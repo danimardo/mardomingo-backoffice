@@ -19,6 +19,9 @@ function edges(): Edge[] {
 		const from = featureOf(file.path);
 		for (const specifier of moduleSpecifiers(file.ast)) {
 			const deep = FEATURE_DEEP.exec(specifier);
+			// D-03: un schema.ts puede referenciar el schema.ts de otra funcionalidad solo para references(); no cuenta en el grafo.
+			const referenceOnly = file.path.endsWith('/schema.ts') && /\/schema$/.test(specifier);
+			if (referenceOnly) continue;
 			if (deep !== null && deep[1] !== from && !FEATURE_IMPORT.test(specifier)) {
 				result.push({
 					from: from ?? '(fuera)',

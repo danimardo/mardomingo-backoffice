@@ -57,6 +57,9 @@ export const civilDate = customType<{ data: CivilDate; driverData: string }>({
 	toDriver: (value) => value
 });
 
+/** Valor por defecto `now` de las columnas de instante: milisegundos UTC del momento de la inserción. */
+export const nowMs = sql`(CAST(unixepoch('subsec') * 1000 AS INTEGER))`;
+
 /** Booleano como entero 0/1 (la restricción `IN (0,1)` va en la tabla con `boolCheck`). */
 export const bool = (name: string) => integer(name, { mode: 'boolean' });
 
