@@ -126,13 +126,14 @@ export default ts.config(
 	{
 		// Los módulos de logging, la configuración del entorno y las herramientas
 		// de consola pueden usar sus propias primitivas. Los ficheros de configuración de
-		// herramientas (drizzle, vite) leen el entorno del proceso que las ejecuta.
+		// herramientas (drizzle, vite, Playwright) leen el entorno del proceso que las ejecuta.
 		files: [
 			'src/lib/server/logging/**',
 			'src/lib/logging/client.ts',
 			'scripts/**',
 			'drizzle.config.ts',
-			'vite.config.ts'
+			'vite.config.ts',
+			'playwright.config.ts'
 		],
 		rules: {
 			'no-console': 'off',
