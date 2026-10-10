@@ -54,9 +54,7 @@ dependencias permitidas está en `ARCHITECTURE.md` (sección 3); dónde va cada 
 
 ## Comandos
 
-**Pendientes del scaffold (L01): todavía no existen `package.json` ni scripts.** Son los previstos
-en la constitución («Scripts estándar») y en `Historias.md` 15.25. Cuando existan, se comprueban,
-se mide cuánto tarda cada uno y se actualiza esta sección.
+Los scripts son los de la constitución («Scripts estándar») y `Historias.md` 15.25, ya creados en L01. Tiempos medidos el 2026-10-10 en Windows, en serie (T064, `specs/001-cuenta-mardomingo-v4/research.md`): `check` 19 s, `lint` 53 s, `lint:changed` 14 s (sin cambios), `lint:tokens` 1 s, `test` 23 s, `test:coverage` 25 s, `build` 22 s, `test:http` 10 s, `test:e2e:smoke` 8 s y `test:e2e:a11y` 12 s en Chromium. `pnpm validate` se ejecutará completo en el checkpoint de L01 (T066).
 
 | Script                                                                     | Uso                                                                                              |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
