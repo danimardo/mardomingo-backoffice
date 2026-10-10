@@ -53,3 +53,5 @@ export function createIdGenerator(randomBytes: RandomBytes = cryptoBytes) {
 		return `${ID_PREFIXES[kind]}${body}`;
 	};
 }
+
+export type IdGenerator = ReturnType<typeof createIdGenerator>;

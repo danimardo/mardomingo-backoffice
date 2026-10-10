@@ -1,0 +1,24 @@
+// Catálogo de eventos de la funcionalidad `apps` (contracts/log-events.md 1.1): prefijo `apps`. Los campos nunca
+// llevan valores de configuración ni contenido de plantillas, solo nombres de clave y de tabla.
+import type { LogEventMeta } from '$lib/server/logging/events';
+
+export interface AppsLogFields {
+	'apps.settings.updated': { key: string; scope: 'global' | 'app' };
+	'apps.settings.rejected': {
+		key: string;
+		scope: 'global' | 'app';
+		reason: 'validation' | 'ceiling';
+	};
+	'apps.config.corrupt': { table: string; field: string };
+	'apps.template.versioned': { version: number };
+}
+
+export const APPS_LOG_EVENTS = Object.freeze({
+	'apps.settings.updated': { level: 'info', msg: 'Parámetro de configuración actualizado' },
+	'apps.settings.rejected': {
+		level: 'info',
+		msg: 'Cambio de configuración rechazado por validación'
+	},
+	'apps.config.corrupt': { level: 'error', msg: 'Columna de configuración no válida al leer' },
+	'apps.template.versioned': { level: 'info', msg: 'Nueva versión de plantilla publicada' }
+} as const satisfies Record<keyof AppsLogFields, LogEventMeta>);

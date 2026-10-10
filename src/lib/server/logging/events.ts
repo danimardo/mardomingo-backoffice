@@ -1,8 +1,10 @@
 // Catálogo de eventos de infraestructura (constitución, principio XI; contracts/log-events.md 2.1–2.2 y 2.4).
 // Cada código solo admite los campos de su firma, y `msg` sale de este catálogo (nunca se construye con datos).
-// Cada funcionalidad aporta su catálogo en `src/lib/server/features/<f>/events.ts` y lo une aquí con una
-// línea en `LogEventFieldMap` y otra en `LOG_EVENTS`.
+// Cada funcionalidad aporta su catálogo en `src/lib/server/features/<f>/events.ts`, lo exporta desde su `index.ts`
+// y lo une aquí con una línea en `LogEventFieldMap` y otra en `LOG_EVENTS`.
 import type { ErrorCode } from '$lib/server/shared/errors';
+import { AUDIT_LOG_EVENTS, type AuditLogFields } from '$lib/server/features/audit';
+import { APPS_LOG_EVENTS, type AppsLogFields } from '$lib/server/features/apps';
 
 export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug';
 
@@ -12,6 +14,7 @@ export interface InfraLogFields {
 	'app.config.invalid': { count: number };
 	'app.db.migrated': { count: number; durationMs: number };
 	'app.db.migration_failed': { err: unknown };
+	'app.db.seed_failed': { err: unknown };
 	'http.request.completed': {
 		route: string;
 		method: string;
@@ -32,6 +35,7 @@ export const INFRA_LOG_EVENTS = Object.freeze({
 	'app.config.invalid': { level: 'fatal', msg: 'Configuración de entorno inválida' },
 	'app.db.migrated': { level: 'info', msg: 'Migraciones aplicadas' },
 	'app.db.migration_failed': { level: 'fatal', msg: 'Migración fallida' },
+	'app.db.seed_failed': { level: 'fatal', msg: 'Datos iniciales no aplicados' },
 	'http.request.completed': { level: 'info', msg: 'Petición completada', downgradable: true },
 	'http.request.failed': { level: 'error', msg: 'Error inesperado en la petición' },
 	'http.host.rejected': { level: 'debug', msg: 'Host no corresponde a la ruta' },
@@ -48,7 +52,7 @@ export interface LogEventMeta {
 }
 
 /** Unión de todos los catálogos de eventos. Cada funcionalidad añade su mapa aquí. */
-export type LogEventFieldMap = InfraLogFields;
+export type LogEventFieldMap = InfraLogFields & AuditLogFields & AppsLogFields;
 
 export type LogEventCode = keyof LogEventFieldMap;
 
@@ -63,5 +67,7 @@ export type DowngradableLogEventCode = {
 }[keyof typeof INFRA_LOG_EVENTS];
 
 export const LOG_EVENTS: Readonly<Record<LogEventCode, LogEventMeta>> = Object.freeze({
-	...INFRA_LOG_EVENTS
+	...INFRA_LOG_EVENTS,
+	...AUDIT_LOG_EVENTS,
+	...APPS_LOG_EVENTS
 });
