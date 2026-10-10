@@ -194,13 +194,127 @@ Usabilidad:
   OAuth y apps móviles) se limita a interfaces y modelo de datos, sin implementaciones
   especulativas.
 
-### XI. Observabilidad sin contenido
+### XI. Registro y diagnóstico sin contenido
 
-- Logs estructurados en JSON (pino) por `stdout`, que recoge OpenObserve. Cada línea lleva
-  `requestId`, `appId`, `userId` (id, nunca el email), `operation`, `status` y `durationMs`.
-- PROHIBIDO registrar cuerpos de petición o de respuesta de `/ai/*` y `/sync`, contraseñas,
-  tokens, cabeceras `Authorization` o `Cookie`, emails completos y datos fiscales. El logger aplica
-  una lista de redacción (`redact`) obligatoria y testeada.
+**Propósito.** Los logs sirven para diagnosticar fallos y reconstruir el recorrido de una petición.
+**No** son el registro de auditoría: el dinero, las operaciones y las acciones del administrador se
+reconstruyen desde la BD (`credit_movements`, `ai_operations`, `payments`, `admin_audit`). Nadie
+debe dar por hecho que un log existe para siempre: se pueden perder eventos si el Gateway cae y
+Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
+
+**Una API de registro por capa**
+
+- Servidor: `pino` (dependencia de producción, no de desarrollo) detrás de un puerto `Logger`
+  propio, en `$lib/server/logging/`. Solo ese módulo importa `pino`.
+- Navegador: `loglevel` detrás de `$lib/logging/client.ts`. Solo ese módulo importa `loglevel`.
+- Comparten únicamente los tipos y el catálogo de códigos de evento; ninguna biblioteca de
+  servidor llega al bundle del cliente. ESLint lo comprueba con `no-restricted-imports` y
+  `no-console` (salvo en los módulos de logging).
+- El **dominio no registra nada**: es puro. Los servicios reciben el `Logger` por parámetro, ya
+  enriquecido con el contexto de la petición.
+
+**Eventos**
+
+- Cada línea tiene un `event` con código estable `dominio.objeto.resultado` (p. ej.
+  `credits.hold.rejected`) y un `msg` fijo tomado del catálogo. PROHIBIDO construir mensajes con
+  datos.
+- La firma del logger está tipada por evento: cada código solo admite sus campos (lista permitida
+  comprobada en compilación).
+- **Campos permitidos:** `time`, `level`, `event`, `msg`, `schema`, `service`, `env`, `version`,
+  `requestId`, `appId`, `userId`, `sessionId`, `operationId`, `operation`, `route` (id de la
+  ruta, nunca la URL con su query), `method`, `httpStatus`, `status`, `errorCode`, `reason`,
+  `durationMs`, `attempt`, `count`, `provider`, `model`, `task` y `err` (serializado según
+  «Un error, un registro»). Solo identificadores, códigos y recuentos.
+- **Prohibido:** contenido de usuario (cuerpos de `/ai/*` y `/sync` incluidos), emails, nombres,
+  **IP**, datos fiscales, importes, fechas de negocio, valores de formulario, textos libres
+  (motivos del administrador incluidos), contraseñas, tokens, cookies, cabeceras
+  `Authorization`/`Cookie`, claves e `Idempotency-Key`.
+- `sessionId` es el id de la fila de sesión, **nunca** el token.
+- Además, `pino.redact` actúa como segunda barrera sobre rutas sensibles conocidas. Mantener un
+  dato para diagnosticar nunca justifica registrar un secreto.
+
+**Niveles**
+
+- `fatal`: el proceso no puede seguir (configuración inválida, BD o migración fallida).
+- `error`: fallo técnico que requiere atención (excepción no controlada, todos los proveedores
+  caídos, discrepancia del ledger, tarea fallida, JSON corrupto en la BD).
+- `warn`: modo degradado o *fallback* (modelo de respaldo, backup de transcripción, coste
+  estimado, tipo de cambio antiguo, email no enviado, freno global, eventos descartados por el
+  Gateway) y señales de abuso.
+- `info`: ciclo de vida, una línea por petición terminada (`http.request.completed`),
+  operaciones completadas y **rechazos de negocio esperados** (saldo, límites, conflicto de
+  sincronización, validación), siempre con `reason`.
+- `debug`: transiciones intermedias y reintentos.
+- `LOG_LEVEL`: `info` en producción, `debug` en staging y desarrollo. `/health` se registra en
+  `debug`.
+- Un rechazo de negocio **nunca** es `error`.
+
+**Un error, un registro**
+
+- Las capas lanzan errores tipados con código; solo la frontera los registra (el hook
+  `handleError` o el envoltorio de la tarea programada). PROHIBIDO registrar y relanzar.
+- Los reintentos van en `debug` y el resultado final se registra una vez.
+- Los errores se serializan con un serializador propio: `type`, `code` y, si el error es interno,
+  el `stack`. El `message` de errores de bibliotecas o proveedores **no** se registra, porque
+  puede contener contenido del usuario.
+
+**Ciclo de vida**
+
+- `app.started` incluye versión, commit, versión de Node, `APP_ENV`, proveedores activos (solo
+  sus nombres), versión de las migraciones y reservas liberadas al arrancar. Nunca valores de
+  configuración ni credenciales.
+- `app.stopping` se registra al recibir SIGTERM, y se vacía el búfer en 5 s como máximo.
+
+**Correlación**
+
+- El servidor genera un `requestId` (UUID) por petición y lo devuelve en la cabecera
+  `X-Request-Id`. La página de error de la web lo muestra como «Código de referencia». Una
+  cabecera `X-Request-Id` entrante se ignora. El `requestId` no se añade al cuerpo JSON de los
+  errores (el contrato de 7.1 no cambia).
+- `operationId` enlaza el log con `ai_operations`.
+- Se usa `time` en ISO 8601 UTC con milisegundos.
+
+**Destinos**
+
+- Siempre: JSON por stdout. Es la copia que conserva Docker con rotación.
+- Staging y producción: además, un *transport* de Pino en un *worker thread* envía lotes al **Log
+  Gateway** (delante de OpenObserve) como servicio `mardomingo_backoffice`, con `env` =
+  `APP_ENV`. Usa una clave propia de **solo escritura**, limitada a ese servicio.
+- El búfer está acotado. Si el Gateway falla, el envío no bloquea las peticiones: descarta los
+  eventos más antiguos y registra en stdout `log.gateway.dropped` con el recuento.
+- Desarrollo: JSON en `.logs/app.log` (ignorado por Git y vaciado en cada arranque) y consola
+  legible con `pino-pretty` (solo dependencia de desarrollo), con la hora en `Europe/Madrid`. El
+  formato legible nunca sustituye al JSON.
+
+**Cliente (navegador)**
+
+- `loglevel` registra en `warn` en producción y en `debug` en desarrollo. El nivel llega en los
+  datos del layout raíz, nunca leyendo `$env` desde el cliente.
+- Los errores no capturados se envían a `POST /client-errors`, una ruta interna de la web y no de
+  `/api/v1`, con esquema estricto y como máximo 4 KB. Solo se envía:
+  - `name` del error;
+  - `fingerprint`, un hash de nombre + mensaje + primera línea de la pila, calculado en el
+    navegador;
+  - las líneas de la pila que pertenecen al propio bundle, sin query;
+  - `routeId`, `version` y un recuento.
+- **El mensaje del error no sale del navegador.** Los *sourcemaps* se generan ocultos (no se
+  sirven) para poder traducir esas líneas.
+- El endpoint tiene un límite de frecuencia en memoria por sesión o visitante y uno global.
+  Cuando se supera responde `204` sin registrar nada, y lo aceptado se registra como
+  `client.error.reported` (`warn`).
+
+**Retención y acceso**
+
+- OpenObserve conserva los logs 30 días (BE-FR-83) y los consulta solo el propietario, a través
+  del Gateway.
+- La retención se configura en OpenObserve o en el Gateway, no en la app. Se verifica, igual que
+  la rotación de los logs de Docker en el host, en cada cambio de infraestructura.
+
+**Catálogo y alertas**
+
+- Cada plan (`/speckit-plan`) incluye un **catálogo de eventos** de la funcionalidad: código,
+  nivel, campos y cuándo se emite. Los catálogos se reúnen en `$lib/logging/events.ts`, que es
+  la fuente única.
 - `/health` comprueba la BD. Las alertas al administrador son las de la sección 5.13 y no se
   repiten por el mismo cruce de umbral (`alerts_state`).
 
@@ -316,7 +430,8 @@ constitución.
 | Gráficas | `layerchart` | **2.6.1** |
 | Email | `resend` | **6.32.1** |
 | Tareas programadas | `croner` | **10.0.1** (zona `Europe/Madrid` explícita en cada tarea) |
-| Logs | `pino` | **10.4.0** |
+| Logs del servidor | `pino` | **10.4.0** (en `dependencies`) |
+| Logs del navegador | `loglevel` | **1.9.2** |
 
 No se usa ninguna librería de componentes de UI: los componentes son propios, sobre Tailwind
 (ver principio IX).
@@ -333,6 +448,7 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
 | Lint | `eslint` / `@eslint/js` / `typescript-eslint` / `eslint-plugin-svelte` / `eslint-config-prettier` / `globals` | **10.12.0** / **10.0.1** / **8.71.1** / **3.23.1** / **10.1.8** / **17.13.0** |
 | Formato | `prettier` / `prettier-plugin-svelte` / `prettier-plugin-tailwindcss` | **3.9.9** / **4.1.1** / **0.8.1** |
 | Tipos de Node | `@types/node` | **24.19.2** |
+| Logs legibles en desarrollo | `pino-pretty` | **13.2.0** |
 
 ### Servicios externos
 
@@ -340,7 +456,7 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
 |---|---|
 | Coolify | Despliegue (entornos `production` y `staging`). |
 | Backblaze B2 (EU Central) | Destino de Litestream. Bucket privado y clave limitada a ese bucket. |
-| OpenObserve | Logs y monitorización. Retención de 30 días. |
+| Log Gateway + OpenObserve | Logs y monitorización (servicio `mardomingo_backoffice`). Retención de 30 días. |
 | Resend | Emails transaccionales; dominio con SPF, DKIM y DMARC. |
 | Cloudflare Turnstile | Captcha del registro. |
 | Mistral API | Voxtral (`voxtral-mini-latest`) para transcripción. |
@@ -432,7 +548,10 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | `BETTER_AUTH_URL` y orígenes de confianza | Las URL de `cuenta.` y `api.` del entorno | Better Auth atiende los dos dominios. |
 | `PUBLIC_TURNSTILE_SITE_KEY` | Clave pública de Turnstile | No es secreta. |
 | `EMAIL_FROM` | Remitente de los emails | Dominio con SPF, DKIM y DMARC. |
-| `LOG_LEVEL` | `info` en producción | Valores de pino. |
+| `LOG_LEVEL` | `info` en producción; `debug` en staging y desarrollo | Valores de pino. |
+| `CLIENT_LOG_LEVEL` | `warn` en producción; `debug` en desarrollo | No es secreta. Llega al navegador en los datos del layout raíz. |
+| `LOG_GATEWAY_URL` | URL de ingesta del Log Gateway | Obligatoria en staging y producción; ausente en desarrollo. |
+| `LOG_GATEWAY_KEY` | Clave de **solo escritura** del servicio `mardomingo_backoffice` | **Secreta.** Una por entorno. |
 | `PORT` | Producción **7311**, staging **7312** | Ver «Proxy, puerto e IP del cliente». |
 | `HOST` | `0.0.0.0` dentro del contenedor | La exposición se limita fuera del contenedor. |
 | `PROTOCOL_HEADER` | `x-forwarded-proto` | |
@@ -556,4 +675,4 @@ visible, su reflejo en el panel de administración y en la auditoría.
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 1.2.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
