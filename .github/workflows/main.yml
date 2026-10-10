@@ -1,0 +1,39 @@
+# Ramas `main` (Historias.md 15.26): E2E completos en Chromium tras cada integración, con el vídeo de los fallos
+# desactivado (solo en la nocturna).
+name: main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.21.0
+  PNPM_VERSION: 12.8.1
+
+jobs:
+  e2e-completos:
+    name: E2E completos (Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm exec playwright test --project=chromium
+      - name: Artefactos de fallo
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-main-fallos
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7

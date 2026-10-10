@@ -1,0 +1,37 @@
+# Semanal (Historias.md 15.26): mutación completa con Stryker. Desactivado hasta tener la línea base del piloto
+# T-MUT-001 (L05 y L06): se activa poniendo la variable de repositorio MUTATION_ENABLED a `true`.
+name: semanal
+
+on:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.21.0
+  PNPM_VERSION: 12.8.1
+
+jobs:
+  mutacion:
+    name: mutación (Stryker)
+    if: vars.MUTATION_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:mutation
+      - name: Informe de mutación
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutacion-informe
+          path: reports/
+          retention-days: 30
