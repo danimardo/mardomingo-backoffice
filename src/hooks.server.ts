@@ -13,6 +13,7 @@ import { getComposition, setComposition } from '$lib/server/composition.cache';
 import { readEnv } from '$lib/server/config/env';
 import { EnvConfigError, type Env } from '$lib/server/config/env-schema';
 import { migrateDatabase } from '$lib/server/db/migrate';
+import { seedDefaults } from '$lib/server/seed';
 import { createRootLogger, type LogContext } from '$lib/server/logging/logger';
 import { createLogSink } from '$lib/server/logging/outputs';
 import { APP_VERSION } from '$lib/version';
@@ -77,6 +78,13 @@ export const init: ServerInit = async () => {
 		});
 	} catch {
 		// El evento `app.db.migration_failed` ya está registrado; el proceso no arranca.
+		composition.close();
+		process.exit(1);
+	}
+	try {
+		seedDefaults(composition.db, composition.clock);
+	} catch (cause) {
+		logger.emit('app.db.seed_failed', { err: cause });
 		composition.close();
 		process.exit(1);
 	}

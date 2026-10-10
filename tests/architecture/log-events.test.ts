@@ -6,14 +6,32 @@ import { CLIENT_LOG_EVENTS } from '$lib/logging/events';
 
 const CODE_FORM = /^[a-z]+(\.[a-z_]+){1,3}$/;
 const INFRA_PREFIXES = new Set(['app', 'http', 'log', 'client']);
+// Las catorce funcionalidades de ARCHITECTURE.md §3: cada una usa su nombre como prefijo de sus eventos.
+const FEATURE_PREFIXES = [
+	'audit',
+	'notifications',
+	'apps',
+	'legal',
+	'pricing',
+	'credits',
+	'invoicing',
+	'accounts',
+	'payments',
+	'sync',
+	'protections',
+	'ai',
+	'privacy',
+	'stats'
+];
+const SERVER_PREFIXES = new Set([...INFRA_PREFIXES, ...FEATURE_PREFIXES]);
 
 describe('catálogo de eventos de log', () => {
-	it('los códigos del servidor tienen forma y prefijo de infraestructura', () => {
+	it('los códigos del servidor tienen forma y prefijo de infraestructura o de su funcionalidad', () => {
 		const codes = Object.keys(LOG_EVENTS);
 		expect(codes.length).toBeGreaterThan(0);
 		for (const code of codes) {
 			expect(code, code).toMatch(CODE_FORM);
-			expect(INFRA_PREFIXES.has(code.split('.')[0] ?? ''), code).toBe(true);
+			expect(SERVER_PREFIXES.has(code.split('.')[0] ?? ''), code).toBe(true);
 		}
 	});
 

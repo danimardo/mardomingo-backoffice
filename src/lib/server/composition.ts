@@ -6,11 +6,13 @@ import { createSystemClock, type Clock } from './adapters/clock/clock';
 import type { Env } from './config/env-schema';
 import { openDatabase, type Db } from './db/client';
 import type { Logger } from './logging/logger';
+import { createIdGenerator, type IdGenerator } from './shared/ids';
 
 export interface Composition {
 	readonly config: Env;
 	readonly logger: Logger;
 	readonly clock: Clock;
+	readonly ids: IdGenerator;
 	readonly db: Db;
 	readonly sqlite: Database.Database;
 	close(): void;
@@ -24,6 +26,7 @@ export function createComposition(config: Env, logger: Logger): Composition {
 		// En L01 el reloj y la BD son los únicos adaptadores. Los proveedores, el email y el captcha llegan
 		// con sus lotes; en `APP_ENV=test` apuntarán a los simuladores por URL base (T038).
 		clock: createSystemClock(),
+		ids: createIdGenerator(),
 		db,
 		sqlite,
 		close: () => {
