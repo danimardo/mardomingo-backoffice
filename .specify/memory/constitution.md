@@ -167,7 +167,7 @@ El código de servidor se organiza en capas con dependencias en una sola direcci
   y el nuevo.
 - Solo son variables de entorno los secretos y la infraestructura que enumera la sección 9.
 
-### IX. Accesibilidad y usabilidad (WCAG 2.2 AA)
+### IX. Accesibilidad, usabilidad y experiencia de uso (WCAG 2.2 AA)
 
 Accesibilidad:
 
@@ -177,33 +177,64 @@ Accesibilidad:
   *landmarks* y tablas con `th`/`scope`/`caption`. ARIA solo cuando el HTML no basta.
 - Todo es usable **solo con teclado**: foco visible (contraste ≥ 3:1), orden lógico, enlace
   «Saltar al contenido», sin trampas de foco, y los diálogos gestionan y devuelven el foco.
+- Al cambiar de ruta, al fallar un envío o al desaparecer el elemento con el foco, se decide
+  dónde va el foco y qué se anuncia. Se conserva el anuncio de ruta de SvelteKit; si se
+  personaliza, se comprueba que no empeora.
 - Contraste ≥ 4,5:1 en texto y ≥ 3:1 en componentes y gráficos, **en ambos temas**.
 - Los formularios tienen `label` visible y asociado, errores en texto junto al campo, enlazados con
   `aria-describedby` y anunciados (`aria-live`), y `autocomplete` correcto. El color nunca es el
   único indicador.
 - Las gráficas (LayerChart) tienen un título descriptivo y una **tabla de datos equivalente**
   accesible.
-- Se respeta `prefers-reduced-motion`. La interfaz funciona con zoom al 200 % y con una anchura de
-  320 px sin desplazamiento horizontal.
+- Se respeta `prefers-reduced-motion`. La interfaz funciona con zoom al 200 %, con el espaciado
+  de texto de WCAG y con una anchura de 320 px sin desplazamiento horizontal de la página (las
+  tablas pueden desplazarse dentro de su contenedor).
+- Los tamaños de letra usan unidades relativas (`rem`), para respetar la ampliación del navegador.
+- Objetivos táctiles de **al menos 44 × 44 px CSS** en toda la web, incluido el panel de
+  administración (política propia, por encima del mínimo de 24 × 24 de WCAG).
 - Los componentes interactivos complejos (diálogos, menús, pestañas, combobox) siguen los patrones
   de la WAI-ARIA Authoring Practices Guide; como no hay librería de componentes, cada uno lleva sus
   tests de teclado.
 - Verificación: `eslint-plugin-svelte` (reglas a11y) sin avisos y `@axe-core/playwright` con
-  **cero violaciones** `serious` o `critical` en cada página y en cada tema.
+  **cero violaciones** `serious` o `critical` en cada página y en cada tema. Lo automático no
+  sustituye a la auditoría manual previa al lanzamiento (`Historias.md` 15.18).
 
 Usabilidad:
 
-- Diseño *mobile-first* y adaptable. Tema claro y oscuro: por defecto sigue
-  `prefers-color-scheme`, con selector manual guardado en una cookie técnica.
+- Cada historia con interfaz se especifica con **criterios observables** (qué ve el usuario, qué
+  puede hacer, qué ocurre si falla). PROHIBIDOS los requisitos del tipo «será intuitiva» o «tendrá
+  buena UX». Los patrones de interfaz se eligen por las tareas aprobadas; no justifican
+  funcionalidades nuevas.
+- **Estados**: cada pantalla con datos define los estados que le apliquen (primer uso, vacío,
+  sin coincidencias, carga, éxito, error recuperable, resultado incierto, sin permiso, sesión
+  caducada) según el catálogo de `Historias.md` 16.6. Toda acción significativa da una
+  respuesta perceptible. Un indicador de carga representa una espera real y nunca oculta un fallo.
+- **Lo escrito no se pierde**: ante un error se conservan los datos válidos (salvo contraseñas y
+  secretos), y tras iniciar sesión se vuelve a la página pedida. Nunca se presenta como confirmado
+  un resultado con consecuencias (compra, ajuste, borrado) antes de que lo confirme el servidor.
+- Diseño *mobile-first* y adaptable en **toda** la web, panel de administración incluido.
+- **Tema**: claro y oscuro, con selector **Sistema / Claro / Oscuro** disponible en todas las
+  páginas. Sistema es la elección inicial, funciona sin JavaScript y sin destello del otro tema, y
+  sigue los cambios del sistema durante la sesión sin perder estado. Claro u Oscuro se guardan en
+  una cookie técnica y el servidor pinta la página ya con el tema elegido (principio XIII).
 - **Mejora progresiva**: todos los formularios funcionan sin JavaScript (form actions de SvelteKit
-  con `use:enhance`). Solo las gráficas pueden requerir JavaScript, y su tabla equivalente no.
+  con `use:enhance`). Solo las gráficas y el captcha del registro pueden requerir JavaScript
+  (sección «Mejora progresiva»).
 - Todo el texto visible está en español y sale de los mensajes de **Paraglide**. PROHIBIDO el texto
   visible *hardcodeado* en componentes, servidores o emails.
-- Los mensajes de error explican qué ha pasado y qué puede hacer el usuario, sin jerga técnica.
+- Los mensajes de error explican qué ha pasado, dónde, qué puede hacer el usuario y qué se ha
+  conservado, sin jerga técnica. Los botones nombran su resultado concreto.
 - Las acciones destructivas o irreversibles (borrar la cuenta, reembolsos, ajustes de saldo,
-  bloqueos) piden confirmación explícita y, cuando la especificación lo indica, la contraseña.
+  bloqueos) piden confirmación explícita mostrando el objeto y el alcance y, cuando la
+  especificación lo indica, la contraseña. El foco inicial de la confirmación no está en la acción
+  destructiva.
+- **PROHIBIDOS los patrones manipulativos**: urgencia falsa, opciones preseleccionadas que
+  favorecen al negocio, casillas legales marcadas de antemano, bajas o borrados más difíciles que
+  las altas y textos que culpabilizan.
 - Los importes se muestran siempre con las reglas de redondeo de BE-FR-22 y el formato español
   (coma decimal, punto de miles). Al usuario nunca se le muestran modelos ni costes reales.
+- Las personas y tareas de `Historias.md` 16.1 son hipótesis. Antes del lanzamiento público con
+  cobros reales se hace la prueba de usabilidad de 16.10 y se corrigen sus hallazgos.
 
 ### X. Simplicidad operativa
 
@@ -403,6 +434,42 @@ Todo dato no confiable se valida con **Zod** al cruzar una frontera, y solo ahí
 - Los esquemas compartidos entre servidor y cliente viven en `$lib/schemas` y no importan código
   de servidor. El servidor valida siempre, aunque el cliente también valide.
 
+### XIII. Sistema de diseño, apariencia y rendimiento percibido
+
+- **Fuente canónica**: la carpeta `Design/` define la identidad, los tokens, los materiales y los
+  componentes base. Para los valores implementados manda su fichero de tokens. PROHIBIDO imponer
+  la identidad de otro producto. Las adaptaciones pendientes (`Historias.md` 16.2, DS-xx) se
+  resuelven en el sistema de diseño, de forma centralizada, nunca con estilos locales repetidos.
+- **Sin valores literales**: ningún componente ni ruta escribe colores, gradientes ni sombras de
+  color literales; usa siempre los tokens (con pareja clara y oscura). Lo comprueba un script en
+  el CI. Si falta un token, se añade al sistema antes de usarlo.
+- **Cristal selectivo** (lenguaje inspirado en Liquid Glass):
+  - Solo en navegación (cabecera, pie, lateral), superposiciones (diálogos, *toasts*, menús) y
+    tarjetas de resumen destacadas. Tablas, formularios, listas, gráficas, paso de compra, textos
+    legales y pantallas de datos de la administración son **siempre opacos**. Los emails, sin
+    cristal.
+  - Cada uso tiene una función concreta. PROHIBIDO anidar superficies de cristal o aplicarlo por
+    fila o por icono.
+  - Toda superficie de cristal tiene una **alternativa opaca** con las mismas acciones,
+    información, jerarquía y foco. El material nunca sustituye a la semántica, al nombre
+    accesible, al foco ni a los estados.
+- **Preferencias**: se respetan `prefers-reduced-transparency`, `prefers-reduced-motion`,
+  `prefers-contrast` y `forced-colors`. Además hay un ajuste propio **«Reducir transparencia y
+  movimiento»**, junto al selector de tema y guardado en una cookie técnica, que pasa todo a opaco
+  y retira el movimiento no esencial. El ajuste propio solo puede reducir efectos, nunca reactivar
+  lo que el sistema pide reducir. Tema y efectos son decisiones independientes.
+- **Temas**: el oscuro se diseña expresamente (no es una inversión del claro), con sus estados,
+  foco, gráficas e imágenes. El contraste se mide sobre la **composición real** (cristal sobre el
+  fondo, en ambos temas y con efectos reducidos), no solo entre pares de tokens.
+- **Movimiento**: cada animación tiene una función (confirmar, orientar, mostrar progreso), se
+  puede interrumpir sin perder foco ni estado y nunca retrasa la respuesta. Duraciones y curvas
+  son tokens.
+- **Rendimiento percibido**: objetivos **LCP ≤ 2,5 s, INP ≤ 200 ms y CLS ≤ 0,1**, medidos en
+  laboratorio sobre el build de producción con perfil móvil limitado, en las páginas de
+  `Historias.md` 16.8. No hay datos de campo (sin analítica de terceros) y los resultados se
+  presentan como medidas de laboratorio. El cristal se compara con la versión de efectos
+  reducidos; si supera los objetivos o perjudica la lectura, se simplifica o se retira.
+
 ## Orden de prioridades
 
 Cuando dos objetivos entren en conflicto, prevalece el primero de esta lista. La decisión y su
@@ -412,7 +479,7 @@ justificación se anotan en el plan.
 2. **Privacidad**: no guardar contenido y minimizar los datos.
 3. **Seguridad**.
 4. **Simplicidad operativa**: una instancia, SQLite y pocas dependencias.
-5. **Accesibilidad y usabilidad**.
+5. **Accesibilidad, usabilidad y experiencia de uso**.
 6. **Rendimiento**.
 7. **Velocidad de entrega** de funcionalidades.
 
@@ -457,7 +524,7 @@ constitución.
 | Logs del navegador | `loglevel` | **1.9.2** |
 
 No se usa ninguna librería de componentes de UI: los componentes son propios, sobre Tailwind
-(ver principio IX).
+(ver principios IX y XIII).
 
 ### Calidad y tests
 
@@ -619,6 +686,12 @@ framework.
   la cuenta, y todas las acciones del panel de administración.
 - JavaScript solo mejora la experiencia (estados de envío, gráficas y filtros instantáneos). Las
   gráficas tienen su tabla equivalente (principio IX).
+- **Excepción: el captcha del registro.** Turnstile necesita JavaScript, así que el registro es la
+  única interacción crítica que lo requiere. Sin JavaScript, el formulario lo explica con un aviso
+  visible (`<noscript>`) en lugar de fallar en silencio; el resto del formulario sigue siendo un
+  `<form>` nativo. No se ofrece un camino sin captcha.
+- El selector de tema y el ajuste de efectos funcionan sin JavaScript (formulario que guarda la
+  cookie); con JavaScript se aplican sin recargar.
 
 ### Autenticación y autorización
 
@@ -847,13 +920,19 @@ El resto de scripts de testing (`test:unit`, `test:int`, `test:http`, `test:trac
 8. `pnpm audit --prod` sin vulnerabilidades altas ni críticas.
 9. Comprobación de que las migraciones están al día con el esquema (`drizzle-kit check` y
    generación sin cambios).
+10. Comprobación de tokens: ningún color, gradiente ni sombra de color literal fuera del fichero
+    de tokens del sistema de diseño (principio XIII).
 
 ### Definición de terminado
 
 Una tarea está terminada cuando pasa todas las puertas del CI, cumple los criterios de aceptación
 (`CA`) de sus requisitos, tiene sus tests escritos según el principio V, sus textos en Paraglide,
 su documentación actualizada (incluido el OpenAPI) y, si cambia parámetros o comportamiento
-visible, su reflejo en el panel de administración y en la auditoría. Los lotes cierran con la
+visible, su reflejo en el panel de administración y en la auditoría. Si tiene interfaz, además
+se ha comprobado en tema claro y oscuro, con efectos reducidos, a 320 px de ancho, solo con
+teclado y sin JavaScript (salvo las excepciones de «Mejora progresiva»), y cada comprobación se
+informa como **comprobado**, **pendiente**, **no verificable en este entorno** o **no aplica** (con
+el motivo). Los lotes cierran con la
 *Definition of Checkpoint* y las historias con la *Definition of Done* de `Historias.md` 15.29 y
 15.30.
 
@@ -884,4 +963,4 @@ visible, su reflejo en el panel de administración y en la auditoría. Los lotes
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 1.4.1 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 1.5.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10

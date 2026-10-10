@@ -4,7 +4,7 @@
 |---|---|
 | Estado | Diseño en revisión (v2: plataforma multi-app) |
 | Fecha | 2026-10-10 |
-| Versión del documento | 2.1 (2026-10-10: estrategia de testing, sección 15; sustituye a la 2.0 y a la 1.0 del 2026-10-06) |
+| Versión del documento | 2.2 (2026-10-10: experiencia de usuario y diseño, sección 16; la 2.1 añadió la estrategia de testing, sección 15; sustituye a la 2.0 y a la 1.0 del 2026-10-06) |
 | Copias | `mardomingo-backoffice/Historias.md` (original) y `secretario2/docs/v4-backend-spec.md` (copia literal para la app). Se editan en el original y se vuelven a copiar. |
 | Primera app cliente | Secretario AI — cambios en la app: `secretario2/docs/v4-app-spec.md` |
 | Repositorio del backend | Privado, `mardomingo-backoffice` (https://github.com/danimardo/mardomingo-backoffice) |
@@ -51,6 +51,7 @@ Ofrecer una **plataforma común** para las apps de IA del propietario (escritori
 - Emails transaccionales con Resend.
 - Landing básica de la marca paraguas, landing básica por app y páginas legales (contenido legal redactado por un profesional, fuera de este documento).
 - Soporte por email y anuncios del administrador a las apps.
+- **Experiencia de usuario y diseño** (sección 16): sistema de diseño propio, temas claro y oscuro con selector Sistema / Claro / Oscuro y ajuste «Reducir transparencia y movimiento».
 - Entorno de **staging** y contrato **OpenAPI**.
 
 ### 1.3 Fuera de alcance (v4)
@@ -1145,6 +1146,11 @@ Resumen de las decisiones tomadas con el propietario del producto durante el dis
 | **Cuentas inactivas (2026-10-10)** | Solo se cierran las que no tienen compras reales (3 años + aviso) |
 | **Firma del instalador (2026-10-10)** | Se decide tras la beta con el embudo de alta |
 | **Añadidos por defecto (2026-10-10)** | `Idempotency-Key`; comisión del proveedor en la fórmula; *timeouts* por operación; ffprobe para la duración del audio; modelos de respaldo y vigilancia; cambio de email; bloqueo por intentos fallidos; limpieza de cuentas sin verificar; edad mínima; retención y DPA; email de soporte; anuncios; staging; OpenAPI; roles como lista; estado de la cuenta sin campos duplicados; aceptación de nuevas versiones legales |
+| **Sistema de diseño (2026-10-10)** | Se recicla el de NetworkBench como base estructural, con identidad propia «Aurora Salvia»; `Design/` es la fuente canónica (16.2) |
+| **Cristal (2026-10-10)** | Selectivo (navegación, superposiciones y tarjetas de resumen); contenido y datos siempre opacos; ajuste propio «Reducir transparencia y movimiento» (16.3, 16.4) |
+| **Temas (2026-10-10)** | Claro y oscuro; selector Sistema / Claro / Oscuro con Sistema inicial, sin JavaScript y sin destello (16.4) |
+| **Adaptación (2026-10-10)** | Mobile-first en toda la web, también en el panel de administración; objetivos táctiles de 44 × 44 px (16.5) |
+| **Usabilidad (2026-10-10)** | Prueba ligera con 3–5 personas antes del lanzamiento público con cobros reales (16.10) |
 
 ---
 
@@ -1280,7 +1286,7 @@ El plan los refina; aquí se fijan el orden y los tests clave.
 
 | Lote | Contenido (requisitos) | Riesgo | Tests clave | Suite de cierre |
 |---|---|---|---|---|
-| L01 | Esqueleto: proyecto, entorno, logging, hooks (requestId, separación por host, CSP), `/health`, OpenAPI vacío, CI, smoke | Medio | Arquitectura, entorno inválido, HTTP de hooks, smoke E2E | N0 + N3 HTTP + smoke |
+| L01 | Esqueleto: proyecto, entorno, logging, hooks (requestId, separación por host, CSP), `/health`, OpenAPI vacío, CI, smoke; base visual (16.12: tokens, tema y efectos, layout base) | Medio | Arquitectura, entorno inválido, HTTP de hooks, smoke E2E | N0 + N3 HTTP + smoke |
 | L02 | Esquema, migraciones, seed (app `secretario`, settings, paquetes), servicio de configuración (BE-FR-61, 62) | Alto | Migraciones sobre BD vacía, herencia global → app → operación, validación y auditoría de settings | N1 + N3 |
 | L03 | Registro, verificación, login web, sesiones, recuperación, bloqueo, edad (BE-FR-01–06, 64, 67, 69, 11.1–11.5) | Alto | Antienumeración, normalización de email, bloqueo, sesión deslizante, E2E de registro | N1 + N3 + E2E crítico |
 | L04 | Login de apps con Bearer, sesión por app, CORS, versión, mantenimiento, `/app/status`, anuncios, soporte (BE-FR-03, 47, 48, 62, 65, 84, 85) | Alto | Matriz de cabeceras, app y sesión; 426, 503, 400, 401 | N3 HTTP |
@@ -1776,3 +1782,193 @@ El mutation testing solo es obligatorio si el plan lo establece para código cr�
 Los tests tienen un propósito claro, son legibles, independientes y repetibles, fallan por una razón comprensible, usan datos claros y aserciones significativas, limpian sus recursos, no acceden a producción, no contienen secretos, no modifican entornos compartidos y permiten refactorizar.
 
 PROHIBIDOS: tests sin aserción o que solo comprueban que no hay excepción, aserciones genéricas, reimplementar el algoritmo esperado dentro del test, dependencia del orden y acoplamiento a detalles internos.
+
+---
+
+## 16. Experiencia de usuario y diseño
+
+Requisitos transversales de UX para todas las historias con interfaz: la web de la cuenta (landings, páginas legales, registro y login, panel de usuario, panel de administración) y los emails. Desarrollan los principios IX y XIII de la constitución. Cada `/speckit-specify` los concreta en requisitos verificables de su funcionalidad. Decisiones tomadas con el propietario el 2026-10-10.
+
+Esta sección **no añade funcionalidades**, salvo dos aprobadas expresamente: el **selector de tema** (Sistema / Claro / Oscuro) y el ajuste **«Reducir transparencia y movimiento»** (16.4).
+
+### 16.1 Personas y tareas
+
+Todo lo que sigue son **hipótesis del propietario**: no hay investigación con usuarios. Se contrastan con la prueba de 16.10.
+
+| Persona | Contexto | Tareas prioritarias | Sabe que ha terminado cuando… | Riesgos principales |
+|---|---|---|---|---|
+| **Visitante que llega desde una app** | Viene de la landing de la app o de un enlace de la propia app (`?app=<slug>`); quiere usar la app, no «abrir una cuenta» | Entender qué es la Cuenta y por qué la necesita; registrarse; verificar el email | La cuenta está verificada, ve su saldo de bienvenida y el siguiente paso de su app (BE-FR-64 CA2) | Confundir la cuenta con la app; abandonar en la verificación; el email no llega o va a spam |
+| **Usuario ocasional** | Entra pocas veces, normalmente desde un aviso de la app («saldo bajo», «contacta con soporte») o desde un email; en móvil o escritorio | Consultar el saldo; comprar créditos; ver en qué se ha gastado; descargar facturas | Ve el saldo actualizado, la compra confirmada o el consumo que buscaba | No entender créditos frente a euros, saldo reservado, deuda ni caducidad |
+| **Usuario atento a su privacidad y seguridad** | Reacciona a un aviso de seguridad o quiere ejercer sus derechos | Cerrar sesiones; cambiar la contraseña o el email; exportar sus datos; borrar la cuenta | Ve las sesiones cerradas, el cambio confirmado, el JSON descargado o la cuenta borrada | Cerrar por error la sesión actual; borrar la cuenta sin entender que pierde el saldo en todas las apps |
+| **Administrador** | Una sola persona, experta en el dominio; uso frecuente, en escritorio y a veces en móvil | Revisar alertas y estadísticas; buscar un usuario; ajustar saldo, bloquear o reembolsar con motivo; configurar economía, modelos y protecciones | Ve el cambio aplicado y su entrada en la auditoría | Errores con consecuencias económicas o de acceso (parámetros, ajustes, reembolsos, freno global) |
+
+### 16.2 Sistema de diseño
+
+- **Fuente canónica:** la carpeta `Design/`, con la identidad visual **«Aurora Salvia»**: azul noche, acento verde salvia y luz ambiental violeta, en tema claro y oscuro. Procede del sistema de diseño de **NetworkBench** (otra app del propietario, de escritorio con Tauri), reciclado con paleta propia el 2026-10-10. Para conocer los valores implementados manda `Design/src/lib/design-system/tokens.css` sobre las tablas de `DESIGN_TOKENS.md`.
+- **Se reutiliza:**
+  - la estructura de tokens por rol con su pareja clara y oscura;
+  - los tres materiales de cristal (`glass-chrome`, `glass-card`, `glass-overlay`), cada uno con su respaldo opaco;
+  - la regla de «ningún color literal fuera de los tokens» y su script `verify-tokens`;
+  - adaptados, los componentes `Button`, `Card`, `Dialog`, `TextField`, `Toast`, `Tooltip`, `StatusPill`, `ProgressBar`, `Icon`, `Sidebar` (navegación del panel de administración) y `ThemeToggle`.
+- **No se aplica** lo propio de NetworkBench: `AVISOS.md`, `FLUJOS.md`, `PANTALLAS-H1.md`, `maqueta-navegable.html` y los componentes `TitleBar`, `DeviceCard`, `ExecutionLink`, `ChecklistItem`, `HomeScreenExample` y `VerificationCode`. Quedan como referencia hasta que se archiven.
+
+**Adaptaciones pendientes** (contradicciones con esta especificación o con la constitución; se resuelven en el sistema de diseño, de forma centralizada, no con estilos locales):
+
+| ID | Adaptación | Motivo | Cuándo |
+|---|---|---|---|
+| DS-01 | Renombrar a Cuenta Mardomingo: títulos, clave `networkbench.theme` y documentos de NetworkBench archivados o reescritos | Es la identidad de otro producto | L01 |
+| DS-02 | Que el modo **Sistema** funcione sin JavaScript: sin elección explícita, los tokens siguen `prefers-color-scheme` en CSS; `data-theme` solo se usa para Claro u Oscuro elegidos, y el servidor lo pinta desde la cookie | Hoy `:root` es el tema oscuro, así que con SSR y sin JS un usuario con el sistema en claro vería el oscuro o un destello | L01 |
+| DS-03 | El controlador de tema guarda la preferencia en una **cookie técnica** (no en `localStorage`) y vive en el contexto del árbol de componentes, sin estado mutable a nivel de módulo | Constitución, «Estado y componentes»; el servidor necesita la preferencia para la primera pintura | L01 |
+| DS-04 | Tipografía para la web: tamaños en `rem` (no `px`); tamaño de cuerpo adecuado a la lectura web (el plan fija el valor; los 14 px de escritorio se revisan); pila de fuentes multiplataforma o fuentes propias autoalojadas, con licencia y peso medidos | Respetar la ampliación de texto del navegador; Segoe UI Variable y Cascadia Mono solo existen en Windows; las capturas visuales de 15.18 necesitan fuentes deterministas | L01 |
+| DS-05 | Tratar `prefers-reduced-transparency`, `prefers-reduced-motion`, `prefers-contrast` y `forced-colors`, y un atributo para el ajuste propio de efectos (p. ej. `data-effects="reduced"`) que retira el *blur* y el movimiento no esencial | Hoy solo existe el respaldo `@supports not (backdrop-filter)` | L01 |
+| DS-06 | Componentes propios de esta web: tabla de datos (encabezados, orden, desplazamiento local), paginación, grupos de casillas y de opciones, selector, aviso o *banner* (anuncios y documentos pendientes), estado vacío, contenedor de gráfica con tabla equivalente, cabecera y pie con navegación, y menú de cuenta | No existen en el sistema de NetworkBench | En el lote que los necesite por primera vez |
+| DS-07 | Nombres de token por rol: `--color-lavender` (ahora verde salvia) y `--color-mauve` (ahora violeta) | Los nombres heredados inducen a error | L01 |
+| DS-08 | Integración con Tailwind 4: los tokens se exponen a Tailwind sin duplicar valores; `verify-tokens` se adapta a la estructura del repositorio y pasa a ser una puerta del CI | Constitución: componentes propios sobre Tailwind; puertas del CI | L01 |
+| DS-09 | Medir el contraste sobre la composición real (cristal sobre el fondo ambiental, en los dos temas y con efectos reducidos), no solo entre pares de tokens | Hoy el contraste está verificado por cálculo entre tokens | En cada lote con interfaz |
+
+### 16.3 Lenguaje visual: cristal selectivo
+
+El cristal tiene una función concreta (separar la navegación del contenido o dar continuidad), nunca decorativa.
+
+| Zona | Tratamiento |
+|---|---|
+| Cabecera, pie y navegación lateral del panel de administración | `glass-chrome` cuando hay contenido debajo, con protección de borde |
+| Diálogos, *toasts* y menús desplegables | `glass-overlay` (casi opaco: es para leer) |
+| Tarjetas de resumen destacadas: saldo del panel y bloque principal de las landings | `glass-card` |
+| Tablas, formularios, listas, gráficas, paso de compra, textos legales y todas las pantallas de datos de la administración | **Siempre opaco** |
+| Emails | Sin cristal |
+
+- No se anidan superficies de cristal ni se aplica cristal por fila o por icono.
+- La alternativa opaca conserva las mismas acciones, información, jerarquía y foco.
+- El material nunca sustituye a la semántica, al nombre accesible, al foco ni a los estados.
+
+### 16.4 Tema y efectos
+
+**UX-TEMA — Selector de tema.**
+- CA1: Sin preferencia guardada, el tema es **Sistema**: sigue la apariencia del sistema operativo desde la primera pintura, también sin JavaScript y sin destello del otro tema.
+- CA2: Con Sistema seleccionado, si cambia la apariencia del sistema durante la sesión, la página se actualiza sin recargar y sin perder lo escrito, el foco ni la posición.
+- CA3: Claro u Oscuro elegidos se guardan en una cookie técnica y el servidor pinta la página ya con ese tema. Se mantienen hasta que el usuario vuelva a elegir Sistema.
+- CA4: El selector es un grupo de tres opciones con nombre accesible y la opción actual indicada. Está disponible en todas las páginas, también sin sesión, y funciona sin JavaScript (formulario).
+- CA5: El tema oscuro está diseñado expresamente (no es una inversión del claro), incluidos los estados, el foco, las gráficas y las imágenes.
+
+**UX-EFECTOS — Reducir transparencia y movimiento.**
+- CA1: Junto al selector de tema hay un ajuste «Reducir transparencia y movimiento», guardado en una cookie técnica, que funciona sin JavaScript.
+- CA2: Activado, todas las superficies de cristal pasan a su versión opaca y se retira el movimiento no esencial, sin perder acciones, contenido, foco ni estados.
+- CA3: Las preferencias del sistema se respetan siempre, con el ajuste propio activado o no:
+  - transparencia reducida → superficies opacas;
+  - movimiento reducido → sin desplazamientos, rebotes ni *parallax*;
+  - más contraste → texto, bordes, foco y estados reforzados;
+  - colores forzados → colores del sistema, con bordes y foco visibles sin depender de sombras.
+- CA4: El ajuste propio solo puede **reducir** efectos; nunca reactiva lo que el sistema pide reducir.
+
+Las dos cookies son de preferencias estrictamente necesarias y se declaran en la política de cookies (BE-FR-60).
+
+### 16.5 Adaptación
+
+- **Mobile-first en toda la web, incluido el panel de administración** (decisión del 2026-10-10). Los objetivos táctiles miden **al menos 44 × 44 px CSS**. Es una política propia, por encima del mínimo de 24 × 24 de WCAG 2.2 AA.
+- A 320 px de ancho no hay desplazamiento horizontal de la página. Las tablas pueden desplazarse dentro de su contenedor, con el encabezado identificable, o pasar a una vista de detalle; nunca se ocultan columnas necesarias sin otra forma de verlas.
+- Funciona con zoom al 200 % y con el espaciado de texto de WCAG (interlineado 1,5; párrafos 2; letras 0,12; palabras 0,16).
+- El campo con el foco, su ayuda y la acción necesaria siguen visibles con el teclado virtual abierto y bajo las barras fijas.
+- Interfaz solo en español, con textos de Paraglide y formatos `es-ES`, sin concatenar textos que impidan traducir.
+
+### 16.6 Estados por área
+
+Cada especificación define los estados que apliquen a su área y justifica las exclusiones relevantes. No hay modo sin conexión: un fallo de red se explica y protege lo escrito.
+
+| Área | Estados que hay que definir |
+|---|---|
+| **Landings** (BE-FR-59) | App con landing externa; app desactivada; descarga no disponible; ninguna app activa (vacío legítimo) |
+| **Registro, verificación, login, recuperación y cambio de email** (BE-FR-01–06, 64, 66, 67, 69) | Envío pendiente (botón con texto de progreso, sin doble envío); errores por campo con resumen enlazado y foco en él; captcha que no carga o falla, con reintento; mensaje neutro antienumeración que dice qué hacer si el email no llega (spam, reenviar con su límite y cuándo se puede volver a intentar); enlace caducado o ya usado, con forma de pedir otro; cuenta sin verificar; cuenta bloqueada (con el email de soporte); bloqueo temporal con el tiempo restante; sesión caducada que, tras iniciar sesión, vuelve a la página pedida |
+| **Saldo, movimientos y consumo** (BE-FR-49.1–49.6, 11 CA1) | Primer uso (solo la bienvenida, explicando créditos y caducidad); cuenta sin saldo de bienvenida por email ya usado, explicado; saldo reservado; deuda; saldo bajo; vacío legítimo; sin coincidencias con el filtro visible; error de carga |
+| **Compra** (BE-FR-23–26) | Compra no disponible («Próximamente», explicado en texto visible); casilla de desistimiento sin marcar (error asociado); pendiente; éxito (créditos acreditados y saldo nuevo); repetición por doble clic, reenvío o «atrás» (muestra la misma compra: «Esta compra ya se completó»); error del proveedor (qué se conserva y que no se ha cobrado); resultado incierto (fase Stripe: «Comprobando el pago») |
+| **Perfil, sesiones, exportación y borrado** (BE-FR-07, 08, 49.8–49.9, 66, 74) | Cambio aplicado indicando qué sesiones se han cerrado; sesión actual identificada; exportación en curso, descargada o fallida; borrado con su confirmación (UX-07) |
+| **Avisos** (BE-FR-70, 85) | Documentos pendientes de aceptar (qué deja de funcionar en las apps hasta aceptarlos); anuncios por nivel, distinguidos con icono y texto además del color |
+| **Gráficas** (BE-FR-49.5, 54) | Sin datos en el periodo (vacío, no cero); periodo, unidad y vigencia visibles; tabla equivalente |
+| **Administración** (BE-FR-18, 27, 50–57, 76) | Búsqueda sin resultados con la consulta visible; usuario borrado o anonimizado; motivo obligatorio; confirmación con alcance e importe; vista previa del valor anterior y el nuevo; freno global activo visible en todas sus páginas; éxito con enlace a la auditoría |
+| **Errores globales** | 404, 403 y 500 con «Código de referencia» y una salida conocida (inicio o panel) |
+
+### 16.7 Contenido y lenguaje
+
+- **Vocabulario visible:** la especificación del panel fija los términos para el usuario (créditos, saldo, saldo reservado, deuda, créditos gratuitos o comprados con su caducidad) y evita los internos (ledger, reserva, bolsa) donde no ayuden.
+- Botones con su resultado concreto: «Comprar 10 € de créditos», «Borrar mi cuenta», «Cerrar las demás sesiones». Se evitan «OK» y «Aceptar» cuando dejen dudas.
+- Importes en créditos con su equivalencia en euros, con el formato y el redondeo de BE-FR-22. Las tablas usan cifras tabulares.
+- La ayuda imprescindible nunca vive solo en un *tooltip*.
+- Los mensajes de error dicen qué ha fallado, dónde, cómo corregirlo y qué se ha conservado. Los errores inesperados muestran el «Código de referencia».
+- **Sin patrones manipulativos:**
+  - ningún paquete preseleccionado y sin urgencia falsa;
+  - borrar la cuenta no exige más que lo que pide BE-FR-07;
+  - desactivar el aviso de saldo bajo es tan fácil como activarlo;
+  - las casillas legales nunca vienen marcadas.
+
+### 16.8 Rendimiento percibido
+
+- **Objetivos:** LCP ≤ 2,5 s, INP ≤ 200 ms y CLS ≤ 0,1, medidos **en laboratorio** sobre el build de producción con perfil móvil limitado. Páginas: landing, login, saldo del panel, compra y estadísticas de la administración.
+- No hay datos de campo: no se usa analítica de terceros (BE-FR-60) y recoger métricas propias queda fuera de la v4. Los resultados se presentan como lo que son: medidas de laboratorio.
+- **Presupuesto del cristal:** se compara con la versión de efectos reducidos al desplazar, abrir un diálogo y redimensionar, en perfil móvil. Si supera los objetivos o perjudica la lectura, se simplifica o se retira.
+- Se reserva el espacio de imágenes y datos que llegan después, no se vacía la vista para actualizar un dato y los envíos dan respuesta inmediata.
+- **Cuándo se mide:** primera medida al existir el panel (L12) y medida completa en L16 (15.18). La herramienta la decide el plan.
+
+### 16.9 Criterios de UX por historia
+
+| ID | Historia | Criterio observable |
+|---|---|---|
+| UX-01 | BE-FR-01 | Las etiquetas son visibles y persistentes. La regla real de la contraseña (8–128 caracteres) se ve antes de escribir. Se puede pegar y usar gestores de contraseñas (`autocomplete="new-password"`). El botón para mostrar la contraseña tiene nombre y estado. Si falla, se conserva todo salvo la contraseña y el foco va al resumen de errores |
+| UX-02 | BE-FR-01 CA4–CA5, BE-FR-02 CA3 | Tras registrarse, la pantalla dice a qué dirección se ha enviado el email, qué hacer si no llega y permite reenviarlo, indicando cuándo se puede volver a intentar |
+| UX-03 | BE-FR-02, BE-FR-64 CA2, BE-FR-11 CA1 | La confirmación de la verificación muestra el saldo de bienvenida concedido (o por qué no se concede) y el siguiente paso de la app de origen |
+| UX-04 | BE-FR-03, BE-FR-67 | Error de credenciales genérico; el bloqueo temporal dice cuándo se puede reintentar; tras iniciar sesión se vuelve a la página pedida (solo destinos internos) |
+| UX-05 | BE-FR-25 CA4, BE-FR-26 | El paso de compra muestra el paquete, el precio con IVA y los créditos resultantes, la casilla obligatoria y la opción de factura completa. Un doble envío muestra la misma compra. El resultado muestra el saldo nuevo |
+| UX-06 | BE-FR-25 CA2 | Cuando no se puede comprar, el texto «Próximamente» y su explicación son visibles y accesibles (no basta con un botón desactivado, que no recibe el foco) |
+| UX-07 | BE-FR-07 | La confirmación del borrado muestra el saldo que se pierde (en créditos y euros) y las apps afectadas, y pide la contraseña. La acción se llama «Borrar mi cuenta» y el foco inicial no está en ella. Al terminar, la sesión está cerrada y se confirma el borrado |
+| UX-08 | BE-FR-49.5 | Las gráficas tienen título, periodo y unidad, y tabla equivalente. «Sin datos» no se dibuja como cero. El selector de 30/90 días es un formulario GET (funciona sin JS y la URL se puede compartir) |
+| UX-09 | BE-FR-49.3, 49.4, 49.6 | Las listas paginadas conservan los filtros y la página en la URL, y al volver se restauran. La exportación CSV indica el rango y los filtros aplicados |
+| UX-10 | BE-FR-49.8, BE-FR-06 | La sesión actual se identifica («Esta sesión»). El texto de «cerrar todas» dice si la actual se mantiene |
+| UX-11 | BE-FR-70 CA2–CA3 | El aviso de documentos pendientes enlaza a cada documento, permite aceptarlos y explica qué deja de funcionar en las apps hasta hacerlo |
+| UX-12 | BE-FR-85 CA1 | Los anuncios del panel muestran su nivel con icono y texto además del color |
+| UX-13 | BE-FR-18, 27, 50 | Antes de confirmar un ajuste de saldo, un reembolso, un bloqueo o un cierre de sesiones, se ven el usuario, el importe y el efecto (saldo antes → después), y el motivo es obligatorio. Al guardar, se enlaza la entrada de auditoría |
+| UX-14 | BE-FR-51, 53 | Los cambios de parámetros económicos y de protecciones muestran el valor anterior, el nuevo y su alcance (global o por app) antes de guardar |
+| UX-15 | BE-FR-50 | La búsqueda de usuarios por email es un formulario GET con estados inicial, sin resultados y error, y conserva la consulta |
+| UX-16 | BE-FR-59 | La explicación de SmartScreen de la landing de Secretario tiene los pasos en texto; la captura es un apoyo, con texto alternativo |
+| UX-17 | BE-FR-58 | Los emails se leen bien en clientes con modo oscuro, tienen versión en texto plano, muestran el enlace del botón también como URL y no dependen de imágenes |
+| UX-18 | BE-FR-05, 66 | Tras cambiar la contraseña o el email, la confirmación indica que las demás sesiones se han cerrado |
+
+### 16.10 Prueba de usabilidad previa al lanzamiento
+
+- **Cuándo:** antes del lanzamiento público con cobros reales, junto a la auditoría manual de accesibilidad (15.18). No bloquea el desarrollo de la v4.
+- **Quién:** de 3 a 5 personas cercanas que no hayan participado en el proyecto, con perfiles variados (si es posible, alguna que use lector de pantalla o solo teclado).
+- **Tareas**, como escenarios con un objetivo y sin nombrar botones:
+  1. registrarse desde la landing de Secretario y verificar la cuenta;
+  2. comprar créditos (simulado, en staging);
+  3. averiguar en qué se gastaron créditos el último mes;
+  4. cambiar la contraseña;
+  5. borrar una cuenta de prueba.
+- **Condiciones:** staging con datos sembrados, consentimiento previo, sin grabar si no se consiente y con los datos mínimos.
+- **Registro:**
+  - por tarea, si se completó sin ayuda, con ayuda o no se completó;
+  - dónde se atascó la persona y qué términos no entendió.
+  Los hallazgos se priorizan por consecuencia, frecuencia y recuperación. Se corrigen y se repite el recorrido afectado.
+- No se sacan porcentajes ni conclusiones generales de una muestra tan pequeña.
+
+### 16.11 Verificación de UX
+
+Complementa 15.18.
+
+- **Matriz proporcional:**
+  - en las páginas clave: tema claro y oscuro × efectos normales y reducidos × anchos de 320, 390 y 1366 px;
+  - además: `forced-colors` y `reducedMotion` emulados en Playwright;
+  - el cambio de apariencia del sistema con Sistema seleccionado (`emulateMedia`) actualiza la página sin recargar y sin perder lo escrito.
+- **Sin JavaScript:** los flujos críticos y el selector de tema y de efectos funcionan con JavaScript desactivado. La excepción del captcha del registro está en la constitución, «Mejora progresiva».
+- **Regresión visual:** una de las capturas de 15.18 se toma con efectos reducidos.
+- **Estado de cada comprobación:** comprobado, pendiente, no verificable en este entorno o no aplica (con el motivo). La ausencia de errores automáticos no demuestra accesibilidad ni usabilidad.
+
+### 16.12 Traslado a Spec Kit
+
+- **`/speckit-specify`:** concreta 16.4–16.9 en la funcionalidad: estados, criterios UX-xx y textos visibles.
+- **`/speckit-plan`:** decide lo siguiente:
+  - qué tokens y componentes se crean o adaptan (DS-xx);
+  - la técnica de tema sin destello y los nombres de las cookies;
+  - la herramienta de medición del rendimiento y la matriz de pruebas.
+- **`/speckit-tasks`:** los estados, la accesibilidad, los temas y la adaptación **no** se dejan para el final como «pulido».
+- **L01** incluye la base visual:
+  - DS-01 a DS-05, DS-07 y DS-08;
+  - el layout base con el selector de tema y el ajuste de efectos.
+  Así el smoke y la spec de accesibilidad prueban los dos temas desde el principio. DS-06 y DS-09 se resuelven en cada lote con interfaz.
