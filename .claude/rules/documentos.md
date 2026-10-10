@@ -2,6 +2,8 @@
 paths:
   - "Historias.md"
   - ".specify/memory/constitution.md"
+  - "ARCHITECTURE.md"
+  - "docs/adr/**"
   - "Design/**"
 ---
 
@@ -23,9 +25,25 @@ paths:
 - Después de editar, se vuelve a copiar literalmente en `F:\Apps\secretario2\docs\v4-backend-spec.md`
   y se comprueba que son idénticos (`cmp`). Ese fichero no se edita directamente.
 
+## `ARCHITECTURE.md`
+
+- Concreta la constitución y nunca la contradice. Si hace falta contradecirla, primero se enmienda
+  la constitución.
+- Cambiar una regla, una frontera o el orden de las funcionalidades exige un ADR.
+- Al crear, fusionar o dividir una funcionalidad se actualiza la tabla de la sección 3 (tablas,
+  requisitos y dependencias permitidas).
+
+## ADR (`docs/adr/`)
+
+- Formato y numeración del `README.md` de la carpeta; el número es el siguiente libre y la tabla del
+  índice se actualiza.
+- Un ADR aceptado y ya integrado en `main` no se edita. Si la decisión cambia, se escribe otro que lo
+  sustituye, y en el anterior solo se cambia el estado a «Sustituido por NNNN».
+
 ## `Design/`
 
-- Es la fuente canónica de la identidad visual (`Historias.md` 16.2). Solo se modifica con la
+- Es la fuente canónica de la identidad visual **hasta L01**; desde L01 mandan
+  `src/lib/design-system/` y `src/lib/components/{ui,layout}/` (ADR 0007). Solo se modifica con la
   aprobación del propietario.
 - Los cambios son centrales: tokens con pareja clara y oscura, y componentes compartidos. Nunca
   colores literales ni estilos locales repetidos.

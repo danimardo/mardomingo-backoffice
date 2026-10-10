@@ -17,21 +17,40 @@ Si se contradicen, manda la primera:
    definición de terminado).
 2. `Historias.md`: qué se construye (requisitos `BE-FR-XX` con sus `CA`, testing en la sección 15
    y experiencia de usuario en la sección 16).
-3. `Design/`: identidad visual, tokens y componentes base. Tiene adaptaciones pendientes
-   (`Historias.md` 16.2, DS-01 a DS-09).
-4. `specs/NNN-*/`: especificación, plan y tareas de cada funcionalidad, generados con Spec Kit.
+3. `ARCHITECTURE.md`: dónde va cada cosa, fronteras entre funcionalidades, flujos y el
+   «Architecture Check» de cada plan. Las decisiones y sus alternativas, en `docs/adr/`.
+4. Sistema de diseño: hasta L01, `Design/`; desde L01, `src/lib/design-system/` y
+   `src/lib/components/{ui,layout}/` (ADR 0007). Adaptaciones pendientes en `Historias.md` 16.2.
+5. `specs/NNN-*/`: especificación, plan y tareas de cada funcionalidad, generados con Spec Kit.
 
 Una contradicción no se resuelve en silencio: se informa y se enmienda uno de los documentos.
 
 ## Flujo de trabajo (Spec Kit)
 
 `/speckit-specify` → `/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` → `/speckit-analyze`
-→ `/speckit-implement`. La constitución solo se cambia con `/speckit-constitution`.
+→ `/speckit-implement` → `/speckit-converge`. La constitución solo se cambia con
+`/speckit-constitution`.
+
+- En `/speckit-plan`, lee `ARCHITECTURE.md` y añade después del «Constitution Check» la sección
+  «Architecture Check» (sección 12), con las aristas nuevas entre funcionalidades.
 
 - Cada especificación cita los `BE-FR` que cubre. El trabajo va por lotes (L01–L16,
   `Historias.md` 15.6), y cada lote cierra con su checkpoint (15.29).
 - Ramas: `main` (producción), `staging` y ramas de trabajo `NNN-nombre-corto`, creadas por Spec
   Kit. Commits con Conventional Commits.
+
+## Localizar el código
+
+El servidor es un monolito modular: `src/lib/server/features/<funcionalidad>/` (`index.ts` como API
+pública y, si hacen falta, `domain/`, `service.ts`, `repository.ts`, `schema.ts`, `contract.ts`,
+`events.ts` y `presenters.ts`). La tabla de funcionalidades con su orden, tablas, requisitos y
+dependencias permitidas está en `ARCHITECTURE.md` (sección 3); dónde va cada cosa, en la sección 7.
+
+- Busca primero el `BE-FR` en esa tabla para saber qué funcionalidad toca.
+- Desde otra funcionalidad o desde una ruta, importa **solo** su `index.ts`, y solo de las
+  funcionalidades anteriores en el orden. Nunca leas tablas ajenas. Solo `credits` escribe en el
+  saldo.
+- Si una tarea necesita romper una frontera, detente y propón un cambio de diseño o un ADR.
 
 ## Comandos
 
@@ -44,10 +63,17 @@ se mide cuánto tarda cada uno y se actualiza esta sección.
 | `pnpm check` | `svelte-kit sync` + `svelte-check` sin avisos |
 | `pnpm lint` | Prettier + ESLint sin avisos (nivel historia, PR y CI) |
 | `pnpm lint:changed` | ESLint solo sobre lo modificado (nivel lote) |
-| `pnpm test` / `pnpm test:coverage` | Vitest |
-| `pnpm test:e2e` / `test:e2e:smoke` / `test:e2e:critical` | Playwright contra el build |
+| `pnpm lint:tokens` | Sin colores literales fuera de los tokens |
+| `pnpm test` / `pnpm test:coverage` | Vitest: unit, componente e integración (sin `http`) |
+| `pnpm test:related <ficheros>` | Tests afectados por un cambio (nivel edición) |
+| `pnpm test:http` | Hooks y API contra el build |
+| `pnpm test:trace` | Lista los `CA` y `UX-xx` sin test |
+| `pnpm test:e2e` / `test:e2e:smoke` / `test:e2e:critical` / `test:e2e:a11y` | Playwright contra el build |
 | `pnpm build` | Build de producción (sin secretos) |
-| `pnpm validate` | Todo lo anterior en orden, parando en el primer fallo |
+| `pnpm validate` | `check`, `lint`, `test:coverage`, `build` y `test:e2e`, en ese orden, parando en el primer fallo |
+
+Qué ejecutar en cada nivel (edición, lote, historia o PR): `Historias.md` 15.24. El test de
+arquitectura se ejecuta siempre al cerrar un lote: `test:related` no lo selecciona.
 
 Gestor de paquetes: **pnpm** (no uses npm ni yarn). Node 24.21.0 y pnpm 12.8.1.
 
@@ -72,10 +98,21 @@ Gestor de paquetes: **pnpm** (no uses npm ni yarn). Node 24.21.0 y pnpm 12.8.1.
 - **No hagas commit ni push sin autorización explícita.** Antes de cada commit revisa
   `git status` y no incluyas ficheros ajenos a la tarea.
 - No leas ni muestres secretos (`.env*` salvo `.env.example`, claves y tokens).
-- No modifiques `.specify/` ni `.claude/skills/speckit-*`: los gestiona Spec Kit.
-- `Design/` solo se cambia con aprobación, de forma centralizada (tokens y componentes), nunca con
-  estilos locales.
+- No modifiques a mano `.specify/` ni `.claude/skills/speckit-*`: los gestiona Spec Kit (la
+  constitución, solo con `/speckit-constitution`).
+- Un ADR aceptado y ya integrado no se edita: se sustituye por otro (`docs/adr/README.md`).
+- El sistema de diseño solo se cambia con aprobación, de forma centralizada (tokens y
+  componentes), nunca con estilos locales.
 - No borres ni sobrescribas especificaciones ya cerradas en `specs/`.
+
+## Interfaz
+
+- Antes de crear un componente, busca en `components/ui/`, `components/layout/` y el sistema de
+  diseño; las variantes nuevas se añaden ahí.
+- Sin colores literales ni paleta de Tailwind: solo tokens. El cristal, solo en las zonas del
+  principio XIII. Iconos con el componente `Icon` del sistema de diseño.
+- Enlaces con `resolve()`, mutaciones con form actions y filtros por formulario GET. Prueba sin
+  JavaScript: nada crítico depende de él salvo el captcha del registro.
 
 ## Entorno (Windows)
 
