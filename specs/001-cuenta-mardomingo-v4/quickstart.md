@@ -6,7 +6,7 @@
 > suites ni servidores simulados. Los comandos de esta guía son los fijados por la constitución («Scripts
 > estándar») y por `Historias.md` 15.25; se crean en L01 (T-TEST-006) y se documentan en `CLAUDE.md`. Hasta
 > entonces, ningún escenario puede marcarse como **comprobado**. Los nombres de las variables exclusivas de
-> test (simuladores, *outbox*, captcha falso) los fija `env-schema.ts` en L01.
+> test (simuladores, _outbox_, captcha falso) los fija `env-schema.ts` en L01.
 
 Esta guía **no** explica cómo implementar: describe cómo comprobar que la funcionalidad completa cumple la
 especificación. Cada escenario enlaza a los contratos:
@@ -22,14 +22,14 @@ especificación. Cada escenario enlaza a los contratos:
 
 ## 1. Requisitos previos
 
-| Herramienta | Versión | Para qué |
-|---|---|---|
-| Node.js | **24.21.0** (LTS «Krypton») | Runtime, build y tests (`engines.node: ">=24.21.0 <25"`) |
-| pnpm | **12.8.1** (campo `packageManager`; `corepack enable`) | Instalación con `--frozen-lockfile` y scripts |
-| ffmpeg / ffprobe | **7.1.x** en el `PATH` | Medición real de la duración del audio en los tests de integración de transcripción (BE-FR-44) y conversión a mp3 o wav del audio del respaldo por OpenRouter (D-08). En la imagen Docker viene de Debian 13 |
-| Docker | Reciente, con soporte de contenedores Linux | Capturas de regresión visual **solo** en el contenedor oficial de Playwright 1.64.0 (nunca en Windows) |
-| Navegadores de Playwright | Los de `@playwright/test` 1.64.0 | `pnpm exec playwright install chromium` (y `firefox webkit` para la matriz) |
-| Git | Reciente | Selección de ficheros cambiados (`lint:changed`) |
+| Herramienta               | Versión                                                | Para qué                                                                                                                                                                                                     |
+| ------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Node.js                   | **24.21.0** (LTS «Krypton»)                            | Runtime, build y tests (`engines.node: ">=24.21.0 <25"`)                                                                                                                                                     |
+| pnpm                      | **12.8.1** (campo `packageManager`; `corepack enable`) | Instalación con `--frozen-lockfile` y scripts                                                                                                                                                                |
+| ffmpeg / ffprobe          | **7.1.x** en el `PATH`                                 | Medición real de la duración del audio en los tests de integración de transcripción (BE-FR-44) y conversión a mp3 o wav del audio del respaldo por OpenRouter (D-08). En la imagen Docker viene de Debian 13 |
+| Docker                    | Reciente, con soporte de contenedores Linux            | Capturas de regresión visual **solo** en el contenedor oficial de Playwright 1.64.0 (nunca en Windows)                                                                                                       |
+| Navegadores de Playwright | Los de `@playwright/test` 1.64.0                       | `pnpm exec playwright install chromium` (y `firefox webkit` para la matriz)                                                                                                                                  |
+| Git                       | Reciente                                               | Selección de ficheros cambiados (`lint:changed`)                                                                                                                                                             |
 
 En Windows, una persona administradora puede aplicar las exclusiones de Windows Defender del script de
 T-TEST-008 (nunca el agente).
@@ -46,24 +46,24 @@ T-TEST-008 (nunca el agente).
    con un conjunto mínimo de variables que generan ellas mismas (`webServer.env` o `globalSetup`), sin
    sintaxis de shell:
 
-   | Variable | Valor en test | Nota |
-   |---|---|---|
-   | `APP_ENV` | `test` | Único entorno que admite simuladores, captcha falso y *outbox* en fichero; no exige las variables de producción |
-   | `DATABASE_PATH` | Fichero temporal por ejecución | BD de test con migraciones y *seed* (app `secretario`, ajustes, paquetes) |
-   | `PUBLIC_WEB_URL` / `PUBLIC_API_URL` | Dos hosts distintos (p. ej. `http://localhost:<puerto>` y `http://127.0.0.1:<puerto>`) | Ejercen la separación por host (15.27-8) |
-   | `BETTER_AUTH_SECRET` | Aleatorio, generado al arrancar la suite | Nunca un valor real |
-   | `EMAIL_HASH_KEY` | Aleatorio, generado al arrancar la suite | Clave del HMAC-SHA256 del email normalizado (D-11); en producción nunca se rota |
-   | `OPENROUTER_MANAGEMENT_KEY` | Ausente (salvo en el test de la alerta de saldo, contra el simulador) | Sin ella la alerta de saldo queda desactivada y se registra `ai.provider_balance.check_disabled` al arrancar (D-04) |
-   | `ADMIN_EMAIL` | `admin@example.test` | Promoción del administrador al verificar |
-   | `PAYMENTS_PROVIDER` / `INVOICING_PROVIDER` | `simulated` / `none` | Únicos valores admitidos en la v4 |
-   | `LOG_LEVEL` | `debug` | El marcador de privacidad ve todos los niveles |
-   | `PORT` | Libre, elegido por la suite | En producción y staging, 7311 y 7312 |
-   | Simuladores, *outbox*, captcha falso | URL base de `tests/mock-servers/`, carpeta `.outbox/`, captcha falso | Nombres definitivos en L01 |
+   | Variable                                   | Valor en test                                                                          | Nota                                                                                                                |
+   | ------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+   | `APP_ENV`                                  | `test`                                                                                 | Único entorno que admite simuladores, captcha falso y _outbox_ en fichero; no exige las variables de producción     |
+   | `DATABASE_PATH`                            | Fichero temporal por ejecución                                                         | BD de test con migraciones y _seed_ (app `secretario`, ajustes, paquetes)                                           |
+   | `PUBLIC_WEB_URL` / `PUBLIC_API_URL`        | Dos hosts distintos (p. ej. `http://localhost:<puerto>` y `http://127.0.0.1:<puerto>`) | Ejercen la separación por host (15.27-8)                                                                            |
+   | `BETTER_AUTH_SECRET`                       | Aleatorio, generado al arrancar la suite                                               | Nunca un valor real                                                                                                 |
+   | `EMAIL_HASH_KEY`                           | Aleatorio, generado al arrancar la suite                                               | Clave del HMAC-SHA256 del email normalizado (D-11); en producción nunca se rota                                     |
+   | `OPENROUTER_MANAGEMENT_KEY`                | Ausente (salvo en el test de la alerta de saldo, contra el simulador)                  | Sin ella la alerta de saldo queda desactivada y se registra `ai.provider_balance.check_disabled` al arrancar (D-04) |
+   | `ADMIN_EMAIL`                              | `admin@example.test`                                                                   | Promoción del administrador al verificar                                                                            |
+   | `PAYMENTS_PROVIDER` / `INVOICING_PROVIDER` | `simulated` / `none`                                                                   | Únicos valores admitidos en la v4                                                                                   |
+   | `LOG_LEVEL`                                | `debug`                                                                                | El marcador de privacidad ve todos los niveles                                                                      |
+   | `PORT`                                     | Libre, elegido por la suite                                                            | En producción y staging, 7311 y 7312                                                                                |
+   | Simuladores, _outbox_, captcha falso       | URL base de `tests/mock-servers/`, carpeta `.outbox/`, captcha falso                   | Nombres definitivos en L01                                                                                          |
 
    Para depurar a mano contra el build, se lanzan esas mismas variables en el proceso (`node build`), nunca
    con claves reales de OpenRouter, Mistral, Resend o Turnstile.
 
-3. Datos: cada test crea los suyos con *builders* que llaman a los servicios (emails únicos
+3. Datos: cada test crea los suyos con _builders_ que llaman a los servicios (emails únicos
    `e2e-<worker>-<uuid>@example.test`). Los E2E reutilizan el `storageState` por rol (`anonymous`, `user`,
    `tester`, `admin`, `blocked`) del proyecto `setup`.
 
@@ -71,29 +71,29 @@ T-TEST-008 (nunca el agente).
 
 Todos **pendientes de L01**.
 
-| Comando | Qué valida | Cuándo (15.24) |
-|---|---|---|
-| `pnpm check` | `svelte-kit sync` + `svelte-check --fail-on-warnings` (tipos, firmas de eventos) | Siempre |
-| `pnpm lint` | `prettier --check .` y `eslint . --max-warnings 0` (fronteras, sin `as`, sin `$app/stores`, a11y de Svelte) | PR |
-| `pnpm lint:changed` | ESLint solo sobre lo cambiado (completo si cambia la configuración) | Durante el lote |
-| `pnpm lint:tokens` | Sin colores, gradientes ni sombras literales fuera de los tokens (puerta 10) | PR |
-| `pnpm test` | Vitest `unit` + `component` + `integration` (sin `http`), incluido el test de arquitectura | Lote y PR |
-| `pnpm test:unit` / `test:component` / `test:int` | Un proyecto de Vitest | Bucle de desarrollo |
-| `pnpm test:related <ficheros>` | `vitest related` | Bucle de desarrollo |
-| `pnpm test:http` | Hooks y API contra el build: separación por host, CORS, comprobación de origen del host web (D-01), cabeceras, códigos de 7.2, conformidad con el OpenAPI, IP real | PR |
-| `pnpm test:coverage` | Umbrales: 100 % en `domain/` y los dos `shared/`; 80 % en `src/lib/**` | PR |
-| `pnpm test:trace` | Lista los `CA` de `Historias.md` y los criterios `UX-xx` sin test | Cierre de lote e historia |
-| `pnpm test:e2e:smoke` | Arranque, estilos, navegación, sin errores de consola ni hidratación, login y panel | PR |
-| `pnpm test:e2e:critical` | Los 10 E2E críticos de 15.17 (incluido sin JavaScript) | PR |
-| `pnpm test:e2e:a11y` | axe en **todas** las rutas, tema claro y oscuro: cero `serious`/`critical` | PR |
-| `pnpm test:e2e` | Todo Playwright en Chromium | `main` |
-| `pnpm test:e2e:cross-browser` | Chromium, Firefox y WebKit (también WebKit móvil) | Nocturna, release y PR de riesgo |
-| `pnpm test:e2e:visual` | Regresión visual (8–10 capturas), **solo dentro del contenedor oficial de Playwright 1.64.0** | Nocturna |
-| `pnpm test:e2e:ui` / `:headed` / `:debug` | Depuración | Local |
-| `pnpm test:mutation` | Stryker incremental sobre el dominio | Semanal |
-| `pnpm build` | `vite build` sin secretos | PR |
-| `pnpm validate` | `check` → `lint` → `test:coverage` → `build` → `test:e2e`, parando en el primer fallo | Antes de integrar |
-| `pnpm perf:seed` / `pnpm perf:load` | Siembra con semilla fija y carga (1 sesión y 20 sesiones con pausas de ~5 s), reservas correctas bajo carga y volumen de logs por petición | L12, L16 y release |
+| Comando                                          | Qué valida                                                                                                                                                         | Cuándo (15.24)                   |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| `pnpm check`                                     | `svelte-kit sync` + `svelte-check --fail-on-warnings` (tipos, firmas de eventos)                                                                                   | Siempre                          |
+| `pnpm lint`                                      | `prettier --check .` y `eslint . --max-warnings 0` (fronteras, sin `as`, sin `$app/stores`, a11y de Svelte)                                                        | PR                               |
+| `pnpm lint:changed`                              | ESLint solo sobre lo cambiado (completo si cambia la configuración)                                                                                                | Durante el lote                  |
+| `pnpm lint:tokens`                               | Sin colores, gradientes ni sombras literales fuera de los tokens (puerta 10)                                                                                       | PR                               |
+| `pnpm test`                                      | Vitest `unit` + `component` + `integration` (sin `http`), incluido el test de arquitectura                                                                         | Lote y PR                        |
+| `pnpm test:unit` / `test:component` / `test:int` | Un proyecto de Vitest                                                                                                                                              | Bucle de desarrollo              |
+| `pnpm test:related <ficheros>`                   | `vitest related`                                                                                                                                                   | Bucle de desarrollo              |
+| `pnpm test:http`                                 | Hooks y API contra el build: separación por host, CORS, comprobación de origen del host web (D-01), cabeceras, códigos de 7.2, conformidad con el OpenAPI, IP real | PR                               |
+| `pnpm test:coverage`                             | Umbrales: 100 % en `domain/` y los dos `shared/`; 80 % en `src/lib/**`                                                                                             | PR                               |
+| `pnpm test:trace`                                | Lista los `CA` de `Historias.md` y los criterios `UX-xx` sin test                                                                                                  | Cierre de lote e historia        |
+| `pnpm test:e2e:smoke`                            | Arranque, estilos, navegación, sin errores de consola ni hidratación, login y panel                                                                                | PR                               |
+| `pnpm test:e2e:critical`                         | Los 10 E2E críticos de 15.17 (incluido sin JavaScript)                                                                                                             | PR                               |
+| `pnpm test:e2e:a11y`                             | axe en **todas** las rutas, tema claro y oscuro: cero `serious`/`critical`                                                                                         | PR                               |
+| `pnpm test:e2e`                                  | Todo Playwright en Chromium                                                                                                                                        | `main`                           |
+| `pnpm test:e2e:cross-browser`                    | Chromium, Firefox y WebKit (también WebKit móvil)                                                                                                                  | Nocturna, release y PR de riesgo |
+| `pnpm test:e2e:visual`                           | Regresión visual (8–10 capturas), **solo dentro del contenedor oficial de Playwright 1.64.0**                                                                      | Nocturna                         |
+| `pnpm test:e2e:ui` / `:headed` / `:debug`        | Depuración                                                                                                                                                         | Local                            |
+| `pnpm test:mutation`                             | Stryker incremental sobre el dominio                                                                                                                               | Semanal                          |
+| `pnpm build`                                     | `vite build` sin secretos                                                                                                                                          | PR                               |
+| `pnpm validate`                                  | `check` → `lint` → `test:coverage` → `build` → `test:e2e`, parando en el primer fallo                                                                              | Antes de integrar                |
+| `pnpm perf:seed` / `pnpm perf:load`              | Siembra con semilla fija y carga (1 sesión y 20 sesiones con pausas de ~5 s), reservas correctas bajo carga y volumen de logs por petición                         | L12, L16 y release               |
 
 Ejemplo orientativo de la regresión visual en el contenedor (lo concreta L15/L16):
 
@@ -121,7 +121,7 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
   2. Enviar con una contraseña de 7 caracteres → error junto al campo, foco en el resumen, lo escrito se
      conserva salvo la contraseña.
   3. Enviar datos válidos (captcha falso válido, verificado por `CaptchaVerifier` de `accounts`, D-02).
-  4. Leer el enlace en el *outbox* y abrir `/verificar?token=…`; pulsar «Verificar».
+  4. Leer el enlace en el _outbox_ y abrir `/verificar?token=…`; pulsar «Verificar».
   5. Repetir el registro con el mismo email.
   6. Registrar y verificar `<usuario>+2@gmail.com` cuando `<u.suario>@gmail.com` ya recibió la bienvenida.
   7. Con la app `secretario` con texto propio de pasos siguientes, repetir 1–4 con otra cuenta.
@@ -348,7 +348,7 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
   3. Redirección a `/cuenta-borrada`; sesión web cerrada; bolsas restantes a cero con movimientos `forfeit`
      que cuentan en estadísticas como saldo perdido (D-15); email, perfil, datos fiscales y documentos
      sincronizados eliminados; `deleted_at` fijado; movimientos, operaciones y pagos conservados solo con el
-     `user_id` opaco, sin desactivar ningún *trigger* (D-18); hash en `welcome_grants` conservado.
+     `user_id` opaco, sin desactivar ningún _trigger_ (D-18); hash en `welcome_grants` conservado.
   4. `401 UNAUTHENTICATED`.
   5. Cuenta creada **sin** bienvenida.
 
@@ -356,7 +356,7 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
 
 - **Requisitos**: BE-FR-15 CA1, 46, 56, 58, 80, 82, 87; SC-015, SC-019.
 - **Contratos**: log-events.md §4; eventos con marca **A** y `notifications.alert.*`.
-- **Suite**: `test:int` con reloj falso (cambios de día en Europe/Madrid) y *outbox*.
+- **Suite**: `test:int` con reloj falso (cambios de día en Europe/Madrid) y _outbox_.
 - **Pasos** (cada uno dos veces seguidas y, después, tras normalizar la condición):
   1. Superar el freno global (coste real del día + reservas de cuentas sin compras > 5 €).
   2. Saldo de OpenRouter simulado < 10 USD en la tarea horaria.
@@ -401,11 +401,8 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
   2. Seis peticiones de IA de la app A en un minuto.
   3. Peticiones de la app B hasta sumar 30 en la cuenta; una más de cualquiera de las dos.
   4. Intentar fijar en la app A un valor de 40 (mayor que el global).
-- **Resultado esperado**:
-  2. La sexta → `429 RATE_LIMITED` con `Retry-After` (`reason = rate_limited_app`).
-  3. La app B sigue funcionando hasta que la suma llega a 30; la siguiente → `429` (`reason =
-     rate_limited_account`).
-  4. Rechazado al guardar con el error junto al campo.
+- **Resultado esperado**: 2. La sexta → `429 RATE_LIMITED` con `Retry-After` (`reason = rate_limited_app`). 3. La app B sigue funcionando hasta que la suma llega a 30; la siguiente → `429` (`reason =
+ rate_limited_account`). 4. Rechazado al guardar con el error junto al campo.
 
 ### V15 · Ajuste del administrador que liquida deuda
 
@@ -417,14 +414,11 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
   2. Previsualizar un ajuste **gratuito** de +10 créditos sin motivo; con motivo.
   3. Confirmar.
   4. Previsualizar un ajuste negativo de −10 créditos (mayor que el saldo disponible de 6,764).
-- **Resultado esperado**:
-  2. Sin motivo, error junto al campo; con motivo, la vista previa muestra saldo antes (−3,236) → después
-     (6,764) y la deuda liquidada.
-  3. Movimientos `debt_settlement` (3,236) y `adjustment`; bolsa gratuita de 6,764 créditos; la parte que
-     liquida consta como pérdida absorbida en estadísticas; entrada de auditoría enlazada; doble envío sin
-     duplicar el ajuste.
-  4. Error de validación junto al importe y ningún movimiento: un ajuste negativo no puede superar el saldo
-     disponible ni crear deuda (D-16; `credits.adjustment.rejected` con `reason = exceeds_available`).
+- **Resultado esperado**: 2. Sin motivo, error junto al campo; con motivo, la vista previa muestra saldo antes (−3,236) → después
+  (6,764) y la deuda liquidada. 3. Movimientos `debt_settlement` (3,236) y `adjustment`; bolsa gratuita de 6,764 créditos; la parte que
+  liquida consta como pérdida absorbida en estadísticas; entrada de auditoría enlazada; doble envío sin
+  duplicar el ajuste. 4. Error de validación junto al importe y ningún movimiento: un ajuste negativo no puede superar el saldo
+  disponible ni crear deuda (D-16; `credits.adjustment.rejected` con `reason = exceeds_available`).
 
 ### V16 · Anuncios del panel
 
@@ -436,10 +430,8 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
      una app que la cuenta nunca ha usado.
   2. La cuenta tiene una sesión pasada de `secretario`. Abrir `/panel`.
   3. `GET /app/status` con `X-App-Version: 4.0.0`.
-- **Resultado esperado**:
-  2. El panel muestra el anuncio general y el de `secretario` (sin filtrar por versión), cada uno con el
-     nombre de su app y el nivel con icono y texto; no muestra el de la app no usada.
-  3. `/app/status` devuelve solo el general (el de `secretario` no aplica a 4.0.0), con su `id` estable.
+- **Resultado esperado**: 2. El panel muestra el anuncio general y el de `secretario` (sin filtrar por versión), cada uno con el
+  nombre de su app y el nivel con icono y texto; no muestra el de la app no usada. 3. `/app/status` devuelve solo el general (el de `secretario` no aplica a 4.0.0), con su `id` estable.
 
 ### V17 · Comprobación de origen en la web y subida de audio sin `Origin`
 
@@ -454,36 +446,36 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
   4. En el host de la API, `POST /api/v1/ai/transcribe` en `multipart/form-data` **sin** `Origin`, con Bearer
      de `secretario` y un audio válido.
   5. En el host de la API, `POST /api/v1/ai/chat` con un `Origin` que no está en `allowed_origins` de la app.
-  6. *Preflight* `OPTIONS` con el `Origin` de una app activa; otro con un origen que no figura en ninguna.
+  6. _Preflight_ `OPTIONS` con el `Origin` de una app activa; otro con un origen que no figura en ninguna.
 - **Resultado esperado**:
-  1. y 2. `403` sin ejecutar la *action* (`http.origin.rejected`, `reason = origin_missing` /
+  1. y 2. `403` sin ejecutar la _action_ (`http.origin.rejected`, `reason = origin_missing` /
      `origin_mismatch`).
-  3. La *action* se ejecuta con normalidad.
-  4. `200`: la comprobación de origen de SvelteKit está desactivada y la propia solo actúa en el host web.
-  5. `403 ORIGIN_NOT_ALLOWED` sin `Access-Control-Allow-Origin`.
-  6. `204` con las cabeceras CORS de api-v1.md 1.5; el segundo, sin `Access-Control-Allow-Origin`.
+  2. La _action_ se ejecuta con normalidad.
+  3. `200`: la comprobación de origen de SvelteKit está desactivada y la propia solo actúa en el host web.
+  4. `403 ORIGIN_NOT_ALLOWED` sin `Access-Control-Allow-Origin`.
+  5. `204` con las cabeceras CORS de api-v1.md 1.5; el segundo, sin `Access-Control-Allow-Origin`.
 
 ## 5. Resumen de cobertura
 
-| Escenario | Suite principal | Lote (15.6) |
-|---|---|---|
-| V01 | E2E crítico 1, `test:int` | L03, L05 (bienvenida, D-20) |
-| V02 | `test:http`, E2E crítico 5 | L04, L07, L12 |
-| V03 | `test:int` (concurrencia) | L05, L07 |
-| V04 | `test:int`, `test:http` | L07 |
-| V05 | `test:int` (ffprobe real) | L08 |
-| V06 | E2E crítico 4 | L10 |
-| V07 | E2E crítico 10 (sin JS) | L01–L13 |
-| V08 | Spec de tema, smoke, a11y | L01 |
-| V09 | E2E crítico 8, `test:http` | L04, L13 |
-| V10 | `test:int`, `test:http` | L11 |
-| V11 | E2E crítico 6, `test:int` | L12 |
-| V12 | `test:int` (reloj falso) | L09, L14 |
-| V13 | Marcador de privacidad | L07, L08, L11 |
-| V14 | `test:int`, `test:http` | L09 |
-| V15 | `test:int`, E2E crítico 8 | L05, L13 |
-| V16 | `test:int`, `test:http` | L04, L12 |
-| V17 | `test:http` | L01 (origen), L04 (CORS), L08 (transcripción) |
+| Escenario | Suite principal            | Lote (15.6)                                   |
+| --------- | -------------------------- | --------------------------------------------- |
+| V01       | E2E crítico 1, `test:int`  | L03, L05 (bienvenida, D-20)                   |
+| V02       | `test:http`, E2E crítico 5 | L04, L07, L12                                 |
+| V03       | `test:int` (concurrencia)  | L05, L07                                      |
+| V04       | `test:int`, `test:http`    | L07                                           |
+| V05       | `test:int` (ffprobe real)  | L08                                           |
+| V06       | E2E crítico 4              | L10                                           |
+| V07       | E2E crítico 10 (sin JS)    | L01–L13                                       |
+| V08       | Spec de tema, smoke, a11y  | L01                                           |
+| V09       | E2E crítico 8, `test:http` | L04, L13                                      |
+| V10       | `test:int`, `test:http`    | L11                                           |
+| V11       | E2E crítico 6, `test:int`  | L12                                           |
+| V12       | `test:int` (reloj falso)   | L09, L14                                      |
+| V13       | Marcador de privacidad     | L07, L08, L11                                 |
+| V14       | `test:int`, `test:http`    | L09                                           |
+| V15       | `test:int`, E2E crítico 8  | L05, L13                                      |
+| V16       | `test:int`, `test:http`    | L04, L12                                      |
+| V17       | `test:http`                | L01 (origen), L04 (CORS), L08 (transcripción) |
 
 Antes del lanzamiento público con cobros reales se añaden, fuera de esta guía automática: la auditoría
 manual WCAG 2.2 AA (NVDA y VoiceOver), la prueba de usabilidad de 16.10, el simulacro de restauración de

@@ -588,6 +588,7 @@ constitución.
 | Validación | `zod` | **4.6.5** |
 | OpenAPI | `zod-openapi` | **6.0.2** |
 | i18n | `@inlang/paraglide-js` | **2.27.0** (solo `es`) |
+| Plugins de mensajes de Paraglide | `@inlang/plugin-message-format` / `@inlang/plugin-m-function-matcher` | **4.5.0** / **2.3.0** (devDependencies). `project.inlang/settings.json` los carga desde `node_modules`; el valor por defecto de Paraglide los descarga de jsDelivr en cada build, algo que queda PROHIBIDO |
 | Estilos | `tailwindcss` / `@tailwindcss/vite` | **4.3.3** / **4.3.3** |
 | Gráficas | `layerchart` | **2.6.1** |
 | Email | `resend` | **6.32.1** |
@@ -1099,4 +1100,4 @@ el motivo). Los lotes cierran con la
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 2.1.2 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 2.1.3 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10

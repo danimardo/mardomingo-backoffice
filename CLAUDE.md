@@ -58,19 +58,19 @@ dependencias permitidas está en `ARCHITECTURE.md` (sección 3); dónde va cada 
 en la constitución («Scripts estándar») y en `Historias.md` 15.25. Cuando existan, se comprueban,
 se mide cuánto tarda cada uno y se actualiza esta sección.
 
-| Script | Uso |
-|---|---|
-| `pnpm check` | `svelte-kit sync` + `svelte-check` sin avisos |
-| `pnpm lint` | Prettier + ESLint sin avisos (nivel historia, PR y CI) |
-| `pnpm lint:changed` | ESLint solo sobre lo modificado (nivel lote) |
-| `pnpm lint:tokens` | Sin colores literales fuera de los tokens |
-| `pnpm test` / `pnpm test:coverage` | Vitest: unit, componente e integración (sin `http`) |
-| `pnpm test:related <ficheros>` | Tests afectados por un cambio (nivel edición) |
-| `pnpm test:http` | Hooks y API contra el build |
-| `pnpm test:trace` | Lista los `CA` y `UX-xx` sin test |
-| `pnpm test:e2e` / `test:e2e:smoke` / `test:e2e:critical` / `test:e2e:a11y` | Playwright contra el build |
-| `pnpm build` | Build de producción (sin secretos) |
-| `pnpm validate` | `check`, `lint`, `test:coverage`, `build` y `test:e2e`, en ese orden, parando en el primer fallo |
+| Script                                                                     | Uso                                                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `pnpm check`                                                               | `svelte-kit sync` + `svelte-check` sin avisos                                                    |
+| `pnpm lint`                                                                | Prettier + ESLint sin avisos (nivel historia, PR y CI)                                           |
+| `pnpm lint:changed`                                                        | ESLint solo sobre lo modificado (nivel lote)                                                     |
+| `pnpm lint:tokens`                                                         | Sin colores literales fuera de los tokens                                                        |
+| `pnpm test` / `pnpm test:coverage`                                         | Vitest: unit, componente e integración (sin `http`)                                              |
+| `pnpm test:related <ficheros>`                                             | Tests afectados por un cambio (nivel edición)                                                    |
+| `pnpm test:http`                                                           | Hooks y API contra el build                                                                      |
+| `pnpm test:trace`                                                          | Lista los `CA` y `UX-xx` sin test                                                                |
+| `pnpm test:e2e` / `test:e2e:smoke` / `test:e2e:critical` / `test:e2e:a11y` | Playwright contra el build                                                                       |
+| `pnpm build`                                                               | Build de producción (sin secretos)                                                               |
+| `pnpm validate`                                                            | `check`, `lint`, `test:coverage`, `build` y `test:e2e`, en ese orden, parando en el primer fallo |
 
 Qué ejecutar en cada nivel (edición, lote, historia o PR): `Historias.md` 15.24. El test de
 arquitectura se ejecuta siempre al cerrar un lote: `test:related` no lo selecciona.
@@ -117,7 +117,7 @@ Gestor de paquetes: **pnpm** (no uses npm ni yarn). Node 24.21.0 y pnpm 12.8.1.
 ## Entorno (Windows)
 
 - Hay dos shells: Bash (Git Bash) y PowerShell 5.1, cada una con su sintaxis.
-- Si un comando falla por rutas, comillas o *heredocs* largos, escribe el fichero con la
+- Si un comando falla por rutas, comillas o _heredocs_ largos, escribe el fichero con la
   herramienta de escritura en lugar de repetirlo.
 - En Node usa rutas de Windows (`cygpath -w`): el `/tmp` de Git Bash no es el `/tmp` que ve Node.
 - Las capturas de regresión visual solo se generan en el contenedor oficial de Playwright, nunca
@@ -126,6 +126,6 @@ Gestor de paquetes: **pnpm** (no uses npm ni yarn). Node 24.21.0 y pnpm 12.8.1.
 ## Terminado
 
 Una tarea está terminada cuando cumple la definición de la constitución («Definición de terminado»)
-y, según su alcance, la *Definition of Checkpoint* o la *Definition of Done* de `Historias.md`
+y, según su alcance, la _Definition of Checkpoint_ o la _Definition of Done_ de `Historias.md`
 (15.29 y 15.30). Si tiene interfaz, se informa de cada comprobación de UX como comprobado,
 pendiente, no verificable o no aplica.

@@ -15,7 +15,7 @@ SvelteKit 3.
 Una sola aplicación **SvelteKit 2.70** (Svelte 5, `adapter-node`, Node 24) sirve los dos hosts.
 `handle` separa los dominios: el host de la API solo responde a `/api/v1/*` y el de la web solo a
 la web; `/api/v1/health` responde con cualquier host. SvelteKit 3 queda prohibido hasta que Better
-Auth lo soporte. Las *remote functions* no se usan por ser experimentales.
+Auth lo soporte. Las _remote functions_ no se usan por ser experimentales.
 
 ## Alternativas consideradas
 

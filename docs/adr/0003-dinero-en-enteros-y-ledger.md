@@ -28,7 +28,7 @@ perdido o cobrado de más, y hay que poder reconstruir cualquier saldo.
 
 ## Consecuencias
 
-- Los tipos *branded* del dinero (`Micro`) viven en `$lib/shared/`, compartidos por cliente y
+- Los tipos _branded_ del dinero (`Micro`) viven en `$lib/shared/`, compartidos por cliente y
   servidor.
 - El dominio del dinero son funciones puras sobre enteros, con cobertura del 100 %, tests
   basados en propiedades y mutation testing (principio V).

@@ -1,10 +1,10 @@
 ---
 paths:
-  - "Historias.md"
-  - ".specify/memory/constitution.md"
-  - "ARCHITECTURE.md"
-  - "docs/adr/**"
-  - "Design/**"
+  - 'Historias.md'
+  - '.specify/memory/constitution.md'
+  - 'ARCHITECTURE.md'
+  - 'docs/adr/**'
+  - 'Design/**'
 ---
 
 # Edición de los documentos normativos
@@ -14,7 +14,7 @@ paths:
 - Solo se modifica con `/speckit-constitution`, tras explicar el cambio y su impacto y obtener la
   aprobación del propietario.
 - La versión sube según su política: MAJOR, MINOR o PATCH (sección «Gobernanza»).
-- El *Sync Impact Report* (comentario HTML al principio) se quita antes del commit.
+- El _Sync Impact Report_ (comentario HTML al principio) se quita antes del commit.
 
 ## `Historias.md`
 

@@ -1,0 +1,12 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"common_app_name": "Cuenta Mardomingo",
+	"common_skip_to_content": "Saltar al contenido",
+	"layout_home_title": "Cuenta Mardomingo",
+	"errors_unexpected": "Algo no ha funcionado. Inténtalo de nuevo más tarde.",
+	"errors_reference_code": "Código de referencia",
+	"validation_required": "Este campo es obligatorio.",
+	"theme_system": "Sistema",
+	"theme_light": "Claro",
+	"theme_dark": "Oscuro"
+}
