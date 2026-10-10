@@ -1,0 +1,17 @@
+# Réplica de la BD (R15; Historias.md 15.25). Las credenciales vienen del entorno de Coolify, nunca de este fichero.
+# Retención de snapshots: 720 h (30 días), como fija la especificación.
+dbs:
+  - path: ${DATABASE_PATH}
+    replicas:
+      - name: backblaze-b2-eu
+        type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: cuenta-mardomingo/app.db
+        endpoint: ${LITESTREAM_ENDPOINT}
+        region: ${LITESTREAM_REGION}
+        access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+        secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+        force-path-style: true
+        snapshot:
+          interval: 24h
+          retention: 720h
