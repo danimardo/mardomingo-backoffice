@@ -15,6 +15,8 @@ export interface ApiEventOptions {
 	readonly logger?: FakeLogger;
 }
 
+// Excepción registrada (T388): `RequestEvent` completo exige el `tracing` de SvelteKit, que usa el tipo `Span`
+// de `@opentelemetry/api` (no es dependencia del proyecto). El evento de pruebas es el subconjunto `ApiEvent`.
 export interface TestApiEvent extends ApiEvent {
 	readonly locals: ApiEvent['locals'] & { readonly log: FakeLogger };
 }
