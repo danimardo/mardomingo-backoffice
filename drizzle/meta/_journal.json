@@ -1,1 +1,20 @@
-{"version":"7","dialect":"sqlite","entries":[]}
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791670143305,
+      "tag": "0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791670165227,
+      "tag": "0001_immutable-triggers-audit-templates",
+      "breakpoints": true
+    }
+  ]
+}
