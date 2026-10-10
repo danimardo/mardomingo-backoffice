@@ -537,3 +537,24 @@ export function createTemplateVersion(deps: AppsDeps, input: NewTemplateVersionI
 		return version;
 	});
 }
+
+/** Parámetro global (`settings`) por clave, o `undefined` si la clave no existe. Lo usan otras funcionalidades. */
+export function getSetting(deps: AppsDeps, key: SettingKey): SettingValue | undefined {
+	return loadSettings(deps).get(key);
+}
+
+/** App activa por su slug (`X-App-Id`, `?app=`). Una app desactivada se trata como desconocida (BE-FR-62). */
+export function findActiveAppBySlug(
+	deps: AppsDeps,
+	slug: string
+): { readonly id: string; readonly name: string } | undefined {
+	const app = readAppBySlug(deps.db, deps.logger, slug);
+	if (app === undefined || app.status !== 'active') return undefined;
+	return { id: app.id, name: app.name };
+}
+
+/** Email de soporte global (`support_email`, BE-FR-58): el que va en el pie de los emails y en Reply-To. */
+export function supportEmail(deps: AppsDeps): string {
+	const value = getSetting(deps, 'support_email');
+	return typeof value === 'string' ? value : 'soporte@mardomingo.com';
+}

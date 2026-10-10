@@ -198,6 +198,12 @@ export default ts.config(
 		}
 	},
 	{
+		// Los adaptadores son la frontera de E/S HTTP del servidor (Turnstile): ahí sí puede haber `fetch`. El resto
+		// del código sigue sin usarlo (la regla de arriba dice «usa un servicio o un adaptador»).
+		files: ['src/lib/server/adapters/**/*.ts'],
+		rules: { 'no-restricted-globals': 'off' }
+	},
+	{
 		// Dominio puro: sin I/O, sin entorno, sin reloj real y sin otras funcionalidades.
 		files: ['src/lib/server/features/*/domain/**', 'src/lib/shared/**', 'src/lib/server/shared/**'],
 		rules: {

@@ -21,6 +21,12 @@ import {
 } from '$lib/server/db/columns';
 import { apps } from '../apps/schema';
 
+/**
+ * Instante de las tablas que gestiona Better Auth (R02): drizzle convierte `Date` ↔ entero en la frontera, que es lo que
+ * Better Auth escribe y lee. El DDL es el mismo que el de `epochMs` (`integer`); solo cambia el tipo de TypeScript.
+ */
+const authTimestamp = (name: string) => integer(name, { mode: 'timestamp_ms' });
+
 export const AUTH_RATE_SCOPES = Object.freeze([
 	'login',
 	'signup',
@@ -40,15 +46,15 @@ export const user = sqliteTable(
 		role: text('role').notNull().default('user'),
 		banned: bool('banned').notNull().default(false),
 		banReason: text('ban_reason'),
-		banExpires: epochMs('ban_expires'),
+		banExpires: authTimestamp('ban_expires'),
 		emailNormalized: text('email_normalized'),
 		signupAppId: text('signup_app_id').references(() => apps.id, { onDelete: 'restrict' }),
 		signupIp: text('signup_ip'),
 		lastActivityAt: epochMs('last_activity_at'),
 		inactivityWarnedAt: epochMs('inactivity_warned_at'),
 		deletedAt: epochMs('deleted_at'),
-		createdAt: epochMs('created_at').notNull().default(now),
-		updatedAt: epochMs('updated_at').notNull().default(now)
+		createdAt: authTimestamp('created_at').notNull().default(now),
+		updatedAt: authTimestamp('updated_at').notNull().default(now)
 	},
 	(table) => [
 		check('user_role_not_empty', sql`${sql.identifier('role')} <> ''`),
@@ -85,7 +91,7 @@ export const session = sqliteTable(
 			.notNull()
 			.references(() => user.id, { onDelete: 'cascade' }),
 		token: text('token').notNull().unique(),
-		expiresAt: epochMs('expires_at').notNull(),
+		expiresAt: authTimestamp('expires_at').notNull(),
 		ipAddress: text('ip_address'),
 		userAgent: text('user_agent'),
 		impersonatedBy: text('impersonated_by'),
@@ -93,8 +99,8 @@ export const session = sqliteTable(
 		deviceName: text('device_name'),
 		appVersion: text('app_version'),
 		lastUsedAt: epochMs('last_used_at'),
-		createdAt: epochMs('created_at').notNull().default(now),
-		updatedAt: epochMs('updated_at').notNull().default(now)
+		createdAt: authTimestamp('created_at').notNull().default(now),
+		updatedAt: authTimestamp('updated_at').notNull().default(now)
 	},
 	(table) => [
 		index('session_user_idx').on(table.userId),
@@ -115,11 +121,11 @@ export const account = sqliteTable(
 		accessToken: text('access_token'),
 		refreshToken: text('refresh_token'),
 		idToken: text('id_token'),
-		accessTokenExpiresAt: epochMs('access_token_expires_at'),
-		refreshTokenExpiresAt: epochMs('refresh_token_expires_at'),
+		accessTokenExpiresAt: authTimestamp('access_token_expires_at'),
+		refreshTokenExpiresAt: authTimestamp('refresh_token_expires_at'),
 		scope: text('scope'),
-		createdAt: epochMs('created_at').notNull().default(now),
-		updatedAt: epochMs('updated_at').notNull().default(now)
+		createdAt: authTimestamp('created_at').notNull().default(now),
+		updatedAt: authTimestamp('updated_at').notNull().default(now)
 	},
 	(table) => [
 		uniqueIndex('account_provider_account_unique').on(table.providerId, table.accountId),
@@ -133,9 +139,9 @@ export const verification = sqliteTable(
 		id: text('id').primaryKey(),
 		identifier: text('identifier').notNull(),
 		value: text('value').notNull(),
-		expiresAt: epochMs('expires_at').notNull(),
-		createdAt: epochMs('created_at').notNull().default(now),
-		updatedAt: epochMs('updated_at').notNull().default(now)
+		expiresAt: authTimestamp('expires_at').notNull(),
+		createdAt: authTimestamp('created_at').notNull().default(now),
+		updatedAt: authTimestamp('updated_at').notNull().default(now)
 	},
 	(table) => [
 		index('verification_identifier_idx').on(table.identifier),

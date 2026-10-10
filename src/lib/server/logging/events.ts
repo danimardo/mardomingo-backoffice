@@ -5,6 +5,12 @@
 import type { ErrorCode } from '$lib/server/shared/errors';
 import { AUDIT_LOG_EVENTS, type AuditLogFields } from '$lib/server/features/audit';
 import { APPS_LOG_EVENTS, type AppsLogFields } from '$lib/server/features/apps';
+import { ACCOUNTS_LOG_EVENTS, type AccountsLogFields } from '$lib/server/features/accounts';
+import { LEGAL_LOG_EVENTS, type LegalLogFields } from '$lib/server/features/legal';
+import {
+	NOTIFICATIONS_LOG_EVENTS,
+	type NotificationsLogFields
+} from '$lib/server/features/notifications';
 
 export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug';
 
@@ -52,7 +58,12 @@ export interface LogEventMeta {
 }
 
 /** Unión de todos los catálogos de eventos. Cada funcionalidad añade su mapa aquí. */
-export type LogEventFieldMap = InfraLogFields & AuditLogFields & AppsLogFields;
+export type LogEventFieldMap = InfraLogFields &
+	AuditLogFields &
+	AppsLogFields &
+	AccountsLogFields &
+	LegalLogFields &
+	NotificationsLogFields;
 
 export type LogEventCode = keyof LogEventFieldMap;
 
@@ -69,5 +80,8 @@ export type DowngradableLogEventCode = {
 export const LOG_EVENTS: Readonly<Record<LogEventCode, LogEventMeta>> = Object.freeze({
 	...INFRA_LOG_EVENTS,
 	...AUDIT_LOG_EVENTS,
-	...APPS_LOG_EVENTS
+	...APPS_LOG_EVENTS,
+	...ACCOUNTS_LOG_EVENTS,
+	...LEGAL_LOG_EVENTS,
+	...NOTIFICATIONS_LOG_EVENTS
 });

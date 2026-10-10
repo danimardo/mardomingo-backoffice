@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { copyOfTemplate, type TestDatabase } from '../../../../../tests/builders/database';
 import { appsTestContext, fixedClock } from '../../../../../tests/builders/apps';
 import { seedDefaults } from '$lib/server/seed';
+import { createIdGenerator } from '$lib/server/shared/ids';
+import { seededRandomBytes } from '../../../../../tests/builders/ids';
 import { apps, appOperations, settings } from './schema';
 import { updateSetting } from './index';
 import { packs } from '../payments/schema';
@@ -29,7 +31,7 @@ describe('datos iniciales', () => {
 	it('dos ejecuciones dejan el mismo resultado: ni filas nuevas ni duplicadas', () => {
 		database = copyOfTemplate();
 		const first = counts(database.db);
-		seedDefaults(database.db, fixedClock());
+		seedDefaults(database.db, fixedClock(), createIdGenerator(seededRandomBytes(5)));
 
 		expect(counts(database.db)).toEqual(first);
 		expect(first).toEqual({ settings: 42, apps: 1, operations: 11, packs: 3 });
@@ -45,7 +47,7 @@ describe('datos iniciales', () => {
 			reason: 'Ajuste de prueba'
 		});
 
-		seedDefaults(database.db, fixedClock());
+		seedDefaults(database.db, fixedClock(), createIdGenerator(seededRandomBytes(5)));
 
 		const row = database.db
 			.select()

@@ -7,6 +7,7 @@ import { createSystemClock } from '$lib/server/adapters/clock/clock';
 import { openDatabase } from '$lib/server/db/client';
 import { migrateDatabase } from '$lib/server/db/migrate';
 import { seedDefaults } from '$lib/server/seed';
+import { createIdGenerator } from '$lib/server/shared/ids';
 import { createFakeLogger } from '../builders/fake-logger';
 
 export const TEMPLATE_DIR = join('tests', '.tmp', 'integration');
@@ -29,7 +30,7 @@ export default async function setup(): Promise<() => void> {
 		version: 'integration',
 		logger: createFakeLogger()
 	});
-	seedDefaults(db, createSystemClock());
+	seedDefaults(db, createSystemClock(), createIdGenerator());
 	sqlite.pragma('wal_checkpoint(TRUNCATE)');
 	sqlite.close();
 	return () => {
