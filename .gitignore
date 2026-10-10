@@ -11,6 +11,9 @@ test-results/
 .env.*
 !.env.example
 
+# Logs locales de desarrollo
+.logs/
+
 # Base de datos local
 *.db
 *.db-wal
