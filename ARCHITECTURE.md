@@ -154,6 +154,8 @@ _hooks_ y las tareas obtienen de ahí lo que necesitan y lo pasan a los servicio
 el `Logger` llega ya enriquecido con el contexto de la petición (`event.locals`). Los servicios no
 importan la composición ni leen el entorno. En los tests se construye con los falsos.
 
+**Cachés de módulo.** Las cachés deliberadas del proceso viven en ficheros `*.cache.ts`, documentadas y testeadas (constitución, «Estado de módulo»). Las tres de L01 son de infraestructura, no de una funcionalidad: `composition.cache.ts` (`src/lib/server/`), `api/openapi.cache.ts` y `logging/client-errors.cache.ts`. Se aceptan así por decisión del propietario (convergencia de L01, T383). Ninguna guarda datos de renderizado ni de usuario. Pendiente: el test de `composition.cache.ts` (T382).
+
 ## 6. Flujos habituales
 
 **Operación de IA** (`POST /api/v1/ai/chat`, sección 8 de `Historias.md`):
