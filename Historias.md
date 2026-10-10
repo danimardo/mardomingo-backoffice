@@ -1164,3 +1164,614 @@ Cambios que este documento exige en la especificación de la app. **Incorporados
 | Anuncios | Mostrar los anuncios de `/app/status` y recordar localmente los cerrados. |
 | Precios | Enlace a `links.prices` en Configuración → Cuenta. |
 | *Timeouts* | El *timeout* de cada operación se toma de `operations.<key>.timeoutMs` en `/app/status` más un margen (APP-FR-16). |
+
+---
+
+## 15. Estrategia integral de testing para SvelteKit
+
+> Esta sección indica a `/speckit-plan`, `/speckit-tasks` y `/speckit-implement` **cómo** probar el backend. Las reglas innegociables (cobertura, TDD en el dominio, prohibiciones) están en la constitución (`.specify/memory/constitution.md`, principio V y «Flujo de desarrollo»); si hay contradicción, prevalece la constitución. Las versiones de las herramientas son las de la tabla «Stack tecnológico y versiones» de la constitución: **se comprueban otra vez en el momento de instalarlas**.
+>
+> Estado (2026-10-10): **no existe código, plan ni CI**. Todo lo que sigue son requisitos e instrucciones; ninguna prueba se ha creado ni ejecutado.
+
+### 15.1 Clasificación del proyecto
+
+**Aplicación full-stack SvelteKit híbrida SSR/CSR con backend propio**, en una sola instancia de Node (adapter-node) con SQLite:
+
+- **API JSON** (`/api/v1/*`, dominio `api.`) consumida por clientes externos (Secretario, Electron/Windows). Sin interfaz.
+- **Web SSR con mejora progresiva** (dominio `cuenta.`): landings, legales, precios, registro, panel de usuario y panel de administración. Después de la hidratación, la navegación es CSR.
+- **Sin prerenderizado** en la v4 (`prerender = false`): no hay pruebas de prerender, solo un test de arquitectura que lo garantiza.
+- **Tareas programadas** dentro del proceso (croner).
+
+**Flujos críticos** (dinero, seguridad o privacidad): reserva y cobro de operaciones de IA, compra simulada, ajustes y reembolsos del administrador, caducidad y deuda, registro y verificación (antiabuso del saldo de bienvenida), sesiones y autorización, sincronización sin pérdida de escrituras y no persistencia de contenido.
+
+### 15.2 Inventario de código y nivel de prueba
+
+| Zona | Ubicación | Runtime | Nivel principal | Necesita |
+|---|---|---|---|---|
+| Dominio puro (tarificación, bolsas, reservas, deuda, estimación, normalización, validación de sincronización, idempotencia, fechas) | `src/lib/server/domain/` | Node | Unit + property-based + mutation | Nada (funciones puras) |
+| Servicios (casos de uso, transacciones) | `src/lib/server/services/` | Node | Integración | SQLite temporal, *fakes* de adaptadores, `Clock` y `Logger` falsos |
+| Repositorios y esquema | `src/lib/server/db/` | Node | Integración | SQLite temporal con migraciones reales |
+| Adaptadores (OpenRouter, Mistral, Resend, BCE, Turnstile, GitHub, pagos, facturación) | `src/lib/server/adapters/` | Node | Integración de adaptador | Servidor HTTP simulado local |
+| Configuración y entorno | `src/lib/server/config/` | Node | Unit | Objetos de entorno de prueba |
+| Logging (servidor) | `src/lib/server/logging/` | Node | Unit + emisión real | Registrador falso; stdout capturado |
+| Presenters, helper de formularios, guards | `src/lib/server/presenters/`, `forms/`, guards | Node | Unit | Datos conocidos |
+| Formato compartido (importes BE-FR-22, fechas) | `src/lib/format/` | Node y navegador | Unit | Nada |
+| Esquemas compartidos | `src/lib/schemas/` | Node y navegador | Unit | Nada |
+| Form actions | `src/routes/**/+page.server.ts` | Node | Integración (llamada directa con evento falso) | SQLite temporal |
+| `load` | `src/routes/**/+page.server.ts` | — | **No se llaman**: se prueban los servicios y presenters que componen | — |
+| Hooks (`handle`, `handleError`, `init`) | `src/hooks.server.ts` | Servidor real | HTTP contra el build | Build + `node build` + servidores simulados |
+| Endpoints `+server.ts` (API, webhooks, descargas, `/client-errors`) | `src/routes/api/v1/**` y otros | Servidor real | HTTP contra el build + contrato OpenAPI | Ídem |
+| Componentes | `src/lib/components/**` | jsdom | Componente | Testing Library |
+| Logging del navegador | `src/lib/logging/client.ts` | jsdom | Unit | `fetch` simulado |
+| Páginas y flujos | `src/routes/(web)/**` | Navegador | E2E (Playwright) | Aplicación completa en modo test |
+| Tareas programadas | Servicios invocados por croner | Node | Integración (se invoca el servicio, no el cron) | `Clock` falso |
+
+### 15.3 Herramientas
+
+| Necesidad | Herramienta | Estado | Clasificación |
+|---|---|---|---|
+| Tipos, Svelte, lint, formato | `svelte-check`, ESLint, Prettier | Fijadas en la constitución | Necesaria |
+| Unit, integración, componente, HTTP | Vitest + `@vitest/coverage-v8` | Fijada | Necesaria |
+| Componentes | `@testing-library/svelte` + `jsdom` | Fijada | Necesaria |
+| E2E, cross-browser, visual, responsive | Playwright | Fijada | Necesaria |
+| Accesibilidad automática | `@axe-core/playwright` | Fijada | Necesaria |
+| Property-based | `fast-check` + `@fast-check/vitest` (comprobado: 4.10.2 / 0.5.0, compatibles con Vitest 5) | Nueva (enmienda de la constitución) | Condicional: solo dominio, normalización y fechas |
+| Mutation testing | StrykerJS (`@stryker-mutator/core` + `vitest-runner`; comprobado: 10.0.0, admite Vitest ≥ 2; no admite Browser Mode, que no usamos) | Nueva (enmienda) | Condicional: piloto sobre el dominio |
+| Servidores HTTP simulados | `node:http` nativo | Sin dependencia | Necesaria |
+| Prueba de carga | Script propio con `fetch` | Sin dependencia | Opcional (L16) |
+
+No se añaden MSW, Cucumber, Vitest Browser Mode ni herramientas visuales externas: lo cubren Playwright y los servidores simulados nativos.
+
+### 15.4 Pirámide de testing
+
+| Nivel | Qué demuestra | Herramienta y entorno | Frecuencia | Bloquea |
+|---|---|---|---|---|
+| **N0 Estático** | Tipos, Svelte, lint, imports prohibidos, build, tests de arquitectura | `pnpm check`, `pnpm lint` / `lint:changed`, `pnpm build` | Edición y lote | Lote, PR |
+| **N1 Unit** | Reglas puras, cálculos, validadores, formateadores | Vitest (Node) | Edición y lote | Lote, PR |
+| **N2 Componente** | Estados, interacción y contrato accesible de componentes | Vitest + jsdom + Testing Library | Lote | PR |
+| **N3 Integración** | Servicios + BD real, actions, adaptadores contra simuladores, hooks y API sobre el build | Vitest (Node), SQLite temporal, `node build` | Lote | Lote, PR |
+| **N4 Aceptación** | Criterios `CA` de `Historias.md` | Tests etiquetados en el nivel más barato posible (N1–N5) | Lote / historia | Historia |
+| **N5 E2E** | Flujos críticos con navegador real, también sin JavaScript | Playwright contra el build en modo test | Historia / PR (críticos), `main` (todos) | PR, release |
+| **N6 Transversal** | Accesibilidad, responsive, cross-browser, visual, rendimiento, seguridad verificable | Playwright, axe, script de carga | Según 15.24 | Release |
+| **Mutation** (aparte) | Calidad de los tests del dominio | Stryker | Programada y PR que toquen el dominio | Release (umbral de línea base) |
+
+Las comprobaciones de N0 **no sustituyen** a ningún test. La cobertura es una señal, no una prueba de calidad.
+
+### 15.5 Implementación por lotes y checkpoints
+
+**Modelo predeterminado** (para cada historia):
+
+1. Analizar la historia y sus `CA`.
+2. Identificar los comportamientos observables que se probarán.
+3. Clasificar el nivel de test más barato para cada uno.
+4. Dividir la implementación en lotes funcionales coherentes (orientativo: 3–8 tareas).
+5. Implementar el lote.
+6. Estabilizar sus contratos públicos (esquemas, firmas de servicio, rutas).
+7. Crear o completar los tests del lote.
+8. Ejecutar solo las suites afectadas (15.24).
+9. Corregir los fallos.
+10. Cerrar el checkpoint.
+
+**Tests antes o inmediatamente después** de implementar (no al final del lote): todo el dominio de dinero (TDD obligatorio por la constitución), autenticación y autorización, concurrencia, idempotencia, privacidad (no persistir contenido), migraciones, contratos ambiguos y cualquier bug (primero el test de regresión que lo reproduce).
+
+**Lotes más pequeños** en dinero, autenticación, autorización, seguridad, migraciones, concurrencia e integraciones con proveedores. **Más grandes** en componentes presentacionales, páginas de solo lectura y adaptadores simples.
+
+**Deuda de tests:** solo puede existir dentro del lote activo. PROHIBIDO acumular lotes sin tests, cerrar historias con tests obligatorios pendientes, dejar todos los E2E para el final o dar una pantalla por terminada porque «funciona a mano».
+
+**Plan previo de cada lote** (bloque obligatorio en `plan.md`, por lote):
+
+```markdown
+#### Lote L0X — <nombre>
+- Historia / requisitos: BE-FR-…
+- Objetivo y funcionalidad:
+- Rutas / componentes / código servidor / código cliente:
+- Comportamientos observables, estados, interacciones:
+- Reglas, errores, casos límite, riesgos:
+- Tests previstos: unit · componente · integración · aceptación (CA) · E2E · responsive · a11y · visual
+- Datos, fixtures, builders, fakes y dependencias sustituidas:
+- Eventos de log del catálogo (principio XI):
+- Suite de cierre y criterios del checkpoint:
+```
+
+### 15.6 Lotes funcionales orientativos de la v4
+
+El plan los refina; aquí se fijan el orden y los tests clave.
+
+| Lote | Contenido (requisitos) | Riesgo | Tests clave | Suite de cierre |
+|---|---|---|---|---|
+| L01 | Esqueleto: proyecto, entorno, logging, hooks (requestId, separación por host, CSP), `/health`, OpenAPI vacío, CI, smoke | Medio | Arquitectura, entorno inválido, HTTP de hooks, smoke E2E | N0 + N3 HTTP + smoke |
+| L02 | Esquema, migraciones, seed (app `secretario`, settings, paquetes), servicio de configuración (BE-FR-61, 62) | Alto | Migraciones sobre BD vacía, herencia global → app → operación, validación y auditoría de settings | N1 + N3 |
+| L03 | Registro, verificación, login web, sesiones, recuperación, bloqueo, edad (BE-FR-01–06, 64, 67, 69, 11.1–11.5) | Alto | Antienumeración, normalización de email, bloqueo, sesión deslizante, E2E de registro | N1 + N3 + E2E crítico |
+| L04 | Login de apps con Bearer, sesión por app, CORS, versión, mantenimiento, `/app/status`, anuncios, soporte (BE-FR-03, 47, 48, 62, 65, 84, 85) | Alto | Matriz de cabeceras, app y sesión; 426, 503, 400, 401 | N3 HTTP |
+| L05 | Bolsas, ledger, reservas, deuda, caducidad, ajustes (BE-FR-12–18, 71) | **Crítico** | TDD, property-based, concurrencia, reconstrucción del ledger | N1 + PBT + N3 + piloto de mutation |
+| L06 | Tarificación, coste máximo, tipo de cambio, redondeo (BE-FR-19–22, 72, 87) | **Crítico** | Ejemplos de BE-FR-22 como fixtures exactos, PBT, BCE simulado | N1 + PBT + N3 |
+| L07 | Pasarela de chat, catálogo, plantillas, salida estructurada, idempotencia, cancelación, registro sin contenido (BE-FR-30–34, 37, 38, 77–81) | **Crítico** | Flujo de la sección 8 con proveedor simulado, estados de idempotencia, marcador de privacidad | N3 + N3 HTTP |
+| L08 | Transcripción con *fallback* y ffprobe, imagen (BE-FR-35, 36, 44) | Alto | Escenarios Voxtral/backup, reintentos con reloj falso, duración medida, temporales borrados | N3 |
+| L09 | Protecciones: tope diario, freno global, límites, altas por IP (BE-FR-11.4, 11.6, 43, 45, 46) | Alto | Límites por usuario y globales, IP real del proxy | N3 + N3 HTTP |
+| L10 | Paquetes, compra simulada, testers, contracargos, reembolsos, datos fiscales, interfaces de facturación (BE-FR-23–28, 74–76) | **Crítico** | Idempotencia de la acreditación, liquidación de deuda, `simulated` excluido, CSV contable | N1 + N3 + E2E de compra |
+| L11 | Sincronización y predeterminados (BE-FR-39–42) | Alto | Validación por estrategia, 412 concurrente, siembra con `updatedAt = 0`, copia con vista previa | N1 + PBT + N3 |
+| L12 | Panel de usuario (BE-FR-07, 08, 49, 66, 70) | Medio | Presenters sin campos internos, CSV, gráficas con tabla, sin JS | N2 + N3 + E2E |
+| L13 | Panel de administración (BE-FR-18, 27, 50–57) | Alto | Guards de admin, auditoría inmutable, ajustes con motivo | N3 + E2E de admin |
+| L14 | Emails y tareas programadas (BE-FR-16, 54, 56, 58, 68, 73, 80, 83, 86) | Medio | Reloj falso (cambios de día en Madrid), umbrales sin repetición (`alerts_state`) | N3 |
+| L15 | Landings, legales, precios (BE-FR-59, 60, 73) | Bajo | axe, responsive, visual | Smoke E2E + a11y |
+| L16 | Endurecimiento previo a la beta: auditoría manual de accesibilidad, matriz de navegadores, línea base visual y de mutation, prueba de carga, simulacro de restauración | Alto | 15.18 y 15.20 | Nivel 4 completo |
+
+### 15.7 Unit testing (N1)
+
+**Qué cubre:** funciones puras del dominio y utilidades compartidas. Se ejecuta en Node, sin BD ni servidor.
+
+Casos obligatorios (con datos conocidos, sin fecha real ni aleatoriedad):
+
+- **Fórmula de cobro** (BE-FR-19): los cuatro ejemplos de BE-FR-22 como fixtures **exactos** en µc; `ceil` solo al final; comisión por proveedor; `credits_per_eur_usage` distinto de `credits_per_eur_purchase`; aritmética `BigInt` sin pérdida.
+- **Redondeo de presentación** (BE-FR-22): límites 10 y 0,1 (≥ 10 sin decimales, 0,1–10 con un decimal, > 0 y < 0,1 → «< 0,1»), 0, negativos (deuda) y formato es-ES.
+- **Orden de consumo** de bolsas (BE-FR-14), generación y liquidación de deuda (BE-FR-17), condición de reserva `reserva ≤ disponible + (max_debt − deuda)` (BE-FR-71).
+- **Estimación del coste máximo** (BE-FR-72): chat (caracteres por token, imágenes, el precio más caro entre principal y respaldos), transcripción e imagen; tope `max_cost_credits`.
+- **Normalización de email** (BE-FR-11.5), incluido el CA1 (`juan+2@gmail.com` frente a `j.uan@gmail.com`) y `googlemail.com`.
+- **Tipo de cambio** (BE-FR-87): `(1 / BCE) × (1 + colchón)` en ppm.
+- **Validación del documento de sincronización** por estrategia (`items`, `block`, `keyed`) y de las variables de plantilla (BE-FR-39, 78).
+- **Máquina de estados de idempotencia** (BE-FR-81): en curso → 409; entregada → 409 duplicado; `undelivered` → repetir sin cobro; fallida o cancelada → repetir.
+- **Comparación de versiones** semver (BE-FR-48) y rangos de versión de los anuncios (BE-FR-85).
+- **Fechas** (`EpochMs`, `CivilDate`): cortes diarios en Europe/Madrid, **incluidos los cambios de hora** (último domingo de marzo y de octubre), caducidades de 30 días, 24 h y 1 h, y plazos de retención.
+- **Helper de formularios** (campos repetidos, cadena vacía, casillas, importes decimales en español: `"1.000"`, `"1,5"`, `""`), validación de `redirectTo` (solo rutas internas) y esquema del entorno (coherencia entre variables).
+- **Presenters**: el modelo de vista no contiene campos internos (modelo, coste real, hashes, tokens).
+
+### 15.8 Property-based testing
+
+Solo donde hay invariantes generales. Semillas fijas en CI; la semilla y el caso mínimo de cada fallo se guardan en un test de regresión.
+
+| Propiedad | Módulo | Lote |
+|---|---|---|
+| Para cualquier secuencia de operaciones (bienvenida, reserva, cobro, liberación, caducidad, compra, reembolso, ajuste), el saldo materializado coincide con la reconstrucción desde el ledger; `remaining_µc ≥ 0`; la deuda ≤ `max_debt` salvo contracargo | Dominio de créditos | L05 |
+| La exposición (reservas activas) nunca supera `saldo + max_debt − deuda` | Reservas | L05 |
+| El cobro es monótono respecto al coste, entero seguro y ≥ que el valor exacto (por el `ceil`) | Tarificación | L06 |
+| `normalize(normalize(x)) = normalize(x)` | Email | L03 |
+| La conversión `EpochMs` ↔ `CivilDate` es coherente en cualquier instante, incluidos los cambios de hora | Fechas | L02 |
+| El validador acepta todo documento válido generado para un esquema y rechaza las categorías no declaradas | Sincronización | L11 |
+
+No se usa en componentes ni en código visual.
+
+### 15.9 Component testing (N2)
+
+Entorno: Vitest + jsdom + Testing Library. Se simulan `$app/forms` (`vi.mock('$app/forms', () => ({ enhance: () => undefined }))`) y `$app/state` cuando el componente los usa.
+
+Se prueban **solo** los componentes reutilizables, con estados o críticos para la accesibilidad:
+
+- Primitivas `ui/`: diálogo (atrapa y devuelve el foco, Escape, título accesible), campo de formulario (label, error asociado con `aria-describedby`, indicador de obligatorio), botón (estado `aria-busy` y deshabilitado), tabla (caption, cabeceras con `scope`) y aviso (`aria-live`).
+- Tarjeta de saldo: total, reservado, deuda, próxima caducidad y formato de BE-FR-22.
+- Resumen de errores de formulario: recibe el foco y enlaza cada error con su campo.
+- Gráficas: renderizan su **tabla equivalente** con los mismos datos.
+- Selector de tema y cierre de anuncios.
+
+Los nombres accesibles pueden incluir el indicador de obligatorio («Email *»): se busca con expresiones (`name: /Email/`). No se prueban clases de Tailwind, el orden irrelevante del DOM ni el número de actualizaciones reactivas. No se repite en la interfaz la lógica que ya cubren los unit tests.
+
+### 15.10 Integration testing (N3)
+
+**Base de datos:**
+
+- Un `globalSetup` crea una BD **plantilla** con todas las migraciones y el seed base. Cada fichero de test trabaja sobre una **copia** propia en el directorio temporal del sistema (WAL, `foreign_keys=ON`). Nada se comparte entre ficheros, así que se pueden ejecutar en paralelo.
+- PROHIBIDO simular la BD. Nunca se conecta a staging ni a producción.
+- Los datos de prueba se crean con **builders** que llaman a los servicios (no con SQL suelto) y usan los ids sembrados (`seededAppId`, `seededAdminId`) cuando hay claves foráneas.
+
+**Servicios:** BD real + *fakes* de adaptadores + `Clock` falso + `Logger` falso (que acumula eventos para las aserciones de 15.19).
+
+**Concurrencia** (obligatoria; `better-sqlite3` es síncrono y la concurrencia real ocurre **entre** `await`):
+
+- El proveedor simulado devuelve promesas diferidas para que las operaciones se intercalen entre la reserva y el cobro.
+- BE-FR-71 CA1: 20 operaciones a la vez con saldo para 3 → solo se lanzan las que caben y el resto recibe `INSUFFICIENT_BALANCE`; la exposición nunca supera `saldo + max_debt`.
+- BE-FR-41 CA1: dos `PUT /sync` con la misma revisión → uno 200 y otro 412.
+- BE-FR-24 CA1 y BE-FR-75 CA2: un webhook o una emisión repetidos no acreditan ni facturan dos veces.
+- BE-FR-81: misma `Idempotency-Key` en curso, entregada y no entregada.
+- Reinicio con reservas abiertas → reservas liberadas y operaciones `interrupted` (BE-FR-71).
+
+**Adaptadores contra servidores simulados** (`node:http` en un puerto libre; la URL base se inyecta):
+
+- OpenRouter: `usage.cost` presente; ausente → consulta a `/generation`; ausente también → estimación con `cost_estimated = true`; la petición incluye `provider.data_collection = "deny"` y las cabeceras de BE-FR-33; `require_parameters` con salida estructurada; 5xx, *timeout*, JSON inválido o con campos extra; rechazo por moderación → `flagged`.
+- Mistral: reintentos a los 2, 4 y 8 s **con temporizador falso**, *timeout* de 45 s por intento, *fallback* al backup, errores 401/402/429 de facturación (alerta).
+- BCE (formato que decida el plan), Turnstile, Resend, GitHub Releases y saldo de OpenRouter: éxito, error, respuesta inválida y servicio caído.
+
+**Form actions** (llamada directa con un evento mínimo falso: `request` con `FormData`, `locals` con usuario y rol, `params`, `cookies` y logger):
+
+- Lo que se **devuelve** (`fail(...)`) se comprueba con `toMatchObject({ status: 400 })`.
+- Lo que se **lanza** (`redirect`, `error`) se comprueba con `rejects.toSatisfy((e) => isRedirect(e))` o `isHttpError(e) && e.status === 403`.
+- El resultado se estrecha con una función propia (`unwrapActionFailure`), sin `as`. Se usan literales completos con `toMatchObject`, no `expect.any` ni `objectContaining`, que rompen el lint tipado.
+- `toMatchObject` exige arrays de la misma longitud: si no se controlan todas las filas, se localiza la que importa con `find`.
+
+**HTTP contra el build** (suite `http`, un solo *worker*): un `globalSetup` ejecuta `vite build` una vez, arranca `node build` en un puerto libre con `APP_ENV=test` y apunta los adaptadores a los servidores simulados. Cubre:
+
+- Separación por host (combinaciones cruzadas → 404; `/api/v1/health` con cualquier `Host`).
+- `X-App-Id` ausente o desconocido (400), app desactivada (503), sesión de otra app (401), Bearer en la web y cookie en la API rechazados.
+- CORS por app, CSRF de formularios desde otro origen, versión mínima (426), mantenimiento (503), freno global (503).
+- Cabeceras de seguridad (CSP, HSTS), `X-Request-Id` y `BODY_SIZE_LIMIT`.
+- **Formato de error y conformidad con el OpenAPI** de todas las respuestas: un test parametrizado por tabla de casos, no un test por endpoint.
+- IP del cliente desde `X-Forwarded-For` con `XFF_DEPTH=1` (un valor falsificado más a la izquierda se ignora).
+
+### 15.11 Testing específico de SvelteKit
+
+| Artefacto | Cómo se prueba |
+|---|---|
+| `load` de página y layout | No se llama directamente: su evento no se puede fabricar sin aserciones de tipo. Si compone varios servicios, la composición vive en un módulo normal (`*.data.ts`) que se prueba en N3. Las restricciones de query (`strictObject` en la página, `object` en el layout) se prueban con E2E que abren cada página **con** parámetros |
+| Actions | N3, llamada directa (15.10) |
+| `+server.ts` | N3 HTTP contra el build |
+| Hooks | N3 HTTP contra el build; las funciones puras que usan (resolución de host, guards), en N1 |
+| Cookies y sesiones | N3 HTTP (atributos `Secure`, `HttpOnly`, `SameSite=Lax`, solo en la web) y E2E |
+| Redirecciones y errores esperados | N3 (se lanzan) y E2E (páginas `+error.svelte` accesibles con «Código de referencia») |
+| Parámetros de ruta | N1 de los *param matchers* |
+| Código solo de servidor | Test de arquitectura: nada fuera de `$lib/server` o `*.server.ts` importa la BD, los adaptadores ni la configuración |
+| SSR | E2E con JavaScript desactivado: el contenido esencial aparece en el HTML inicial |
+| Hidratación | Smoke: sin errores de hidratación en consola y la página es interactiva |
+| CSR | Smoke: navegación cliente entre el panel y sus subpáginas sin recarga completa |
+| Código solo de navegador | Uso de `window` o `document` protegido con `browser` u `onMount` (lint + SSR sin errores) |
+| Prerender | Test de arquitectura: ninguna ruta exporta `prerender = true` |
+
+Los grupos y parámetros de ruta (`(web)`, `[slug]`) cuentan como niveles en las importaciones relativas de los tests: se prefieren alias (`$lib`, `$tests`).
+
+### 15.12 Formularios y actions
+
+Para cada formulario crítico (registro, login, recuperación, cambio de contraseña y de email, datos fiscales, compra, aceptación legal, borrado, ajustes y configuración del administrador):
+
+| Caso | Nivel más barato |
+|---|---|
+| Datos válidos → servicio llamado y `303` o `success` | N3 action |
+| Obligatorios, inválidos y límites (contraseña de 8–128, NIF, importes) | N1 esquema + N3 action (un caso representativo) |
+| Valores reenviados sin contraseñas ni campos sensibles | N3 action |
+| Rechazo de negocio → `fail(4xx, { formError })` | N3 action |
+| Sin sesión, sin verificar, bloqueado o rol incorrecto | N3 action (cada action protegida) |
+| Fallo de persistencia → error genérico sin detalles | N3 action con un repositorio que falla |
+| Estado pendiente (`aria-busy`), foco en el primer error y anuncio | N2 componente + E2E en un formulario representativo |
+| Funciona sin JavaScript | E2E con `javaScriptEnabled: false` |
+| Doble envío | E2E en la compra (ver 15.27, pregunta 1) y en los ajustes de saldo |
+
+### 15.13 APIs y endpoints
+
+Para cada grupo de `/api/v1` (auth, me, ai, sync, defaults, app/status) se cubre con tablas de casos parametrizadas:
+
+- Método.
+- Body válido e inválido (`strictObject`: una clave desconocida da 400).
+- Autenticación y autorización.
+- Código HTTP y formato de error de 7.2.
+- Serialización (enteros `…Micro`, fechas ISO UTC).
+- Cabeceras (`Retry-After`, `X-Request-Id`).
+- Límites (413).
+- Dependencias caídas (502/504).
+
+Los servicios externos están siempre simulados.
+
+### 15.14 Persistencia
+
+- Todas las migraciones se aplican sobre una BD vacía y el esquema resultante coincide con Drizzle (`drizzle-kit check` en CI).
+- A partir de la primera release: test de migración desde una copia sintética del esquema anterior.
+- Las restricciones `UNIQUE`, `FOREIGN KEY` y `CHECK` se prueban en integración.
+- **Inmutabilidad** de `credit_movements`, `admin_audit`, `invoices` y `prompt_templates`: test de arquitectura (sin `UPDATE`/`DELETE` en el código) y, si el plan lo decide, *triggers* de SQLite que lo impidan (15.27, pregunta 3).
+- Anonimización (BE-FR-07, 83): el borrado deja movimientos y operaciones sin datos personales y libera el email, pero conserva el hash de `welcome_grants`.
+
+### 15.15 Autenticación, autorización, cookies y sesiones
+
+Matriz mínima (N3, una tabla parametrizada por recurso protegido): **anónimo, sin verificar, usuario, tester, admin y bloqueado**, contra panel, administración, actions, endpoints y API.
+
+Además:
+
+- Sesión deslizante: renovación solo si han pasado más de 24 h y caducidad a los 30 días sin uso (reloj falso).
+- Revocación inmediata, logout, cambio de contraseña (revoca las demás sesiones), cambio de email (revoca las demás) y bloqueo (revoca todas).
+- Bloqueo por intentos fallidos (10 fallos en 15 min, exista o no el email) y desbloqueo tras un login correcto o una recuperación.
+- Antienumeración: la misma respuesta para un email existente o inexistente en registro, login, reenvío, recuperación y cambio de email.
+- Datos manipulados: cookie alterada, token de otra app, `X-App-Id` cambiado con la misma sesión.
+- `ADMIN_EMAIL`: promoción al verificar y nunca dos administradores.
+
+Nunca se usan contraseñas, tokens ni proveedores reales.
+
+### 15.16 Tests funcionales derivados de historias de usuario
+
+**Trazabilidad:** cada test que demuestra un criterio lleva su identificador en el nombre (`[BE-FR-71/CA1]`) o, en Playwright, como etiqueta (`@BE-FR-71`). Un script `test:trace` cruza los `CA` de `Historias.md` con los nombres de los tests y lista los criterios sin test. Se agrupan los comportamientos relacionados; no se crea un test por frase. Se puede usar el formato Given/When/Then en el nombre o en un comentario, sin Cucumber.
+
+| Requisito / CA | Comportamiento | Nivel | Lote | E2E | Prioridad |
+|---|---|---|---|---|---|
+| BE-FR-01 CA1–CA5 | Registro: contraseña de 8–128, aceptaciones versionadas, captcha obligatorio, cuenta sin verificar, respuesta antienumeración | N1 + N3 + E2E (camino feliz) | L03 | Sí | Alta |
+| BE-FR-02 CA1–CA3 | La verificación crea la bolsa de bienvenida; login sin verificar → `EMAIL_NOT_VERIFIED`; reenvío con límite | N3 + E2E (enlace del email) | L03 | Sí | Alta |
+| BE-FR-03, 04, 06 | Login web y de app, sesión deslizante, revocación, logout | N3 + N3 HTTP + E2E (login web) | L03 / L04 | Sí | Alta |
+| BE-FR-05, 66, 67 | Recuperación (1 h, un solo uso), cambio de contraseña y de email, bloqueo por intentos | N3 + E2E (recuperación) | L03 | Sí | Alta |
+| BE-FR-07, 08 | Borrado con anonimización y exportación RGPD | N3 + E2E (borrado) | L12 | Sí | Alta |
+| BE-FR-09 | El modelo `account` permite añadir OAuth sin migrar datos | Revisión del esquema en el plan | L02 | No | Baja |
+| BE-FR-11 CA1–CA2 | La normalización impide un segundo saldo; las compras simuladas no cuentan para el tope | N1 + N3 | L03 / L09 | No | Alta |
+| BE-FR-12–16 | Bolsa de bienvenida, tipos, orden de consumo, ledger reconstruible, caducidad y aviso | N1 + PBT + N3 | L05 / L14 | No | Crítica |
+| BE-FR-17, 71 CA1–CA2 | Saldo mínimo, deuda y su tope, liquidación con la siguiente compra, reservas concurrentes, saldo total, reservado y disponible | N1 + N3 de concurrencia | L05 | No | Crítica |
+| BE-FR-18, 27, 28 | Ajustes con motivo, reembolso manual, contracargo con deuda sin tope y bloqueo | N3 + E2E (ajuste de admin) | L05 / L10 / L13 | Sí (ajuste) | Crítica |
+| BE-FR-19–22 | Fórmula, origen del coste, qué no se cobra, ejemplos numéricos | N1 + PBT + N3 | L06 / L07 | No | Crítica |
+| BE-FR-72 CA1–CA3 | 413 `OPERATION_TOO_EXPENSIVE` sin llamar al proveedor, `truncated`, una operación sin precio no se puede activar | N1 + N3 | L06 / L13 | No | Alta |
+| BE-FR-73 CA1–CA2 | Mediana con muestras mínimas o valor manual; página `/precios` | N1 + N3 + smoke E2E | L14 / L15 | Smoke | Media |
+| BE-FR-87 CA1–CA3 | Tipo diario del BCE, último valor si falla la consulta, alerta, valor manual auditado | N1 + N3 (BCE simulado) | L06 | No | Alta |
+| BE-FR-23–26 | Paquetes calculados al comprar, idempotencia del webhook, compra simulada solo para testers en producción, aceptación previa al pago | N3 + E2E (compra) | L10 | Sí | Crítica |
+| BE-FR-74–76 | Datos fiscales (NIF), copia en la factura, interfaz de facturación, CSV contable | N1 + N3 | L10 | No | Media (la v4 no tiene cobros reales) |
+| BE-FR-30–34, 77–79 | Operaciones válidas por app, modelo elegido por el servidor, plantillas versionadas, salida estructurada y herramientas | N3 + N3 HTTP | L07 | No | Crítica |
+| BE-FR-81, 37 | Idempotencia y cancelación, con cobro según el estado | N3 de concurrencia + N3 HTTP (cierre de conexión) | L07 | No | Crítica |
+| BE-FR-38 CA1–CA2 | Sin contenido en BD, logs ni temporales; temporales borrados también en error y cancelación | N3 (marcador en stdout y BD, sistema de ficheros) | L07 / L08 | No | Crítica |
+| BE-FR-35, 36, 44 | Escenarios de transcripción, error saneado, `providerUsed`, transcripciones simultáneas, duración medida con ffprobe, 413 | N3 (ffprobe real con audios de fixture) | L08 | No | Alta |
+| BE-FR-80 CA1 | Respaldos en orden dentro del *timeout* total; el cliente no ve el modelo | N3 | L07 | No | Alta |
+| BE-FR-39–42 | Esquema por app, siembra, 412, tamaño, predeterminados con vista previa y auditoría | N1 + PBT + N3 + E2E (copia de predeterminados) | L11 / L13 | Sí (admin) | Alta |
+| BE-FR-43, 45, 46 | 429 con `Retry-After`, límites de autenticación, freno global solo para cuentas sin compras | N3 + N3 HTTP | L09 | No | Alta |
+| BE-FR-47, 48 | Mantenimiento global y por app; 426; `/app/status` con los tiempos por operación | N3 HTTP + E2E (activar el mantenimiento) | L04 / L13 | Sí (admin) | Alta |
+| BE-FR-62–65 | Apps sin redesplegar, saldo compartido, origen del registro con `?app=`, clientes web y móviles, CORS | N3 + N3 HTTP + E2E (registro con `?app=`) | L02 / L04 | Sí | Alta |
+| BE-FR-49 | Panel: saldo, compra, movimientos, consumo filtrado, gráficas, CSV, aviso de saldo bajo, sesiones, perfil, facturas, apps, avisos, soporte | N2 + N3 + E2E | L12 | Sí | Media |
+| BE-FR-50–57, 61 | Admin: usuarios, economía, apps y modelos, protecciones, estadísticas, auditoría, alerta de OpenRouter, predeterminados, parámetros editables | N3 + E2E (recorrido de admin) | L13 | Sí | Alta |
+| BE-FR-58 | Emails con plantilla, marca y soporte; un email por cruce de umbral | N3 (*outbox* en fichero) | L14 | No | Media |
+| BE-FR-59, 60 | Landings, legales versionados, solo cookies técnicas, sin terceros | Smoke E2E + a11y + N3 HTTP (cookies emitidas) | L15 | Smoke | Media |
+| BE-FR-68, 70, 83, 86 | Limpieza de cuentas sin verificar, nuevas versiones legales (403 hasta aceptar), retención, inactividad sin borrar cuentas con compras | N3 (reloj falso) + E2E (aceptación) | L12 / L14 | Sí (aceptación) | Alta |
+| BE-FR-82, 84, 85 | Moderación marcada sin contenido, email de soporte, anuncios por app y versión | N3 | L07 / L04 | No | Media |
+
+Para cada fila se contemplan, cuando apliquen: camino correcto, validación, vacío, error recuperable y no recuperable, reintento, cancelación, sin sesión, sin permiso, límites, datos incorrectos, viewport y diferencias entre servidor y navegador.
+
+### 15.17 Playwright (N5)
+
+**Entorno:** siempre contra el **build de producción** (`vite build` + `node build`) en `APP_ENV=test`, también en local para los críticos; el servidor de desarrollo solo se usa para depurar. En modo test:
+
+- Los adaptadores apuntan a servidores simulados locales (IA, BCE, GitHub).
+- El captcha usa un adaptador falso y el widget de Turnstile **no** se carga, así que no hay red externa.
+- Los emails se escriben en un *outbox* en fichero que leen los tests (enlaces de verificación y de recuperación).
+- Pagos `simulated` y facturación `none`.
+- El esquema del entorno **rechaza todo esto fuera de `APP_ENV=test`** (enmienda de la constitución).
+
+**Datos y aislamiento:** una BD de test por ejecución. Cada test crea sus propios datos con *fixtures* que usan los servicios (emails únicos `e2e-<worker>-<uuid>@example.test`). Ningún test depende de otro: todos se pueden ejecutar solos, en cualquier orden y en paralelo.
+
+**Autenticación:** un proyecto `setup` inicia sesión por la interfaz una vez por rol (`anonymous`, `user`, `tester`, `admin`, `blocked`) y guarda el `storageState`. Los E2E de login, registro y recuperación prueban el proceso; los demás reutilizan el estado guardado.
+
+**Smoke** (`@smoke`, Chromium, en cada PR):
+
+- La app arranca y `/` responde con el contenido principal visible (no en blanco).
+- El layout aparece y los estilos están cargados (`getComputedStyle` del fondo y de una variable del tema).
+- Funciona la navegación cliente básica.
+- Sin excepciones de página, `console.error` ni errores de hidratación (lista de excepciones vacía, y documentada si alguna vez hace falta).
+- El login y el panel son accesibles con la sesión de `user`.
+
+**E2E críticos** (`@critical`):
+
+1. Registro (con `?app=secretario`) → email → verificación → panel con el saldo de bienvenida y los siguientes pasos de la app.
+2. Login, logout y cierre de otra sesión desde el panel.
+3. Recuperación de contraseña.
+4. Compra simulada como tester (aceptación del desistimiento, factura completa opcional): el saldo se actualiza y un doble clic no acredita dos veces.
+5. Consumo: una operación de la API (con el `request` de Playwright y un Bearer) aparece en el panel con su nombre amigable y sin el modelo.
+6. Cambio de email y borrado de la cuenta.
+7. Nueva versión legal que exige aceptación: aviso en el panel y aceptación.
+8. Admin: ajuste de saldo con motivo y su entrada en la auditoría; activar el mantenimiento de la app → la API responde 503.
+9. Admin: copia de predeterminados con vista previa y exclusión de elementos.
+10. **Sin JavaScript**: registro, login, compra, datos fiscales, aceptación legal y una action de administración.
+
+**Errores del navegador:** en todos los E2E se escuchan `pageerror`, `console.error`, `requestfailed` y las respuestas 5xx, distinguiendo errores funcionales, de infraestructura y del simulador. No hay recursos externos opcionales: cualquier petición a un dominio externo es un fallo.
+
+**Selectores:** `getByRole` → `getByLabel` → `getByText` estable → `getByTestId` solo si no hay alternativa, con nombres de dominio (`balance-card`, `primary-action`, `theme-toggle`, `error-summary`). Prohibidos el CSS profundo, las clases de Tailwind, los `nth()` innecesarios y los ids generados.
+
+**Esperas:** solo localizadores, `expect` *web-first*, URL y respuestas observables. PROHIBIDOS `waitForTimeout`, `sleep` y los bucles de espera. No se suben *timeouts* para tapar condiciones de carrera.
+
+**Simulaciones:** cada spec declara si usa el backend real de test con la BD de test (lo normal) o intercepta peticiones (solo para estados del navegador difíciles de provocar, p. ej. el fallo de `/client-errors`). No se mezclan ambas estrategias en un mismo flujo.
+
+**Artefactos:** captura y *trace* solo en los fallos (`retain-on-failure`); vídeo solo en la ejecución nocturna. En CI se suben como artefacto.
+
+### 15.18 Validaciones transversales (N6)
+
+**Accesibilidad:**
+
+- Una spec `a11y` recorre **todas** las páginas (lista de rutas generada desde `src/routes`) con axe en tema claro y oscuro: cero violaciones `serious` o `critical`.
+- Tests de teclado para los componentes personalizados (diálogo, menús, pestañas): Tab, Mayús+Tab, Escape, foco visible y foco devuelto.
+- Reflujo a 320 px y zoom al 200 % en las páginas clave.
+- **Auditoría manual** antes del lanzamiento público (NVDA en Windows y VoiceOver en iOS), con una lista de comprobación de WCAG 2.2 AA. Lo automático no sustituye a la auditoría.
+
+**Responsive:** móvil 390×844 y escritorio 1366×768 en los E2E críticos del panel y de la compra. Los menús, diálogos y tablas (con desplazamiento o reorganización) deben poder usarse en móvil.
+
+**Cross-browser:**
+
+| Momento | Navegadores |
+|---|---|
+| Desarrollo y lote | Chromium, tests afectados |
+| PR | Chromium. Además Firefox y WebKit si la PR toca formularios, foco, descargas, subida de ficheros o CSS global |
+| `main` | Chromium completo |
+| Nocturna y release | Chromium, Firefox y WebKit (incluido WebKit móvil) |
+
+**Regresión visual** (nocturna, Chromium): landing, login, saldo del panel, compra y una pantalla de administración, en móvil y escritorio y en tema claro y oscuro (unas 8–10 capturas). Se controlan los datos (sembrados y fijos), el reloj (`page.clock`), el locale (`es-ES`), las fuentes (propias), las animaciones (desactivadas) y `reducedMotion`. Solo se enmascaran regiones legítimamente dinámicas. **Las capturas se generan solo en el contenedor oficial de Playwright** de la misma versión que el paquete, nunca en Windows, porque el renderizado de fuentes es distinto. Solo se actualizan si el cambio es intencionado, se ha revisado y va en el mismo PR.
+
+**Rendimiento** (L16; opcional, pero conviene hacerlo pronto): `perf:seed` (siembra con los servicios y semilla fija) y `perf:load` (script propio con `fetch`), en cuanto existan el panel y `/ai/chat` con un proveedor simulado con latencia.
+
+- Se mide una sola sesión (tiempo de servicio) y 20 sesiones con pausas de unos 5 s con *jitter* y arranque escalonado.
+- Se comprueba que las reservas siguen siendo correctas bajo carga y se mide el volumen de logs por petición.
+- Siempre contra el build. Se publican los dos números junto con el objetivo.
+
+**Seguridad verificable:** ya está incluida en N3 HTTP (host, CORS, CSRF, cabeceras, redirecciones abiertas, límites, IP real) y en el marcador de privacidad de los logs.
+
+### 15.19 Logging en los tests
+
+- Cada rechazo de negocio relevante (saldo, tope diario, límite, conflicto de sincronización, login bloqueado) tiene un test con el **registrador falso**: comprueba `event` y `reason`, y que `JSON.stringify(eventos)` no contiene el email, el importe ni la fecha de la operación.
+- Un dato corrupto que se rechaza al leerlo registra su propio evento, sin copiar el contenido.
+- `console.log` puede no aparecer en el informe de Vitest: para inspeccionar un valor, se fuerza un `expect` que falle con el dato dentro de la comparación.
+
+### 15.20 Mutation testing
+
+- **Piloto** tras cerrar L05 y L06, sobre `src/lib/server/domain/**` (tarificación, bolsas, reservas, deuda, estimación, normalización, idempotencia, fechas). Se excluyen la interfaz, el CSS, la configuración, los adaptadores simples, el logging y el código generado.
+- Se registran los mutantes, *killed*, *survived*, sin cobertura, *timeouts*, errores y tiempo total. Cada superviviente se clasifica (aserción insuficiente, caso límite ausente, mutación equivalente, código muerto o comportamiento no observable) y se corrige o se documenta.
+- **Sin umbral fijo de partida**: se crea una línea base y el umbral que bloquea la release se fija después (nunca un 100 % automático).
+- Ejecución semanal programada y en las PR que modifiquen el dominio (modo incremental). Nunca en el bucle de desarrollo ni sobre suites inestables.
+
+### 15.21 Cobertura
+
+Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones y sentencias en el dominio y 80 % global), medidos con `@vitest/coverage-v8` sobre las suites de Vitest. Atención especial a las ramas de validación, errores, permisos, límites y reglas. No se escriben tests sin valor para subirla, y una cobertura alta no sustituye a los tests de aceptación, los E2E ni el mutation testing. El informe se publica en cada PR para ver los cambios.
+
+### 15.22 Determinismo
+
+- **Tiempo:** solo a través del adaptador `Clock` (fijo en los tests), con temporizadores falsos para reintentos y esperas; en Playwright, `page.clock`.
+- **Aleatoriedad e ids:** generador inyectable con semilla y UUID conocidos en los fixtures.
+- **Zona horaria:** el ejecutor corre con `TZ=UTC`; los tests de Europe/Madrid fijan la zona en el propio cálculo, nunca en la del sistema.
+- **Locale:** `es-ES` explícito en todo formateo.
+- **Entorno de los tests:** un conjunto mínimo documentado (`APP_ENV=test`, `DATABASE_PATH` temporal y secretos aleatorios generados al arrancar la suite) que se exporta solo para el comando de tests. No se crea un `.env` para los tests, y `APP_ENV=test` no exige las variables de producción.
+
+### 15.23 Servicios externos
+
+| Servicio | Sustituto en unit e integración | Sustituto en E2E | Escenarios obligatorios |
+|---|---|---|---|
+| OpenRouter (chat, imagen, audio, modelos, saldo, generación) | *Fake* del puerto `AiGateway` + servidor simulado para el adaptador | Servidor simulado | Éxito, coste ausente, 5xx, *timeout*, JSON inválido, moderación, respaldo, saldo bajo |
+| Mistral (Voxtral) | Servidor simulado | Servidor simulado | Éxito, reintentos a 2/4/8 s, *timeout*, 401/402/429 de facturación, *fallback* |
+| Resend | *Fake* de `EmailSender` (en memoria) | *Outbox* en fichero | Éxito, error (log `warn`, sin reintento infinito) |
+| Turnstile | *Fake* de captcha | *Fake* (sin widget) | Válido, inválido, servicio caído |
+| BCE | Servidor simulado | Valor fijo | Éxito, error, días sin actualizar (alerta) |
+| GitHub Releases | Servidor simulado | — | Éxito, error |
+| Pagos | `simulated` | `simulated` | Completado, webhook repetido, reembolso, contracargo |
+| Facturación | `none` + *fake* para la interfaz | — | Emisión idempotente (con el *fake*) |
+| Log Gateway | Servidor simulado | Desactivado (solo stdout) | Lotes, error, caída sin bloqueo |
+| ffprobe | Real (binario de la imagen) con audios de fixture pequeños | — | Duración, audio ilegible, exceso de duración |
+
+### 15.24 Ejecución escalonada y selección de tests afectados
+
+| Nivel | Cuándo | Qué se ejecuta | Coste orientativo |
+|---|---|---|---|
+| 0 Edición | Cambios pequeños | `check` del área, `lint:changed`, test individual | Segundos |
+| 1 Ultrarrápida | Durante el lote | `vitest related <ficheros>` o el fichero de test | Segundos |
+| 2 Lote (checkpoint) | Cierre de lote | Unit, componente e integración del área (`vitest --changed`), aceptación del lote, `lint:changed`, `check` | Segundos a pocos minutos |
+| 3 Historia / PR | Antes de integrar | Puertas del CI (constitución) + smoke + E2E `@critical` afectados en Chromium + navegadores según el riesgo | Minutos |
+| 4 Completa | Nocturna y release | Todo: E2E en los tres navegadores, visual, a11y completa, cobertura, build de la imagen, mutation (semanal), carga (release) | Mayor |
+
+**Se amplía la selección** cuando cambia un componente `ui/` muy usado, un layout, los hooks, la autenticación o las sesiones, el esquema o las migraciones, la serialización o el OpenAPI, el tema o el CSS global, `svelte.config.*`, `vite.config.*`, el adaptador o una dependencia principal. En esos casos se ejecuta el nivel 3 completo.
+
+Los tiempos no se fijan de antemano: se miden (T-TEST-001) y se registran antes y después de cada optimización.
+
+### 15.25 Estructura y comandos
+
+```text
+src/lib/**/X.test.ts            unit y componente (junto al código)
+tests/
+  integration/                  servicios, repositorios, actions, adaptadores
+  http/                         hooks y API contra el build
+  fixtures/  builders/  fakes/  mock-servers/
+e2e/
+  setup/                        storageState por rol
+  smoke.spec.ts
+  <funcionalidad>.spec.ts
+  a11y.spec.ts
+  visual.spec.ts
+  fixtures/
+scripts/
+  lint-changed.*  test-trace.*  perf-seed.*  perf-load.*
+```
+
+Vitest se organiza en **proyectos**: `unit` (Node), `component` (jsdom), `integration` (Node, una BD por fichero) y `http` (Node, build compartido, un *worker*). Playwright, en los proyectos `setup`, `chromium`, `firefox`, `webkit`, `mobile-webkit` y `visual`.
+
+Scripts propuestos (pnpm; se crean en L01 y se documentan en `CLAUDE.md`):
+
+| Script | Propósito |
+|---|---|
+| `test` | Vitest: unit + componente + integración |
+| `test:unit` / `test:component` / `test:int` / `test:http` | Un proyecto de Vitest |
+| `test:related` | `vitest related` sobre los ficheros indicados |
+| `test:coverage` | Vitest con cobertura y umbrales |
+| `test:trace` | Lista los `CA` sin test |
+| `test:e2e` | Playwright, Chromium, todo |
+| `test:e2e:smoke` / `test:e2e:critical` | Por etiqueta |
+| `test:e2e:a11y` / `test:e2e:visual` | Accesibilidad / capturas |
+| `test:e2e:cross-browser` | Los tres navegadores |
+| `test:e2e:ui` / `test:e2e:headed` / `test:e2e:debug` | Depuración |
+| `test:mutation` | Stryker (incremental por defecto) |
+| `lint:changed` | ESLint solo sobre los ficheros cambiados respecto al último commit (más los nuevos), con `--concurrency auto` y reintento en un hilo; si cambia la configuración de ESLint o un `tsconfig`, lint completo |
+| `perf:seed` / `perf:load` | Prueba de carga (L16) |
+
+### 15.26 CI, tests inestables y optimización
+
+**CI (GitHub Actions):**
+
+- **PR**: puertas de la constitución + `test:e2e:smoke` + `test:e2e:critical` (Chromium) + Firefox y WebKit si la PR toca las áreas de riesgo (15.18) + Stryker incremental si toca el dominio.
+- **`main`**: E2E completos en Chromium + a11y completa.
+- **Nocturna**: matriz de tres navegadores, regresión visual y vídeo de los fallos.
+- **Semanal**: mutation completo sobre el dominio.
+- **Release**: nivel 4 contra la **imagen Docker** que se va a desplegar + prueba de carga.
+
+Cachés de pnpm y de los navegadores de Playwright. *Sharding* solo si la suite E2E lo necesita, según lo medido.
+
+**Tests inestables:** son un defecto. Se investiga la causa: estado compartido, carreras, esperas, datos, orden, temporizadores, red o paralelismo. Los reintentos en CI (máximo 1) sirven para capturar el *trace* y **marcar** el test como inestable, no para ocultarlo. Ningún test crítico se ignora sin una tarea abierta y justificada.
+
+**Optimización y verificación en Windows** (equipo de desarrollo):
+
+- Antes de recortar nada, se mide: coste fijo del lint con un solo fichero, número de ficheros del programa de TypeScript, perfil de CPU y latencia de `stat`.
+- Las librerías con índices enormes (p. ej. de iconos) se importan por ruta individual.
+- Si el antivirus en tiempo real domina, se excluyen la carpeta del proyecto y las cachés de pnpm (script en `scripts/` con opción de deshacerlo; requiere administrador).
+- Las suites no se ejecutan en paralelo entre sí, porque compiten por disco y CPU: se encadenan. `testTimeout` global de 30 s en Vitest para absorber la carga de la suite completa.
+- `eslint --cache` falla con configuraciones que contienen funciones (typescript-eslint): no se usa; en su lugar, `lint:changed`. El lint completo se parte en dos pasadas (`src tests` con `--concurrency auto` y el resto en serie). Un lint completo que pasa de 10 minutos se interrumpe y se sustituye por el parcial.
+
+### 15.27 Preguntas abiertas sobre testing
+
+Mientras no se resuelvan se aplican suposiciones conservadoras, y cada una genera una tarea de confirmación en el plan.
+
+1. **Doble envío de la compra simulada.** `Historias.md` no define cómo se evita que un doble clic cree dos compras. *Suposición:* el formulario de compra lleva un identificador de intento de un solo uso y la compra es idempotente por ese identificador; lo comprueba el E2E 4.
+2. **Formato del BCE** (XML o API SDMX). *Suposición:* lo decide el plan y el simulador reproduce el formato elegido.
+3. **Inmutabilidad en la BD.** *Suposición:* además del test de arquitectura, *triggers* de SQLite impiden `UPDATE` y `DELETE` en las tablas inmutables (salvo la anonimización, que usa una vía dedicada).
+4. **Versiones de navegador soportadas.** *Suposición:* las dos últimas versiones estables de Chrome, Edge, Firefox y Safari.
+5. **Duración máxima aceptable de una PR.** *Suposición:* se mide en L01–L03 y se fija como objetivo.
+6. **Smoke después de cada despliegue a staging** (sin datos de producción). *Suposición:* sí, `test:e2e:smoke` contra `cuenta-staging` con una cuenta de prueba dedicada, más la verificación de proxy de la constitución.
+7. **Pruebas de la app Secretario** (cliente): quedan fuera de este documento; corresponden a `v4-app-spec.md`.
+
+### 15.28 Integración con Spec Kit
+
+- **`/speckit-specify`**: cada especificación cita los `BE-FR` y sus `CA`, y añade los estados, errores, límites, permisos y riesgos que falten para que sean verificables.
+- **`/speckit-plan`** decide y documenta: los lotes de la funcionalidad con su **plan previo de tests** (15.5), el catálogo de eventos (principio XI), los fixtures, builders y fakes necesarios, las suites de cierre, los E2E afectados, los navegadores y viewports, si aplica property-based o mutation testing, y los riesgos de SSR e hidratación.
+- **`/speckit-tasks`** agrupa por lote: cada lote termina con una **tarea de checkpoint** que incluye sus tests y la suite de cierre. Los prefijos (`T-UNIT`, `T-INT`, `T-E2E`, `T-A11Y`, `T-VIS`, `T-MUT`, `T-QUAL`, `T-PLAY`, `T-TEST`) se usan como etiquetas dentro de las tareas. **No** se genera «implementar función A / test A / función B / test B» ni una tarea por test.
+- **`/speckit-implement`** sigue el modelo de 15.5, ejecuta solo las suites del nivel que corresponde (15.24) e informa de qué se ha ejecutado realmente.
+- **`/speckit-analyze`** comprueba que cada `CA` tiene un test previsto y que ningún lote se cierra con tests pendientes.
+
+**Tareas transversales sugeridas** (en L01 salvo que se indique otra cosa; se adaptan, no se crean todas automáticamente):
+
+```text
+T-TEST-001 Inventario de arquitectura y runtimes (15.2) y medición inicial de tiempos.
+T-TEST-002 Proyectos de Vitest, globalSetup de la BD plantilla y build compartido para http.
+T-TEST-003 Clock, generador de ids, Logger falso, builders y fakes base.
+T-TEST-004 Servidores simulados (IA, BCE, Turnstile, Resend, GitHub, Log Gateway).
+T-TEST-005 Modo APP_ENV=test (adaptadores falsos, outbox en fichero), rechazado fuera de test.
+T-TEST-006 Scripts (15.25), lint:changed, test:trace y documentación en CLAUDE.md.
+T-PLAY-001 Configuración de Playwright contra el build, proyectos, artefactos y storageState por rol.
+T-PLAY-002 Smoke con detección de errores de página, consola e hidratación.
+T-A11Y-001 Spec a11y que recorre todas las rutas en ambos temas.
+T-QUAL-001 Cobertura con umbrales y publicación del informe en la PR.
+T-VIS-001  Capturas visuales en el contenedor de Playwright (L15 / L16).
+T-MUT-001  Piloto de Stryker sobre el dominio y línea base (tras L05–L06).
+T-QUAL-002 Prueba de carga (perf:seed / perf:load) y registro de resultados (L16).
+```
+
+### 15.29 Definition of Checkpoint (cierre de lote)
+
+Un lote se cierra cuando:
+
+- La implementación prevista está completa.
+- `check`, `lint:changed` y el build son correctos.
+- Están creados los tests obligatorios del lote, incluidos los que se escriben antes o inmediatamente después (15.5).
+- Pasan los tests afectados y la aceptación del lote.
+- Existen los fixtures y fakes necesarios.
+- No hay errores críticos ni tests pendientes sin justificar.
+- **No queda deuda de tests del lote.**
+
+No hace falta ejecutar en cada checkpoint todos los E2E, navegadores, viewports, capturas, mutation testing ni suites no afectadas.
+
+### 15.30 Definition of Done (historia)
+
+Una historia está terminada cuando:
+
+- Todos sus lotes están cerrados.
+- Sus `CA` son trazables (`test:trace` sin huecos para la historia).
+- Están cubiertos las reglas, los errores, los límites y los estados principales.
+- Las dependencias externas están simuladas.
+- Los tests son deterministas, sin esperas arbitrarias ni tests ignorados sin justificar.
+- Las puertas del CI están en verde.
+- Los E2E críticos afectados pasan en Chromium y en los navegadores que exija el riesgo.
+- Se ha verificado el responsive mínimo.
+- Las capturas coinciden o se han actualizado intencionadamente.
+- No hay errores inesperados de consola ni de página.
+- La cobertura no empeora sin justificación.
+- Los comandos están documentados y los tests, integrados en CI.
+
+El mutation testing solo es obligatorio si el plan lo establece para código crítico.
+
+**Si la historia requiere Playwright**, además:
+
+- Pasan los smoke y los E2E obligatorios.
+- No hay errores inesperados de consola, de JavaScript ni de página.
+- El flujo se ha verificado en el navegador y el viewport mínimos requeridos.
+- Los datos son reproducibles y los fixtures y simulaciones están documentados.
+- No hay `waitForTimeout`.
+- Los tests son independientes.
+- Los artefactos de diagnóstico están configurados.
+
+### 15.31 Requisitos de calidad de los tests
+
+Los tests tienen un propósito claro, son legibles, independientes y repetibles, fallan por una razón comprensible, usan datos claros y aserciones significativas, limpian sus recursos, no acceden a producción, no contienen secretos, no modifican entornos compartidos y permiten refactorizar.
+
+PROHIBIDOS: tests sin aserción o que solo comprueban que no hay excepción, aserciones genéricas, reimplementar el algoritmo esperado dentro del test, dependencia del orden y acoplamiento a detalles internos.
