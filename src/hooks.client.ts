@@ -4,6 +4,7 @@
 import type { HandleClientError } from '@sveltejs/kit';
 import { page } from '$app/state';
 import * as m from '$lib/paraglide/messages.js';
+import { applyZodMessages } from '$lib/schemas/common/zod-config';
 import {
 	describeError,
 	emitClientEvent,
@@ -13,7 +14,11 @@ import {
 import type { ClientLogEventCode } from '$lib/logging/events';
 import { APP_VERSION } from '$lib/version';
 
-/** Veces que se ha visto cada huella en esta pestaña; viaja como `count` en el informe. */
+// Mensajes de validación en español también en el navegador (principio XII).
+applyZodMessages();
+
+// Excepción documentada de estado de módulo, solo en el cliente (la regla de la constitución es para el servidor):
+// cuenta las veces que se ha visto cada huella en esta pestaña; viaja como `count` en el informe.
 const seen = new Map<string, number>();
 
 function report(event: Exclude<ClientLogEventCode, 'client.report.failed'>, error: unknown): void {

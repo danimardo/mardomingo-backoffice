@@ -122,7 +122,7 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 | `client.report.failed`             | Navegador (solo consola, nunca se envía) | debug | `No se pudo enviar el informe de error` | `reason` (`network`\|`rejected`)                                                                                       | Fallo del envío a `/client-errors`                                             | —      |
 | `client.error.reported`            | Servidor (`/client-errors`)              | warn  | `Error del navegador recibido`          | `route` (routeId), `version`, `count`, `err` (`type` = `name`, `code` = `fingerprint`, `stack` = `frames`)             | Informe aceptado. Superado el límite: `204` **sin** registrar                  | V      |
 
-El **mensaje** del error nunca sale del navegador. `fingerprint` y las líneas de la pila se transportan en
+Con `navigator.sendBeacon` (T027) el navegador no informa del resultado del envío: `client.report.failed` solo se emite con `reason: network` (cuando no puede encolar el envío); `rejected` no se emite. El **mensaje** del error nunca sale del navegador. `fingerprint` y las líneas de la pila se transportan en
 `err.code` y `err.stack` para no ampliar la lista de campos permitidos.
 
 ---

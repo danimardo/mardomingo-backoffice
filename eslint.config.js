@@ -119,6 +119,11 @@ export default ts.config(
 				{
 					selector: 'MemberExpression[object.name="process"][property.name="env"]',
 					message: 'Solo $lib/server/config/env.ts lee el entorno.'
+				},
+				{
+					selector: "CallExpression[callee.name='redirect'] Literal[value=/^\\//]",
+					message:
+						'redirect() con una ruta literal: usa resolve() de $app/paths (svelte/no-navigation-without-resolve no cubre redirect).'
 				}
 			]
 		}

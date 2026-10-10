@@ -1,6 +1,6 @@
 // Emisión real con pino sobre un destino en memoria (Historias.md 15.19): comprueba forma, nivel, contexto y
 // que ni el mensaje de un error ni un dato sensible llegan a la línea.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import * as z from 'zod';
 import { createRootLogger, type LogThreshold } from './logger';
 
@@ -11,16 +11,20 @@ function recordOf(line: string): Record<string, unknown> {
 }
 
 function capture(level: LogThreshold = 'debug') {
+	// Emisión real: pino escribe en process.stdout, el mismo destino que en producción.
 	const lines: string[] = [];
+	const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
+		lines.push(String(chunk));
+		return true;
+	});
+	onTestFinished(() => {
+		spy.mockRestore();
+	});
 	const logger = createRootLogger({
 		level,
 		env: 'test',
 		version: '1.2.3',
-		sink: {
-			write(chunk: string) {
-				lines.push(chunk);
-			}
-		}
+		sink: process.stdout
 	});
 	return {
 		logger,
