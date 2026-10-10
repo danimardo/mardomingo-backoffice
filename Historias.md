@@ -4,7 +4,7 @@
 |---|---|
 | Estado | Diseño en revisión (v2: plataforma multi-app) |
 | Fecha | 2026-10-10 |
-| Versión del documento | 2.4 (2026-10-10: revisión cruzada de los prompts de preparación: modelo de datos, secciones 15 y 16; la 2.3 añadió la arquitectura por funcionalidades, 15.2 y 15.28; la 2.2 añadió la experiencia de usuario y diseño, sección 16, y la 2.1, la estrategia de testing, sección 15; sustituye a la 2.0 y a la 1.0 del 2026-10-06) |
+| Versión del documento | 2.7 (2026-10-10: altas por IP en L03 tras `/speckit-analyze`; la 2.6 recogió las decisiones de la revisión del plan 001: CSRF propio del host web; captcha Turnstile y límites de autenticación en `accounts` (tabla `auth_rate_limits`), sin los plugins `captcha` ni `rateLimit` de Better Auth; saldo de OpenRouter con `OPENROUTER_MANAGEMENT_KEY`; pérdida por cancelación; logs solo a stdout hasta el contrato del Log Gateway; ejemplos de cobro exactos; audio de respaldo convertido con ffmpeg; coste real de OpenRouter sin `usage: { include: true }`; email normalizado no único y hash HMAC con `EMAIL_HASH_KEY`; estado `in_progress` para la idempotencia; tabla `user_app_activity` y columnas que faltaban; movimiento `forfeit` al borrar la cuenta; ajuste negativo limitado al saldo disponible; IVA de las compras simuladas; anonimización sin desactivar *triggers*; contrato de la API (códigos nuevos, CORS, `/sync`, `/health`, IP aproximada); coherencia de lotes y de las adaptaciones DS; la 2.5 aclaró la especificación 001: deuda y ajustes, límites por cuenta y por app, anuncios en el panel, pasos tras verificar, categorías de sincronización y `ADMIN_EMAIL`; la 2.4 hizo la revisión cruzada de los prompts de preparación: modelo de datos, secciones 15 y 16; la 2.3 añadió la arquitectura por funcionalidades, 15.2 y 15.28; la 2.2 añadió la experiencia de usuario y diseño, sección 16, y la 2.1, la estrategia de testing, sección 15; sustituye a la 2.0 y a la 1.0 del 2026-10-06) |
 | Copias | `mardomingo-backoffice/Historias.md` (original) y `secretario2/docs/v4-backend-spec.md` (copia literal para la app). Se editan en el original y se vuelven a copiar. |
 | Primera app cliente | Secretario AI — cambios en la app: `secretario2/docs/v4-app-spec.md` |
 | Repositorio del backend | Privado, `mardomingo-backoffice` (https://github.com/danimardo/mardomingo-backoffice) |
@@ -118,16 +118,16 @@ Ofrecer una **plataforma común** para las apps de IA del propietario (escritori
 | Framework | **SvelteKit** (`adapter-node`) | Un único proyecto para landing, panel de usuario, panel de administración y API (`+server.ts`). Sirve los dos dominios (API y web) desde la misma instancia. |
 | Base de datos | **SQLite** en modo **WAL** | Un fichero en volumen persistente. Las escrituras se serializan, lo que garantiza que dos peticiones simultáneas no gasten ni reserven el mismo crédito. |
 | ORM | **Drizzle** (`sv add drizzle`) | Migraciones versionadas en el repositorio. |
-| Autenticación | **Better Auth** (`sv add better-auth`) con adaptador Drizzle | Plugins: `bearer`, `admin`, `captcha` (Turnstile); *rate limit* integrado con almacenamiento en base de datos; cambio de email con verificación. |
+| Autenticación | **Better Auth** (`sv add better-auth`) con adaptador Drizzle | Plugins: `bearer` y `admin`; cambio de email con verificación. Las form actions lo llaman con su API de servidor (`auth.api`), y por esa vía no actúan sus plugins `captcha` ni `rateLimit`, que no se usan: el captcha Turnstile (adaptador `CaptchaVerifier`) y los límites de autenticación por IP (tabla `auth_rate_limits`) los implementa la funcionalidad `accounts` (BE-FR-01, BE-FR-45). |
+| Audio | **ffmpeg** y **ffprobe** en la imagen del contenedor | ffprobe mide en el servidor la duración del audio (BE-FR-44); ffmpeg convierte el audio que se envía al respaldo de OpenRouter (BE-FR-35). |
 | Validación y contrato | **Zod 4** + **zod-openapi** | De los esquemas se genera el **OpenAPI** de la API (ver 7.1). |
-| Audio | **ffprobe** (ffmpeg) en la imagen del contenedor | Para medir en el servidor la duración del audio (ver BE-FR-44). |
 | Internacionalización | **Paraglide** (`sv add paraglide`) | Solo `es` en la v4. |
 | Estilos | **Tailwind CSS** | |
 | Tests | **Vitest** | Obligatorios para la lógica de créditos, reservas y tarificación (ver 10.4). |
 | Emails | **Resend** | Tras una interfaz de envío propia (ver 5.13). |
 | Backups | **Litestream** → **Backblaze B2** (región UE, EU Central) | Bucket privado dedicado; clave de aplicación limitada a ese bucket. |
 | Despliegue | **Coolify** | Una sola instancia por entorno (requisito de SQLite); entornos `production` y `staging`. |
-| Logs y monitorización | **pino** (servidor) y **loglevel** (navegador) → stdout + **Log Gateway** → **OpenObserve** | Constitución, principio XI. |
+| Logs y monitorización | **pino** (servidor) y **loglevel** (navegador) → stdout + **Log Gateway** → **OpenObserve** | Constitución, principio XI. El envío al Gateway es un adaptador con interfaz propia; hasta que el propietario entregue el contrato de ingesta (entrada de L01), los logs solo van a stdout. |
 
 ### 4.2 Componentes lógicos
 
@@ -171,12 +171,13 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 - Enlaces: landing (interna `/apps/<slug>` o externa), descarga, notas de versión.
 - Versión mínima y recomendada, y si se exige la versión (`enforce_version`; normalmente desactivado en apps web).
 - Mantenimiento propio (además del global) con mensaje.
+- Texto opcional de pasos siguientes tras verificar la cuenta (BE-FR-64 CA2).
 - Orígenes permitidos para CORS (solo apps web).
 - Sobrescrituras de límites y parámetros globales (sección 9, los marcados como "por app").
 - Esquema del documento de sincronización (BE-FR-39) y predeterminados (BE-FR-42).
 - Catálogo de operaciones (BE-FR-77).
 - Email de soporte propio opcional (BE-FR-84).
-- CA1: Toda petición a `/api/v1` (salvo `/health` y `/openapi.json`) lleva `X-App-Id`. Ausente o desconocido → `400 UNKNOWN_APP`; app `disabled` → `503 APP_DISABLED`.
+- CA1: Toda petición a `/api/v1` (salvo `/health`, `/openapi.json` y el *preflight* CORS, BE-FR-65 CA2) lleva `X-App-Id`. Ausente o desconocido → `400 UNKNOWN_APP`; app `disabled` → `503 APP_DISABLED`.
 - CA2: `X-App-Id` **identifica, no autentica**: los clientes públicos no pueden guardar secretos. La seguridad descansa en la sesión del usuario, los límites y las reservas.
 - CA3: Dar de alta una app o una operación no requiere redesplegar.
 - **Perfil inicial:** se crea la app `secretario` (tipo `desktop`) con las operaciones de BE-FR-31, el esquema de sincronización de BE-FR-39 y los parámetros de audio de la sección 9.
@@ -189,12 +190,12 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 
 **BE-FR-64 — Marca paraguas y origen del registro.** La web (registro, login, panel, administración) y los emails usan la marca paraguas. El registro admite el parámetro `?app=<slug>`:
 - CA1: Se guarda la app de origen en la cuenta (`signup_app_id`) a efectos estadísticos.
-- CA2: Tras verificar el email, la página de confirmación muestra los siguientes pasos de esa app (p. ej. "Descarga Secretario AI e inicia sesión").
+- CA2: Tras verificar el email, la página de confirmación muestra los siguientes pasos de esa app (p. ej. "Descarga Secretario AI e inicia sesión"). Por defecto el texto se genera con el nombre de la app, su botón de descarga o acceso e «inicia sesión con tu email»; si la app tiene un texto propio de pasos siguientes (BE-FR-62), se usa ese.
 - CA3: Los emails que se refieren a una app concreta la mencionan por su nombre visible.
 
 **BE-FR-65 — Clientes web y móviles.**
 - CA1: Todas las apps se autentican con **token Bearer** (BE-FR-03); la cookie de sesión es exclusiva de la web de la cuenta.
-- CA2: Las peticiones con cabecera `Origin` solo se aceptan si el origen figura en la lista de la app indicada en `X-App-Id` (CORS por app). Las apps de escritorio y móviles no envían `Origin`.
+- CA2: CORS por app. El *preflight* (`OPTIONS`, que no lleva `X-App-Id`) se acepta si el origen figura en la lista de alguna app activa. La petición real con cabecera `Origin` solo se acepta si el origen figura en la lista de la app indicada en `X-App-Id`; si no, `403 ORIGIN_NOT_ALLOWED`. Las apps de escritorio y móviles no envían `Origin`.
 - CA3: La sesión queda **ligada a la app** con la que se inició; una petición con otro `X-App-Id` → `401 UNAUTHENTICATED`.
 
 ### 5.2 Cuentas y autenticación
@@ -202,7 +203,7 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 **BE-FR-01 — Registro web.** El registro se hace **solo en la web** (`/registro`), con email, contraseña, aceptación de los términos, la política de privacidad y la política de uso aceptable vigentes, declaración de edad mínima (BE-FR-69) y captcha Turnstile.
 - CA1: La contraseña tiene entre 8 y 128 caracteres.
 - CA2: Se registra la versión de cada documento aceptado y la fecha (`terms_acceptances`).
-- CA3: Sin captcha válido, el registro se rechaza.
+- CA3: Sin captcha válido, el registro se rechaza. El token de Turnstile lo verifica en el servidor la funcionalidad `accounts` mediante el adaptador `CaptchaVerifier` (no el plugin `captcha` de Better Auth; 4.1).
 - CA4: Tras registrarse, se envía el email de verificación y la cuenta queda **sin verificar** (`email_verified = false`).
 - CA5: La respuesta no revela si el email ya existía (anti-enumeración): siempre "Te hemos enviado un email".
 
@@ -241,22 +242,23 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 
 **BE-FR-68 — Limpieza de cuentas sin verificar.** Las cuentas sin verificar con más de `unverified_account_ttl_days` días se eliminan por completo (no tienen saldo ni datos), y el email queda libre.
 
-**BE-FR-86 — Cuentas inactivas.** Una cuenta verificada **sin ninguna compra real** y sin actividad (ni login, ni uso de la API, ni acceso al panel) durante `inactive_account_years` años recibe un email de aviso. Si no hay actividad en los `inactive_account_notice_days` días siguientes, se borra según BE-FR-07.
+**BE-FR-86 — Cuentas inactivas.** Una cuenta verificada **sin ninguna compra real** y sin actividad (ni login, ni uso de la API, ni acceso al panel; se registra en `user.last_activity_at`) durante `inactive_account_years` años recibe un email de aviso. Si no hay actividad en los `inactive_account_notice_days` días siguientes, se borra según BE-FR-07.
 - CA1: Las cuentas con alguna compra real **nunca** se cierran de forma automática, tengan o no saldo, para no quedarse con dinero del usuario.
 - CA2: Cualquier actividad durante el plazo de aviso cancela el borrado.
-- CA3: Los créditos gratuitos restantes se pierden con el borrado (ya caducan antes por BE-FR-16).
+- CA3: Los créditos gratuitos restantes se pierden con el borrado (movimiento `forfeit`, BE-FR-07 CA4), aunque normalmente ya han caducado antes (BE-FR-16).
 
 **BE-FR-69 — Edad mínima.** El registro exige marcar "Declaro tener al menos `min_age` años". La declaración se guarda en `terms_acceptances` (`document = age_declaration`). El valor por defecto (18) lo confirma el profesional legal (12, decisión 14).
 
 **BE-FR-70 — Nuevas versiones de documentos legales.** El administrador publica versiones nuevas de términos, privacidad, cookies y uso aceptable indicando si **requieren nueva aceptación** o son **solo informativas**.
-- CA1: Con una versión que requiere aceptación pendiente, `GET /me` y la respuesta de login la incluyen en `pendingAcceptances`, y las operaciones de IA y de sincronización responden `403 TERMS_ACCEPTANCE_REQUIRED`. Login, `/me`, `/app/status` y la aceptación siguen funcionando.
+- CA1: Con una versión que requiere aceptación pendiente, `GET /me` y la respuesta de login la incluyen en `pendingAcceptances`, y las operaciones de IA y de sincronización responden `403 TERMS_ACCEPTANCE_REQUIRED`. Login, logout, `/me`, `/app/status`, `/defaults` y la aceptación siguen funcionando.
 - CA2: La app muestra los documentos (enlaces) y acepta con `POST /api/v1/me/accept-terms`; la web muestra el mismo aviso al entrar en el panel.
 - CA3: Las versiones solo informativas se notifican por email y en el panel, sin bloquear.
 
 **BE-FR-07 — Borrado de cuenta.** Desde el panel, con confirmación de contraseña y aviso explícito de que **el saldo restante se pierde sin reembolso** y de que afecta a **todas las apps**.
-- CA1: Se revocan todas las sesiones y se eliminan el email, el perfil, los datos fiscales y los datos sincronizados de todas las apps. La cuenta queda marcada con `deleted_at`.
-- CA2: Los movimientos de créditos, las operaciones y los pagos se **conservan anonimizados** (sin email ni datos personales) por obligaciones contables y estadísticas. Las facturas emitidas se conservan íntegras durante el plazo legal (BE-FR-83), porque la normativa lo exige.
-- CA3: El email queda libre para un registro nuevo, pero **no** recibe de nuevo el saldo de bienvenida si su forma normalizada ya lo recibió (se conserva un hash del email normalizado).
+- CA1: Se revocan todas las sesiones y se eliminan los datos personales de la fila de `user` (email incluido), el perfil, los datos fiscales y los datos sincronizados de todas las apps. La cuenta queda marcada con `deleted_at`. Las IP de registro y de aceptaciones legales siguen el plazo de BE-FR-83.
+- CA2: Los movimientos de créditos, las operaciones y los pagos se **conservan anonimizados** por obligaciones contables y estadísticas: las tablas inmutables solo guardan el `user_id` opaco, de modo que quedan sin datos personales al borrarlos de `user` y **no** se modifican (no hace falta ninguna vía que desactive sus *triggers*, 15.27 pregunta 3). Las facturas emitidas se conservan íntegras durante el plazo legal (BE-FR-83), porque la normativa lo exige.
+- CA3: El email queda libre para un registro nuevo, pero **no** recibe de nuevo el saldo de bienvenida si su forma normalizada ya lo recibió (se conserva en `welcome_grants` el hash HMAC del email normalizado, BE-FR-11.5).
+- CA4: Las bolsas con saldo restante se ponen a cero con un movimiento `forfeit`, que cuenta en las estadísticas (BE-FR-54).
 
 **BE-FR-08 — Exportación de datos (RGPD).** El panel permite descargar un JSON con perfil, datos fiscales, datos sincronizados de cada app, movimientos, operaciones (metadatos), pagos, facturas y aceptaciones legales del usuario.
 
@@ -271,7 +273,7 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 2. Bloqueo de **dominios de email desechables** mediante una lista mantenida y actualizable sin redesplegar.
 3. **Turnstile** en el registro (BE-FR-01).
 4. **Límite de altas por IP**: máximo `registrations_per_ip_24h` registros por IP en 24 h.
-5. **Normalización del email** para la concesión del saldo de bienvenida: minúsculas, eliminación del sufijo `+etiqueta` en cualquier dominio y eliminación de puntos en `gmail.com`/`googlemail.com`. Se guarda `email_normalized` (único) y su hash para cuentas borradas.
+5. **Normalización del email** para la concesión del saldo de bienvenida: minúsculas, eliminación del sufijo `+etiqueta` en cualquier dominio y eliminación de puntos en `gmail.com`/`googlemail.com`. Se guarda `email_normalized` con índice, pero **no único** (CA1 admite varias cuentas con la misma forma normalizada). La concesión se controla con `welcome_grants`, que guarda, con restricción de unicidad, un hash **HMAC-SHA256** del email normalizado calculado con la clave secreta propia `EMAIL_HASH_KEY` (sección 9; nunca se rota) y sobrevive al borrado de la cuenta (BE-FR-07 CA3).
 6. **Tope de gasto diario para cuentas sin compras**: un usuario sin ninguna compra real completada no puede gastar (cobros del día + reservas activas) más de `daily_cap_no_purchase` créditos al día (Europe/Madrid), sumando todas las apps. Al superarlo: `DAILY_FREE_LIMIT_REACHED`.
 - CA1: Un segundo registro con `juan+2@gmail.com` cuando ya existe `j.uan@gmail.com` puede crear la cuenta, pero **no** recibe saldo de bienvenida (se le informa en el panel).
 - CA2: Las compras simuladas **no** cuentan como compra a efectos de este tope.
@@ -289,7 +291,7 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 
 **BE-FR-14 — Orden de consumo.** Primero bolsas `free` (la que caduca antes primero), después `paid` (la más antigua primero). Si no queda saldo, el resto pasa a **deuda** (BE-FR-17).
 
-**BE-FR-15 — Libro de movimientos (ledger).** Todo cambio de saldo genera un movimiento inmutable en `credit_movements`: `welcome`, `purchase`, `usage`, `adjustment`, `expiry`, `refund`, `chargeback`, `debt_settlement`. El saldo visible es siempre la suma de bolsas menos la deuda, y debe poder **reconstruirse** a partir del ledger. Las reservas (BE-FR-71) **no** son movimientos: no cambian el saldo, solo el saldo disponible.
+**BE-FR-15 — Libro de movimientos (ledger).** Todo cambio de saldo genera un movimiento inmutable en `credit_movements`: `welcome`, `purchase`, `usage`, `adjustment`, `expiry`, `refund`, `chargeback`, `debt_settlement`, `forfeit` (saldo anulado al borrar la cuenta, BE-FR-07 CA4). El saldo visible es siempre la suma de bolsas menos la deuda, y debe poder **reconstruirse** a partir del ledger. Las reservas (BE-FR-71) **no** son movimientos: no cambian el saldo, solo el saldo disponible.
 - CA1: Existe una comprobación (tarea programada diaria y test) de que, para cada usuario, saldo materializado = reconstrucción desde el ledger; una discrepancia genera alerta al administrador.
 
 **BE-FR-16 — Caducidad.** Una tarea diaria pone a cero las bolsas `free` caducadas y registra movimientos `expiry`. Siete días antes (`free_expiry_warning_days`) se envía un único email de aviso si la bolsa conserva saldo.
@@ -298,7 +300,7 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 - Para **lanzar** una operación hace falta `saldo disponible ≥ min_balance_to_operate` y que la reserva de la operación quepa (BE-FR-71); si no, `INSUFFICIENT_BALANCE` y **no se llama al proveedor**.
 - Si el coste final supera el saldo (porque superó la estimación), se cobra igualmente: el exceso pasa a deuda, hasta `max_debt`. El exceso por encima de `max_debt` lo absorbe el administrador (se registra en estadísticas como pérdida).
 - Con deuda > 0 no se pueden lanzar operaciones.
-- La siguiente entrada de créditos `paid` **liquida primero la deuda** (movimiento `debt_settlement`).
+- La siguiente entrada de créditos `paid`, o cualquier ajuste positivo del administrador (BE-FR-18), gratuito o comprado, **liquida primero la deuda** (movimiento `debt_settlement`). En un ajuste gratuito, la parte que liquida la deuda se registra en estadísticas como pérdida absorbida.
 
 **BE-FR-71 — Reservas de saldo.** Antes de llamar al proveedor, el backend calcula el **coste máximo estimado** de la operación (BE-FR-72) y, en una transacción, crea una **reserva** por ese importe.
 - La operación solo se lanza si `reserva ≤ saldo disponible + (max_debt − deuda actual)` y `saldo disponible ≥ min_balance_to_operate`. Si no, `402 INSUFFICIENT_BALANCE` con `details.requiredMicro` y `details.availableMicro`.
@@ -309,6 +311,7 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 - *Compromiso conocido:* una operación con `max_output_tokens` alto exige más saldo disponible para lanzarse, aunque su coste real sea pequeño. El administrador lo ajusta por operación (BE-FR-77).
 
 **BE-FR-18 — Ajustes manuales.** El administrador puede sumar o restar créditos a un usuario indicando tipo de bolsa, caducidad (si es `free`) y **motivo obligatorio**. Queda en el ledger y en la auditoría (BE-FR-55).
+- CA1: Un ajuste negativo no puede superar el saldo disponible (BE-FR-71): si lo supera, se rechaza con un error de validación. El administrador no crea deuda por ajuste.
 
 ### 5.5 Tarificación
 
@@ -329,13 +332,13 @@ cobro_µc       = ceil(cobro_creditos × 1.000.000)
 
 | Proveedor | Fuente del coste |
 |---|---|
-| OpenRouter (texto, imagen, audio de respaldo) | Campo `usage.cost` de la respuesta. Se envía `usage: { include: true }` por compatibilidad. Si falta, se consulta `GET /api/v1/generation?id=<id>`. Si tampoco está disponible, se estima con los precios por token del modelo y se marca la operación como `cost_estimated = true`. |
+| OpenRouter (texto, imagen, audio de respaldo) | Campo `usage.cost` de la respuesta (el parámetro `usage: { include: true }` ya no tiene efecto, así que no se depende de él). Si falta, se consulta `GET /api/v1/generation?id=<id>`. Si tampoco está disponible, se estima con los precios por token del modelo y se marca la operación como `cost_estimated = true`. |
 | Mistral (Voxtral) | `segundos de audio × voxtral_price_per_minute_usd / 60`. Los segundos se toman del `usage` de la respuesta si lo incluye; si no, de la duración medida en el servidor (BE-FR-44). **Nunca** se confía en una duración enviada por el cliente. |
 
 **BE-FR-21 — Qué no se cobra.**
 - Operaciones rechazadas antes de llamar al proveedor (validación, saldo, límites, mantenimiento, coste máximo).
 - Operaciones en las que **todos** los proveedores fallan.
-- Operaciones **canceladas** por el cliente antes de que el proveedor respondiera. Si el proveedor ya había respondido (coste conocido), se cobra, salvo en el caso de reintento de BE-FR-81.
+- Operaciones **canceladas** por el cliente antes de que el proveedor respondiera. El proveedor puede facturarlas igualmente: ese coste, si se conoce, se registra como «pérdida por cancelación» (BE-FR-37). Si el proveedor ya había respondido (coste conocido), se cobra, salvo en el caso de reintento de BE-FR-81.
 - Operaciones `interrupted` (reinicio del servidor durante la llamada).
 - En la transcripción con *fallback*: si Voxtral falla y el backup responde, solo se cobra lo que haya facturado cada proveedor realmente (normalmente, solo el backup).
 
@@ -353,10 +356,10 @@ fx_usd_eur = (1 / tipo_BCE_EUR_USD) × (1 + fx_buffer_pct)
 
 | Caso | Coste real | Cálculo | Cobro |
 |---|---|---|---|
-| Fix de un párrafo (OpenRouter) | 0,00040 USD | 0,0004 × 1,055 × 0,92 × 2,0 × 1.000 | 0,776 créditos → se muestra "0,8" |
-| Transcripción de 2 min (Voxtral a 0,001 USD/min) | 0,002 USD | 0,002 × 1,0 × 0,92 × 2,0 × 1.000 | 3,68 créditos → "3,7" |
-| Prompt Directo largo con modelo PRO | 0,03 USD | 0,03 × 1,055 × 0,92 × 2,0 × 1.000 | 58,2 créditos → "58" |
-| Saldo 55; reserva estimada 50; coste final 58,2 (supera la estimación) | — | 55 de bolsas + 3,2 a deuda (≤ `max_debt`) | Saldo −3,2 |
+| Fix de un párrafo (OpenRouter) | 0,00040 USD | 0,0004 × 1,055 × 0,92 × 2,0 × 1.000 | 0,77648 créditos (776.480 µc) → se muestra "0,8" |
+| Transcripción de 2 min (Voxtral a 0,001 USD/min) | 0,002 USD | 0,002 × 1,0 × 0,92 × 2,0 × 1.000 | 3,68 créditos (3.680.000 µc) → "3,7" |
+| Prompt Directo largo con modelo PRO | 0,03 USD | 0,03 × 1,055 × 0,92 × 2,0 × 1.000 | 58,236 créditos (58.236.000 µc) → "58" |
+| Saldo 55; reserva estimada 50; coste final 58,236 (supera la estimación) | — | 55 de bolsas + 3,236 a deuda (≤ `max_debt`) | Saldo −3,236 → se muestra "−3,2" |
 
 **Justificación del margen ×2,0:** con precios con IVA incluido (21 %) y la comisión de Stripe, un paquete de 5 € deja unos 3,80 € netos; el margen mínimo para no perder dinero es ≈ ×1,32. El ×2,0 cubre además el saldo de bienvenida, la deuda absorbida y los imprevistos, con un beneficio razonable.
 
@@ -396,6 +399,8 @@ El proveedor activo se elige con una **variable de entorno del servidor** (`PAYM
 - CA2: Si `APP_ENV = production`, solo los usuarios con rol `tester` o `admin` pueden; para el resto, los botones de compra aparecen desactivados con el texto "Próximamente".
 - CA3: Las compras simuladas se excluyen de los ingresos en estadísticas, no generan factura y no cuentan como "compra" para el tope diario (BE-FR-11.6).
 - CA4: Al abrir la página de compra, el servidor genera un **identificador de intento** de un solo uso que viaja en el formulario. La compra es idempotente por ese identificador: un doble clic, un reenvío o volver atrás y reenviar muestran la misma compra sin acreditar de nuevo. Funciona sin JavaScript y vale igual para el proveedor `stripe` (sesión de checkout).
+
+- CA5: En la v4, las compras simuladas registran el IVA español del 21 % incluido en el precio y el país `ES` (`vat_rate`, `base_eur_cents`, `vat_eur_cents`, `country`). El cálculo real del IVA llega con Stripe Tax en la fase de cobros reales (BE-FR-29), pendiente de la gestoría (12, decisiones 2 y 3).
 
 **BE-FR-26 — Aceptación previa al pago.** Antes de comprar, el usuario marca una casilla por la que acepta el inicio inmediato del servicio y reconoce la pérdida del derecho de desistimiento sobre el contenido digital. Se registra con fecha y versión del texto. En el mismo paso puede indicar que quiere **factura completa** (BE-FR-74).
 
@@ -492,7 +497,7 @@ issueCorrective(invoice, amount)        → { invoiceId, number, pdfUrl }
 
 **BE-FR-35 — Transcripción (`POST /api/v1/ai/transcribe`).** Recibe `operation` y el audio en `multipart/form-data` (campo `file`, WebM/Opus) de hasta `max_audio_mb`. **Perfil `secretario`:** reproduce **en el servidor** la lógica actual de la app (`specs.md` 2.2):
 - Escenarios configurados por el administrador en la operación: Voxtral solo; Voxtral + backup; solo backup (Voxtral desactivado). No se permite desactivar Voxtral sin backup configurado.
-- Voxtral (`voxtral-mini-latest`, `POST https://api.mistral.ai/v1/audio/transcriptions`) con reintentos automáticos a los 2 s, 4 s y 8 s y *timeout* de 45 s por intento; si fallan, backup de OpenRouter (`input_audio` WebM en base64, *timeout* de 60 s).
+- Voxtral (`voxtral-mini-latest`, `POST https://api.mistral.ai/v1/audio/transcriptions`) con reintentos automáticos a los 2 s, 4 s y 8 s y *timeout* de 45 s por intento; si fallan, backup de OpenRouter (`input_audio` en base64, *timeout* de 60 s). Antes de enviarlo al backup, el audio WebM se convierte con ffmpeg (incluido en la imagen) a un formato que OpenRouter admite (mp3 o wav); los temporales de la conversión se borran al terminar, también en caso de error o cancelación (BE-FR-38 CA2).
 - Si fallan ambos: `TRANSCRIPTION_FAILED` con el error saneado de cada proveedor (sin nombres de modelo ni datos internos).
 - La respuesta indica si se usó el proveedor `primary` o `backup`, **sin el nombre del modelo**.
 - Máximo `max_concurrent_transcriptions` transcripciones simultáneas por usuario.
@@ -507,7 +512,7 @@ issueCorrective(invoice, amount)        → { invoiceId, number, pdfUrl }
 - CA1: La respuesta al cliente nunca revela el modelo ni si se usó un respaldo (salvo `providerUsed` en la transcripción).
 
 **BE-FR-81 — Idempotencia y resultados no entregados.** Las peticiones a `/ai/*` aceptan la cabecera `Idempotency-Key` (UUID que el cliente genera por cada acción del usuario y reutiliza en sus reintentos). Para un mismo usuario y clave, durante `idempotency_window_minutes`:
-- Si la operación anterior **sigue en curso** → `409 REQUEST_IN_PROGRESS` (sin llamar al proveedor).
+- Si la operación anterior **sigue en curso** (estado `in_progress`) → `409 REQUEST_IN_PROGRESS` (sin llamar al proveedor). Un índice único parcial sobre (`user_id`, `idempotency_key`) limitado al estado `in_progress` impide dos ejecuciones simultáneas y permite repetir tras `undelivered` o un fallo.
 - Si terminó y su respuesta **se entregó** → `409 DUPLICATE_REQUEST` con `details.operationId` (sin llamar ni cobrar de nuevo). Protege frente a dobles clics y reintentos automáticos.
 - Si terminó pero **no se entregó** (el cliente cerró la conexión después de que el proveedor respondiera; estado `undelivered`) → se ejecuta de nuevo y esa repetición **no se cobra** (el coste se registra como absorbido).
 - Si falló o se canceló antes de que el proveedor respondiera → se ejecuta de nuevo con normalidad.
@@ -515,6 +520,7 @@ issueCorrective(invoice, amount)        → { invoiceId, number, pdfUrl }
 - CA2: Sin cabecera, cada petición es independiente.
 
 **BE-FR-37 — Cancelación.** Si el cliente cierra la conexión, el backend aborta la llamada al proveedor en curso (`AbortSignal`), detiene los reintentos y registra la operación como `cancelled` (o `undelivered` si el proveedor ya había respondido). Cobro según BE-FR-21 y BE-FR-81.
+- CA1: Cortar una petición sin *streaming* no evita que el proveedor la facture. La operación `cancelled` no se cobra al usuario; cuando se conoce el coste del proveedor (en la respuesta o en la consulta posterior de la generación, BE-FR-20), se guarda en `ai_operations` (`cost_µusd`) y cuenta en las estadísticas como **«pérdida por cancelación»** (BE-FR-54).
 
 **BE-FR-38 — Registro de operaciones sin contenido.** Cada operación genera un registro en `ai_operations` con: usuario, app, sesión, operación, versión de plantilla, proveedor (`mistral`/`openrouter`), modelo, estado, tokens de entrada/salida, segundos de audio, coste real, reserva, cobro, duración, versión de la app, código de error, `Idempotency-Key` y si el proveedor marcó el contenido por moderación. **Nunca** se guardan audios, textos, prompts, variables, imágenes ni resultados: ni en base de datos, ni en logs, ni en ficheros temporales más allá de la vida de la petición.
 - CA1: Una búsqueda en los logs de OpenObserve de un texto enviado en una operación no devuelve resultados.
@@ -526,49 +532,49 @@ issueCorrective(invoice, amount)        → { invoiceId, number, pdfUrl }
 
 **Perfil de la app `secretario`** (se almacena por cuenta y en ningún caso por dispositivo):
 
-| Categoría | Clave en la app (v3) | Estrategia |
-|---|---|---|
-| Sustituciones personalizadas | `customReplacements` + `customReplacementsTombstones` | `items` (clave `from`; marcas de borrado que caducan a los 30 días). Lógica actual de `specs.md` 2.6. |
-| Sustituciones core | `coreReplacements` | `block` |
-| Textos rápidos | `defaultTexts` | `block` |
-| Prompts de IA | `defaultPrompts` | `block` |
-| Preferencias de uso | `communicationStyle`, `messageType`, `language`, `targetPersons`, `processWithLLM`, `autoCopy`, `fixAuto`, `markdownMode`, `translationTargetLanguage`, `themePreference` | `keyed` |
+| Categoría | Nombre en el documento | Clave en la app (v3) | Estrategia |
+|---|---|---|---|
+| Sustituciones personalizadas | `customReplacements` (con `items` y `tombstones`) | `customReplacements` + `customReplacementsTombstones` | `items` (clave `from`; marcas de borrado que caducan a los 30 días). Lógica actual de `specs.md` 2.6. |
+| Sustituciones core | `coreReplacements` | `coreReplacements` | `block` |
+| Textos rápidos | `quickTexts` | `defaultTexts` | `block` |
+| Prompts de IA | `prompts` | `defaultPrompts` | `block` |
+| Preferencias de uso | `preferences` (una clave por preferencia) | `communicationStyle`, `messageType`, `language`, `targetPersons`, `processWithLLM`, `autoCopy`, `fixAuto`, `markdownMode`, `translationTargetLanguage`, `themePreference` | `keyed` |
 
 No se sincronizan (quedan en cada equipo): tamaño y posición de la ventana, modo compacto, tamaños del editor y de la transcripción, paneles plegados, **atajos de teclado globales**, variables locales persistentes, historial de copias y todo lo relativo al modo BYOK.
 
-**BE-FR-40 — Siembra de predeterminados.** La **primera vez** que una cuenta usa una app (primer `GET /sync` con ese `X-App-Id`), se crea su documento copiando los **predeterminados vigentes** de esa app, con todos los `updatedAt = 0` (época). Así, en la primera sincronización, cualquier dato local con fecha real del usuario **gana** (lo local prevalece, decisión 38).
+**BE-FR-40 — Siembra de predeterminados.** La **primera vez** que una cuenta usa una app (primer `GET /sync` con ese `X-App-Id`), se crea su documento con `revision = 1` copiando los **predeterminados vigentes** de esa app, con todos los `updatedAt = 0` (época). Así, en la primera sincronización, cualquier dato local con fecha real del usuario **gana** (lo local prevalece, decisión 38).
 
 **BE-FR-41 — Lectura y escritura del documento.**
 - `GET /api/v1/sync` devuelve el documento de la app y su `revision` (entero creciente).
-- `PUT /api/v1/sync` con cabecera `If-Match: <revision>` sustituye el documento. Si la revisión no coincide → `412 SYNC_CONFLICT`; el cliente vuelve a leer, fusiona localmente y reintenta.
+- `PUT /api/v1/sync` con cabecera `If-Match: <revision>` (obligatoria) sustituye el documento. Sin la cabecera → `VALIDATION_ERROR` con `details.field = "If-Match"`. Si la revisión no coincide → `412 SYNC_CONFLICT`; el cliente vuelve a leer, fusiona localmente y reintenta.
 - Tamaño máximo del documento: `max_sync_doc_kb` (por defecto 1024 KB; sobrescribible por app).
 - CA1: Dos `PUT` concurrentes con la misma revisión: uno tiene éxito y el otro recibe `412`. Nunca se pierde una escritura silenciosamente.
 - CA2: Un documento con categorías no declaradas o con forma incorrecta → `VALIDATION_ERROR`.
 
 **BE-FR-42 — Predeterminados del administrador.** El administrador edita los predeterminados de cada app (mismas categorías que su esquema) desde el panel. Además dispone de la acción **"Copiar mis datos actuales como predeterminados"**, que toma el documento sincronizado de su propia cuenta para esa app, para no tener que editar prompts largos en formularios web.
 - CA1: Cambiar los predeterminados **no modifica** ninguna cuenta existente.
-- CA2: `GET /api/v1/defaults` devuelve los predeterminados vigentes de la app (Secretario lo usa para "Restaurar valores predeterminados").
+- CA2: `GET /api/v1/defaults` devuelve los predeterminados vigentes de la app (Secretario lo usa para "Restaurar valores predeterminados"). No se bloquea por mantenimiento (BE-FR-47) ni por documentos legales pendientes (BE-FR-70).
 - CA3: Antes de copiar, se muestra una **vista previa** por categorías con casillas por elemento para excluir lo que no deba copiarse (p. ej. datos personales). Solo se sustituyen las categorías con algún elemento seleccionado.
 - CA4: La copia queda registrada en la auditoría (BE-FR-55).
 
 ### 5.10 Protecciones
 
-**BE-FR-43 — Límites por usuario.** Máximo `ai_requests_per_minute` peticiones de IA por minuto (sumando todas las apps) y `max_concurrent_transcriptions` transcripciones simultáneas. Excederlos → `429 RATE_LIMITED` con cabecera `Retry-After`.
+**BE-FR-43 — Límites por usuario.** Máximo `ai_requests_per_minute` peticiones de IA por minuto y `max_concurrent_transcriptions` transcripciones simultáneas. El valor global se aplica a la **suma de todas las apps** de la cuenta; si una app tiene su propio valor (sección 9, «por app»), es un límite adicional solo para las peticiones de esa app y no puede superar el global. Se aplica el primero que se alcance. Excederlos → `429 RATE_LIMITED` con cabecera `Retry-After`.
 
 **BE-FR-44 — Límites de tamaño y duración.** Audio ≤ `max_audio_mb` y de duración ≤ `max_audio_seconds`, texto total de mensajes o variables ≤ `max_text_chars`, imagen ≤ `max_image_mb`.
 - La duración del audio se **mide en el servidor con ffprobe**, porque el WebM que genera `MediaRecorder` no incluye la duración en la cabecera y hay que leer el flujo completo. Se admite una tolerancia de `audio_duration_tolerance_seconds` para absorber el desfase de la parada automática de la app. Un audio que ffprobe no puede leer → `VALIDATION_ERROR`.
 - Exceso de tamaño → `413 PAYLOAD_TOO_LARGE`; exceso de duración → `413 AUDIO_TOO_LONG`. En ambos casos, sin llamar al proveedor y sin cobrar.
 - La configuración de `adapter-node` (`BODY_SIZE_LIMIT`) debe ser coherente con el mayor `max_audio_mb` configurado en cualquier app.
 
-**BE-FR-45 — Límites de autenticación.** *Rate limit* por IP en login, registro, reenvío de verificación, recuperación de contraseña y cambio de email (Better Auth, con almacenamiento en base de datos), más el límite de altas por IP (BE-FR-11) y el bloqueo por email (BE-FR-67).
+**BE-FR-45 — Límites de autenticación.** *Rate limit* por IP en login, registro, reenvío de verificación, recuperación de contraseña y cambio de email, implementado en la funcionalidad `accounts` con contadores en su tabla propia `auth_rate_limits` (no se usa el `rateLimit` de Better Auth, que no actúa en las llamadas con `auth.api`; 4.1), más el límite de altas por IP (BE-FR-11) y el bloqueo por email (BE-FR-67).
 
 **BE-FR-46 — Freno global de gasto.** Si el **coste real acumulado del día** (Europe/Madrid) de las operaciones de cuentas **sin compras reales**, más las reservas en curso de esas cuentas, supera `global_daily_free_cost_brake_eur`, el backend rechaza nuevas operaciones de esas cuentas con `503 SERVICE_LIMITED` hasta el día siguiente o hasta que el administrador lo libere. Se envía un email al administrador al activarse.
 - CA1: Las cuentas con compras reales no se ven afectadas.
 
-**BE-FR-47 — Modo mantenimiento.** Interruptor **global** y uno **por app** en el panel, cada uno con mensaje personalizable. Activo: las operaciones de IA y la sincronización (de todas las apps o de esa app) responden `503 MAINTENANCE` con el mensaje; el login, `/me` y `/app/status` siguen funcionando.
+**BE-FR-47 — Modo mantenimiento.** Interruptor **global** y uno **por app** en el panel, cada uno con mensaje personalizable. Activo: las operaciones de IA y la sincronización (de todas las apps o de esa app) responden `503 MAINTENANCE` con el mensaje; el login, el logout, `/me`, `/app/status` y `/defaults` siguen funcionando.
 
 **BE-FR-48 — Control de versiones de la app.** Las apps envían `X-App-Version` en cada petición. El administrador configura, por app, `min_app_version`, `recommended_app_version` y si se exige (`enforce_version`).
-- CA1: Petición autenticada de una app con `enforce_version` y versión < mínima (o sin cabecera) → `426 UPGRADE_REQUIRED`.
+- CA1: Petición autenticada de una app con `enforce_version` y versión < mínima (o sin cabecera) → `426 UPGRADE_REQUIRED`. `POST /auth/logout` y `GET /app/status` no exigen la versión mínima.
 - CA2: `GET /api/v1/app/status` (sin autenticación) devuelve, para la app de `X-App-Id`, ambas versiones, el estado de mantenimiento, los límites, el tiempo máximo de cada operación activa (BE-FR-77 CA4), los enlaces, el email de soporte y los anuncios activos.
 - CA3: La API se versiona por ruta (`/api/v1`). Un cambio incompatible exige `/api/v2` manteniendo `/api/v1` durante un periodo de transición.
 
@@ -582,7 +588,7 @@ No se sincronizan (quedan en cada equipo): tamaño y posición de la ventana, mo
 5. **Gráficas de consumo**: créditos por día, por operación y por app, últimos 30 / 90 días.
 6. **Exportar CSV**: movimientos y consumo, con filtro por fechas y app.
 7. **Aviso de saldo bajo**: umbral elegido por el usuario (o desactivado). Se envía **un** email al cruzar el umbral hacia abajo; se rearma al volver a superarlo. El mismo umbral lo usan las apps para su aviso (ver `v4-app-spec.md`).
-8. **Sesiones activas**: app, equipo, versión de la app, último uso, IP aproximada; cerrar una o todas.
+8. **Sesiones activas**: app, equipo, versión de la app, último uso, IP aproximada (IPv4 truncada a /24 e IPv6 a /48); cerrar una o todas.
 9. **Perfil**: email (con cambio, BE-FR-66), cambio de contraseña, datos fiscales (BE-FR-74), exportar datos (BE-FR-08), borrar cuenta (BE-FR-07).
 10. **Facturas**: lista y descarga en PDF (BE-FR-75); solicitud de factura completa de una compra.
 11. **Mis apps**: apps disponibles con su enlace de descarga o acceso (p. ej. Secretario: `https://github.com/danimardo/secretario2/releases/latest/download/SecretarioAI-Setup.exe`).
@@ -599,12 +605,12 @@ No se sincronizan (quedan en cada equipo): tamaño y posición de la ventana, mo
 
 **BE-FR-53 — Protecciones y versiones.** Límites (globales y por app), freno global (y su liberación manual), mantenimiento (global y por app), versiones mínima y recomendada por app.
 
-**BE-FR-54 — Estadísticas.** Por día, app, operación y usuario: coste real (USD y EUR), cobrado (créditos y su equivalente en EUR al valor de consumo), margen bruto, pérdidas por deuda absorbida y por repeticiones no cobradas (BE-FR-81), operaciones fallidas, canceladas, interrumpidas o truncadas, uso de modelos de respaldo, usuarios activos, altas (por app de origen), compras reales (excluidas las simuladas) e ingresos.
-- **Embudo de alta por app** (semanal y acumulado): descargas del instalador, registros con `?app=<slug>`, cuentas verificadas, primer login desde la app y primera operación de IA. Las descargas se obtienen a diario del contador de la API de GitHub Releases cuando el enlace de descarga de la app apunta a GitHub. Este embudo es el criterio para decidir la firma del instalador de Secretario (12, decisión 11).
+**BE-FR-54 — Estadísticas.** Por día, app, operación y usuario: coste real (USD y EUR), cobrado (créditos y su equivalente en EUR al valor de consumo), margen bruto, pérdidas por deuda absorbida, por repeticiones no cobradas (BE-FR-81) y por cancelación (coste del proveedor de operaciones canceladas sin cobro, BE-FR-37), saldo anulado al borrar cuentas (movimientos `forfeit`, BE-FR-07 CA4), operaciones fallidas, canceladas, interrumpidas o truncadas, uso de modelos de respaldo, usuarios activos, altas (por app de origen), compras reales (excluidas las simuladas) e ingresos.
+- **Embudo de alta por app** (semanal y acumulado): descargas del instalador, registros con `?app=<slug>`, cuentas verificadas, primer login desde la app (`user_app_activity.first_login_at`) y primera operación de IA. Las descargas se obtienen a diario del contador de la API de GitHub Releases cuando el enlace de descarga de la app apunta a GitHub; el repositorio de descargas es público (los usuarios descargan de él el instalador), así que la consulta no necesita token. Este embudo es el criterio para decidir la firma del instalador de Secretario (12, decisión 11).
 
 **BE-FR-55 — Auditoría.** Toda acción del administrador que modifique datos (ajustes de saldo, bloqueos, cambios de configuración, apps, operaciones, plantillas, modelos, paquetes, predeterminados, anuncios, documentos legales, reembolsos) se registra en `admin_audit` con fecha, acción, entidad, valores anterior/nuevo y motivo. El registro no se puede editar ni borrar desde el panel.
 
-**BE-FR-56 — Alerta de saldo de proveedores.** Cada hora se consulta el saldo de OpenRouter (`GET https://openrouter.ai/api/v1/credits`); si baja de `openrouter_balance_alert_usd`, se envía un email al administrador (uno por cruce de umbral). Para Mistral, que no expone saldo equivalente, se alerta cuando sus llamadas devuelvan errores de pago o cuota (HTTP 401/402/429 de facturación).
+**BE-FR-56 — Alerta de saldo de proveedores.** Cada hora se consulta el saldo de OpenRouter (`GET https://openrouter.ai/api/v1/credits`) con la clave de gestión `OPENROUTER_MANAGEMENT_KEY` (variable secreta usada solo para esta consulta; sección 9). Si la variable falta (p. ej. en staging), la alerta de saldo queda desactivada y se registra un evento al arrancar. Si el saldo baja de `openrouter_balance_alert_usd`, se envía un email al administrador (uno por cruce de umbral). Para Mistral, que no expone saldo equivalente, se alerta cuando sus llamadas devuelvan errores de pago o cuota (HTTP 401/402/429 de facturación).
 
 **BE-FR-57 — Predeterminados.** BE-FR-42, por app.
 
@@ -676,7 +682,7 @@ Los recibos de compra no se envían con el proveedor simulado; con Stripe, los e
 **BE-FR-84 — Soporte.** Un email de soporte global (`support_email`), sobrescribible por app. Se publica en `/app/status`, en el panel, en las landings y en el pie de los emails. Los mensajes de las apps que dicen "Contacta con soporte" enlazan a él. En la v4 no hay sistema de tickets.
 
 **BE-FR-85 — Anuncios.** El administrador crea anuncios con: app (o todas), texto, nivel (`info` / `warning` / `critical`), ventana de validez, enlace opcional y rango de versiones de la app al que va dirigido.
-- CA1: `/app/status` devuelve los anuncios activos que aplican a la app y versión de la petición; el panel de usuario los muestra también.
+- CA1: `/app/status` devuelve los anuncios activos que aplican a la app y versión de la petición. El panel de usuario muestra los anuncios activos dirigidos a todas las apps y los de las apps que la cuenta ha usado (registradas en `user_app_activity`), sin filtrar por versión e indicando a qué app se refiere cada uno.
 - CA2: Cada anuncio tiene un `id` estable para que el cliente recuerde localmente cuáles ha cerrado el usuario.
 
 ---
@@ -687,20 +693,22 @@ Tablas principales (las de Better Auth — `user`, `session`, `account`, `verifi
 
 | Tabla | Campos principales |
 |---|---|
-| `apps` | `id`, `slug` (único), `name`, `description`, `client_types`, `status` (`active`/`disabled`), `links` (JSON), `min_app_version`, `recommended_app_version`, `enforce_version`, `maintenance_active`, `maintenance_message`, `allowed_origins`, `settings_overrides` (JSON), `sync_schema` (JSON), `support_email`, `created_at`, `updated_at` |
+| `apps` | `id`, `slug` (único), `name`, `description`, `client_types`, `status` (`active`/`disabled`), `links` (JSON), `min_app_version`, `recommended_app_version`, `enforce_version`, `maintenance_active`, `maintenance_message`, `post_verify_text` (texto opcional de pasos tras verificar, BE-FR-64 CA2), `allowed_origins`, `settings_overrides` (JSON), `sync_schema` (JSON), `support_email`, `created_at`, `updated_at` |
 | `app_operations` | `id`, `app_id`, `key`, `name`, `kind` (`chat`/`transcription`/`image`), `mode` (`libre`/`plantilla`), `model`, `fallback_models` (JSON), `preferred_provider`, `margin_override`, `temperature`, `max_output_tokens`, `max_cost_µc`, `estimated_max_cost_µusd`, `timeout_ms`, `capabilities` (JSON), `limits` (JSON), `transcription_config` (JSON), `group`, `active`, `updated_at` — único (`app_id`, `key`) |
 | `prompt_templates` | `id`, `operation_id`, `version`, `messages` (JSON), `variables` (JSON), `response_format` (JSON), `tools` (JSON), `created_at` — **inmutable** por versión |
-| `user` (Better Auth) | `id`, `email`, `email_verified`, `role` (lista separada por comas: `user`, `tester`, `admin`, como admite el plugin `admin`), `banned`, `ban_reason`, **`email_normalized`** (único), **`signup_app_id`**, **`deleted_at`**, `created_at`. Estado derivado sin campos duplicados: sin verificar = `email_verified = false`; bloqueada = `banned`; borrada = `deleted_at` no nulo |
+| `user` (Better Auth) | `id`, `email`, `email_verified`, `role` (lista separada por comas: `user`, `tester`, `admin`, como admite el plugin `admin`), `banned`, `ban_reason`, **`email_normalized`** (con índice, **no único**; BE-FR-11.5), **`signup_app_id`**, **`signup_ip`** (BE-FR-83), **`last_activity_at`** (BE-FR-86), **`deleted_at`**, `created_at`. Estado derivado sin campos duplicados: sin verificar = `email_verified = false`; bloqueada = `banned`; borrada = `deleted_at` no nulo |
 | `session` (Better Auth) | `id`, `user_id`, `token`, `expires_at`, `ip_address`, `user_agent`, **`app_id`** (nulo en la web de la cuenta), **`device_name`**, **`app_version`**, **`last_used_at`** |
-| `login_attempts` | `email_normalized_hash`, `failures`, `window_start`, `locked_until` |
-| `legal_documents` | `id`, `document` (`terms`/`privacy`/`cookies`/`aup`/`withdrawal_waiver`), `version`, `published_at`, `requires_reacceptance`, `content_hash` |
+| `login_attempts` | `email_normalized_hash` (HMAC-SHA256 con `EMAIL_HASH_KEY`, como en `welcome_grants`), `failures`, `window_start`, `locked_until` |
+| `user_app_activity` | `user_id`, `app_id`, `first_login_at`, `last_used_at` — clave (`user_id`, `app_id`); dueña: `accounts`. Alimenta el embudo de alta (primer login desde la app, BE-FR-54) y los anuncios del panel (apps usadas, BE-FR-85 CA1) |
+| `auth_rate_limits` | `key` (acción e IP), `count`, `window_start` — contadores de los límites de autenticación por IP (BE-FR-45); dueña: `accounts`. Sustituye a la tabla del *rate limit* de Better Auth, que no se usa |
+| `legal_documents` | `id`, `document` (`terms`/`privacy`/`cookies`/`aup`/`withdrawal_waiver`), `version`, `content` (texto versionado), `published_at`, `requires_reacceptance`, `content_hash` |
 | `terms_acceptances` | `id`, `user_id`, `document` (los de `legal_documents` + `age_declaration`), `version`, `accepted_at`, `ip`, `app_id` (desde dónde se aceptó) |
-| `welcome_grants` | `email_normalized_hash` (único), `granted_at` — sobrevive al borrado de cuentas |
+| `welcome_grants` | `email_normalized_hash` (único; HMAC-SHA256 con `EMAIL_HASH_KEY`), `granted_at` — sobrevive al borrado de cuentas |
 | `credit_buckets` | `id`, `user_id`, `kind` (`free`/`paid`), `initial_µc`, `remaining_µc`, `expires_at` (nulo en `paid`), `source` (`welcome`/`purchase`/`adjustment`), `payment_id`, `simulated`, `created_at` |
 | `user_balances` | `user_id`, `debt_µc`, **`has_real_purchase`**, **`low_balance_threshold_µc`**, **`low_balance_notified`**, `updated_at` (saldo materializado = Σ `remaining_µc` − `debt_µc`). Los tres campos en negrita pasaron de `user` a esta tabla (2.4) para que los gestione `credits` sin depender de `accounts` |
-| `credit_holds` | `id`, `user_id`, `operation_id`, `amount_µc`, `created_at`, `expires_at`, `released_at` |
+| `credit_holds` | `id`, `user_id`, `app_id`, `operation_id`, `amount_µc`, `created_at`, `expires_at`, `released_at` |
 | `credit_movements` | `id`, `user_id`, `type`, `amount_µc` (con signo), `bucket_id`, `operation_id`, `app_id` (informativo), `payment_id`, `admin_reason`, `created_at` — **inmutable** |
-| `ai_operations` | `id`, `user_id`, `app_id`, `session_id`, `operation`, `template_version`, `provider`, `model`, `used_fallback`, `status` (`ok`/`provider_error`/`cancelled`/`undelivered`/`interrupted`/`rejected`), `idempotency_key`, `input_tokens`, `output_tokens`, `audio_seconds`, `cost_µusd`, `cost_estimated`, `hold_µc`, `charged_µc`, `absorbed_µc`, `truncated`, `flagged`, `duration_ms`, `app_version`, `error_code`, `provider_generation_id`, `created_at` — **sin contenido**; único (`user_id`, `idempotency_key`) cuando la clave existe |
+| `ai_operations` | `id`, `user_id`, `app_id`, `session_id`, `operation`, `template_version`, `provider`, `model`, `used_fallback`, `status` (`in_progress`/`ok`/`provider_error`/`cancelled`/`undelivered`/`interrupted`/`rejected`), `idempotency_key`, `input_tokens`, `output_tokens`, `audio_seconds`, `cost_µusd`, `cost_estimated`, `hold_µc`, `charged_µc`, `absorbed_µc`, `truncated`, `flagged`, `duration_ms`, `app_version`, `error_code`, `provider_generation_id`, `created_at` — **sin contenido**; índice único parcial sobre (`user_id`, `idempotency_key`) solo para `status = in_progress` (BE-FR-81); en las `cancelled`, `cost_µusd` guarda el coste del proveedor si se conoce (BE-FR-37 CA1) |
 | `packs` | `id`, `name`, `price_eur_cents`, `bonus_pct`, `active`, `sort_order` |
 | `payments` | `id`, `user_id`, `pack_id`, `provider`, `provider_ref` (único), `status` (`pending`/`completed`/`refunded`/`partially_refunded`/`chargeback`), `amount_eur_cents`, `base_eur_cents`, `vat_eur_cents`, `vat_rate`, `country`, `credits_µc`, `wants_full_invoice`, `simulated`, `created_at`, `completed_at` |
 | `billing_profiles` | `user_id`, `kind` (`individual`/`business`), `legal_name`, `tax_id`, `address`, `postal_code`, `city`, `country`, `updated_at` |
@@ -715,11 +723,10 @@ Tablas principales (las de Better Auth — `user`, `session`, `account`, `verifi
 | `admin_audit` | `id`, `admin_id`, `action`, `entity`, `entity_id`, `before`, `after`, `reason`, `created_at` — **inmutable** |
 | `alerts_state` | `key`, `active`, `last_sent_at` — evita emails repetidos por el mismo cruce de umbral |
 | `disposable_domains` | `domain` |
-| `rate_limit` (Better Auth) | Contadores del *rate limit* de autenticación por IP (BE-FR-45), con el esquema que define Better Auth |
 | `protection_state` | `key`, `value` (JSON), `updated_at` — estado del freno global del día y su liberación manual (BE-FR-46) |
 | `release_downloads` | `app_id`, `day`, `downloads`, `fetched_at` — descargas diarias del instalador desde GitHub Releases (BE-FR-54, embudo de alta) |
 
-Toda escritura que afecte a saldo o reservas (reserva, cobro, compra, ajuste, caducidad, reembolso) se ejecuta en **una única transacción** que actualiza bolsas, deuda, reservas y ledger a la vez.
+Toda escritura que afecte a saldo o reservas (reserva, cobro, compra, ajuste, caducidad, reembolso, anulación al borrar la cuenta) se ejecuta en **una única transacción** que actualiza bolsas, deuda, reservas y ledger a la vez.
 
 ---
 
@@ -752,6 +759,9 @@ Toda escritura que afecte a saldo o reservas (reserva, cobro, compra, ajuste, ca
 | 403 | `EMAIL_NOT_VERIFIED` | Cuenta sin verificar |
 | 403 | `ACCOUNT_BLOCKED` | Cuenta bloqueada |
 | 403 | `TERMS_ACCEPTANCE_REQUIRED` | Hay documentos legales pendientes de aceptar (`details.pending`) |
+| 403 | `ORIGIN_NOT_ALLOWED` | La cabecera `Origin` no figura entre los orígenes de la app de `X-App-Id` (BE-FR-65 CA2) |
+| 404 | `NOT_FOUND` | Ruta inexistente en la API |
+| 405 | `METHOD_NOT_ALLOWED` | Método HTTP no admitido por el endpoint |
 | 409 | `REQUEST_IN_PROGRESS` | Ya hay una operación en curso con esa `Idempotency-Key` |
 | 409 | `DUPLICATE_REQUEST` | La operación con esa `Idempotency-Key` ya se completó y entregó (`details.operationId`) |
 | 412 | `SYNC_CONFLICT` | La revisión del documento ha cambiado |
@@ -761,6 +771,7 @@ Toda escritura que afecte a saldo o reservas (reserva, cobro, compra, ajuste, ca
 | 426 | `UPGRADE_REQUIRED` | Versión de la app por debajo de la mínima |
 | 429 | `RATE_LIMITED` | Demasiadas peticiones (con `Retry-After`) |
 | 429 | `LOGIN_TEMPORARILY_LOCKED` | Demasiados intentos fallidos para ese email (con `Retry-After`) |
+| 500 | `INTERNAL_ERROR` | Error inesperado del servidor (mensaje genérico, sin detalles internos) |
 | 502 | `PROVIDER_ERROR` | El proveedor de IA ha fallado o ha rechazado el contenido (chat / imagen) |
 | 502 | `TRANSCRIPTION_FAILED` | Han fallado Voxtral y el backup (`details.primaryError`, `details.backupError`) |
 | 503 | `MAINTENANCE` | Mantenimiento global o de la app (`message` = texto del administrador) |
@@ -771,6 +782,8 @@ Toda escritura que afecte a saldo o reservas (reserva, cobro, compra, ajuste, ca
 ### 7.3 Endpoints
 
 #### `GET /app/status` *(público; requiere `X-App-Id`)*
+
+No exige la versión mínima (BE-FR-48 CA1) y sigue funcionando en mantenimiento.
 
 ```json
 {
@@ -810,11 +823,11 @@ Errores: `INVALID_CREDENTIALS`, `EMAIL_NOT_VERIFIED`, `ACCOUNT_BLOCKED`, `RATE_L
 
 #### `POST /auth/resend-verification` *(público)*
 
-Petición: `{ "email": "..." }`. Respuesta siempre `202` (anti-enumeración).
+Petición: `{ "email": "..." }`. Respuesta siempre `202` (anti-enumeración), salvo `429 RATE_LIMITED` (con `Retry-After`) al superar el límite por IP (BE-FR-45).
 
 #### `POST /auth/logout`
 
-Revoca la sesión del token. Respuesta `204`.
+Revoca la sesión del token. Respuesta `204`. No exige la versión mínima (BE-FR-48 CA1).
 
 #### `GET /me`
 
@@ -871,10 +884,12 @@ Respuesta 200:
   "toolCalls": null,
   "truncated": false,
   "operationId": "op_…",
-  "chargedMicro": 776000,
-  "balance": { "totalMicro": 481574000, "availableMicro": 481574000, "debtMicro": 0 }
+  "chargedMicro": 776480,
+  "balance": { "totalMicro": 481573520, "reservedMicro": 0, "availableMicro": 481573520, "debtMicro": 0 }
 }
 ```
+
+El `balance` de todas las respuestas de `/ai/*` tiene esta forma (total, reservado, disponible y deuda; BE-FR-71 CA2).
 
 #### `POST /ai/transcribe`
 
@@ -889,7 +904,7 @@ Respuesta 200: `{ "imageDataUrl": "data:image/png;base64,...", "operationId": ".
 
 #### `GET /sync`
 
-Documento de la app de `X-App-Id`. Ejemplo con el perfil `secretario`:
+Documento de la app de `X-App-Id`. El primer `GET` de una cuenta en esa app siembra el documento con los predeterminados y `revision = 1` (BE-FR-40). Ejemplo con el perfil `secretario`:
 
 ```json
 {
@@ -912,15 +927,15 @@ Documento de la app de `X-App-Id`. Ejemplo con el perfil `secretario`:
 
 #### `PUT /sync`
 
-Cabecera `If-Match: 42`. Cuerpo: `{ "data": { ... } }` (mismo formato). Respuesta 200: `{ "revision": 43 }`. Errores: `SYNC_CONFLICT` (412), `PAYLOAD_TOO_LARGE`, `VALIDATION_ERROR`.
+Cabecera `If-Match: 42` (obligatoria). Cuerpo: `{ "data": { ... } }` (mismo formato). Respuesta 200: `{ "revision": 43 }`. Errores: `SYNC_CONFLICT` (412), `PAYLOAD_TOO_LARGE`, `VALIDATION_ERROR` (también sin `If-Match`, con `details.field = "If-Match"`).
 
 #### `GET /defaults`
 
-`{ "data": { ... } }` con el mismo formato que `/sync` de la app (sin `revision`).
+`{ "data": { ... } }` con el mismo formato que `/sync` de la app (sin `revision`). No se bloquea por mantenimiento ni por documentos legales pendientes (BE-FR-42 CA2).
 
 #### `GET /health` *(público)*
 
-`{ "status": "ok" }` si la base de datos responde. Lo usan Coolify y la monitorización.
+`{ "status": "ok" }` si la base de datos responde; si no responde, `503`. Lo usan Coolify y la monitorización.
 
 #### `GET /openapi.json` *(público)*
 
@@ -1009,17 +1024,17 @@ Solo las variables de entorno listadas al final de esta sección (secretos e inf
 | Operaciones (modelo, respaldos, `max_output_tokens`, `max_cost_credits`, *timeout*…) | Equivalentes a los sugeridos hoy por el asistente de Secretario | Por operación | BE-FR-77 |
 | Transcripción | Voxtral activo, backup configurable | Por operación | BE-FR-35 |
 
-Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`test`/`staging`/`production`), `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `PAYMENTS_PROVIDER`, `INVOICING_PROVIDER`, `DATABASE_PATH`, `BETTER_AUTH_SECRET`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `RESEND_API_KEY`, `TURNSTILE_SECRET`, `BODY_SIZE_LIMIT`, credenciales S3 de Litestream y, en la fase Stripe, sus claves y las del proveedor de facturación.
+Variables de entorno (no editables desde el panel): `ADMIN_EMAIL` (la cuenta que se registra y verifica con ese email recibe el rol `admin`; nunca hay dos), `APP_ENV` (`development`/`test`/`staging`/`production`), `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `PAYMENTS_PROVIDER`, `INVOICING_PROVIDER`, `DATABASE_PATH`, `BETTER_AUTH_SECRET`, `OPENROUTER_API_KEY`, `OPENROUTER_MANAGEMENT_KEY` (opcional; clave de gestión de OpenRouter usada solo para leer el saldo cada hora; sin ella, la alerta de saldo queda desactivada, BE-FR-56), `MISTRAL_API_KEY`, `RESEND_API_KEY`, `TURNSTILE_SECRET`, `EMAIL_HASH_KEY` (clave secreta del HMAC del email normalizado de `welcome_grants` y `login_attempts`, BE-FR-11.5; **nunca se rota**, porque los hashes guardados dejarían de coincidir), `BODY_SIZE_LIMIT`, credenciales S3 de Litestream y, en la fase Stripe, sus claves y las del proveedor de facturación.
 
 ---
 
 ## 10. Seguridad, privacidad y calidad
 
-1. **HTTPS obligatorio** (proxy de Coolify). Cookies `Secure`, `HttpOnly`, `SameSite=Lax` (solo en la web de la cuenta). Protección CSRF de SvelteKit (comprobación de origen) en formularios web. **CORS** de la API restringido a los orígenes declarados por cada app (BE-FR-65).
+1. **HTTPS obligatorio** (proxy de Coolify). Cookies `Secure`, `HttpOnly`, `SameSite=Lax` (solo en la web de la cuenta). **Protección CSRF propia, solo en el host web** (`cuenta.`): un *hook* `handle` exige que todo `POST`/`PUT`/`PATCH`/`DELETE` con tipo de contenido de formulario traiga una cabecera `Origin` igual al origen de `PUBLIC_WEB_URL`; si no, `403`. La comprobación de origen propia de SvelteKit se desactiva, porque rechaza los `POST` `multipart/form-data` sin `Origin` y las apps de escritorio no lo envían al subir audio (BE-FR-35). El host de la API usa solo Bearer, sin cookies, así que CSRF no aplica allí. **CORS** de la API restringido a los orígenes declarados por cada app (BE-FR-65).
 2. **Contraseñas** con el algoritmo de hash de Better Auth; nunca se registran en logs.
 3. **Secretos** (claves de proveedores, Resend, Turnstile, Litestream, pagos, facturación) solo en variables de entorno de Coolify; nunca en el repositorio. Claves distintas por entorno.
 4. **Tests obligatorios** (Vitest) de: fórmula de cobro (con comisión del proveedor) y redondeo, orden de consumo de bolsas, **reservas con peticiones simultáneas**, estimación del coste máximo, deuda y su liquidación, caducidad, idempotencia de pagos y de `/ai/*`, reconstrucción del saldo desde el ledger, concurrencia de cobros, conflicto de sincronización, validación del documento de sincronización por esquema, aislamiento entre apps (sesión, sincronización y operaciones) y cumplimiento del contrato OpenAPI.
-5. **Logs** (stdout + Log Gateway → OpenObserve; constitución, principio XI) con identificador de petición, app, usuario (id, no email), operación, estado y duración. **Prohibido** registrar cuerpos de petición o respuesta de `/ai/*` y `/sync`.
+5. **Logs** (stdout + Log Gateway → OpenObserve; constitución, principio XI; solo stdout hasta recibir el contrato de ingesta del Gateway, 11) con identificador de petición, app, usuario (id, no email), operación, estado y duración. **Prohibido** registrar cuerpos de petición o respuesta de `/ai/*` y `/sync`.
 6. **Sin contenido persistido** (BE-FR-38).
 7. **Proveedores**: `data_collection: "deny"` en OpenRouter (BE-FR-33).
 8. **Retención y encargados del tratamiento**: BE-FR-83.
@@ -1038,7 +1053,7 @@ Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`te
 - **Backups**: Litestream replica en continuo el SQLite a Backblaze B2 (región UE, API compatible con S3) con retención mínima de 30 días. Procedimiento de **restauración documentado y probado** antes del lanzamiento público (requisito: el dinero de los usuarios depende de él).
 - **Migraciones** Drizzle aplicadas automáticamente al arrancar, con backup previo. Se prueban primero en staging.
 - **Tareas programadas** (dentro del proceso):
-  - Cada hora: saldo de OpenRouter.
+  - Cada hora: saldo de OpenRouter (solo si existe `OPENROUTER_MANAGEMENT_KEY`, BE-FR-56).
   - Diarias:
     - caducidad de bolsas y avisos;
     - comprobación del ledger;
@@ -1047,12 +1062,13 @@ Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`te
     - limpieza de marcas de borrado de sincronización con más de 30 días;
     - borrado de cuentas sin verificar (BE-FR-68);
     - aplicación de plazos de retención (BE-FR-83);
-    - limpieza de reservas caducadas.
+    - limpieza de reservas caducadas;
     - tipo de cambio del BCE (BE-FR-87);
     - aviso y borrado de cuentas inactivas (BE-FR-86);
     - contador de descargas de GitHub Releases para el embudo de alta (BE-FR-54).
   - Semanal: actualización de la lista de dominios desechables.
 - **Monitorización**: `/health`, logs y errores en OpenObserve (a través del Log Gateway), alertas por email (5.13).
+- **Log Gateway**: el envío se implementa como un adaptador con interfaz propia. Hasta que el propietario entregue el contrato de ingesta (URL, autenticación, formato del lote, tamaños, códigos de respuesta y `Retry-After`), que es una entrada de L01, los logs solo se escriben en stdout.
 
 ---
 
@@ -1160,6 +1176,13 @@ Resumen de las decisiones tomadas con el propietario del producto durante el dis
 | **Validación (2026-10-10)** | Zod 4 en todas las fronteras, estricto en las entradas y tolerante en layouts y proveedores, `z.input` para lo que llega y sin aserciones de tipo (constitución XII) |
 | **Entorno (2026-10-10)** | `$env/dynamic/private` y `$env/dynamic/public` leídos solo en `env.ts`, validados en `init` con `building`; `APP_ENV=test` para las pruebas |
 | **Revisión cruzada (2026-10-10)** | `privacy` como funcionalidad propia; compra real y saldo bajo en `user_balances` (`credits`); `$lib/shared/` y `$lib/server/api/`; tests de integración junto a su funcionalidad; cobertura del 80 % sobre `src/lib`; tokens canónicos en el código desde L01 (constitución v2.1.0, ADR 0007) |
+| **Aclaraciones de la especificación 001 (2026-10-10)** | Los ajustes positivos del administrador también liquidan la deuda; límites por usuario a la suma de apps más un límite opcional por app; anuncios del panel: generales y de las apps que la cuenta usa; pasos tras verificar: texto genérico o propio de la app |
+| **Saldo de OpenRouter (2026-10-10)** | Clave de gestión propia `OPENROUTER_MANAGEMENT_KEY`, usada solo para leer el saldo cada hora; si falta (p. ej. en staging), la alerta queda desactivada y se registra un evento al arrancar (BE-FR-56) |
+| **Cancelaciones (2026-10-10)** | La operación cancelada no se cobra al usuario; el coste del proveedor, cuando se conoce, se guarda y cuenta como «pérdida por cancelación» (BE-FR-37, BE-FR-54) |
+| **Ajuste negativo (2026-10-10)** | No puede superar el saldo disponible: se rechaza con un error de validación y el administrador no crea deuda por ajuste (BE-FR-18) |
+| **Email normalizado (2026-10-10)** | Con índice, no único; la bienvenida se controla con `welcome_grants` y un hash HMAC-SHA256 con la clave propia `EMAIL_HASH_KEY`, que nunca se rota (BE-FR-11.5) |
+| **CSRF (2026-10-10)** | Protección propia en `handle` solo para el host web (`Origin` igual al de `PUBLIC_WEB_URL` en los envíos de formulario); se desactiva la de SvelteKit porque rechaza la subida de audio sin `Origin` de las apps de escritorio; la API usa solo Bearer (10.1) |
+| **Captcha y límites de autenticación (2026-10-10)** | Turnstile (adaptador `CaptchaVerifier`) y límites por IP (tabla `auth_rate_limits`) implementados en `accounts`, porque los plugins `captcha` y `rateLimit` de Better Auth no actúan con `auth.api`; de Better Auth se usan `bearer` y `admin` (4.1, BE-FR-45) |
 
 ---
 
@@ -1237,7 +1260,7 @@ Cambios que este documento exige en la especificación de la app. **Incorporados
 | Property-based | `fast-check` + `@fast-check/vitest` (comprobado: 4.10.2 / 0.5.0, compatibles con Vitest 5) | Nueva (enmienda de la constitución) | Condicional: solo dominio, normalización y fechas |
 | Mutation testing | StrykerJS (`@stryker-mutator/core` + `vitest-runner`; comprobado: 10.0.0, admite Vitest ≥ 2; no admite Browser Mode, que no usamos) | Nueva (enmienda) | Condicional: piloto sobre el dominio |
 | Servidores HTTP simulados | `node:http` nativo | Sin dependencia | Necesaria |
-| Prueba de carga | Script propio con `fetch` | Sin dependencia | Opcional (L16) |
+| Prueba de carga | Script propio con `fetch` | Sin dependencia | Necesaria: obligatoria desde L12 (L12, L16 y cada release) |
 
 No se añaden MSW, Cucumber, Vitest Browser Mode ni herramientas visuales externas: lo cubren Playwright y los servidores simulados nativos.
 
@@ -1301,15 +1324,15 @@ El plan los refina; aquí se fijan el orden y los tests clave.
 
 | Lote | Contenido (requisitos) | Riesgo | Tests clave | Suite de cierre |
 |---|---|---|---|---|
-| L01 | Esqueleto: proyecto, entorno, logging, hooks (requestId, separación por host, preferencias, CSP), `/health`, OpenAPI vacío, punto de composición, CI, smoke; base visual (16.12: tokens, tema y efectos, marco) | Medio | Arquitectura, entorno inválido, HTTP de hooks, smoke E2E, a11y en ambos temas | N0 + N3 HTTP + smoke + a11y |
+| L01 | Esqueleto: proyecto, entorno, logging (adaptador del Log Gateway según el contrato de ingesta que entrega el propietario al empezar el lote; hasta entonces, solo stdout), hooks (requestId, separación por host, CSRF propio del host web, preferencias, CSP), `/health`, OpenAPI vacío, punto de composición, CI, smoke; base visual (16.12: tokens, tema y efectos, marco) | Medio | Arquitectura, entorno inválido, HTTP de hooks (incluido CSRF), smoke E2E, a11y en ambos temas | N0 + N3 HTTP + smoke + a11y |
 | L02 | Esquema, migraciones, seed (app `secretario`, settings, paquetes), servicio de configuración (BE-FR-61, 62) | Alto | Migraciones sobre BD vacía, herencia global → app → operación, validación y auditoría de settings | N1 + N3 |
-| L03 | Registro, verificación, login web, sesiones, recuperación, bloqueo, edad (BE-FR-01–06, 64, 67, 69, 11.1–11.5) | Alto | Antienumeración, normalización de email, bloqueo, sesión deslizante, E2E de registro | N1 + N3 + E2E crítico |
+| L03 | Registro, verificación, login web, sesiones, recuperación, bloqueo, edad (BE-FR-01–06, 64, 67, 69, 11.1–11.5). De BE-FR-02 CA1 se prueba la verificación; la concesión de la bolsa de bienvenida llega en L05 | Alto | Antienumeración, normalización de email, bloqueo, sesión deslizante, E2E de registro | N1 + N3 + E2E crítico |
 | L04 | Login de apps con Bearer, sesión por app, CORS, versión, mantenimiento, `/app/status`, anuncios, soporte (BE-FR-03, 47, 48, 62, 65, 84, 85) | Alto | Matriz de cabeceras, app y sesión; 426, 503, 400, 401 | N3 HTTP |
-| L05 | Bolsas, ledger, reservas, deuda, caducidad, ajustes (BE-FR-12–18, 71) | **Crítico** | TDD, property-based, concurrencia, reconstrucción del ledger | N1 + PBT + N3 + piloto de mutation |
-| L06 | Tarificación, coste máximo, tipo de cambio, redondeo (BE-FR-19–22, 72, 87) | **Crítico** | Ejemplos de BE-FR-22 como fixtures exactos, PBT, BCE simulado | N1 + PBT + N3 |
+| L05 | Bolsas, ledger, reservas, deuda, caducidad, ajustes (BE-FR-12–18, 71); concesión de la bolsa de bienvenida al verificar (BE-FR-02 CA1) y su test | **Crítico** | TDD, property-based, concurrencia, reconstrucción del ledger, ajuste negativo limitado al saldo disponible | N1 + PBT + N3 |
+| L06 | Tarificación, coste máximo, tipo de cambio, redondeo (BE-FR-19–22, 72, 87) | **Crítico** | Ejemplos de BE-FR-22 como fixtures exactos, PBT, BCE simulado | N1 + PBT + N3 + piloto de mutation (tras cerrar L05 y L06, 15.20) |
 | L07 | Pasarela de chat, catálogo, plantillas, salida estructurada, idempotencia, cancelación, registro sin contenido (BE-FR-30–34, 37, 38, 77–81) | **Crítico** | Flujo de la sección 8 con proveedor simulado, estados de idempotencia, marcador de privacidad | N3 + N3 HTTP |
 | L08 | Transcripción con *fallback* y ffprobe, imagen (BE-FR-35, 36, 44) | Alto | Escenarios Voxtral/backup, reintentos con reloj falso, duración medida, temporales borrados | N3 |
-| L09 | Protecciones: tope diario, freno global, límites, altas por IP (BE-FR-11.4, 11.6, 43, 45, 46) | Alto | Límites por usuario y globales, IP real del proxy | N3 + N3 HTTP |
+| L09 | Protecciones: tope diario, freno global y límites (BE-FR-11.6, 43, 45, 46); las altas por IP (BE-FR-11.4) van en L03 con el antiabuso | Alto | Límites por usuario y globales, IP real del proxy | N3 + N3 HTTP |
 | L10 | Paquetes, compra simulada, testers, contracargos, reembolsos, datos fiscales, interfaces de facturación (BE-FR-23–28, 74–76) | **Crítico** | Idempotencia de la acreditación, liquidación de deuda, `simulated` excluido, CSV contable | N1 + N3 + E2E de compra |
 | L11 | Sincronización y predeterminados (BE-FR-39–42) | Alto | Validación por estrategia, 412 concurrente, siembra con `updatedAt = 0`, copia con vista previa | N1 + PBT + N3 |
 | L12 | Panel de usuario y privacidad (BE-FR-07, 08, 49, 66, 70) | Medio | Presenters sin campos internos, CSV, gráficas con tabla, sin JS, **primera prueba de carga** y Web Vitals de laboratorio | N2 + N3 + E2E + carga |
@@ -1402,7 +1425,8 @@ Los nombres accesibles pueden incluir el indicador de obligatorio («Email *»):
 
 - Separación por host (combinaciones cruzadas → 404; `/api/v1/health` con cualquier `Host`).
 - `X-App-Id` ausente o desconocido (400), app desactivada (503), sesión de otra app (401), Bearer en la web y cookie en la API rechazados.
-- CORS por app, CSRF de formularios desde otro origen, versión mínima (426), mantenimiento (503), freno global (503).
+- CORS por app (*preflight* con el origen de cualquier app activa; petición real con un origen ajeno a la app de `X-App-Id` → 403 `ORIGIN_NOT_ALLOWED`), versión mínima (426, salvo logout y `/app/status`), mantenimiento (503), freno global (503).
+- CSRF propio del host web (10.1): un envío de formulario sin `Origin` o con otro origen → 403; en el host de la API, una subida `multipart/form-data` sin `Origin` con Bearer se acepta (la comprobación de SvelteKit está desactivada).
 - Cabeceras de seguridad (CSP, HSTS), `X-Request-Id` y `BODY_SIZE_LIMIT`.
 - **Formato de error y conformidad con el OpenAPI** de todas las respuestas: un test parametrizado por tabla de casos, no un test por endpoint.
 - IP del cliente desde `X-Forwarded-For` con `XFF_DEPTH=1` (un valor falsificado más a la izquierda se ignora).
@@ -1447,8 +1471,9 @@ Para cada formulario crítico (registro, login, recuperación, cambio de contras
 
 Para cada grupo de `/api/v1` (auth, me, ai, sync, defaults, app/status) se cubre con tablas de casos parametrizadas:
 
-- Método.
+- Método (no admitido → 405 `METHOD_NOT_ALLOWED`; ruta inexistente → 404 `NOT_FOUND`; error inesperado → 500 `INTERNAL_ERROR` sin detalles internos).
 - Body válido e inválido (`strictObject`: una clave desconocida da 400).
+- Subida `multipart/form-data` sin `Origin` (como la envían las apps de escritorio): aceptada.
 - Autenticación y autorización.
 - Código HTTP y formato de error de 7.2.
 - Serialización (enteros `…Micro`, fechas ISO UTC).
@@ -1464,7 +1489,7 @@ Los servicios externos están siempre simulados.
 - A partir de la primera release: test de migración desde una copia sintética del esquema anterior.
 - Las restricciones `UNIQUE`, `FOREIGN KEY` y `CHECK` se prueban en integración.
 - **Inmutabilidad** de `credit_movements`, `admin_audit`, `invoices` y `prompt_templates`: test de arquitectura (sin `UPDATE`/`DELETE` en el código) y, si el plan lo decide, *triggers* de SQLite que lo impidan (15.27, pregunta 3).
-- Anonimización (BE-FR-07, 83): el borrado deja movimientos y operaciones sin datos personales y libera el email, pero conserva el hash de `welcome_grants`.
+- Anonimización (BE-FR-07, 83): el borrado elimina los datos personales de `user`, del perfil, de los datos fiscales y de los sincronizados; pone a cero las bolsas con `forfeit`; no modifica las tablas inmutables (solo guardan el `user_id` opaco y sus *triggers* siguen activos); conserva íntegras las facturas; libera el email y conserva el hash de `welcome_grants`.
 
 ### 15.15 Autenticación, autorización, cookies y sesiones
 
@@ -1477,6 +1502,8 @@ Además:
 - Bloqueo por intentos fallidos (10 fallos en 15 min, exista o no el email) y desbloqueo tras un login correcto o una recuperación.
 - Antienumeración: la misma respuesta para un email existente o inexistente en registro, login, reenvío, recuperación y cambio de email.
 - Datos manipulados: cookie alterada, token de otra app, `X-App-Id` cambiado con la misma sesión.
+- CSRF (10.1, N3 HTTP): en el host web, `handle` rechaza con 403 un envío de formulario sin `Origin` o de otro origen; en la API no hay cookies, así que una cookie de sesión enviada a la API no autentica.
+- Captcha y límites de autenticación en `accounts`: captcha inválido o servicio caído (adaptador `CaptchaVerifier` falso) y contadores por IP de `auth_rate_limits` (429 con `Retry-After`; `resend-verification` responde 202 salvo al superar el límite).
 - `ADMIN_EMAIL`: promoción al verificar y nunca dos administradores.
 
 Nunca se usan contraseñas, tokens ni proveedores reales.
@@ -1488,15 +1515,15 @@ Nunca se usan contraseñas, tokens ni proveedores reales.
 | Requisito / CA | Comportamiento | Nivel | Lote | E2E | Prioridad |
 |---|---|---|---|---|---|
 | BE-FR-01 CA1–CA5 | Registro: contraseña de 8–128, aceptaciones versionadas, captcha obligatorio, cuenta sin verificar, respuesta antienumeración | N1 + N3 + E2E (camino feliz) | L03 | Sí | Alta |
-| BE-FR-02 CA1–CA3 | La verificación crea la bolsa de bienvenida; login sin verificar → `EMAIL_NOT_VERIFIED`; reenvío con límite | N3 + E2E (enlace del email) | L03 | Sí | Alta |
+| BE-FR-02 CA1–CA3 | La verificación crea la bolsa de bienvenida; login sin verificar → `EMAIL_NOT_VERIFIED`; reenvío con límite | N3 + E2E (enlace del email) | L03 (verificación, CA2, CA3) / L05 (concesión de la bolsa de CA1) | Sí | Alta |
 | BE-FR-03, 04, 06 | Login web y de app, sesión deslizante, revocación, logout | N3 + N3 HTTP + E2E (login web) | L03 / L04 | Sí | Alta |
-| BE-FR-05, 66, 67 | Recuperación (1 h, un solo uso), cambio de contraseña y de email, bloqueo por intentos | N3 + E2E (recuperación) | L03 | Sí | Alta |
-| BE-FR-07, 08 | Borrado con anonimización y exportación RGPD | N3 + E2E (borrado) | L12 | Sí | Alta |
+| BE-FR-05, 66, 67 | Recuperación (1 h, un solo uso), cambio de contraseña y de email, bloqueo por intentos | N3 + E2E (recuperación) | L03 (BE-FR-05, 67) / L12 (BE-FR-66, necesita el perfil) | Sí | Alta |
+| BE-FR-07, 08 | Borrado con anonimización (sin tocar las tablas inmutables), bolsas a cero con `forfeit` y exportación RGPD | N3 + E2E (borrado) | L12 | Sí | Alta |
 | BE-FR-09 | El modelo `account` permite añadir OAuth sin migrar datos | Revisión del esquema en el plan | L02 | No | Baja |
 | BE-FR-11 CA1–CA2 | La normalización impide un segundo saldo; las compras simuladas no cuentan para el tope | N1 + N3 | L03 / L09 | No | Alta |
 | BE-FR-12–16 | Bolsa de bienvenida, tipos, orden de consumo, ledger reconstruible, caducidad y aviso | N1 + PBT + N3 | L05 / L14 | No | Crítica |
 | BE-FR-17, 71 CA1–CA2 | Saldo mínimo, deuda y su tope, liquidación con la siguiente compra, reservas concurrentes, saldo total, reservado y disponible | N1 + N3 de concurrencia | L05 | No | Crítica |
-| BE-FR-18, 27, 28 | Ajustes con motivo, reembolso manual, contracargo con deuda sin tope y bloqueo | N3 + E2E (ajuste de admin) | L05 / L10 / L13 | Sí (ajuste) | Crítica |
+| BE-FR-18, 27, 28 | Ajustes con motivo (el negativo, limitado al saldo disponible), reembolso manual, contracargo con deuda sin tope y bloqueo | N3 + E2E (ajuste de admin) | L05 / L10 / L13 | Sí (ajuste) | Crítica |
 | BE-FR-19–22 | Fórmula, origen del coste, qué no se cobra, ejemplos numéricos | N1 + PBT + N3 | L06 / L07 | No | Crítica |
 | BE-FR-72 CA1–CA3 | 413 `OPERATION_TOO_EXPENSIVE` sin llamar al proveedor, `truncated`, una operación sin precio no se puede activar | N1 + N3 | L06 / L13 | No | Alta |
 | BE-FR-73 CA1–CA2 | Mediana con muestras mínimas o valor manual; página `/precios` | N1 + N3 + smoke E2E | L14 / L15 | Smoke | Media |
@@ -1504,16 +1531,16 @@ Nunca se usan contraseñas, tokens ni proveedores reales.
 | BE-FR-23–26 | Paquetes calculados al comprar, idempotencia del webhook, compra simulada solo para testers en producción, aceptación previa al pago | N3 + E2E (compra) | L10 | Sí | Crítica |
 | BE-FR-74–76 | Datos fiscales (NIF), copia en la factura, interfaz de facturación, CSV contable | N1 + N3 | L10 | No | Media (la v4 no tiene cobros reales) |
 | BE-FR-30–34, 77–79 | Operaciones válidas por app, modelo elegido por el servidor, plantillas versionadas, salida estructurada y herramientas | N3 + N3 HTTP | L07 | No | Crítica |
-| BE-FR-81, 37 | Idempotencia y cancelación, con cobro según el estado | N3 de concurrencia + N3 HTTP (cierre de conexión) | L07 | No | Crítica |
+| BE-FR-81, 37 | Idempotencia (estado `in_progress` e índice único parcial) y cancelación, con cobro según el estado y pérdida por cancelación registrada | N3 de concurrencia + N3 HTTP (cierre de conexión) | L07 | No | Crítica |
 | BE-FR-38 CA1–CA2 | Sin contenido en BD, logs ni temporales; temporales borrados también en error y cancelación | N3 (marcador en stdout y BD, sistema de ficheros) | L07 / L08 | No | Crítica |
-| BE-FR-35, 36, 44 | Escenarios de transcripción, error saneado, `providerUsed`, transcripciones simultáneas, duración medida con ffprobe, 413 | N3 (ffprobe real con audios de fixture) | L08 | No | Alta |
+| BE-FR-35, 36, 44 | Escenarios de transcripción, conversión con ffmpeg del audio del respaldo (temporales borrados), error saneado, `providerUsed`, transcripciones simultáneas, duración medida con ffprobe, 413 | N3 (ffprobe real con audios de fixture) | L08 | No | Alta |
 | BE-FR-80 CA1 | Respaldos en orden dentro del *timeout* total; el cliente no ve el modelo | N3 | L07 | No | Alta |
 | BE-FR-39–42 | Esquema por app, siembra, 412, tamaño, predeterminados con vista previa y auditoría | N1 + PBT + N3 + E2E (copia de predeterminados) | L11 / L13 | Sí (admin) | Alta |
 | BE-FR-43, 45, 46 | 429 con `Retry-After`, límites de autenticación, freno global solo para cuentas sin compras | N3 + N3 HTTP | L09 | No | Alta |
 | BE-FR-47, 48 | Mantenimiento global y por app; 426; `/app/status` con los tiempos por operación | N3 HTTP + E2E (activar el mantenimiento) | L04 / L13 | Sí (admin) | Alta |
-| BE-FR-62–65 | Apps sin redesplegar, saldo compartido, origen del registro con `?app=`, clientes web y móviles, CORS | N3 + N3 HTTP + E2E (registro con `?app=`) | L02 / L04 | Sí | Alta |
+| BE-FR-62–65 | Apps sin redesplegar, saldo compartido, origen del registro con `?app=`, clientes web y móviles, CORS (*preflight* y `ORIGIN_NOT_ALLOWED`) | N3 + N3 HTTP + E2E (registro con `?app=`) | L02 / L04 | Sí | Alta |
 | BE-FR-49 | Panel: saldo, compra, movimientos, consumo filtrado, gráficas, CSV, aviso de saldo bajo, sesiones, perfil, facturas, apps, avisos, soporte | N2 + N3 + E2E | L12 | Sí | Media |
-| BE-FR-50–57, 61 | Admin: usuarios, economía, apps y modelos, protecciones, estadísticas, auditoría, alerta de OpenRouter, predeterminados, parámetros editables | N3 + E2E (recorrido de admin) | L13 | Sí | Alta |
+| BE-FR-50–57, 61 | Admin: usuarios, economía, apps y modelos, protecciones, estadísticas, auditoría, alerta de OpenRouter (desactivada sin `OPENROUTER_MANAGEMENT_KEY`), pérdida por cancelación y `forfeit` en estadísticas, predeterminados, parámetros editables | N3 + E2E (recorrido de admin) | L13 | Sí | Alta |
 | BE-FR-58 | Emails con plantilla, marca y soporte; un email por cruce de umbral | N3 (*outbox* en fichero) | L14 | No | Media |
 | BE-FR-59, 60 | Landings, legales versionados, solo cookies técnicas, sin terceros | Smoke E2E + a11y + N3 HTTP (cookies emitidas) | L15 | Smoke | Media |
 | BE-FR-68, 70, 83, 86 | Limpieza de cuentas sin verificar, nuevas versiones legales (403 hasta aceptar), retención, inactividad sin borrar cuentas con compras | N3 (reloj falso) + E2E (aceptación) | L12 / L14 | Sí (aceptación) | Alta |
@@ -1597,7 +1624,7 @@ Para cada fila se contemplan, cuando apliquen: camino correcto, validación, vac
 - Se comprueba que las reservas siguen siendo correctas bajo carga y se mide el volumen de logs por petición.
 - Siempre contra el build. Se publican los dos números junto con el objetivo.
 
-**Seguridad verificable:** ya está incluida en N3 HTTP (host, CORS, CSRF, cabeceras, redirecciones abiertas, límites, IP real) y en el marcador de privacidad de los logs.
+**Seguridad verificable:** ya está incluida en N3 HTTP (host, CORS, CSRF propio del host web y subida `multipart/form-data` sin `Origin` en la API, cabeceras, redirecciones abiertas, límites, IP real) y en el marcador de privacidad de los logs.
 
 ### 15.19 Logging en los tests
 
@@ -1642,16 +1669,16 @@ Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones 
 
 | Servicio | Sustituto en unit e integración | Sustituto en E2E | Escenarios obligatorios |
 |---|---|---|---|
-| OpenRouter (chat, imagen, audio, modelos, saldo, generación) | *Fake* del puerto `AiGateway` + servidor simulado para el adaptador | Servidor simulado | Éxito, coste ausente, 5xx, *timeout*, JSON inválido, moderación, respaldo, saldo bajo |
+| OpenRouter (chat, imagen, audio, modelos, saldo, generación) | *Fake* del puerto `AiGateway` + servidor simulado para el adaptador | Servidor simulado | Éxito, coste ausente, 5xx, *timeout*, JSON inválido, moderación, respaldo, saldo bajo, sin `OPENROUTER_MANAGEMENT_KEY` (alerta desactivada), coste conocido de una operación cancelada |
 | Mistral (Voxtral) | Servidor simulado | Servidor simulado | Éxito, reintentos a 2/4/8 s, *timeout*, 401/402/429 de facturación, *fallback* |
 | Resend | *Fake* de `EmailSender` (en memoria) | *Outbox* en fichero (`.outbox/`, ignorado por Git) | Éxito, error (log `warn`, sin reintento infinito) |
-| Turnstile | *Fake* de captcha | *Fake* (sin widget) | Válido, inválido, servicio caído |
+| Turnstile | *Fake* del adaptador `CaptchaVerifier` de `accounts` + servidor simulado para el adaptador real | *Fake* de `CaptchaVerifier` (sin widget) | Válido, inválido, servicio caído |
 | BCE | Servidor simulado | Valor fijo | Éxito, error, días sin actualizar (alerta) |
 | GitHub Releases | Servidor simulado | — | Éxito, error |
 | Pagos | `simulated` | `simulated` | Completado, webhook repetido, reembolso, contracargo |
 | Facturación | `none` + *fake* para la interfaz | — | Emisión idempotente (con el *fake*) |
 | Log Gateway | Servidor simulado | Desactivado (solo stdout) | Lotes, error, caída sin bloqueo |
-| ffprobe | Real (binario de la imagen) con audios de fixture pequeños | — | Duración, audio ilegible, exceso de duración |
+| ffprobe y ffmpeg | Reales (binarios de la imagen) con audios de fixture pequeños | — | Duración, audio ilegible, exceso de duración; conversión del audio del respaldo y temporales borrados |
 
 ### 15.24 Ejecución escalonada y selección de tests afectados
 
@@ -1742,7 +1769,7 @@ Mientras no se resuelvan se aplican suposiciones conservadoras, y cada una gener
 
 1. ~~**Doble envío de la compra simulada.**~~ **Resuelta (2026-10-10):** identificador de intento de un solo uso (BE-FR-25 CA4); lo comprueba el E2E 4.
 2. ~~**Formato del BCE.**~~ **Resuelta (2026-10-10):** API SDMX del BCE (`data-api.ecb.europa.eu`) en formato CSV; el simulador reproduce ese formato.
-3. ~~**Inmutabilidad en la BD.**~~ **Resuelta (2026-10-10):** además del test de arquitectura, *triggers* de SQLite impiden `UPDATE` y `DELETE` en `credit_movements`, `admin_audit`, `invoices` y `prompt_templates`; la anonimización legal usa una vía dedicada y testeada.
+3. ~~**Inmutabilidad en la BD.**~~ **Resuelta (2026-10-10):** además del test de arquitectura, *triggers* de SQLite impiden `UPDATE` y `DELETE` en `credit_movements`, `admin_audit`, `invoices` y `prompt_templates`. La anonimización no necesita ninguna vía que los desactive: las tablas inmutables solo guardan el `user_id` opaco y los datos personales se borran de `user` y de las tablas no inmutables (BE-FR-07 CA2).
 4. ~~**Versiones de navegador soportadas.**~~ **Resuelta (2026-10-10):** las dos últimas versiones estables de Chrome, Edge, Firefox y Safari (incluido iOS).
 5. **Duración máxima aceptable de una PR.** *Suposición:* se mide en L01–L03 y se fija como objetivo.
 6. ~~**Smoke después de cada despliegue a staging.**~~ **Resuelta (2026-10-10):** sí, `test:e2e:smoke` contra `cuenta-staging` con una cuenta de prueba dedicada (sin datos de producción), más la verificación de proxy de la constitución.
@@ -1866,15 +1893,15 @@ Todo lo que sigue son **hipótesis del propietario**: no hay investigación con 
 
 | ID | Adaptación | Motivo | Cuándo |
 |---|---|---|---|
-| DS-01 | Renombrar a Cuenta Mardomingo: títulos, clave `networkbench.theme` y documentos de NetworkBench archivados o reescritos | Es la identidad de otro producto | Ahora, en `Design/` |
-| DS-02 | Que el modo **Sistema** funcione sin JavaScript: sin elección explícita, los tokens siguen `prefers-color-scheme` en CSS; `data-theme` solo se usa para Claro u Oscuro elegidos, y el servidor lo pinta desde la cookie | Hoy `:root` es el tema oscuro, así que con SSR y sin JS un usuario con el sistema en claro vería el oscuro o un destello | L01 |
+| DS-01 | Renombrar a Cuenta Mardomingo: títulos, clave `networkbench.theme` y documentos de NetworkBench archivados o reescritos | Es la identidad de otro producto | Antes de L01, en `Design/` (encargo en paralelo); lo que no esté hecho al empezar L01 entra en L01 |
+| DS-02 | Que el modo **Sistema** funcione sin JavaScript: sin elección explícita, los tokens siguen `prefers-color-scheme` en CSS; `data-theme` solo se usa para Claro u Oscuro elegidos, y el servidor lo pinta desde la cookie | Hoy `:root` es el tema oscuro, así que con SSR y sin JS un usuario con el sistema en claro vería el oscuro o un destello | Antes de L01, en `Design/` (encargo en paralelo); lo que no esté hecho al empezar L01 entra en L01 |
 | DS-03 | El controlador de tema guarda la preferencia en una **cookie técnica** (no en `localStorage`) y vive en el contexto del árbol de componentes, sin estado mutable a nivel de módulo | Constitución, «Estado y componentes»; el servidor necesita la preferencia para la primera pintura. `ThemeToggle` pasa a ser un formulario que funciona sin JavaScript (16.4) | L01 |
-| DS-04 | Tipografía para la web: tamaños en `rem` (no `px`); tamaño de cuerpo adecuado a la lectura web (el plan fija el valor; los 14 px de escritorio se revisan); pila de fuentes multiplataforma o fuentes propias autoalojadas, con licencia y peso medidos | Respetar la ampliación de texto del navegador; Segoe UI Variable y Cascadia Mono solo existen en Windows; las capturas visuales de 15.18 necesitan fuentes deterministas | L01 |
-| DS-05 | Tratar `prefers-reduced-transparency`, `prefers-reduced-motion`, `prefers-contrast` y `forced-colors`, y un atributo para el ajuste propio de efectos (p. ej. `data-effects="reduced"`) que retira el *blur* y el movimiento no esencial | Hoy solo existe el respaldo `@supports not (backdrop-filter)` | L01 |
+| DS-04 | Tipografía para la web: tamaños en `rem` (no `px`); tamaño de cuerpo adecuado a la lectura web (el plan fija el valor; los 14 px de escritorio se revisan); pila de fuentes multiplataforma o fuentes propias autoalojadas, con licencia y peso medidos | Respetar la ampliación de texto del navegador; Segoe UI Variable y Cascadia Mono solo existen en Windows; las capturas visuales de 15.18 necesitan fuentes deterministas | Antes de L01, en `Design/` (encargo en paralelo); lo que no esté hecho al empezar L01 entra en L01 |
+| DS-05 | Tratar `prefers-reduced-transparency`, `prefers-reduced-motion`, `prefers-contrast` y `forced-colors`, y un atributo para el ajuste propio de efectos (p. ej. `data-effects="reduced"`) que retira el *blur* y el movimiento no esencial | Hoy solo existe el respaldo `@supports not (backdrop-filter)` | Antes de L01, en `Design/` (encargo en paralelo); lo que no esté hecho al empezar L01 entra en L01 |
 | DS-06 | Componentes propios de esta web: tabla de datos (encabezados, orden, desplazamiento local), paginación, grupos de casillas y de opciones, selector, aviso o *banner* (anuncios y documentos pendientes), estado vacío, contenedor de gráfica con tabla equivalente, cabecera y pie con navegación, y menú de cuenta. Cada componente documenta sus estados, teclado, temas y efectos reducidos | No existen en el sistema de NetworkBench | El marco (`components/layout/`) en L01; el resto, en el lote que lo necesite por primera vez |
-| DS-07 | Nombres de token por rol: `--color-lavender` (ahora verde salvia) y `--color-mauve` (ahora violeta) | Los nombres heredados inducen a error | L01 |
+| DS-07 | Nombres de token por rol: `--color-lavender` (ahora verde salvia) y `--color-mauve` (ahora violeta) | Los nombres heredados inducen a error | Antes de L01, en `Design/` (encargo en paralelo); lo que no esté hecho al empezar L01 entra en L01 |
 | DS-08 | Integración con Tailwind 4: los tokens se exponen a Tailwind sin duplicar valores; `verify-tokens` se adapta a la estructura del repositorio y pasa a ser la puerta 10 del CI (`lint:tokens`); la paleta por defecto de Tailwind se desactiva y se rechazan los colores arbitrarios (`bg-[#fff]`) | Constitución: componentes propios sobre Tailwind, solo con tokens | L01 |
-| DS-09 | Medir el contraste sobre la composición real (cristal sobre el fondo ambiental, en los dos temas y con efectos reducidos), no solo entre pares de tokens | Hoy el contraste está verificado por cálculo entre tokens | Ahora, en `Design/`; después, en cada lote con interfaz |
+| DS-09 | Medir el contraste sobre la composición real (cristal sobre el fondo ambiental, en los dos temas y con efectos reducidos), no solo entre pares de tokens | Hoy el contraste está verificado por cálculo entre tokens | Antes de L01, en `Design/` (encargo en paralelo); lo que no esté hecho al empezar L01 entra en L01; después, en cada lote con interfaz |
 | DS-10 | Semántica web de los componentes heredados: `Button` con `href` (enlace) y con `name`/`value`/`formaction` y `aria-busy`; `Sidebar` con `<a>` y `aria-current`; `ThemeToggle` como formulario; `Card` sin `div role="button"`; `Dialog` con alternativa sin JavaScript; `TextField` sin altura fija; textos de Paraglide; *snippets* en lugar de `<slot />`; y retirar las reglas de «aspecto nativo» (enlaces sin subrayar, `cursor: default`, `user-select: none`, prohibición del `<select>` nativo) | Contradicen los principios IX y XIII y la mejora progresiva | L01 (`Button`, `TextField`, `ThemeToggle`, marco); `Sidebar` en el lote de la administración |
 
 ### 16.3 Lenguaje visual: cristal selectivo
@@ -2023,6 +2050,6 @@ Complementa 15.18.
   - la herramienta de medición del rendimiento y la matriz de pruebas.
 - **`/speckit-tasks`:** los estados, la accesibilidad, los temas y la adaptación **no** se dejan para el final como «pulido».
 - **L01** incluye la base visual:
-  - DS-03, DS-08 y DS-10 (componentes del marco), migrando los tokens y componentes de `Design/` al código (ADR 0007), con DS-01, 02, 04, 05, 07 y 09 ya resueltos en `Design/`;
+  - DS-03, DS-08 y DS-10 (componentes del marco), migrando los tokens y componentes de `Design/` al código (ADR 0007). DS-01, 02, 04, 05, 07 y 09 se resuelven en `Design/` antes de L01 (encargo en paralelo); lo que no esté hecho al empezar L01 entra en L01;
   - el marco (`components/layout/`, parte de DS-06) con el selector de tema y el ajuste de efectos.
   Así el smoke y la spec de accesibilidad prueban los dos temas desde el principio. El resto de DS-06 y la medición de DS-09 se resuelven en cada lote con interfaz.
