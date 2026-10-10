@@ -4,7 +4,7 @@
 import { AppError } from '$lib/server/shared/errors';
 
 /** Claves que se eliminan de cualquier registro, en el primer nivel y dentro de un objeto. */
-export const LOG_REDACT_PATHS: readonly string[] = [
+export const LOG_REDACT_PATHS: readonly string[] = Object.freeze([
 	'authorization',
 	'cookie',
 	'password',
@@ -21,7 +21,7 @@ export const LOG_REDACT_PATHS: readonly string[] = [
 	'*.ip',
 	'req.headers.authorization',
 	'req.headers.cookie'
-];
+]);
 
 export interface SerializedError {
 	readonly type: string;

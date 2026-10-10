@@ -3,7 +3,7 @@
 import * as m from '$lib/paraglide/messages.js';
 import type { ErrorCode } from '$lib/server/shared/errors';
 
-export const ERROR_MESSAGES: Readonly<Record<ErrorCode, () => string>> = {
+export const ERROR_MESSAGES: Readonly<Record<ErrorCode, () => string>> = Object.freeze({
 	VALIDATION_ERROR: m.errors_validation_error,
 	UNKNOWN_APP: m.errors_unknown_app,
 	UNAUTHENTICATED: m.errors_unauthenticated,
@@ -51,4 +51,4 @@ export const ERROR_MESSAGES: Readonly<Record<ErrorCode, () => string>> = {
 	BILLING_PROFILE_INCOMPLETE: m.errors_billing_profile_incomplete,
 	PAYMENT_PROVIDER_ERROR: m.errors_payment_provider_error,
 	REGISTRATION_IP_LIMIT: m.errors_registration_ip_limit
-};
+});

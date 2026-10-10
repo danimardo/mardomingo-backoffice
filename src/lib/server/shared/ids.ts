@@ -2,7 +2,7 @@
 // Inyectable: en los tests se pasa una fuente de bytes fija para obtener ids deterministas.
 
 /** Prefijos de las entidades con id propio. Supuestos de data-model 1.3, pendientes de confirmar. */
-export const ID_PREFIXES = {
+export const ID_PREFIXES = Object.freeze({
 	app: 'app_',
 	aop: 'aop_',
 	tpl: 'tpl_',
@@ -18,7 +18,7 @@ export const ID_PREFIXES = {
 	op: 'op_',
 	ann: 'ann_',
 	aud: 'aud_'
-} as const;
+} as const);
 
 export type IdKind = keyof typeof ID_PREFIXES;
 

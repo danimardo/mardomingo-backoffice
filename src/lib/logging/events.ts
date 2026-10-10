@@ -13,10 +13,10 @@ export interface ClientLogFields {
 	'client.report.failed': { readonly reason: 'network' | 'rejected' };
 }
 
-export const CLIENT_LOG_EVENTS = {
+export const CLIENT_LOG_EVENTS = Object.freeze({
 	'client.error.uncaught': { level: 'error', msg: 'Error no capturado en el navegador' },
 	'client.error.unhandled_rejection': { level: 'error', msg: 'Promesa rechazada sin capturar' },
 	'client.report.failed': { level: 'debug', msg: 'No se pudo enviar el informe de error' }
-} as const satisfies Record<keyof ClientLogFields, { level: 'error' | 'debug'; msg: string }>;
+} as const satisfies Record<keyof ClientLogFields, { level: 'error' | 'debug'; msg: string }>);
 
 export type ClientLogEventCode = keyof ClientLogFields;

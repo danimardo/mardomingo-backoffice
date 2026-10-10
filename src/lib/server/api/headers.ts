@@ -2,9 +2,9 @@
 // hook `handle` a todas las respuestas; aquí solo va lo específico de JSON de la API.
 
 /** Sin caché en ninguna respuesta de la API: reflejan configuración editable y datos de cuenta. */
-export const API_NO_STORE_HEADERS: Readonly<Record<string, string>> = {
+export const API_NO_STORE_HEADERS: Readonly<Record<string, string>> = Object.freeze({
 	'cache-control': 'no-store'
-};
+});
 
 export interface JsonInit {
 	readonly status: number;

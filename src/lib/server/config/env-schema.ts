@@ -3,19 +3,27 @@
 // y los tests, que pasan el entorno por parámetro. Solo `env.ts` lee el entorno real.
 import { z } from 'zod';
 
-export const APP_ENVS = ['development', 'test', 'staging', 'production'] as const;
+export const APP_ENVS = Object.freeze(['development', 'test', 'staging', 'production'] as const);
 export type AppEnv = (typeof APP_ENVS)[number];
 
-const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const;
+const LOG_LEVELS = Object.freeze([
+	'trace',
+	'debug',
+	'info',
+	'warn',
+	'error',
+	'fatal',
+	'silent'
+] as const);
 
 // Hosts que nunca pueden aparecer en las URL públicas de staging o producción.
-const LOCAL_HOSTS: readonly string[] = ['localhost', '127.0.0.1'];
+const LOCAL_HOSTS: readonly string[] = Object.freeze(['localhost', '127.0.0.1']);
 
 // Claves de prueba oficiales de Turnstile: siempre aceptan o rechazan, nunca protegen nada.
 const TURNSTILE_TEST_KEY = /^[123]x0+[A-Z]{2}$/;
 
 // Variables que solo existen para las pruebas: rechazadas fuera de APP_ENV=test.
-const TEST_ONLY_KEYS = [
+const TEST_ONLY_KEYS = Object.freeze([
 	'MOCK_OPENROUTER_URL',
 	'MOCK_MISTRAL_URL',
 	'MOCK_RESEND_URL',
@@ -24,16 +32,16 @@ const TEST_ONLY_KEYS = [
 	'MOCK_GITHUB_URL',
 	'EMAIL_OUTBOX_DIR',
 	'CAPTCHA_FAKE'
-] as const;
+] as const);
 
 // Requeridas solo en staging y producción (en test y desarrollo pueden estar vacías).
-const DEPLOYED_REQUIRED_KEYS = [
+const DEPLOYED_REQUIRED_KEYS = Object.freeze([
 	'OPENROUTER_API_KEY',
 	'MISTRAL_API_KEY',
 	'RESEND_API_KEY',
 	'PUBLIC_TURNSTILE_SITE_KEY',
 	'TURNSTILE_SECRET'
-] as const;
+] as const);
 
 // Entero leído de texto (los valores del entorno siempre llegan como cadena).
 const intFromEnv = (min: number, max: number) =>
