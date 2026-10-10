@@ -3,22 +3,22 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import EffectsToggle from './EffectsToggle.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
-	import { useAppearance } from '$lib/design-system/theme.svelte';
+	import type { Effects, Theme } from '$lib/appearance/preferences';
 
 	interface Props {
 		redirectTo: string;
+		theme: Theme;
+		effects: Effects;
 	}
 
-	let { redirectTo }: Props = $props();
-
-	const appearance = useAppearance();
+	let { redirectTo, theme, effects }: Props = $props();
 </script>
 
 <footer class="footer">
 	<p>{m.layout_footer_text()}</p>
 	<div class="controls">
-		<ThemeToggle current={appearance.theme} {redirectTo} />
-		<EffectsToggle current={appearance.effects} {redirectTo} />
+		<ThemeToggle current={theme} {redirectTo} />
+		<EffectsToggle current={effects} {redirectTo} />
 	</div>
 </footer>
 
