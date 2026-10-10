@@ -103,10 +103,33 @@ El código de servidor se organiza en capas con dependencias en una sola direcci
 - Son obligatorios todos los tests de la sección 10.4 de `Historias.md`, incluidos los de
   **concurrencia** (N peticiones simultáneas sobre el mismo saldo), los de **aislamiento entre
   apps** y la validación de respuestas contra el **OpenAPI**.
-- Cada endpoint tiene tests de sus códigos de error documentados (sección 7.2).
-- Cada página de la web tiene un test E2E (Playwright) del recorrido principal y una comprobación
-  automática de accesibilidad (principio IX).
+- Todos los códigos de error documentados (sección 7.2) están cubiertos por tests de la API,
+  agrupados en tablas de casos parametrizadas (no un test por endpoint).
+- **Accesibilidad en todas las páginas, E2E en los flujos críticos**: una spec recorre todas las
+  páginas de la web con axe en ambos temas (principio IX), y los E2E de Playwright se reservan
+  para los flujos críticos de `Historias.md` 15.17, también sin JavaScript. No se escriben E2E
+  que repitan lo que demuestra un test más barato.
 - Un bug corregido lleva un test de regresión que lo reproduce.
+- **Implementación por lotes con checkpoint**: cada lote cierra con sus tests (deuda de tests solo
+  dentro del lote activo) y ninguna historia se cierra con tests obligatorios pendientes. Fuera de
+  los módulos con TDD obligatorio, los tests se escriben al estabilizar el lote, salvo
+  autenticación, autorización, concurrencia, privacidad, migraciones y bugs, que se prueban antes
+  o inmediatamente después.
+- **Trazabilidad**: cada test que demuestra un criterio `CA` lleva su identificador
+  (`[BE-FR-XX/CAn]` o la etiqueta `@BE-FR-XX`) y `test:trace` lista los criterios sin test.
+- **Determinismo**: el tiempo, los ids y la aleatoriedad se inyectan (`Clock`, generador con
+  semilla). PROHIBIDOS en los tests `waitForTimeout`, `sleep` y esperas arbitrarias. Un test
+  inestable es un defecto: los reintentos solo sirven para diagnosticar, nunca para ocultarlo.
+- **E2E contra el build de producción** en `APP_ENV=test` (adaptadores contra servidores
+  simulados locales, captcha falso, emails en un *outbox* en fichero, sin red externa).
+- **Navegadores**: Chromium en cada PR; Firefox y WebKit en las PR de riesgo, cada noche y antes
+  de cada release. Las capturas de regresión visual solo se generan en el contenedor oficial de
+  Playwright y solo se actualizan con un cambio intencionado y revisado.
+- **Property-based** (fast-check) donde haya invariantes del dominio y **mutation testing**
+  (Stryker) sobre `src/lib/server/domain/**`, con línea base y ejecución programada; nunca en el
+  bucle de desarrollo.
+- La estrategia detallada (niveles, lotes, suites, comandos, CI y criterios de cierre) está en
+  `Historias.md`, sección 15, y es de obligado seguimiento en el plan y las tareas.
 
 ### VI. Contrato de API primero
 
@@ -449,6 +472,8 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
 | Formato | `prettier` / `prettier-plugin-svelte` / `prettier-plugin-tailwindcss` | **3.9.9** / **4.1.1** / **0.8.1** |
 | Tipos de Node | `@types/node` | **24.19.2** |
 | Logs legibles en desarrollo | `pino-pretty` | **13.2.0** |
+| Property-based testing | `fast-check` / `@fast-check/vitest` | **4.10.2** / **0.5.0** |
+| Mutation testing | `@stryker-mutator/core` / `@stryker-mutator/vitest-runner` | **10.0.0** / **10.0.0** |
 
 ### Servicios externos
 
@@ -503,6 +528,176 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
   restauración está documentado y se prueba antes del lanzamiento público y después de cada cambio
   de infraestructura.
 
+## Arquitectura idiomática de SvelteKit
+
+El proyecto sigue estrictamente el modelo mental de SvelteKit 2 y Svelte 5. Esta sección concreta
+los principios IV (capas), IX (accesibilidad y mejora progresiva) y XII (validación) para el
+framework.
+
+### Rutas y dominios
+
+- Organización con grupos de rutas: `src/routes/(web)/(public)/…` (landings, precios, legales,
+  registro, login), `(web)/panel/…`, `(web)/admin/…`, `api/v1/…` y `client-errors/`. Las URL
+  visibles son las de `Historias.md` (`/registro`, `/panel`, `/admin`, `/precios`…).
+- Los parámetros de ruta (`slug`, ids) se restringen con *param matchers* en `src/params/`.
+- **Separación por host**, aplicada en `handle`:
+  - El host de la API (`PUBLIC_API_URL`) solo responde a `/api/v1/*`.
+  - El host de la web (`PUBLIC_WEB_URL`) solo responde a la web y a `/client-errors`.
+  - Cualquier otra combinación devuelve `404` sin ejecutar la ruta.
+  - Excepción: `/api/v1/health` responde con cualquier `Host`, porque el *healthcheck* de
+    Coolify llama al contenedor directamente.
+  - En desarrollo, si ambas URL comparten host, la separación se desactiva.
+- Opciones de página: `ssr = true` en todo el proyecto; `prerender = false` en la v4 (el
+  contenido de landings, precios y legales sale de la BD); `trailingSlash` por defecto.
+- `handle` es un `sequence(...)` con este orden: contexto de la petición (`requestId`, logger) →
+  separación por host → middleware de Paraglide → resolución de la app (`X-App-Id`, solo en la
+  API) → sesión (Better Auth → `event.locals`) → cabeceras de seguridad. `event.locals` está
+  tipado en `src/app.d.ts`.
+
+### Carga de datos
+
+- Las páginas cargan datos **solo** con `+page.server.ts` y `+layout.server.ts`. Los componentes
+  reciben datos listos para pintar a través de la prop `data`. PROHIBIDOS los `load` universales
+  (`+page.ts`, `+layout.ts`) salvo justificación en el plan.
+- La web **nunca** llama a `/api/v1` ni a sus propios `+server.ts` para obtener datos: el `load`
+  llama directamente a los servicios.
+- Todo lo que devuelve un `load` se serializa y llega al navegador. Por eso un `load` devuelve
+  **modelos de vista** construidos con funciones de mapeo explícitas
+  (`$lib/server/presenters/`), nunca filas de la BD ni objetos de Better Auth. Al usuario nunca
+  le llegan campos internos (modelo, coste real, `has_real_purchase` de otros, hashes, tokens).
+- Sin cascadas: las cargas independientes se lanzan en paralelo (`Promise.all`); `await parent()`
+  solo cuando hace falta y después del trabajo independiente.
+- Los datos no críticos y lentos (p. ej. gráficas) se pueden enviar como promesas en
+  *streaming*, con un estado de carga accesible (`aria-busy`).
+- Para refrescar se usan `invalidate`, `depends` o `invalidateAll`, nunca un `fetch` manual.
+- Las páginas autenticadas responden con `cache-control: private, no-store` (`setHeaders`).
+
+### Mutaciones: form actions
+
+- Toda mutación de la web es una **action con nombre** (`?/guardarPerfil`) en `+page.server.ts`,
+  invocada desde un `<form method="POST">` con `use:enhance`.
+  - PROHIBIDO el `fetch` manual para enviar formularios o mutar datos desde componentes.
+  - PROHIBIDO usar `+server.ts` para mutaciones de la web.
+  - PROHIBIDAS las *remote functions* (`kit.experimental.remoteFunctions`), porque son
+    experimentales. Se reevaluarán con SvelteKit 3.
+- Una action es un **controlador** y sigue siempre estos pasos:
+  1. Autorización con los *guards* (ver «Autenticación y autorización»).
+  2. Lectura y validación del `FormData` con el helper de formularios.
+  3. Llamada a **un** servicio de `$lib/server/services/`.
+  4. Traducción del resultado:
+     - Éxito: `redirect(303, …)` (patrón POST-redirect-GET) o `{ success: true }` con una clave
+       de mensaje.
+     - Validación: `fail(400, { values, errors })`.
+     - Rechazo de negocio: `fail(4xx, { formError })` con el código del error.
+- **La lógica de negocio no vive en rutas ni en actions**, sino en `src/lib/server/services/`.
+  PROHIBIDO `src/lib/services`, porque SvelteKit solo protege del cliente `src/lib/server/**` y
+  los ficheros `*.server.ts`. Las rutas no importan `$lib/server/db` ni los adaptadores; solo
+  servicios, *guards*, el helper de formularios y los *presenters*.
+- **Helper de formularios propio** (`$lib/server/forms/`), sin dependencias nuevas
+  (`sveltekit-superforms` no se usa). Hace estas cosas:
+  - Convierte `FormData` en un objeto normalizado (campos repetidos como lista, cadena vacía como
+    `undefined`, casillas como booleano), según el principio XII.
+  - Valida con `safeParse`.
+  - Si falla, devuelve `fail(400, { values, errors })`, donde `errors` contiene los errores por
+    campo (mensajes de Paraglide) y un error general opcional.
+  - `values` reenvía lo escrito para no perderlo, **excepto** contraseñas, tokens y cualquier
+    campo marcado como sensible.
+  - Nunca devuelve detalles internos.
+- En `use:enhance`:
+  - Durante el envío, el botón queda desactivado con `aria-busy="true"`.
+  - Si el envío falla, el foco va al resumen de errores o al primer campo inválido y el error se
+    anuncia (`aria-live`).
+  - Se conserva el comportamiento por defecto de `applyAction` e `invalidateAll`.
+- Las confirmaciones de acciones destructivas son un paso de formulario (página o diálogo
+  accesible con su propio `<form>`), nunca `window.confirm`, para que funcionen sin JavaScript.
+
+### Mejora progresiva
+
+- Toda interacción crítica funciona **sin JavaScript** mediante `<form>` y `<a>` correctos.
+  Interacciones críticas: registro, verificación, login, recuperación y cambio de contraseña,
+  cambio de email, compra, datos fiscales, aceptación legal, sesiones, borrado y exportación de
+  la cuenta, y todas las acciones del panel de administración.
+- JavaScript solo mejora la experiencia (estados de envío, gráficas y filtros instantáneos). Las
+  gráficas tienen su tabla equivalente (principio IX).
+
+### Autenticación y autorización
+
+- `handle` resuelve la sesión una vez y la deja en `event.locals` (`user`, `session`).
+- **Cada** `load`, **cada** action y **cada** `+server.ts` protegido comprueba la autorización con
+  *guards* explícitos (`requireUser`, `requireVerifiedUser`, `requireAdmin`). El `load` de un
+  layout **no** es una barrera de seguridad: las actions y los `+server.ts` no lo ejecutan, y los
+  `load` se ejecutan en paralelo.
+- La web redirige a `/login?redirectTo=…` y solo acepta en `redirectTo` rutas internas
+  relativas, para evitar redirecciones abiertas.
+- La API usa **solo** el token Bearer (BE-FR-65) y no lee cookies. La web usa **solo** la cookie
+  de sesión y no acepta tokens Bearer.
+
+### Estado y componentes (Svelte 5)
+
+- **Solo runes**:
+  - `$state` para el estado local y `$derived` para los valores derivados.
+  - PROHIBIDO usar `$effect` para sincronizar o derivar estado. `$effect` solo para efectos con
+    el DOM o APIs externas, con limpieza.
+  - `$props()` con su interfaz tipada; *callback props* en lugar de `createEventDispatcher`;
+    *snippets* (`{#snippet}`/`{@render}`) en lugar de slots; atributos de evento (`onclick`).
+- `page`, `navigating` y `updated` se importan de `$app/state`. PROHIBIDO `$app/stores`
+  (obsoleto) y `svelte/store` en código nuevo.
+- **PROHIBIDO el estado mutable a nivel de módulo** en todo código que se ejecute en el
+  servidor, incluidos los `.svelte` y `.svelte.ts` que se importan durante el SSR. En el servidor
+  ese estado se comparte entre peticiones y filtraría datos entre usuarios.
+  - El estado compartido en el cliente se crea por árbol de componentes con
+    `setContext`/`getContext` (p. ej. en el layout).
+  - Los datos por petición del servidor viven solo en `event.locals`.
+  - Excepción: las cachés y contadores deliberados del proceso (caché de configuración y de
+    modelos, límites de frecuencia) viven en `$lib/server`, documentados y testeados, y nunca
+    guardan datos de renderizado.
+- Organización de componentes: `src/lib/components/ui/` para primitivas accesibles genéricas
+  (botón, campo de formulario, diálogo, tabla, aviso) y `src/lib/components/<funcionalidad>/`
+  para el resto. Ficheros en `PascalCase.svelte`; módulos con runes en `*.svelte.ts`.
+- Los componentes no acceden a la BD, a los servicios ni a `fetch`. El formato de importes
+  (BE-FR-22), fechas y números vive en funciones puras de `$lib/format/`, compartidas por
+  servidor, cliente y emails.
+
+### Endpoints `+server.ts`
+
+- Solo se usan para:
+  - la API de las apps (`/api/v1/*`);
+  - los webhooks de pagos;
+  - las descargas autenticadas por `GET` (CSV, PDF de facturas, exportación RGPD);
+  - `/client-errors`.
+- Cada endpoint valida con Zod (principio XII). La API responde con `json()` y el formato de
+  error de 7.1, mediante un formateador común; nunca con `error()` ni `+error.svelte`.
+
+### Errores
+
+- **Esperados** (no encontrado, sin permiso): `error(404 | 403, …)` en los `load`, con mensaje de
+  Paraglide, y páginas `+error.svelte` accesibles que muestran el «Código de referencia»
+  (`requestId`).
+- **Inesperados**: `handleError` en `hooks.server.ts` los registra una vez (principio XI) y
+  devuelve `{ message, requestId }` con un mensaje genérico. Nunca devuelve la pila ni detalles
+  internos.
+
+### Verificación de esta sección
+
+- **ESLint** (`no-restricted-imports`):
+  - `$app/stores` y `svelte/store`, en todo el proyecto.
+  - `$lib/server/db` y `$lib/server/adapters`, en `src/routes/**`.
+  - `fetch` en `src/lib/components/**`.
+- **Tests de arquitectura**:
+  - No existen `+page.ts`/`+layout.ts` con `load` fuera de la lista justificada.
+  - No existe `src/lib/services`.
+  - No hay `let`/`$state` mutable a nivel de módulo en ficheros que se importan durante el SSR,
+    salvo en las cachés registradas.
+- **Tests de integración**:
+  - Cada action y cada endpoint protegidos responden `401`/`403` o redirigen sin sesión o con
+    el rol equivocado.
+  - Los `load` no devuelven campos prohibidos (comparación del objeto serializado con el modelo
+    de vista).
+  - La separación por host devuelve `404` en las combinaciones cruzadas, y `/api/v1/health`
+    responde con cualquier `Host`.
+- **E2E** con Playwright y `javaScriptEnabled: false`: todos los recorridos críticos de
+  «Mejora progresiva» se completan sin JavaScript.
+
 ## Configuración y variables de entorno
 
 ### Acceso y validación
@@ -523,6 +718,9 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
   páginas prerenderizadas, `init` también se ejecuta en el build y `building` lo evita.
 - **Si falta configuración**: el proceso termina con código distinto de 0 y un error que
   enumera **los nombres** de las variables ausentes o inválidas, nunca sus valores.
+- `APP_ENV` admite `development`, `test`, `staging` y `production`. **Solo** con `APP_ENV=test`
+  se aceptan las opciones de prueba: URL base de los servidores simulados, captcha falso, *outbox*
+  de emails en fichero y secretos de prueba. `APP_ENV=test` no exige las variables de producción.
 - **Coherencia entre variables**, comprobada por el esquema:
   - En la v4 se rechazan `PAYMENTS_PROVIDER=stripe` e `INVOICING_PROVIDER` distinto de `none`.
   - Con `APP_ENV=production` se rechazan las claves de prueba de Turnstile y los valores de
@@ -613,6 +811,12 @@ Los mismos comandos se usan en local y en el CI, y se documentan en `CLAUDE.md`:
 | `test:e2e` | `playwright test` |
 | `build` | `vite build` |
 | `validate` | `check`, `lint`, `test:coverage`, `build` y `test:e2e`, en ese orden, deteniéndose en el primer fallo |
+| `lint:changed` | ESLint solo sobre los ficheros cambiados (nivel de lote; ver `Historias.md` 15.25) |
+| `test:e2e:smoke` / `test:e2e:critical` | Smoke y flujos críticos de Playwright por etiqueta |
+
+El resto de scripts de testing (`test:unit`, `test:int`, `test:http`, `test:trace`,
+`test:e2e:a11y`, `test:e2e:visual`, `test:e2e:cross-browser`, `test:mutation`…) se definen en
+`Historias.md` 15.25.
 
 - `svelte-kit sync` se ejecuta antes de `svelte-check` (y en `prepare`), porque el `tsconfig.json`
   del proyecto extiende el que genera SvelteKit en `.svelte-kit/`.
@@ -635,7 +839,10 @@ Los mismos comandos se usan en local y en el CI, y se documentan en `CLAUDE.md`:
 3. `pnpm check`.
 4. `pnpm test:coverage` con los umbrales del principio V.
 5. Validación del OpenAPI generado y tests de contrato.
-6. `pnpm test:e2e` (E2E + axe) contra un build de producción con proveedores falsos.
+6. `pnpm test:e2e:smoke`, `pnpm test:e2e:critical` y `pnpm test:e2e:a11y` en Chromium contra un
+   build de producción en `APP_ENV=test`; Firefox y WebKit además si la PR toca formularios,
+   foco, descargas, subida de ficheros o CSS global. En `main` se ejecutan todos los E2E; cada
+   noche, la matriz de navegadores y la regresión visual; cada semana, el mutation testing.
 7. `pnpm build` **sin variables de entorno secretas** y build de la imagen Docker.
 8. `pnpm audit --prod` sin vulnerabilidades altas ni críticas.
 9. Comprobación de que las migraciones están al día con el esquema (`drizzle-kit check` y
@@ -646,7 +853,9 @@ Los mismos comandos se usan en local y en el CI, y se documentan en `CLAUDE.md`:
 Una tarea está terminada cuando pasa todas las puertas del CI, cumple los criterios de aceptación
 (`CA`) de sus requisitos, tiene sus tests escritos según el principio V, sus textos en Paraglide,
 su documentación actualizada (incluido el OpenAPI) y, si cambia parámetros o comportamiento
-visible, su reflejo en el panel de administración y en la auditoría.
+visible, su reflejo en el panel de administración y en la auditoría. Los lotes cierran con la
+*Definition of Checkpoint* y las historias con la *Definition of Done* de `Historias.md` 15.29 y
+15.30.
 
 ### Despliegue
 
@@ -675,4 +884,4 @@ visible, su reflejo en el panel de administración y en la auditoría.
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 1.4.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
