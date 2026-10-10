@@ -549,3 +549,67 @@ que corresponda).
     van en un `webServer`): **NO VERIFICADO**;
   - el nombre de las opciones de Vitest 5 (`fileParallelism`, `maxWorkers`, `provide`);
   - la lista exacta de miembros de `RequestEvent` en SvelteKit 2.70.3.
+
+---
+
+## Resultados de la comprobación de L01 (T062, 2026-10-10)
+
+Cada punto «pendiente de comprobar en L01» de R01–R16 tiene aquí su resultado. **VERIFICADO**: comprobado en el
+repositorio o en ejecución (build, HTTP, E2E o contenedor). **NO VERIFICADO**: sigue abierto, con el lote donde se cierra.
+
+| Punto (R)                                                                                              | Resultado     | Evidencia o motivo                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Opción de Kit 2.70.3 para desactivar la comprobación de origen (R01)                                   | VERIFICADO    | `csrf.trustedOrigins: ['*']`; un multipart sin `Origin` se acepta (tests HTTP `origin-check`).                                       |
+| `handleError` recibe los 404 de ruta inexistente (R01)                                                 | VERIFICADO    | La página 404 muestra el código de referencia (tests `host-separation`).                                                             |
+| `sveltekit:shutdown` de adapter-node 5.5.7 (R01)                                                       | VERIFICADO    | `docker stop` tarda 1 s, sale con código 0 y registra `app.stopping`.                                                                |
+| `getLocale()` fuera de petición (R16)                                                                  | VERIFICADO    | Devuelve `es` y el catálogo resuelve el texto (prueba temporal, retirada).                                                           |
+| `localhost` con `HOST=0.0.0.0` (R09)                                                                   | VERIFICADO    | `localhost` responde 200. `[::1]` no escucha: si hiciera falta IPv6, `HOST=::`.                                                      |
+| `light-dark()` y `data-theme` (R06)                                                                    | VERIFICADO    | El cambio de tema funciona en Chromium, Firefox y WebKit (E2E `appearance`).                                                         |
+| `prefers-reduced-transparency` por CDP (R09)                                                           | VERIFICADO    | Chromium lo aplica y `matchMedia` lo confirma; en los demás navegadores queda «no verificable».                                      |
+| `forcedColors` en Firefox y WebKit (R09)                                                               | PARCIAL       | Se emula sin errores en los cuatro navegadores; el efecto visual no se comprueba.                                                    |
+| Miembros de `RequestEvent` en SvelteKit 2.70.3 (R16)                                                   | VERIFICADO    | `svelte-check` compila el builder de la API contra los tipos de SvelteKit.                                                           |
+| Opciones de Vitest 5 usadas (`projects`, `setupFiles`, `globalSetup`, cobertura por glob) (R08)        | VERIFICADO    | Las suites corren con esa configuración y los umbrales se aplican.                                                                   |
+| `@testing-library/svelte` 5.4.2 con Vitest 5 y Svelte 5.57 (R16)                                       | VERIFICADO    | Los tests de componente pasan.                                                                                                       |
+| `better-sqlite3` y los scripts de compilación con pnpm 12 (R03)                                        | VERIFICADO    | `pnpm install` funciona en el host y dentro de la imagen con `allowBuilds`.                                                          |
+| Formato de drizzle-kit 0.31 (R03)                                                                      | PARCIAL       | `db:check` pasa; el formato de `db:generate` se verá en L02, al existir el primer esquema.                                           |
+| `CREATE TRIGGER` con `;` internos en el migrador (R03)                                                 | NO VERIFICADO | Llega con las primeras tablas con disparadores (L02).                                                                                |
+| Litestream reenvía SIGTERM y la retención de 720 h (R15)                                               | NO VERIFICADO | Requiere una réplica alcanzable. En la prueba, `litestream restore` espera al endpoint y no arranca. Se verá en el simulacro de L16. |
+| Propiedad del volumen de Coolify para `node` (R15)                                                     | NO VERIFICADO | Solo se puede comprobar en el despliegue.                                                                                            |
+| `webServer` antes que `globalSetup` en Playwright (R09)                                                | NO VERIFICADO | En L01 no hay simuladores que lo dependan; se comprueba al añadirlos (L03).                                                          |
+| Tailwind 4.3: valores arbitrarios y clases de paleta desactivadas (R06)                                | NO VERIFICADO | Tailwind no lo prohíbe; lo cubre `lint:tokens`, que sí lo detecta.                                                                   |
+| `resolve()` con plantillas y `href` dinámicos (R07)                                                    | NO VERIFICADO | Sin enlaces dinámicos en L01; se comprueba en L03.                                                                                   |
+| `--no-warn-ignored` con `--max-warnings 0` en ESLint 10.12 (R07)                                       | NO VERIFICADO | Se comprueba al ejecutar `lint:changed` en T064.                                                                                     |
+| Regla de `redirect()` con literal (R07)                                                                | VERIFICADO    | Añadida y probada con un caso que la dispara (commit de la fase 16).                                                                 |
+| Better Auth 1.7.7: `afterEmailVerification`, `trustedProxies`, `transaction`, `signUpEmail` (R02, R04) | NO VERIFICADO | Better Auth llega en L03.                                                                                                            |
+| Coste de scrypt en el bucle de eventos (R04)                                                           | NO VERIFICADO | Se mide en L03.                                                                                                                      |
+| zod-openapi 6: `z.file()`, `.brand()`, `transform` y OAS 3.1 (R11)                                     | PARCIAL       | El documento de L01 (3.1, `ApiError`) es válido; `z.file()` llega con la subida de audio (L08).                                      |
+| `emitTsDeclarations` para `svelte-check` (R10)                                                         | VERIFICADO    | No hace falta: `svelte-check --fail-on-warnings` pasa con 0 avisos.                                                                  |
+| Test de arquitectura y el uso solo en `references()` de `schema.ts` (R08)                              | NO VERIFICADO | La regla existe; su comportamiento real con `references()` se comprueba en L02.                                                      |
+| `fileParallelism` / `maxWorkers` de Vitest 5 (R08)                                                     | NO VERIFICADO | No se han necesitado; se confirma si hace falta.                                                                                     |
+| Umbral por glob y el global de cobertura (R08)                                                         | PARCIAL       | Las suites pasan con los umbrales configurados; no se ha forzado nunca un fallo para ver que se aplican.                             |
+
+---
+
+## Medición inicial de L01 (T064, 2026-10-10)
+
+Medido en Windows 11, en serie (nunca en paralelo), con el árbol de trabajo limpio. Cada cifra es la de una sola
+ejecución; el primer `lint` completo incluye la caché fría de ESLint.
+
+| Comprobación                                          | Resultado                            | Tiempo          |
+| ----------------------------------------------------- | ------------------------------------ | --------------- |
+| `pnpm check`                                          | 0 errores, 0 avisos                  | 19,2 s          |
+| `pnpm lint` (completo)                                | Sin avisos                           | 52,7 s          |
+| `pnpm lint:changed`                                   | Sin cambios pendientes (caso mínimo) | 14,0 s          |
+| `pnpm lint:tokens`                                    | Sin colores literales                | 0,6 s           |
+| `pnpm test` (unit, componente e integración)          | 160 pruebas                          | 22,9 s          |
+| `pnpm test:coverage`                                  | Umbrales cumplidos                   | 25,4 s          |
+| `pnpm build`                                          | Correcto                             | 22,0 s          |
+| `pnpm test:http` (contra el build)                    | 38 pruebas                           | 9,6 s           |
+| `pnpm test:e2e:smoke` (Chromium)                      | Pasa                                 | 7,5 s           |
+| `pnpm test:e2e:a11y` (Chromium)                       | Pasa                                 | 12,2 s          |
+| ESLint sobre un fichero, `--concurrency auto` / `off` | Igual de rápido                      | 13,5 s / 13,2 s |
+| Programa de TypeScript (`tsc --listFilesOnly`)        | 1.378 ficheros                       | —               |
+| `stat` de un fichero, 1.000 llamadas                  | —                                    | 164 ms          |
+
+Lectura: el coste fijo de ESLint domina el lint de un solo fichero (13 s frente a 13 s con o sin concurrencia), así
+que el paralelismo no aporta en `lint:changed` con pocos ficheros. Se revisará con más código.
