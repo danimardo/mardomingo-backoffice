@@ -16,7 +16,7 @@ export interface Appearance {
 	readonly effects: Effects;
 }
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: 'system', effects: 'normal' };
+export const DEFAULT_APPEARANCE: Appearance = Object.freeze({ theme: 'system', effects: 'normal' });
 
 /** Lee las cookies. Sin cookie o con valor inválido, el valor por defecto. */
 export function appearanceFromCookies(read: (name: string) => string | undefined): Appearance {

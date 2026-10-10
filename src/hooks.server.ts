@@ -19,18 +19,18 @@ import { APP_VERSION } from '$lib/version';
 
 const API_PREFIX = '/api/v1/';
 const HEALTH_PATH = '/api/v1/health';
-const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const FORM_CONTENT_TYPES = new Set([
+const UNSAFE_METHODS: readonly string[] = Object.freeze(['POST', 'PUT', 'PATCH', 'DELETE']);
+const FORM_CONTENT_TYPES: readonly string[] = Object.freeze([
 	'application/x-www-form-urlencoded',
 	'multipart/form-data',
 	'text/plain'
 ]);
 
-const SHUTDOWN_REASONS: Readonly<Record<string, 'sigterm' | 'sigint' | 'idle'>> = {
+const SHUTDOWN_REASONS: Readonly<Record<string, 'sigterm' | 'sigint' | 'idle'>> = Object.freeze({
 	SIGTERM: 'sigterm',
 	SIGINT: 'sigint',
 	IDLE: 'idle'
-};
+});
 
 export const init: ServerInit = async () => {
 	if (building) return;
@@ -166,7 +166,7 @@ const hostSeparation: Handle = ({ event, resolve }) => {
 /** Comprobación de origen propia del host web (D-01): formularios sin `Origin` del propio sitio → 403. */
 const originCheck: Handle = ({ event, resolve }) => {
 	if (event.url.pathname.startsWith(API_PREFIX)) return resolve(event);
-	if (!UNSAFE_METHODS.has(event.request.method) || !isFormRequest(event.request)) {
+	if (!UNSAFE_METHODS.includes(event.request.method) || !isFormRequest(event.request)) {
 		return resolve(event);
 	}
 
@@ -191,7 +191,7 @@ function rejectedFormResponse(requestId: string): Response {
 
 function isFormRequest(request: Request): boolean {
 	const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
-	return type !== undefined && FORM_CONTENT_TYPES.has(type);
+	return type !== undefined && FORM_CONTENT_TYPES.includes(type);
 }
 
 /** Paraglide: idioma de la petición y `lang`/`dir` de la página. Solo `es` (baseLocale). */

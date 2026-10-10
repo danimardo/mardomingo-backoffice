@@ -2,7 +2,7 @@
 // contracts/web-routes.md. El estado HTTP de cada código es la única fuente de verdad: el
 // formateador de errores de la API (`$lib/server/api`) lo usa tal cual.
 
-export const ERROR_CODES = {
+export const ERROR_CODES = Object.freeze({
 	// API (Historias.md 7.2)
 	VALIDATION_ERROR: 400,
 	UNKNOWN_APP: 400,
@@ -52,7 +52,7 @@ export const ERROR_CODES = {
 	BILLING_PROFILE_INCOMPLETE: 400,
 	PAYMENT_PROVIDER_ERROR: 502,
 	REGISTRATION_IP_LIMIT: 429
-} as const satisfies Record<string, number>;
+} as const satisfies Record<string, number>);
 
 export type ErrorCode = keyof typeof ERROR_CODES;
 
@@ -61,7 +61,9 @@ export function isErrorCode(value: string): value is ErrorCode {
 	return Object.hasOwn(ERROR_CODES, value);
 }
 
-export const ERROR_CODE_LIST: readonly ErrorCode[] = Object.keys(ERROR_CODES).filter(isErrorCode);
+export const ERROR_CODE_LIST: readonly ErrorCode[] = Object.freeze(
+	Object.keys(ERROR_CODES).filter(isErrorCode)
+);
 
 /** Error de aplicación con código tipado. Los detalles nunca incluyen secretos ni contenido. */
 export class AppError extends Error {

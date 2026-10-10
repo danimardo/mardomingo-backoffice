@@ -15,7 +15,7 @@ export interface IconDef {
 	readonly filled?: true;
 }
 
-const ICON_TABLE = {
+const ICON_TABLE = Object.freeze({
 	check: {
 		strokeWidth: 2.4,
 		shapes: [{ d: 'M4 12.5l5 5L20 6.5' }]
@@ -125,7 +125,7 @@ const ICON_TABLE = {
 		strokeWidth: 1.8,
 		shapes: [{ d: 'M4 5.5h16l-6 7v6l-4 2v-8l-6-7z' }]
 	}
-} as const satisfies Record<string, IconDef>;
+} as const satisfies Record<string, IconDef>);
 
 export type IconName = keyof typeof ICON_TABLE;
 

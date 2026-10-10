@@ -26,7 +26,7 @@ export interface InfraLogFields {
 	'client.error.reported': { route: string; version: string; count: number; err: unknown };
 }
 
-export const INFRA_LOG_EVENTS = {
+export const INFRA_LOG_EVENTS = Object.freeze({
 	'app.started': { level: 'info', msg: 'Aplicación iniciada' },
 	'app.stopping': { level: 'info', msg: 'Aplicación deteniéndose' },
 	'app.config.invalid': { level: 'fatal', msg: 'Configuración de entorno inválida' },
@@ -38,7 +38,7 @@ export const INFRA_LOG_EVENTS = {
 	'http.origin.rejected': { level: 'info', msg: 'Formulario rechazado por su origen' },
 	'http.cors.rejected': { level: 'info', msg: 'Origen no permitido para la app' },
 	'client.error.reported': { level: 'warn', msg: 'Error del navegador recibido' }
-} as const satisfies Record<keyof InfraLogFields, LogEventMeta>;
+} as const satisfies Record<keyof InfraLogFields, LogEventMeta>);
 
 export interface LogEventMeta {
 	readonly level: LogLevel;
@@ -62,6 +62,6 @@ export type DowngradableLogEventCode = {
 		: never;
 }[keyof typeof INFRA_LOG_EVENTS];
 
-export const LOG_EVENTS: Readonly<Record<LogEventCode, LogEventMeta>> = {
+export const LOG_EVENTS: Readonly<Record<LogEventCode, LogEventMeta>> = Object.freeze({
 	...INFRA_LOG_EVENTS
-};
+});
