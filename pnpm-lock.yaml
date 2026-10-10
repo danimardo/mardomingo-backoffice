@@ -187,9 +187,6 @@ importers:
       pino:
         specifier: 10.4.0
         version: 10.4.0
-      pino-abstract-transport:
-        specifier: 3.0.0
-        version: 3.0.0
       resend:
         specifier: 6.32.1
         version: 6.32.1

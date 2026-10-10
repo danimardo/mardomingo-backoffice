@@ -305,8 +305,7 @@ Usabilidad:
 **Propósito.** Los logs sirven para diagnosticar fallos y reconstruir el recorrido de una petición.
 **No** son el registro de auditoría: el dinero, las operaciones y las acciones del administrador se
 reconstruyen desde la BD (`credit_movements`, `ai_operations`, `payments`, `admin_audit`). Nadie
-debe dar por hecho que un log existe para siempre: se pueden perder eventos si el Gateway cae y
-Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
+debe dar por hecho que un log existe para siempre: Docker rota sus ficheros y, en la v4, no hay copia remota; se pueden perder eventos si el proceso se cae antes de vaciar su búfer de salida.
 
 **Una API de registro por capa**
 
@@ -346,7 +345,7 @@ Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
   caídos, discrepancia del ledger, tarea fallida, JSON corrupto en la BD).
 - `warn`: modo degradado o *fallback* (modelo de respaldo, backup de transcripción, coste
   estimado, tipo de cambio antiguo, email no enviado, freno global, eventos descartados por el
-  Gateway) y señales de abuso.
+  Log Gateway, cuando exista, en la fase posterior) y señales de abuso.
 - `info`: ciclo de vida, una línea por petición terminada (`http.request.completed`),
   operaciones completadas y **rechazos de negocio esperados** (saldo, límites, conflicto de
   sincronización, validación), siempre con `reason`.
@@ -382,16 +381,18 @@ Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
 
 **Destinos**
 
-- Siempre: JSON por stdout. Es la copia que conserva Docker con rotación.
-- Staging y producción: además, un *transport* de Pino en un *worker thread* envía lotes al **Log
-  Gateway** (delante de OpenObserve) como servicio `mardomingo_backoffice`, con `env` =
-  `APP_ENV`. Usa una clave propia de **solo escritura**, limitada a ese servicio.
-- El búfer está acotado. Si el Gateway falla, el envío no bloquea las peticiones: descarta los
-  eventos más antiguos y registra en stdout `log.gateway.dropped` con el recuento.
+- Siempre: JSON por stdout. Es la única salida de la v4 en todos los entornos y la copia que conserva
+  Docker con rotación.
 - Desarrollo: JSON en `.logs/app.log` (ignorado por Git y vaciado en cada arranque) y consola
   legible con `pino-pretty` (solo dependencia de desarrollo), con la hora en `Europe/Madrid`. El
   formato legible nunca sustituye al JSON.
-- Test (`APP_ENV=test`): solo stdout, sin Gateway ni `.logs/`, con `LOG_LEVEL=debug` para que el
+- Fase posterior (aplazada por la enmienda 2.2.0; no se implementa en la v4): al activar el Log
+  Gateway, staging y producción enviarán además lotes, mediante un *transport* de Pino en un
+  *worker thread*, al servicio `mardomingo_backoffice` (delante de OpenObserve), con `env` =
+  `APP_ENV` y una clave propia de **solo escritura**. Ese envío tendrá un búfer acotado: si el
+  Gateway falla, no bloqueará las peticiones, descartará los eventos más antiguos y registrará en
+  stdout `log.gateway.dropped` con el recuento. Activarlo exige enmendar esta sección.
+- Test (`APP_ENV=test`): solo stdout, sin `.logs/` y sin envío remoto, con `LOG_LEVEL=debug` para que el
   marcador de privacidad vea todos los niveles. Los tests unitarios y de integración usan el
   registrador falso.
 
@@ -414,10 +415,11 @@ Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
 
 **Retención y acceso**
 
-- OpenObserve conserva los logs 30 días (BE-FR-83) y los consulta solo el propietario, a través
-  del Gateway.
-- La retención se configura en OpenObserve o en el Gateway, no en la app. Se verifica, igual que
-  la rotación de los logs de Docker en el host, en cada cambio de infraestructura.
+- En la v4, la retención de los logs la fija la rotación de Docker en el host. Se verifica en cada
+  cambio de infraestructura, igual que su tamaño y número de ficheros.
+- Fase posterior (aplazada por la enmienda 2.2.0): OpenObserve conservará los logs 30 días
+  (BE-FR-83) y los consultará solo el propietario, a través del Log Gateway. La retención se
+  configurará en OpenObserve o en el Gateway, no en la app.
 
 **Catálogo y alertas**
 
@@ -593,7 +595,7 @@ constitución.
 | Gráficas | `layerchart` | **2.6.1** |
 | Email | `resend` | **6.32.1** |
 | Tareas programadas | `croner` | **10.0.1** (zona `Europe/Madrid` explícita en cada tarea) |
-| Logs del servidor | `pino` / `pino-abstract-transport` | **10.4.0** / **3.0.0** (ambas en `dependencies`; la segunda solo para el *transport* del Log Gateway) |
+| Logs del servidor | `pino` | **10.4.0** (en `dependencies`). `pino-abstract-transport` 3.0.0 llega solo como dependencia de `pino`; no es dependencia directa de la v4 y solo se declararía al activar el Log Gateway (fase posterior) |
 | Logs del navegador | `loglevel` | **1.9.2** |
 
 No se usa ninguna librería de componentes de UI: los componentes son propios, sobre Tailwind
@@ -621,7 +623,7 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
 |---|---|
 | Coolify | Despliegue (entornos `production` y `staging`). |
 | Backblaze B2 (EU Central) | Destino de Litestream. Bucket privado y clave limitada a ese bucket. |
-| Log Gateway + OpenObserve | Logs y monitorización (servicio `mardomingo_backoffice`). Retención de 30 días. |
+| Log Gateway + OpenObserve | Logs centralizados y monitorización (servicio `mardomingo_backoffice`). **Fase posterior**: no se usa en la v4 (enmienda 2.2.0). En la v4, los logs son stdout y la rotación de Docker. |
 | Resend | Emails transaccionales; dominio con SPF, DKIM y DMARC. |
 | Cloudflare Turnstile | Captcha del registro. |
 | Mistral API | Voxtral (`voxtral-mini-latest`) para transcripción. |
@@ -944,8 +946,8 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | `EMAIL_FROM` | `Cuenta Mardomingo <no-reply@mardomingo.com>` | Dominio con SPF, DKIM y DMARC. `Reply-To`: el email de soporte (`soporte@mardomingo.com`). |
 | `LOG_LEVEL` | `info` en producción; `debug` en staging y desarrollo | Valores de pino. |
 | `CLIENT_LOG_LEVEL` | `warn` en producción; `debug` en desarrollo | No es secreta. Llega al navegador en los datos del layout raíz. |
-| `LOG_GATEWAY_URL` | URL de ingesta del Log Gateway | Obligatoria en staging y producción; ausente en desarrollo. |
-| `LOG_GATEWAY_KEY` | Clave de **solo escritura** del servicio `mardomingo_backoffice` | **Secreta.** Una por entorno. |
+| `LOG_GATEWAY_URL` | URL de ingesta del Log Gateway | No se usa en la v4. Se define al activar el Log Gateway (fase posterior). |
+| `LOG_GATEWAY_KEY` | Clave de **solo escritura** del servicio `mardomingo_backoffice` | No se usa en la v4. Se define al activar el Log Gateway (fase posterior). **Secreta**, una por entorno. |
 | `PORT` | Producción **7311**, staging **7312** | Ver «Proxy, puerto e IP del cliente». |
 | `HOST` | `0.0.0.0` dentro del contenedor | La exposición se limita fuera del contenedor. |
 | `PROTOCOL_HEADER` | `x-forwarded-proto` | |
@@ -1100,4 +1102,4 @@ el motivo). Los lotes cierran con la
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 2.1.3 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 2.2.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10

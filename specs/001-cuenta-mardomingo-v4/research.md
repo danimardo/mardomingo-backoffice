@@ -248,61 +248,37 @@ que corresponda).
   - si `webServer.command` usa un shell en Windows (no afecta a `node build`, pero no se ha
     confirmado).
 
-## R10 pino 10 + Log Gateway
+## R10 pino 10 y salida de logs de la v4
 
 - **Decisión**:
-  - **Destinos**: `pino.transport({ targets: [...] })` con dos destinos en el _worker_:
-    - `pino/file` con `destination: 1` (stdout);
-    - el _transport_ propio `log-gateway`, solo en staging y producción.
-
-    Así el hilo principal no hace E/S.
-
-  - **Transport propio** (`build` de `pino-abstract-transport`):
-    - el bucle `for await` solo **encola** en un array acotado (p. ej. 5.000 eventos) y nunca
-      espera a la red;
-    - un temporizador envía lotes (p. ej. cada 1 s o 200 eventos) con `fetch` y
-      `AbortSignal.timeout`;
-    - si la cola se llena, descarta los **más antiguos**, cuenta los descartes y escribe
-      `log.gateway.dropped` en stdout;
-    - si falla un envío, reintenta el lote con espera exponencial acotada;
-    - en `close()` hace un último envío con un _timeout_ de 4 s o menos.
-  - **Cierre**: al recibir `sveltekit:shutdown` (adapter-node, tras SIGTERM) se registra
-    `app.stopping` y se llama a `transport.end()`, con un límite total de 5 s.
-  - **`redact`**: `{ paths: [...], remove: true }` sobre `req.headers.authorization`,
-    `req.headers.cookie`, `*.password`, `*.token`, `*.email`, `*.idempotencyKey`, `*.ip`…
-  - **Serializador `err` propio**: `{ type, code, stack? }`. El `stack` solo se incluye si el error
-    es una subclase de nuestro error tipado; el `message` de bibliotecas y proveedores **nunca**
-    se registra.
+  - **Salida**: JSON por stdout en todos los entornos; Docker conserva esa copia con rotación.
   - **Desarrollo**:
     - `pino-pretty` dentro de un módulo _target_ propio (las funciones no pueden cruzar al
       _worker_);
     - `customPrettifiers.time` con `Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid' })`;
     - además, `pino/file` hacia `.logs/app.log`.
+  - **`redact`**: `{ paths: [...], remove: true }` sobre `req.headers.authorization`,
+    `req.headers.cookie`, `*.password`, `*.token`, `*.email`, `*.idempotencyKey`, `*.ip`…
+  - **Serializador `err` propio**: `{ type, code, stack? }`. El `stack` solo se incluye si el error
+    es una subclase de nuestro error tipado; el `message` de bibliotecas y proveedores **nunca**
+    se registra.
   - **Navegador**: `loglevel` con `setLevel(nivel, false)`, para que el nivel **no** se guarde en
     `localStorage` ni en una cookie. `window.onerror` y `unhandledrejection` envían a
     `/client-errors` (esquema de XI).
-  - **Adaptador del Gateway (D-06)**: el envío se diseña como adaptador con interfaz; el _transport_
-    recibe por opciones `url`, `authHeaderName`, `key`, `maxBatch`, `maxBytes` y el formato del lote
-    (`ndjson` o `json-array`). Hasta que el propietario entregue el contrato de ingesta (entrada de
-    L01), solo se escribe en stdout. Con el servidor simulado se prueban los lotes, el error y la caída.
-  - **Dependencia (D-10)**: `pino-abstract-transport` se declara como dependencia directa exacta de
-    producción (ecosistema oficial de pino; con pnpm una dependencia transitiva no se puede
-    importar). Se justifica en el plan; no es transversal y no necesita ADR.
+  - **Transport al Log Gateway: APLAZADO** a una fase posterior (enmienda 2.2.0; D-06). En la v4 no hay envío remoto. Diseño aplazado: transport en worker, búfer acotado, descarte con `log.gateway.dropped`, clave de solo escritura.
 - **Justificación**:
   - `pino.transport` crea un _worker_ (`thread-stream`) y vacía en `beforeExit` y `exit`.
-  - Un error del _transport_ es fatal, así que la cola nunca debe propagar errores de red.
-  - `redact.remove` está documentado (pino 10.4.0 depende de `@pinojs/redact` y de
-    `pino-abstract-transport ^3`).
+  - `redact.remove` está documentado (pino 10.4.0 depende de `@pinojs/redact` y de `pino-abstract-transport ^3`, que llega así como dependencia indirecta y no se declara en la v4).
   - `loglevel` 1.9.2 persiste el nivel salvo que se pase `persist=false`.
-- **Alternativas consideradas**:
+- **Alternativas consideradas para el envío aplazado**:
   - **Envío en el hilo principal**: lo prohíbe XI.
   - **`pino-socket` o `pino-http-send`**: dependencias nuevas sin control del descarte.
   - **Un `Writable` propio sin `pino-abstract-transport`**: posible, pero reimplementa el troceado
     de líneas y el cierre.
-- **Pendiente de comprobar en L01**:
+- **Pendiente de comprobar en la fase posterior**:
   - cómo localizar el fichero del _transport_ tras `vite build`: un `.mjs` sin compilar resuelto
     con `new URL(..., import.meta.url)`, o una copia a `build/`. **NO VERIFICADO**;
-  - **contrato del Log Gateway** (entrada de L01, lo entrega el propietario):
+  - **contrato del Log Gateway** (lo entrega el propietario al activar la fase posterior):
     - URL de ingesta;
     - autenticación (cabecera y formato de la clave);
     - formato del lote (NDJSON o array JSON, campo `service` o `env` en la URL o en el cuerpo);
@@ -513,7 +489,7 @@ que corresponda).
   - **Migraciones**: en `init`, si hay migraciones pendientes, se copia la BD con
     `db.backup('/data/pre-migrate/<versión>.db')` (se conservan las 3 últimas) y después se migra.
   - **Staging**: otra aplicación de Coolify en el mismo servidor, puerto 7312, con su propio
-    volumen, bucket, clave de B2 y clave del Gateway.
+    volumen, bucket y clave de B2.
 - **Justificación**: referencia de Litestream (configuración 0.5, `restore`, guías de Backblaze y
   Docker: «Litestream will monitor your application's process»), guías de Coolify (_rolling
   updates_ y _health checks_), adapter-node (SIGTERM, `SHUTDOWN_TIMEOUT` y `sveltekit:shutdown`)
@@ -544,7 +520,7 @@ que corresponda).
     - en el _teardown_, `child.kill()` y cierre de los simuladores;
     - el proyecto se ejecuta con un solo _worker_ (`fileParallelism: false`).
   - **Simuladores**: `node:http` en `tests/mock-servers/<proveedor>.ts` (OpenRouter, Mistral,
-    Resend, BCE, Turnstile, GitHub y Gateway).
+    Resend, BCE, Turnstile y GitHub).
     - Cada uno escucha en el puerto 0, reproduce el formato real (p. ej. el CSV del BCE, el 200
       con `error`) y admite escenarios mediante una ruta de control `/__scenario` y una latencia
       configurable.

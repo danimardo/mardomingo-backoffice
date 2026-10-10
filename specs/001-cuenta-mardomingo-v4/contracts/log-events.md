@@ -2,7 +2,7 @@
 
 **Funcionalidad**: `001-cuenta-mardomingo-v4` · **Fase**: 1 de `/speckit-plan` · **Fecha**: 2026-10-10
 
-**Fuentes**: constitución v2.1.2, principio XI («Registro y diagnóstico sin contenido») y principio XII;
+**Fuentes**: constitución v2.2.0, principio XI («Registro y diagnóstico sin contenido») y principio XII;
 decisiones de la revisión del plan del 2026-10-10 (D-01…D-22 de `plan.md`);
 `Historias.md` 5.13 (alertas), 10.5, 11 (tareas programadas), 15.19 (logging en los tests);
 `ARCHITECTURE.md` §3 (funcionalidades). Endpoints y rutas que los emiten: [api-v1.md](./api-v1.md) y
@@ -64,7 +64,7 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
   funcionalidad dueña llama a `notifications`, que envía el email una sola vez por cruce de umbral
   (`alerts_state`) y emite `notifications.alert.triggered`.
 - **V** — evento de **vigilancia** en OpenObserve (nivel `error`/`fatal` o señal de abuso). No genera email
-  propio; el propietario lo consulta a través del Gateway.
+  propio; el propietario lo consulta a través del Gateway (fase posterior).
 - «—» — sin alerta.
 
 ---
@@ -105,14 +105,13 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 
 ### 2.3 `log.*` — transporte de logs (`$lib/server/logging/events.ts`)
 
-El envío al Log Gateway es un adaptador con interfaz (D-06). Hasta que el propietario entregue el contrato de
-ingesta (entrada de L01), solo se escribe en stdout y estos eventos no se emiten.
+**Nota (fase posterior, enmienda 2.2.0).** Esta sección es el catálogo del envío al Log Gateway, aplazado a una fase posterior (D-06). En la v4 no hay envío remoto: los logs van solo a stdout en JSON y estos eventos no se emiten; se conservan como catálogo de esa fase.
 
-| Código                  | Nivel | `msg`                                          | Campos propios                      | Cuándo                                                                      | Alerta |
-| ----------------------- | ----- | ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------- | ------ |
-| `log.gateway.dropped`   | warn  | `Eventos descartados por el búfer del Gateway` | `count`                             | El Gateway falla y el búfer acotado descarta los más antiguos (solo stdout) | V      |
-| `log.gateway.failed`    | warn  | `Fallo al enviar un lote al Gateway`           | `attempt`, `httpStatus`, `err`      | Un envío de lote falla (stdout)                                             | —      |
-| `log.gateway.recovered` | info  | `Envío al Gateway restablecido`                | `count` (lotes pendientes enviados) | Tras un periodo de fallos                                                   | —      |
+| Código                  | Nivel | `msg`                                          | Campos propios                      | Cuándo                                                                      | Alerta         |
+| ----------------------- | ----- | ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------- | -------------- |
+| `log.gateway.dropped`   | warn  | `Eventos descartados por el búfer del Gateway` | `count`                             | El Gateway falla y el búfer acotado descarta los más antiguos (solo stdout) | fase posterior |
+| `log.gateway.failed`    | warn  | `Fallo al enviar un lote al Gateway`           | `attempt`, `httpStatus`, `err`      | Un envío de lote falla (stdout)                                             | fase posterior |
+| `log.gateway.recovered` | info  | `Envío al Gateway restablecido`                | `count` (lotes pendientes enviados) | Tras un periodo de fallos                                                   | fase posterior |
 
 ### 2.4 `client.*` — navegador (`src/lib/logging/`) y su recepción
 
@@ -385,4 +384,4 @@ cruce) o `notifications.alert.suppressed` (repetición sin normalizar).
 | `stats`         | 2       |
 | **Total**       | **149** |
 
-Eventos que originan alertas por email (A): 8, más `notifications.alert.triggered`, que registra el envío. Eventos de vigilancia (V): 23.
+Eventos que originan alertas por email (A): 8, más `notifications.alert.triggered`, que registra el envío. Eventos de vigilancia (V): 22 (`log.gateway.dropped` pasa a la fase posterior).

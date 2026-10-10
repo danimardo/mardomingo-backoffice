@@ -3,7 +3,7 @@
 **Funcionalidad**: `001-cuenta-mardomingo-v4` · **Fase**: 1 de `/speckit-plan` · **Fecha**: 2026-10-10
 
 **Fuentes**: `Historias.md` v2.6, 5.11–5.15, 15.17 y 16 (UX); `spec.md` (FR-077–FR-132 y aclaraciones del
-2026-10-10); constitución v2.1.2, «Arquitectura idiomática de SvelteKit» y principios III, IX, XI y XII;
+2026-10-10); constitución v2.2.0, «Arquitectura idiomática de SvelteKit» y principios III, IX, XI y XII;
 `ARCHITECTURE.md` §2, §6 y §7; decisiones de la revisión del plan (D-01…D-22 de `plan.md`).
 
 Referencias cruzadas: API de las apps en [api-v1.md](./api-v1.md); eventos en

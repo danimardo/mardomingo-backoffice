@@ -46,7 +46,6 @@
 		"layerchart": "2.6.1",
 		"loglevel": "1.9.2",
 		"pino": "10.4.0",
-		"pino-abstract-transport": "3.0.0",
 		"resend": "6.32.1",
 		"zod": "4.6.5",
 		"zod-openapi": "6.0.2"
