@@ -41,7 +41,11 @@
 <main id="contenido" tabindex="-1">
 	{@render children()}
 </main>
-<SiteFooter redirectTo={`${page.url.pathname}${page.url.search}`} />
+<SiteFooter
+	redirectTo={`${page.url.pathname}${page.url.search}`}
+	theme={appearance.theme}
+	effects={appearance.effects}
+/>
 
 <style>
 	main {
