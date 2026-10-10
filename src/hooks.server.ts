@@ -3,6 +3,7 @@
 // (solo web) → Paraglide → apariencia → app → sesión → cabeceras de seguridad.
 import { building } from '$app/environment';
 import { isHttpError, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
+import { getRequestEvent } from '$app/server';
 import { sequence } from '@sveltejs/kit/hooks';
 import { dirname, join } from 'node:path';
 import * as m from '$lib/paraglide/messages.js';
@@ -64,7 +65,7 @@ export const init: ServerInit = async () => {
 		sink
 	});
 
-	const composition = createComposition(config, logger);
+	const composition = createComposition(config, logger, { requestEvent: getRequestEvent });
 	try {
 		await migrateDatabase({
 			sqlite: composition.sqlite,
@@ -82,7 +83,7 @@ export const init: ServerInit = async () => {
 		process.exit(1);
 	}
 	try {
-		seedDefaults(composition.db, composition.clock);
+		seedDefaults(composition.db, composition.clock, composition.ids);
 	} catch (cause) {
 		logger.emit('app.db.seed_failed', { err: cause });
 		composition.close();

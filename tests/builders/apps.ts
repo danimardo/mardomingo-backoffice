@@ -40,8 +40,8 @@ export function insertAdmin(db: Db): string {
 			email: 'admin@example.test',
 			emailVerified: true,
 			role: 'admin',
-			createdAt: TEST_NOW,
-			updatedAt: TEST_NOW
+			createdAt: new Date(TEST_NOW),
+			updatedAt: new Date(TEST_NOW)
 		})
 		.run();
 	return id;

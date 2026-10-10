@@ -72,5 +72,19 @@
 	"error_forbidden_title": "No tienes acceso a esta página",
 	"error_unexpected_title": "Algo no ha funcionado",
 	"error_go_home": "Ir al inicio",
-	"home_intro": "Gestiona tu cuenta y tus apps desde un solo sitio."
+	"home_intro": "Gestiona tu cuenta y tus apps desde un solo sitio.",
+	"notifications_footer_brand": "Cuenta Mardomingo",
+	"notifications_footer_support": "¿Necesitas ayuda? Escribe a {email}.",
+	"notifications_footer_automatic": "Este es un mensaje automático. Si no lo esperabas, puedes ignorarlo.",
+	"notifications_app_line": "Esta cuenta es para usar {app}.",
+	"notifications_verification_subject": "Confirma tu email",
+	"notifications_verification_body": "Pulsa el botón para confirmar tu dirección de email. El enlace caduca en 24 horas.",
+	"notifications_verification_action": "Confirmar mi email",
+	"notifications_verification_fallback": "Si el botón no funciona, copia este enlace en el navegador:",
+	"notifications_reset_subject": "Restablece tu contraseña",
+	"notifications_reset_body": "Pulsa el botón para elegir una contraseña nueva. El enlace caduca en 1 hora y solo sirve una vez. Si no lo pediste, ignora este email.",
+	"notifications_reset_action": "Elegir contraseña nueva",
+	"notifications_reset_fallback": "Si el botón no funciona, copia este enlace en el navegador:",
+	"notifications_password_changed_subject": "Tu contraseña ha cambiado",
+	"notifications_password_changed_body": "Se ha cambiado la contraseña de tu cuenta. Si no has sido tú, escribe a soporte cuanto antes."
 }
