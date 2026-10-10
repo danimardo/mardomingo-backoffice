@@ -63,8 +63,13 @@ El saldo de los usuarios es dinero real. Ningún atajo justifica ponerlo en ries
   secretos. Cada entorno usa claves distintas.
 - Respuestas anti-enumeración en registro, login, recuperación y cambio de email (BE-FR-01, 03 y
   66).
-- La web aplica CSP estricta (`kit.csp`), HSTS, cookies `Secure`/`HttpOnly`/`SameSite=Lax` y la
-  protección CSRF de SvelteKit. La API aplica CORS por app (BE-FR-65).
+- La web aplica CSP estricta (`kit.csp`), HSTS y cookies `Secure`/`HttpOnly`/`SameSite=Lax`.
+- **CSRF**: la comprobación de origen de SvelteKit se desactiva, porque rechaza los POST
+  `multipart/form-data` sin `Origin` que envían las apps de escritorio a la API. En su lugar,
+  `handle` aplica una comprobación equivalente **solo en el host web**: todo POST, PUT, PATCH o
+  DELETE con tipo de contenido de formulario debe traer un `Origin` igual al de `PUBLIC_WEB_URL`;
+  si no, `403`. El host de la API usa solo el token Bearer y no lee cookies, así que no es
+  vulnerable a CSRF; aplica CORS por app (BE-FR-65). Ambas reglas tienen tests HTTP.
 - La autorización se comprueba en el servidor y en cada endpoint o acción: rol, propiedad del
   recurso y pertenencia de la sesión a la app de `X-App-Id`. La interfaz no es una barrera de
   seguridad.
@@ -81,7 +86,7 @@ en `ARCHITECTURE.md`, y la decisión, en `docs/adr/0005`.
 |---|---|
 | `src/lib/server/features/<funcionalidad>/domain/` | Funciones puras: tarificación, consumo de bolsas, reservas, deuda, estimación de coste, validación del documento de sincronización, reglas de idempotencia… **Sin I/O**: no importa SvelteKit, Drizzle, `better-sqlite3`, `fetch`, `node:*`, `Date.now()`, `new Date()` ni `process.env`. El tiempo y la configuración entran como parámetros. Solo importa `zod`, `$lib/shared/`, `$lib/server/shared/` y su propio `domain/`; nunca otras funcionalidades. |
 | `…/<funcionalidad>/service.ts` | Casos de uso: orquestan dominio, repositorios, adaptadores y las API públicas de otras funcionalidades. Sin conocimiento de HTTP. |
-| `…/<funcionalidad>/repository.ts` y `schema.ts` | `schema.ts` contiene **solo** las tablas Drizzle de las que la funcionalidad es **dueña**; solo puede importar el `schema.ts` de otra funcionalidad para declarar una clave foránea (`references()`). `repository.ts` es el único código que lee o escribe esas tablas, y valida sus columnas JSON. |
+| `…/<funcionalidad>/repository.ts` y `schema.ts` | `schema.ts` contiene **solo** las tablas Drizzle de las que la funcionalidad es **dueña**; solo puede importar el `schema.ts` de otra funcionalidad para declarar una clave foránea (`references()`); esas importaciones son declaraciones de la BD y quedan fuera del orden de funcionalidades y del cálculo de ciclos. `repository.ts` es el único código que lee o escribe esas tablas, y valida sus columnas JSON. |
 | `…/<funcionalidad>/contract.ts` | Esquemas Zod del contrato de la API de la funcionalidad (entrada, salida y OpenAPI). |
 | `…/<funcionalidad>/events.ts` | Catálogo de eventos de log de la funcionalidad (principio XI). |
 | `…/<funcionalidad>/presenters.ts` | Modelos de vista con mapeo explícito (sin filas de la BD ni objetos de Better Auth). |
@@ -579,7 +584,7 @@ constitución.
 | CLI de andamiaje | `sv` | **1.1.1** |
 | BD (driver) | `better-sqlite3` / `@types/better-sqlite3` | **13.0.3** / **9.6.0** |
 | ORM | `drizzle-orm` / `drizzle-kit` | **0.45.4** / **0.31.11** (no se usan las versiones 1.0 beta ni rc) |
-| Autenticación | `better-auth` | **1.7.7** (plugins `bearer`, `admin` y `captcha`; adaptador Drizzle) |
+| Autenticación | `better-auth` | **1.7.7** (plugins `bearer` y `admin`; adaptador Drizzle). El captcha (Turnstile) y los límites de autenticación son propios de la funcionalidad `accounts` (D-02), porque por la API de servidor no actúan ni el plugin `captcha` ni el `rateLimit` |
 | Validación | `zod` | **4.6.5** |
 | OpenAPI | `zod-openapi` | **6.0.2** |
 | i18n | `@inlang/paraglide-js` | **2.27.0** (solo `es`) |
@@ -587,7 +592,7 @@ constitución.
 | Gráficas | `layerchart` | **2.6.1** |
 | Email | `resend` | **6.32.1** |
 | Tareas programadas | `croner` | **10.0.1** (zona `Europe/Madrid` explícita en cada tarea) |
-| Logs del servidor | `pino` | **10.4.0** (en `dependencies`) |
+| Logs del servidor | `pino` / `pino-abstract-transport` | **10.4.0** / **3.0.0** (ambas en `dependencies`; la segunda solo para el *transport* del Log Gateway) |
 | Logs del navegador | `loglevel` | **1.9.2** |
 
 No se usa ninguna librería de componentes de UI: los componentes son propios, sobre Tailwind
@@ -856,8 +861,9 @@ framework.
   - No existen `+page.ts`/`+layout.ts` con `load` fuera de la lista justificada.
   - No existen `src/lib/services`, `src/lib/server/domain` ni `src/lib/server/services`.
   - Una funcionalidad solo importa de otra su `index.ts`; el grafo entre funcionalidades no tiene
-    ciclos y respeta el orden de `ARCHITECTURE.md`; `audit` y los dos `shared/` no importan
-    funcionalidades y `notifications` solo importa `audit`.
+    ciclos y respeta el orden de `ARCHITECTURE.md` (las importaciones `schema.ts` → `schema.ts`
+    para `references()` no cuentan); `audit` y los dos `shared/` no importan funcionalidades y
+    `notifications` solo importa `audit`.
   - Ningún `repository.ts` importa el `schema.ts` de otra funcionalidad (un `schema.ts` solo lo
     hace para `references()`), y solo `credits` escribe en las tablas de saldo.
   - No hay `let`, `$state` ni colecciones sin congelar a nivel de módulo en ficheros que se
@@ -967,8 +973,8 @@ Además de las que enumera la sección 9 de `Historias.md`:
   el valor más a la izquierda de `X-Forwarded-For`, que controla el cliente.
 - **Verificación obligatoria en staging** antes de dar por buenos los límites por IP:
   - Se registra la IP real del cliente.
-  - `url.origin` es `https://cuenta-staging.mardomingo.com` y los formularios no reciben un 403
-    de CSRF.
+  - `url.origin` es `https://cuenta-staging.mardomingo.com` y los formularios de la web no reciben
+    un 403 de la comprobación de origen propia.
   - Un `X-Forwarded-For` falsificado por el cliente no cambia la IP registrada.
   - El puerto 7312 no responde desde fuera del host.
 
@@ -1093,4 +1099,4 @@ el motivo). Los lotes cierran con la
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 2.1.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 2.1.2 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10

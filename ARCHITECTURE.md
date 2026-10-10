@@ -95,7 +95,7 @@ dentro de este margen.
 | 5 | `pricing` | Tarificación, coste máximo, tipo de cambio y precios orientativos | `price_references`, `fx_rates` | BE-FR-19–22, 72, 73, 87 | apps, audit, notifications |
 | 6 | `credits` | Bolsas, saldo, reservas, deuda, caducidad, ajustes, ledger, tope diario, compra real y aviso de saldo bajo | `credit_buckets`, `user_balances`, `credit_holds`, `credit_movements`, `welcome_grants` | BE-FR-11.6, 12–18, 49.7, 71 | apps, audit, notifications |
 | 7 | `invoicing` | Datos fiscales, facturas y exportación contable | `billing_profiles`, `invoices` | BE-FR-74–76 | apps, audit, notifications |
-| 8 | `accounts` | Better Auth, registro, verificación, sesiones, perfil, cambio de email, antiabuso, límites de autenticación y *guards* | `user`, `session`, `account`, `verification`, `rate_limit` (Better Auth), `login_attempts`, `disposable_domains` | BE-FR-01–06, 09–11 (salvo 11.6), 45, 63–69 | apps, audit, notifications, legal, credits |
+| 8 | `accounts` | Better Auth (plugins `bearer` y `admin`), registro, verificación, sesiones, perfil, cambio de email, antiabuso, captcha (adaptador `CaptchaVerifier`), límites de autenticación, actividad por app y *guards* | `user`, `session`, `account`, `verification`, `auth_rate_limits`, `login_attempts`, `disposable_domains`, `user_app_activity` | BE-FR-01–06, 09–11 (salvo 11.6), 45, 63–69 | apps, audit, notifications, legal, credits |
 | 9 | `payments` | Paquetes, compras, reembolsos y contracargos (bloquean la cuenta) | `packs`, `payments` | BE-FR-23–29 | apps, audit, notifications, credits, invoicing, accounts |
 | 10 | `sync` | Documento sincronizado y predeterminados por app | `sync_documents`, `app_defaults` | BE-FR-39–42 | apps, audit |
 | 11 | `protections` | Límites por usuario, freno global, comprobación de mantenimiento y de versión | `protection_state` (freno del día y su liberación); contadores en `*.cache.ts` | BE-FR-43, 46, 47, 48 | apps, audit, notifications, credits |
@@ -110,13 +110,18 @@ dentro de este margen.
   viven en `user_balances` (dueña: `credits`). `payments` indica si la compra es simulada al
   acreditarla, y `credits` actualiza la marca.
 - `/app/status` lo compone su ruta leyendo las API públicas de `apps`, `notifications` y `legal`.
+- Las claves foráneas hacia tablas de funcionalidades posteriores (p. ej. de `credits` o `audit` hacia
+  `user`) se declaran importando su `schema.ts` solo para `references()`; no crean dependencia en
+  ejecución.
+- **CSRF** (constitución, principio III): la comprobación de origen la hace `handle` solo en el host
+  web; el host de la API usa solo Bearer.
 
 ## 4. Reglas de dependencia
 
 | Desde → Hacia | ¿Permitido? |
 |---|---|
 | Funcionalidad → `index.ts` de una funcionalidad anterior permitida | Sí |
-| Funcionalidad → interior de otra (`domain/`, `repository.ts`, `schema.ts`…) | **No** (salvo `schema.ts` → `schema.ts` para `references()`) |
+| Funcionalidad → interior de otra (`domain/`, `repository.ts`, `schema.ts`…) | **No** (salvo `schema.ts` → `schema.ts` para `references()`, que es una declaración de la BD y no cuenta para el orden ni para los ciclos) |
 | Funcionalidad → `$lib/shared`, `$lib/server/{shared,db,config,logging,api}`, `adapters` (por su interfaz) | Sí |
 | `domain/` → `zod`, `$lib/shared`, `$lib/server/shared`, su propio `domain/` | Sí; **nada más** |
 | Los dos `shared/` → funcionalidades o infraestructura | **No** |
