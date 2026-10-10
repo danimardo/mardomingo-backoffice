@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+@import './lib/design-system/tokens.css';
+
+/* Sin paleta por defecto de Tailwind ni sombras genéricas: los colores y sombras son los de tokens.css (DS-08).
+   Los componentes usan var(--token); las utilidades arbitrarias con colores fuera de tokens.css se rechazan. */
+@theme {
+	--color-*: initial;
+	--shadow-*: initial;
+}
+
+/* Fuente de la interfaz para la utilidad `font-sans`, sin repetir el valor (DS-04). */
+@theme inline {
+	--font-sans: var(--font-ui);
+}
+
+@layer base {
+	html {
+		font-size: 100%;
+	}
+
+	body {
+		margin: 0;
+		font-family: var(--font-ui);
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-body);
+		line-height: 1.5;
+		color: var(--color-text-primary);
+		background: var(--color-bg-base);
+		min-height: 100vh;
+	}
+}

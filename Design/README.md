@@ -1,5 +1,7 @@
 # NetworkBench — sistema de diseño (v4, cierre de auditoría H1)
 
+> **Archivado en L01 (ADR 0007).** Esta carpeta es el prototipo original. La fuente canónica desde L01 es `src/lib/design-system/` (tokens) y `src/lib/components/{ui,layout}/` (componentes). Ver `src/ARCHIVADO.md`. No se importa desde la aplicación.
+
 Entregable para el desarrollador de frontend: tokens, componentes Svelte 5 y
 las reglas de implementación necesarias para construir el resto de la
 interfaz sin tener que decidir nada de diseño por su cuenta. Si algo no está

@@ -38,3 +38,6 @@ Thumbs.db
 
 # Código generado por Paraglide (se regenera en cada build)
 /src/lib/paraglide/
+
+# Temporales de las pruebas (HTTP, integración y depuración).
+/tests/.tmp/
