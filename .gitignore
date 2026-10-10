@@ -35,3 +35,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Código generado por Paraglide (se regenera en cada build)
+/src/lib/paraglide/

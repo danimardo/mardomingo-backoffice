@@ -13,7 +13,7 @@ extremo en [quickstart.md](../quickstart.md).
 **Qué fija `Historias.md` y qué propone este documento.** `Historias.md` solo fija las URL `/`,
 `/apps/<slug>`, `/precios`, `/registro?app=<slug>`, `/login`, `/recuperar`, `/panel`, `/panel/comprar`,
 `/admin`, `/terminos`, `/privacidad`, `/cookies` y `/uso-aceptable` (4.2, 7.3 `links`). El resto de URL,
-los nombres de las *actions*, los nombres de los parámetros de consulta y los nombres de las cookies son
+los nombres de las _actions_, los nombres de los parámetros de consulta y los nombres de las cookies son
 **[Propuesta]** de esta fase: el plan los confirma y, una vez implementados, `resolve()` de `$app/paths`
 los tipa. Las URL visibles están en español; los identificadores de código, en inglés.
 
@@ -23,28 +23,28 @@ los tipa. Las URL visibles están en español; los identificadores de código, e
 
 ### 1.1 Grupos de rutas
 
-| Grupo (`src/routes/…`) | Contenido | Host |
-|---|---|---|
-| `(web)/(public)/` | Landings, precios, legales, registro, verificación, login, recuperación, confirmación de email, preferencias | `cuenta.` |
-| `(web)/panel/` | Panel de usuario | `cuenta.` |
-| `(web)/admin/` | Panel de administración | `cuenta.` |
-| `client-errors/` | Errores del navegador (`+server.ts`) | `cuenta.` |
-| `api/v1/` | API de las apps (ver [api-v1.md](./api-v1.md)) | `api.` |
+| Grupo (`src/routes/…`) | Contenido                                                                                                    | Host      |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| `(web)/(public)/`      | Landings, precios, legales, registro, verificación, login, recuperación, confirmación de email, preferencias | `cuenta.` |
+| `(web)/panel/`         | Panel de usuario                                                                                             | `cuenta.` |
+| `(web)/admin/`         | Panel de administración                                                                                      | `cuenta.` |
+| `client-errors/`       | Errores del navegador (`+server.ts`)                                                                         | `cuenta.` |
+| `api/v1/`              | API de las apps (ver [api-v1.md](./api-v1.md))                                                               | `api.`    |
 
 La separación por host se aplica en `handle`: en el host de la web, `/api/v1/*` responde `404` (salvo
 `/api/v1/health`), y viceversa.
 
-### 1.2 *Guards* (exportados por `accounts`)
+### 1.2 _Guards_ (exportados por `accounts`)
 
-Cada `load`, cada *action* y cada `+server.ts` protegido llama a su *guard*. El `load` de un *layout*
+Cada `load`, cada _action_ y cada `+server.ts` protegido llama a su _guard_. El `load` de un _layout_
 **no** es una barrera de seguridad.
 
-| *Guard* | Exige | Sin cumplirlo, en un `load` o descarga GET | Sin cumplirlo, en una *action* |
-|---|---|---|---|
-| Público | — | — | — |
-| `requireUser` | Sesión web válida (cookie), cuenta no bloqueada ni borrada | `redirect(303, "/login?redirectTo=<ruta+query>")` | `fail(401, { formError: "SESSION_EXPIRED", values })` (sin contraseñas), con enlace a `/login?redirectTo=…` **[Propuesta]** |
-| `requireVerifiedUser` | `requireUser` + email verificado | Como `requireUser`; sin verificar → `redirect(303, "/verificar/reenviar")` | Como `requireUser` |
-| `requireAdmin` | `requireVerifiedUser` + rol `admin` | Anónimo → como `requireUser`; usuario sin rol → `error(403)` | `fail(403, { formError: "FORBIDDEN" })` |
+| _Guard_               | Exige                                                      | Sin cumplirlo, en un `load` o descarga GET                                 | Sin cumplirlo, en una _action_                                                                                              |
+| --------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Público               | —                                                          | —                                                                          | —                                                                                                                           |
+| `requireUser`         | Sesión web válida (cookie), cuenta no bloqueada ni borrada | `redirect(303, "/login?redirectTo=<ruta+query>")`                          | `fail(401, { formError: "SESSION_EXPIRED", values })` (sin contraseñas), con enlace a `/login?redirectTo=…` **[Propuesta]** |
+| `requireVerifiedUser` | `requireUser` + email verificado                           | Como `requireUser`; sin verificar → `redirect(303, "/verificar/reenviar")` | Como `requireUser`                                                                                                          |
+| `requireAdmin`        | `requireVerifiedUser` + rol `admin`                        | Anónimo → como `requireUser`; usuario sin rol → `error(403)`               | `fail(403, { formError: "FORBIDDEN" })`                                                                                     |
 
 - `redirectTo` solo admite rutas internas relativas: `^/(?!/)[^\\\s]*$`, ≤ 2048 caracteres; cualquier otro
   valor se sustituye por `/panel` (sin redirecciones abiertas).
@@ -60,15 +60,15 @@ Cada `load`, cada *action* y cada `+server.ts` protegido llama a su *guard*. El 
   `$lib/format` (BE-FR-22, `es-ES`); fechas como ISO UTC o `YYYY-MM-DD`. **Nunca** filas de la BD, objetos
   de Better Auth, nombres de modelo, costes reales, hashes, tokens ni `has_real_purchase` de otros usuarios.
 - Validación de la query: `z.strictObject` en el `load` de la página dueña de sus parámetros (clave
-  desconocida o valor inválido → `error(400)` con «Código de referencia»); `z.object` en los *layouts*.
-- Cargas independientes en paralelo; las gráficas pueden llegar como promesa en *streaming* con
+  desconocida o valor inválido → `error(400)` con «Código de referencia»); `z.object` en los _layouts_.
+- Cargas independientes en paralelo; las gráficas pueden llegar como promesa en _streaming_ con
   `aria-busy`.
 
-### 1.4 Mutaciones (*actions* con nombre)
+### 1.4 Mutaciones (_actions_ con nombre)
 
 - Todas son `<form method="POST" action="?/<nombre>">` con `use:enhance`. Sin `fetch` manual, sin
-  `+server.ts` para mutar, sin *remote functions*.
-- Pasos: *guard* → helper de formularios (`$lib/server/forms/`, Zod con `z.strictObject`) → **un**
+  `+server.ts` para mutar, sin _remote functions_.
+- Pasos: _guard_ → helper de formularios (`$lib/server/forms/`, Zod con `z.strictObject`) → **un**
   servicio por `index.ts` → resultado.
 - Resultados:
   - Éxito: `redirect(303, …)` (POST-redirect-GET) o `{ success: true, messageKey }`.
@@ -79,7 +79,7 @@ Cada `load`, cada *action* y cada `+server.ts` protegido llama a su *guard*. El 
     `SESSION_NOT_FOUND`, `PACK_INACTIVE`, `LEGAL_VERSION_CHANGED`, `NOTHING_SELECTED`, `SLUG_TAKEN`…)
     forman parte del **catálogo único de errores tipados** (`$lib/server/shared/errors.ts`) que usan el
     formateador de `$lib/server/api` y el helper de formularios (I6); no se escriben como literales sueltos en las
-    *actions*. Los que no son de 7.2 no aparecen nunca en las respuestas de la API.
+    _actions_. Los que no son de 7.2 no aparecen nunca en las respuestas de la API.
 - **Mensajes tras PRG**: el destino recibe `?aviso=<clave>` con un enumerado validado por Zod (nunca texto
   libre ni datos personales en la URL) **[Propuesta]**.
 - **Confirmaciones** (borrado, ajustes, reembolsos, bloqueos, cierre de sesiones, parámetros; UX-07,
@@ -87,15 +87,15 @@ Cada `load`, cada *action* y cada `+server.ts` protegido llama a su *guard*. El 
   1. `?/previsualizar<Acción>` valida y devuelve `{ preview }` (objeto, alcance, importe, valor anterior →
      nuevo) **sin modificar nada**; la página pinta el paso de confirmación con su propio `<form>`.
   2. `?/<acción>` con los mismos campos ocultos y `confirmado=true` ejecuta.
-  El foco inicial de la confirmación no está en la acción destructiva. Los textos libres (motivo) **nunca**
-  viajan por GET.
+     El foco inicial de la confirmación no está en la acción destructiva. Los textos libres (motivo) **nunca**
+     viajan por GET.
 - Con JavaScript: botón desactivado con `aria-busy="true"` durante el envío; ante un fallo, foco al resumen
   de errores o al primer campo inválido y anuncio con `aria-live`.
 - **Comprobación de origen (D-01)**: la comprobación CSRF propia de SvelteKit está desactivada (rechazaría
   el `multipart` sin `Origin` de las apps en la API; R01) y `handle` aplica una equivalente **solo en el host
   web**: todo POST/PUT/PATCH/DELETE con tipo de contenido de formulario (`application/x-www-form-urlencoded`,
   `multipart/form-data`, `text/plain`) debe traer `Origin` igual al origen de `PUBLIC_WEB_URL`. Si falta o no
-  coincide → `403` (página de error con «Código de referencia») sin ejecutar la *action*, y
+  coincide → `403` (página de error con «Código de referencia») sin ejecutar la _action_, y
   `http.origin.rejected`. Autorizada por la constitución (enmienda PATCH v2.1.1, principio III; vigente
   v2.1.2); se prueba en N3 HTTP.
 
@@ -104,13 +104,13 @@ Cada `load`, cada *action* y cada `+server.ts` protegido llama a su *guard*. El 
 `<form method="GET">` con botón visible y enlaces de página; la URL guarda el estado; aplicar al cambiar es
 solo una mejora (sin formularios ocultos con `requestSubmit()`). Parámetros comunes **[Propuesta]**:
 
-| Parámetro | Esquema |
-|---|---|
+| Parámetro        | Esquema                                                                        |
+| ---------------- | ------------------------------------------------------------------------------ |
 | `desde`, `hasta` | `dd/mm/aaaa` o ISO `YYYY-MM-DD` → `CivilDate` (Europe/Madrid); `desde ≤ hasta` |
-| `app` | Slug de app o vacío (todas) |
-| `pagina` | Texto de dígitos → entero ≥ 1 (sin `z.coerce.number()`) |
-| `periodo` | `30` \| `90` |
-| `q` | Texto 1–254 (búsqueda de usuarios por email, solo administración) |
+| `app`            | Slug de app o vacío (todas)                                                    |
+| `pagina`         | Texto de dígitos → entero ≥ 1 (sin `z.coerce.number()`)                        |
+| `periodo`        | `30` \| `90`                                                                   |
+| `q`              | Texto 1–254 (búsqueda de usuarios por email, solo administración)              |
 
 ### 1.6 Sin JavaScript
 
@@ -122,7 +122,7 @@ Todo funciona sin JavaScript (FR-112, SC-012), salvo:
 
 ### 1.7 Captcha y límites de autenticación (D-02)
 
-- Las *actions* llaman a Better Auth con su API de servidor (`auth.api`), por la que no actúan su plugin
+- Las _actions_ llaman a Better Auth con su API de servidor (`auth.api`), por la que no actúan su plugin
   `captcha` ni su `rateLimit`; no se usan (solo los plugins `bearer` y `admin`).
 - **Turnstile** lo verifica `accounts` con el adaptador `CaptchaVerifier` (real y `fake.ts`), solo en el
   registro (W08), con el campo `cf-turnstile-response` y la IP de `event.getClientAddress()`.
@@ -139,20 +139,20 @@ conocida (inicio o panel). Los errores inesperados los registra `handleError` un
 
 ### 1.9 Layouts
 
-| Layout | Guard | Datos del `load` (modelo de vista) |
-|---|---|---|
-| Raíz `src/routes/+layout.server.ts` (L01) | Público | Tema y efectos: `appearance: { theme: "system"\|"light"\|"dark", effects: "normal"\|"reduced" }` (de `event.locals`); nivel de log del cliente `clientLogLevel` (`CLIENT_LOG_LEVEL`); variables públicas (`PUBLIC_…`, p. ej. `publicWebUrl`); `supportEmail` global; `account: { signedIn, isAdmin }`. Pinta `data-theme` (solo si es claro u oscuro) y `data-effects` desde el servidor |
-| `(web)/panel/+layout.server.ts` | (no es barrera) | Navegación del panel con `aria-current`, `pendingAcceptancesCount`, `activeAnnouncementsCount` |
-| `(web)/admin/+layout.server.ts` | (no es barrera) | Navegación lateral, `globalBrake: { active }` (visible en todas las páginas de administración, 16.6), `alertsActiveCount` |
+| Layout                                    | Guard           | Datos del `load` (modelo de vista)                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Raíz `src/routes/+layout.server.ts` (L01) | Público         | Tema y efectos: `appearance: { theme: "system"\|"light"\|"dark", effects: "normal"\|"reduced" }` (de `event.locals`); nivel de log del cliente `clientLogLevel` (`CLIENT_LOG_LEVEL`); variables públicas (`PUBLIC_…`, p. ej. `publicWebUrl`); `supportEmail` global; `account: { signedIn, isAdmin }`. Pinta `data-theme` (solo si es claro u oscuro) y `data-effects` desde el servidor |
+| `(web)/panel/+layout.server.ts`           | (no es barrera) | Navegación del panel con `aria-current`, `pendingAcceptancesCount`, `activeAnnouncementsCount`                                                                                                                                                                                                                                                                                           |
+| `(web)/admin/+layout.server.ts`           | (no es barrera) | Navegación lateral, `globalBrake: { active }` (visible en todas las páginas de administración, 16.6), `alertsActiveCount`                                                                                                                                                                                                                                                                |
 
 - **Un solo layout raíz con datos** (I3): tema, efectos, nivel de log del cliente, variables públicas y
   `supportEmail` se cargan **solo** en `src/routes/+layout.server.ts`; no hay un `(web)/+layout.server.ts`
   que los repita. Los `+server.ts` (API, descargas, `client-errors`) no ejecutan layouts.
 - **Los layouts del panel y de la administración no son barrera** (D4): no llaman a `requireVerifiedUser`
-  ni a `requireAdmin` (un `load` de layout no protege las *actions* ni se vuelve a ejecutar en cada
+  ni a `requireAdmin` (un `load` de layout no protege las _actions_ ni se vuelve a ejecutar en cada
   navegación). Leen `event.locals.user` si existe para la navegación y los contadores, y devuelven valores
-  vacíos si no. El *guard* va en el `load` de cada `+page.server.ts` y en **cada** *action* (1.2). El layout
-  del panel lo crea L03 (mínimo) y lo amplía L10 con la navegación del panel (sin *guard*); L12 lo completa.
+  vacíos si no. El _guard_ va en el `load` de cada `+page.server.ts` y en **cada** _action_ (1.2). El layout
+  del panel lo crea L03 (mínimo) y lo amplía L10 con la navegación del panel (sin _guard_); L12 lo completa.
 
 ---
 
@@ -169,9 +169,9 @@ conocida (inicio o panel). Los errores inesperados los registra `handleError` un
 
 ### W02 · `/apps/[slug=appSlug]` — Landing de app (BE-FR-59, FR-100, FR-101, UX-16)
 
-- **Guard**: público. *Param matcher* `appSlug` en `src/params/`.
+- **Guard**: público. _Param matcher_ `appSlug` en `src/params/`.
 - **`load`**: `app: { slug, name, description, clientTypes, download: { url, available } | null,
-  access: { url } | null, externalLanding: url | null, smartScreenHelp: boolean }`, `registerHref`
+access: { url } | null, externalLanding: url | null, smartScreenHelp: boolean }`, `registerHref`
   (`/registro?app=<slug>`), `supportEmail`. App inexistente → `error(404)`.
 - **Estados 16.6**: app desactivada (mensaje, sin descarga ni «Crear cuenta»); descarga no disponible; app con
   landing externa (enlace visible a la externa, sin redirección automática **[Propuesta]**).
@@ -204,8 +204,8 @@ conocida (inicio o panel). Los errores inesperados los registra `handleError` un
   uso aceptable vigentes), `minAge`, `passwordRule: { min: 8, max: 128 }`, `turnstileSiteKey`.
 - **Actions**:
 
-| Action | Entrada | Validación | Éxito | Errores (`fail`) |
-|---|---|---|---|---|
+| Action        | Entrada                                                                                                                                                                               | Validación                                                                                          | Éxito                                                                                                                                                          | Errores (`fail`)                                                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `?/registrar` | `email`, `password`, `acceptTerms`, `acceptPrivacy`, `acceptAup`, `ageDeclaration`, `cf-turnstile-response`, `app` (oculto), `versionTerms`, `versionPrivacy`, `versionAup` (ocultos) | `z.email()`; contraseña 8–128; las cuatro casillas `true` (nunca premarcadas); versiones = vigentes | `{ success: true, sentTo }` (misma respuesta exista o no el email, BE-FR-01 CA5); muestra a qué dirección se envió, qué hacer si no llega y el reenvío (UX-02) | `400` validación (`values` sin contraseña; foco al resumen); `400 CAPTCHA_INVALID` (con reintento); `400 DISPOSABLE_DOMAIN`; `429 REGISTRATION_IP_LIMIT`; `429 RATE_LIMITED` (IP); `409 LEGAL_VERSION_CHANGED` (vuelve a mostrar los documentos) |
 
 - **Estados 16.6**: envío pendiente sin doble envío; errores por campo con resumen enlazado; captcha que no
@@ -226,8 +226,8 @@ conocida (inicio o panel). Los errores inesperados los registra `handleError` un
 - **`load`**: `tokenState: "valid"|"expired"|"used"|"invalid"` (sin consumirlo).
 - **Actions**:
 
-| Action | Entrada | Éxito | Errores |
-|---|---|---|---|
+| Action        | Entrada          | Éxito                                                                                                                                                                                                 | Errores                                                               |
+| ------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `?/verificar` | `token` (oculto) | Verifica, crea la bolsa de bienvenida (o la deniega por email normalizado ya usado), aplica `ADMIN_EMAIL` si corresponde, inicia la sesión web **[Propuesta]** y `redirect(303, "/panel/bienvenida")` | `400 TOKEN_EXPIRED` / `TOKEN_USED` / `TOKEN_INVALID` con enlace a W10 |
 
 - **Estados 16.6**: enlace caducado o ya usado con forma de pedir otro.
@@ -250,8 +250,8 @@ conocida (inicio o panel). Los errores inesperados los registra `handleError` un
 - **`load`**: `redirectTo` saneado, `notice`.
 - **Actions**:
 
-| Action | Entrada | Éxito | Errores |
-|---|---|---|---|
+| Action     | Entrada                                    | Éxito                                                                                                            | Errores                                                                                                                                                                                                                                |
+| ---------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `?/entrar` | `email`, `password`, `redirectTo` (oculto) | Sesión web (cookie, `session.app_id = null`), contador de fallos a cero, `redirect(303, redirectTo ?? "/panel")` | `400` validación; `401 INVALID_CREDENTIALS` (genérico); `403 EMAIL_NOT_VERIFIED` (con enlace a W10); `403 ACCOUNT_BLOCKED` (con el email de soporte); `429 LOGIN_TEMPORARILY_LOCKED` (`retryAfterMinutes` visible); `429 RATE_LIMITED` |
 
 - **Estados 16.6**: cuenta sin verificar; bloqueada; bloqueo temporal con tiempo restante; sesión caducada
@@ -300,10 +300,10 @@ conocida (inicio o panel). Los errores inesperados los registra `handleError` un
   página propia sin JS).
 - **Actions**:
 
-| Action | Entrada | Validación | Éxito |
-|---|---|---|---|
-| `?/tema` | `theme`, `redirectTo` (oculto) | `theme ∈ { system, light, dark }` | `light`/`dark` → cookie `mdm_theme`; `system` → borra la cookie. `redirect(303, redirectTo ?? "/")`. Con JS, se aplica sin recargar y sin perder lo escrito, el foco ni la posición |
-| `?/efectos` | `effects`, `redirectTo` (oculto) | `effects ∈ { normal, reduced }` | `reduced` → cookie `mdm_effects`; `normal` → la borra. Mismo redirect |
+| Action      | Entrada                          | Validación                        | Éxito                                                                                                                                                                               |
+| ----------- | -------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `?/tema`    | `theme`, `redirectTo` (oculto)   | `theme ∈ { system, light, dark }` | `light`/`dark` → cookie `mdm_theme`; `system` → borra la cookie. `redirect(303, redirectTo ?? "/")`. Con JS, se aplica sin recargar y sin perder lo escrito, el foco ni la posición |
+| `?/efectos` | `effects`, `redirectTo` (oculto) | `effects ∈ { normal, reduced }`   | `reduced` → cookie `mdm_effects`; `normal` → la borra. Mismo redirect                                                                                                               |
 
 - **Cookies** **[Propuesta]** (nombres y técnica sin destello los fija el plan, 16.12): `mdm_theme`
   (`light`\|`dark`) y `mdm_effects` (`reduced`); `Path=/`, `SameSite=Lax`, `Secure`, `HttpOnly`,
@@ -322,8 +322,8 @@ conocida (inicio o panel). Los errores inesperados los registra `handleError` un
 
 ## 3. Panel de usuario — `(web)/panel`
 
-Todas las páginas: `requireVerifiedUser` en el `load` de cada página y en cada *action* (nunca solo en el
-*layout*, D4), `cache-control: private, no-store`, vocabulario de 16.7 (créditos,
+Todas las páginas: `requireVerifiedUser` en el `load` de cada página y en cada _action_ (nunca solo en el
+_layout_, D4), `cache-control: private, no-store`, vocabulario de 16.7 (créditos,
 saldo, saldo reservado, deuda, créditos gratuitos o comprados), importes en créditos con su equivalencia en
 euros y cifras tabulares.
 
@@ -351,7 +351,7 @@ euros y cifras tabulares.
 ### W19 · `/panel/bienvenida` — Tras verificar (BE-FR-64 CA2, BE-FR-11 CA1; UX-03; FR-005, FR-117)
 
 - **`load`**: `welcome: { status, grantedMicro: entero|null, expiresOn }`, `nextSteps: { appName,
-  customText: texto|null, download: url|null, access: url|null }` (`customText` = `apps.post_verify_text`,
+customText: texto|null, download: url|null, access: url|null }` (`customText` = `apps.post_verify_text`,
   D-14: texto propio de la app si existe; si no,
   el genérico con nombre, botón de descarga o acceso e «inicia sesión con tu email»; aclaración 2026-10-10),
   `balance` resumido.
@@ -370,8 +370,8 @@ euros y cifras tabulares.
     `waiverText: { version }`, `billingProfile: { complete: boolean, values? }`, `pricesHref: "/precios"`.
 - **Actions**:
 
-| Action | Entrada | Validación | Éxito | Errores |
-|---|---|---|---|---|
+| Action      | Entrada                                                                                                                                                                                                                        | Validación                                                                                                                                                   | Éxito                                                                                                                                                                                                                           | Errores                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `?/comprar` | `packId`, `intentId` (oculto), `waiverAccepted`, `waiverVersion` (oculto), `wantsFullInvoice`, y si pide factura completa sin perfil completo: `billingKind`, `legalName`, `taxId`, `address`, `postalCode`, `city`, `country` | Casilla de desistimiento `true` (nunca premarcada); `intentId` UUID; NIF/NIE/CIF con formato español válido; si `wantsFullInvoice`, datos fiscales completos | `redirect(303, "/panel/comprar/<paymentId>")`. **Repetición** (doble clic, reenvío, «atrás»): el mismo `intentId` lleva a la misma compra sin acreditar de nuevo: `redirect(303, "/panel/comprar/<paymentId>?estado=repetida")` | `400` validación (casilla sin marcar con error junto a ella); `403 PURCHASE_NOT_AVAILABLE`; `409 PACK_INACTIVE`; `502 PAYMENT_PROVIDER_ERROR` (qué se conserva y que no se ha cobrado) |
 
 - **Estados 16.6**: no disponible («Próximamente»); casilla sin marcar; pendiente; éxito; repetición; error del
@@ -402,7 +402,7 @@ euros y cifras tabulares.
 
 - **Guard**: `requireVerifiedUser`. **Query**: `desde`, `hasta`, `app` (los de W22).
 - **Respuesta**: `text/csv; charset=utf-8`, `Content-Disposition: attachment;
-  filename="movimientos-<desde>_<hasta>.csv"`, separador `;` y coma decimal **[Propuesta]**; columnas:
+filename="movimientos-<desde>_<hasta>.csv"`, separador `;` y coma decimal **[Propuesta]**; columnas:
   fecha, tipo, créditos, app, operación. Solo las filas del usuario y del filtro.
 - **Eventos**: `http.request.completed`.
 
@@ -413,7 +413,7 @@ euros y cifras tabulares.
   - `rows: [{ createdAt, appName, operationName, status: "ok"|"failed"|"cancelled"|"undelivered"|"interrupted", chargedMicro }]`
     (nombre amigable; **nunca** modelo ni coste real)
   - `pagination`, `filters`, `exportHref`
-  - `charts` (promesa en *streaming*): `byDay`, `byOperation`, `byApp`, cada una con `title`, `period`,
+  - `charts` (promesa en _streaming_): `byDay`, `byOperation`, `byApp`, cada una con `title`, `period`,
     `unit: "créditos"`, `points` y su tabla equivalente; días sin datos marcados como «sin datos» (no cero).
 - **Estados**: vacío; sin coincidencias; gráfica sin datos en el periodo; error de carga.
 - **Sin JS**: lista, filtros, paginación, selector 30/90 y tablas de las gráficas.
@@ -425,14 +425,14 @@ euros y cifras tabulares.
 ### W26 · `/panel/sesiones` — Sesiones activas (BE-FR-06, 49.8; UX-10; FR-083, FR-124)
 
 - **`load`**: `sessions: [{ id, isCurrent, appName|null ("Web"), deviceName|null, appVersion|null,
-  lastUsedAt, approxIp }]`. «IP aproximada» (D-19): IPv4 truncada a /24 (`203.0.113.x`) e IPv6 a /48; la
+lastUsedAt, approxIp }]`. «IP aproximada» (D-19): IPv4 truncada a /24 (`203.0.113.x`) e IPv6 a /48; la
   IP completa nunca llega al modelo de vista.
 - **Actions**:
 
-| Action | Entrada | Éxito | Errores |
-|---|---|---|---|
+| Action           | Entrada     | Éxito                                                                                                                            | Errores                                      |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
 | `?/cerrarSesion` | `sessionId` | Revoca esa sesión (propia); `redirect(303, "/panel/sesiones?aviso=session_closed")`. Si es la actual → `/login?aviso=logged_out` | `404 SESSION_NOT_FOUND` (ajena o ya cerrada) |
-| `?/cerrarDemas` | — | Revoca todas salvo la actual («Cerrar las demás sesiones»; el texto dice que esta se mantiene) → `?aviso=others_closed` | — |
+| `?/cerrarDemas`  | —           | Revoca todas salvo la actual («Cerrar las demás sesiones»; el texto dice que esta se mantiene) → `?aviso=others_closed`          | —                                            |
 
 - **Estados**: sesión actual identificada («Esta sesión»).
 - **Eventos**: `accounts.session.revoked`.
@@ -443,12 +443,12 @@ euros y cifras tabulares.
   `lowBalance: { thresholdMicro|null }`, `notice`.
 - **Actions**:
 
-| Action | Entrada | Validación | Éxito | Errores |
-|---|---|---|---|---|
-| `?/cambiarEmail` | `newEmail`, `password` | `z.email()`; contraseña requerida | `{ success: true, messageKey: "email_change_requested" }` («Si la dirección es válida, recibirás un email»; también si pertenece a otra cuenta) | `400`; `401 WRONG_PASSWORD`; `429 RATE_LIMITED` |
-| `?/cambiarPassword` | `currentPassword`, `newPassword` | 8–128 | Revoca las demás sesiones, aviso de seguridad; `redirect(303, "/panel/perfil?aviso=password_changed")` (indica que se cerraron las demás sesiones) | `400`; `401 WRONG_PASSWORD` |
-| `?/guardarDatosFiscales` | `kind` (`individual`\|`business`), `legalName`, `taxId`, `address`, `postalCode`, `city`, `country` (ISO 3166-1 alfa-2) | Formato del identificador fiscal español (NIF/NIE/CIF); NIF-IVA intracomunitario: solo formato (VIES pendiente, 12-2) | `?aviso=billing_saved` | `400` (error junto al campo) |
-| `?/guardarAvisoSaldo` | `enabled`, `thresholdCredits` | `thresholdCredits` con el esquema de decimal español a entero escalado (µc), ≥ 0; obligatorio si `enabled` | `?aviso=low_balance_saved`; desactivar es tan fácil como activar | `400` |
+| Action                   | Entrada                                                                                                                 | Validación                                                                                                            | Éxito                                                                                                                                              | Errores                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `?/cambiarEmail`         | `newEmail`, `password`                                                                                                  | `z.email()`; contraseña requerida                                                                                     | `{ success: true, messageKey: "email_change_requested" }` («Si la dirección es válida, recibirás un email»; también si pertenece a otra cuenta)    | `400`; `401 WRONG_PASSWORD`; `429 RATE_LIMITED` |
+| `?/cambiarPassword`      | `currentPassword`, `newPassword`                                                                                        | 8–128                                                                                                                 | Revoca las demás sesiones, aviso de seguridad; `redirect(303, "/panel/perfil?aviso=password_changed")` (indica que se cerraron las demás sesiones) | `400`; `401 WRONG_PASSWORD`                     |
+| `?/guardarDatosFiscales` | `kind` (`individual`\|`business`), `legalName`, `taxId`, `address`, `postalCode`, `city`, `country` (ISO 3166-1 alfa-2) | Formato del identificador fiscal español (NIF/NIE/CIF); NIF-IVA intracomunitario: solo formato (VIES pendiente, 12-2) | `?aviso=billing_saved`                                                                                                                             | `400` (error junto al campo)                    |
+| `?/guardarAvisoSaldo`    | `enabled`, `thresholdCredits`                                                                                           | `thresholdCredits` con el esquema de decimal español a entero escalado (µc), ≥ 0; obligatorio si `enabled`            | `?aviso=low_balance_saved`; desactivar es tan fácil como activar                                                                                   | `400`                                           |
 
 - **Enlaces**: exportar datos (W28) y borrar la cuenta (W29).
 - **Estados 16.6**: cambio aplicado indicando qué sesiones se han cerrado; exportación en curso, descargada o
@@ -461,7 +461,7 @@ euros y cifras tabulares.
 
 - **Guard**: `requireVerifiedUser`.
 - **Respuesta**: `application/json`, `Content-Disposition: attachment;
-  filename="cuenta-mardomingo-datos-<YYYY-MM-DD>.json"`, `no-store`. Contiene perfil, datos fiscales,
+filename="cuenta-mardomingo-datos-<YYYY-MM-DD>.json"`, `no-store`. Contiene perfil, datos fiscales,
   documentos sincronizados de cada app, movimientos, metadatos de operaciones (sin modelo ni coste real
   **[Propuesta]**), pagos, facturas y aceptaciones legales. No se registra su contenido.
 - **Eventos**: `privacy.export.generated` (o `http.request.failed`).
@@ -472,8 +472,8 @@ euros y cifras tabulares.
   plataforma usadas por la cuenta), aviso de que el saldo se pierde sin reembolso en todas las apps.
 - **Actions**:
 
-| Action | Entrada | Éxito | Errores |
-|---|---|---|---|
+| Action           | Entrada                                               | Éxito                                                                                                                                                                                                                                                                                           | Errores                               |
+| ---------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
 | `?/borrarCuenta` | `password`, `confirmLoss` (casilla, nunca premarcada) | Revoca todas las sesiones, pone a cero las bolsas restantes con movimientos `forfeit` (cuentan en estadísticas, D-15), elimina datos personales y sincronizados, anonimiza la cuenta sin tocar las tablas inmutables (D-18), conserva el hash de bienvenida; `redirect(303, "/cuenta-borrada")` | `400` (casilla); `401 WRONG_PASSWORD` |
 
 - La acción se llama «Borrar mi cuenta» y el foco inicial no está en ella; no pide nada más que BE-FR-07.
@@ -483,7 +483,7 @@ euros y cifras tabulares.
 ### W30 · `/panel/facturas` — Facturas (BE-FR-49.10, 75; FR-085)
 
 - **`load`**: `invoices: [{ id, number, kind: "simplified"|"full"|"corrective", issuedOn, amountCents,
-  pdfHref, canRequestFull }]`. En la v4 (proveedor `none`) la lista está vacía con su explicación.
+pdfHref, canRequestFull }]`. En la v4 (proveedor `none`) la lista está vacía con su explicación.
 - **Actions**: `?/solicitarFacturaCompleta` — `invoiceId` → exige perfil fiscal completo; `?aviso=full_invoice_requested`.
   Errores: `400 BILLING_PROFILE_INCOMPLETE` (enlace a W27), `404`.
 - **Estados**: vacío legítimo.
@@ -505,8 +505,8 @@ euros y cifras tabulares.
 
 ## 4. Panel de administración — `(web)/admin`
 
-Todas las páginas y *actions*: `requireAdmin` en el `load` de cada página y en cada *action* (el *layout* no
-es barrera, D4). Toda *action* que modifica datos se audita (BE-FR-55) y, al
+Todas las páginas y _actions_: `requireAdmin` en el `load` de cada página y en cada _action_ (el _layout_ no
+es barrera, D4). Toda _action_ que modifica datos se audita (BE-FR-55) y, al
 guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace a la entrada de auditoría
 (UX-13). Los modelos de vista de administración **sí** pueden mostrar modelos y costes reales.
 
@@ -514,7 +514,7 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
 
 - **`load`**: alertas activas (`alerts_state`), estado del freno global, avisos de modelos retirados o con
   cambio de precio, contadores del día.
-- **Estados**: freno global activo visible (en todas las páginas, vía *layout*).
+- **Estados**: freno global activo visible (en todas las páginas, vía _layout_).
 
 ### W34 · `/admin/usuarios` — Búsqueda (BE-FR-50; UX-15; FR-088, FR-129)
 
@@ -528,12 +528,12 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
   operaciones marcadas por moderación (sin contenido), roles y estado.
 - **Actions** (todas con el patrón de confirmación 1.4 y `reason` obligatorio salvo indicación):
 
-| Action | Entrada | Efecto | Errores |
-|---|---|---|---|
-| `?/previsualizarBloqueo` / `?/bloquear` | `reason`, `confirmado` | Bloquea y revoca todas sus sesiones | `400` (motivo); `409 ALREADY_BLOCKED` |
-| `?/previsualizarDesbloqueo` / `?/desbloquear` | `reason`, `confirmado` | Desbloquea | `409` |
-| `?/marcarTester` / `?/desmarcarTester` | `reason` | Cambia el rol `tester` | `409` |
-| `?/previsualizarCierreSesiones` / `?/cerrarSesiones` | `reason`, `confirmado`, `sessionId` (opcional: una o todas) | Revoca | `404` |
+| Action                                               | Entrada                                                     | Efecto                              | Errores                               |
+| ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------- | ------------------------------------- |
+| `?/previsualizarBloqueo` / `?/bloquear`              | `reason`, `confirmado`                                      | Bloquea y revoca todas sus sesiones | `400` (motivo); `409 ALREADY_BLOCKED` |
+| `?/previsualizarDesbloqueo` / `?/desbloquear`        | `reason`, `confirmado`                                      | Desbloquea                          | `409`                                 |
+| `?/marcarTester` / `?/desmarcarTester`               | `reason`                                                    | Cambia el rol `tester`              | `409`                                 |
+| `?/previsualizarCierreSesiones` / `?/cerrarSesiones` | `reason`, `confirmado`, `sessionId` (opcional: una o todas) | Revoca                              | `404`                                 |
 
 - **Eventos**: `accounts.user.blocked`, `accounts.user.unblocked`, `accounts.role.changed`,
   `accounts.session.revoked`, `audit.entry.recorded`.
@@ -543,10 +543,10 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
 - **`load`**: usuario (email o «cuenta anonimizada»), saldo actual, deuda.
 - **Actions**:
 
-| Action | Entrada | Validación | Éxito | Errores |
-|---|---|---|---|---|
-| `?/previsualizarAjuste` | `direction` (`add`\|`subtract`), `amountCredits`, `bucketKind` (`free`\|`paid`), `expiresOn` (si `free`), `reason` | Importe con decimal español → µc > 0; `expiresOn` (`dd/mm/aaaa`) futura si `free`; motivo 1–500; si `subtract`, importe ≤ saldo disponible (D-16) | `{ preview: { balanceBeforeMicro, balanceAfterMicro, debtSettledMicro } }` (una entrada positiva liquida primero la deuda; aclaración 2026-10-10) | `400` |
-| `?/ajustarSaldo` | Los mismos + `confirmado` | Igual | Movimiento `adjustment` (y `debt_settlement` si procede) y auditoría; `redirect(303, "/admin/usuarios/<id>?aviso=saved&auditoria=<entryId>")` | `400` (validación; una resta mayor que el saldo disponible se rechaza junto al campo `amountCredits`: el ajuste nunca crea deuda, D-16) |
+| Action                  | Entrada                                                                                                            | Validación                                                                                                                                        | Éxito                                                                                                                                             | Errores                                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `?/previsualizarAjuste` | `direction` (`add`\|`subtract`), `amountCredits`, `bucketKind` (`free`\|`paid`), `expiresOn` (si `free`), `reason` | Importe con decimal español → µc > 0; `expiresOn` (`dd/mm/aaaa`) futura si `free`; motivo 1–500; si `subtract`, importe ≤ saldo disponible (D-16) | `{ preview: { balanceBeforeMicro, balanceAfterMicro, debtSettledMicro } }` (una entrada positiva liquida primero la deuda; aclaración 2026-10-10) | `400`                                                                                                                                   |
+| `?/ajustarSaldo`        | Los mismos + `confirmado`                                                                                          | Igual                                                                                                                                             | Movimiento `adjustment` (y `debt_settlement` si procede) y auditoría; `redirect(303, "/admin/usuarios/<id>?aviso=saved&auditoria=<entryId>")`     | `400` (validación; una resta mayor que el saldo disponible se rechaza junto al campo `amountCredits`: el ajuste nunca crea deuda, D-16) |
 
 - **Sin JS**: completo; doble envío protegido (E2E crítico 8 y 15.12).
 - **Eventos**: `credits.adjustment.applied`, `credits.adjustment.rejected`, `credits.debt.settled`,
@@ -580,7 +580,7 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
 
 ### W40 · `/admin/apps/[slug=appSlug]` — Edición de una app (BE-FR-47, 48, 52, 53, 62, 84; FR-001, FR-091)
 
-Todas las rutas de administración de una app (W40–W43) usan el *param matcher* `appSlug` en el segmento
+Todas las rutas de administración de una app (W40–W43) usan el _param matcher_ `appSlug` en el segmento
 `[slug=appSlug]` (I2); un slug que no cumple el formato no llega al `load` (404) y uno válido pero
 inexistente responde `error(404)` desde el `load`.
 
@@ -596,7 +596,7 @@ inexistente responde `error(404)` desde el `load`.
 ### W41 · `/admin/apps/[slug=appSlug]/operaciones/[key=operationKey]` — Operación (BE-FR-32, 35, 72, 77, 78, 80; FR-050, FR-051)
 
 - **`load`**: configuración completa (modelo, respaldos, proveedor preferido, margen, temperatura,
-  `max_output_tokens`, `max_cost_credits`, `estimated_max_cost_usd`, *timeout*, capacidades, límites,
+  `max_output_tokens`, `max_cost_credits`, `estimated_max_cost_usd`, _timeout_, capacidades, límites,
   grupo, escenario de transcripción), modelos compatibles de la caché, versiones de la plantilla,
   `timeoutMs` total calculado.
 - **Actions**: `?/guardarOperacion`; `?/activar` (rechaza sin modelo, con modelo incapaz o sin precio ni
@@ -640,7 +640,7 @@ inexistente responde `error(404)` desde el `load`.
 ### W46 · `/admin/auditoria` — Auditoría (BE-FR-55, FR-094)
 
 - **GET**: `entidad`, `accion`, `desde`, `hasta`, `pagina`. **`load`**: entradas (fecha, acción, entidad,
-  anterior → nuevo, motivo). Sin *actions*: no se puede editar ni borrar.
+  anterior → nuevo, motivo). Sin _actions_: no se puede editar ni borrar.
 
 ### W47 · `/admin/auditoria/[entryId]` — Entrada de auditoría
 
@@ -678,7 +678,7 @@ inexistente responde `error(404)` desde el `load`.
 - **Host**: solo `cuenta.`. **Guard**: público, con límite de frecuencia en memoria por sesión o visitante y
   uno global.
 - **Entrada** (`z.strictObject`, ≤ 4 KB): `name` (≤ 100), `fingerprint` (hash hexadecimal), `frames`
-  (≤ 20 líneas de la pila del propio *bundle*, sin query), `routeId`, `version`, `count` (entero ≥ 1). El
+  (≤ 20 líneas de la pila del propio _bundle_, sin query), `routeId`, `version`, `count` (entero ≥ 1). El
   mensaje del error **no** se envía.
 - **Respuesta**: siempre `204`. Superado el límite: `204` sin registrar nada.
 - **Eventos**: `client.error.reported` (`warn`).
@@ -687,15 +687,15 @@ inexistente responde `error(404)` desde el `load`.
 
 ## 6. Resumen
 
-| Grupo | Rutas | Con *actions* | Descargas GET (`+server.ts`) |
-|---|---|---|---|
-| `(web)/(public)` | 17 (W01–W17) | W08–W16 | — |
-| `(web)/panel` | 15 (W18–W32) | W18, W20, W26, W27, W29, W30 | W23, W25, W28, W31 |
-| `(web)/admin` | 19 (W33–W51) | W35–W44, W48, W49 | W51 |
-| `client-errors` | 1 (W52) | — | — |
-| **Total** | **52** | | 5 |
+| Grupo            | Rutas        | Con _actions_                | Descargas GET (`+server.ts`) |
+| ---------------- | ------------ | ---------------------------- | ---------------------------- |
+| `(web)/(public)` | 17 (W01–W17) | W08–W16                      | —                            |
+| `(web)/panel`    | 15 (W18–W32) | W18, W20, W26, W27, W29, W30 | W23, W25, W28, W31           |
+| `(web)/admin`    | 19 (W33–W51) | W35–W44, W48, W49            | W51                          |
+| `client-errors`  | 1 (W52)      | —                            | —                            |
+| **Total**        | **52**       |                              | 5                            |
 
-Los *webhooks* de pagos (`+server.ts` permitido por la constitución) no existen en la v4: el proveedor
+Los _webhooks_ de pagos (`+server.ts` permitido por la constitución) no existen en la v4: el proveedor
 `simulated` no los usa y Stripe queda fuera de alcance (BE-FR-29).
 
 ## 7. Huecos detectados en `Historias.md` para la web

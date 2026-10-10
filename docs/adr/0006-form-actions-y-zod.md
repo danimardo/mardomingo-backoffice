@@ -12,7 +12,7 @@ frontera (principio XII), y el contrato OpenAPI debe salir del mismo código.
 ## Decisión
 
 - Las mutaciones de la web son **form actions con nombre** con `use:enhance`, y siguen siempre los
-  mismos pasos: *guard*, helper de formularios, un servicio, y `redirect(303)` o `fail`.
+  mismos pasos: _guard_, helper de formularios, un servicio, y `redirect(303)` o `fail`.
 - Un **helper de formularios propio** (`$lib/server/forms/`) normaliza el `FormData`, valida con
   Zod y devuelve `fail(400, { values, errors })` sin reenviar los campos sensibles.
 - **Zod 4** es la única librería de validación. `zod-openapi` genera el contrato de la API a

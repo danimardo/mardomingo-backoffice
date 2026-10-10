@@ -4,7 +4,6 @@ Fase 0 de `/speckit-plan`. Resuelve las incógnitas técnicas del plan con las v
 
 Actualizado con las decisiones de la revisión del plan del 2026-10-10 (D-01…D-22, sección «Decisiones de la revisión del plan» de `plan.md`), recogidas en la constitución v2.1.1 y en `Historias.md` 2.6: cada tema afectado da ya la decisión final.
 
-
 Este documento es la **parte 1 (R01–R08)** de `research.md` para la funcionalidad
 `001-cuenta-mardomingo-v4`. Resuelve las incógnitas técnicas de **cómo** aplicar las decisiones ya
 tomadas en la constitución, `ARCHITECTURE.md` y los ADR 0001–0007 con las versiones fijadas
@@ -27,7 +26,7 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
   - `$app/state` (`page`, `navigating`, `updated`) solo en componentes; en servidor, `event`.
   - `handle = sequence(...)` (`@sveltejs/kit/hooks`). La separación por host compara `event.url.host` con el host de `PUBLIC_API_URL`/`PUBLIC_WEB_URL` y devuelve `new Response(null, { status: 404 })` sin llamar a `resolve`; `/api/v1/health` se comprueba **antes**.
   - adapter-node: `PORT`, `HOST`, `PROTOCOL_HEADER=x-forwarded-proto`, `ADDRESS_HEADER=x-forwarded-for`, `XFF_DEPTH=1` (toma la IP por la derecha), `BODY_SIZE_LIMIT` (admite `K`/`M`/`G`; por defecto 512K).
-  - **`getClientAddress()` lanza si falta `X-Forwarded-For`**: el *healthcheck* de Coolify llega sin proxy, así que el contexto de petición la lee de forma perezosa (nunca en `/api/v1/health`) y los tests HTTP envían la cabecera.
+  - **`getClientAddress()` lanza si falta `X-Forwarded-For`**: el _healthcheck_ de Coolify llega sin proxy, así que el contexto de petición la lee de forma perezosa (nunca en `/api/v1/health`) y los tests HTTP envían la cabecera.
   - **CSRF y comprobación de origen (D-01)**: la comprobación propia de Kit se ejecuta antes de `handle` y rechaza con 403 todo POST de formulario (`multipart/form-data` incluido) sin `Origin`; las apps de escritorio no lo envían, así que bloquearía `POST /api/v1/ai/transcribe`. Por eso:
     - se desactiva la comprobación de Kit con `kit.csrf.trustedOrigins: ['*']` (o la opción equivalente que confirme el changelog de 2.70.3);
     - se implementa una equivalente en `handle`, **solo en el host web**: todo POST/PUT/PATCH/DELETE con tipo de contenido de formulario (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`) debe traer `Origin` igual al origen de `PUBLIC_WEB_URL`; si falta o no coincide → 403 y `http.origin.rejected`;
@@ -57,7 +56,7 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
     - `user.additionalFields.emailNormalized` y `session.additionalFields.{appId, deviceName, appVersion}` con `input: false`, rellenados en `databaseHooks.*.create.before`.
     - Plugins: solo `bearer()` (token de las apps) y `admin()` (`role` y `banned`). **No** se usan el plugin `captcha` ni el `rateLimit` de Better Auth (`rateLimit: { enabled: false }`): con `auth.api` no actúan.
     - IP: cabecera interna `ipAddressHeaders: ['x-mm-client-ip']` puesta desde `event.getClientAddress()` en las cabeceras que se pasan a `auth.api` (y borrada si llega del cliente).
-  - Web: a `getSession` se le pasan las cabeceras sin `authorization`; API: sin `cookie`, y el *handle* quita `set-cookie` en el host de la API.
+  - Web: a `getSession` se le pasan las cabeceras sin `authorization`; API: sin `cookie`, y el _handle_ quita `set-cookie` en el host de la API.
   - `ADMIN_EMAIL` se aplica en `emailVerification.afterEmailVerification`, con una transacción propia e idempotente (igual que la bolsa de bienvenida).
   - **Captcha y límites de autenticación (D-02)**, implementados en `accounts`:
     - Turnstile se verifica con un adaptador `CaptchaVerifier` (real y `fake.ts`) que lee el campo `cf-turnstile-response` que el widget inyecta en el `<form>` (R12);
@@ -77,12 +76,12 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
 - **Decisión**:
   - Una conexión por proceso: `new Database(path)` y `db.pragma()` con `journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000` y `synchronous=NORMAL`.
   - Transacción: `db.transaction((tx) => { …; return r; }, { behavior: 'immediate' })`. El callback es **síncrono**: usa `.run()`, `.all()` y `.get()`, sin `await`. Drizzle delega en la transacción nativa de better-sqlite3 (`.immediate()`), que lanza si el callback devuelve una promesa. Un helper `$lib/server/db/tx.ts` fija `immediate` y un tipo `Tx`.
-  - *Triggers* de solo inserción (`credit_movements`, `admin_audit`, `invoices`, `prompt_templates`): `drizzle-kit generate --custom --name=<f>-immutable-triggers` y SQL a mano (`CREATE TRIGGER … BEFORE UPDATE … BEGIN SELECT RAISE(ABORT, …); END;`), cada sentencia separada por `--> statement-breakpoint`.
+  - _Triggers_ de solo inserción (`credit_movements`, `admin_audit`, `invoices`, `prompt_templates`): `drizzle-kit generate --custom --name=<f>-immutable-triggers` y SQL a mano (`CREATE TRIGGER … BEFORE UPDATE … BEGIN SELECT RAISE(ABORT, …); END;`), cada sentencia separada por `--> statement-breakpoint`.
   - `drizzle.config.ts`: `{ dialect: 'sqlite', schema: './src/lib/server/features/*/schema.ts', out: './drizzle' }`, leyendo la URL con `env-schema.ts`.
   - Claves foráneas: `references(() => user.id)` importando el `schema.ts` de la dueña. Las importaciones `schema.ts` → `schema.ts` que **solo** declaran `references()` quedan fuera del orden y del cálculo de ciclos del principio IV (son declaraciones de la BD, no llamadas en ejecución; D-03, constitución v2.1.1 y `ARCHITECTURE.md` §3/§4). El test de arquitectura las reconoce y las excluye; cualquier otra importación sigue las reglas de siempre.
   - µc: columna propia `micro()` con `customType<{ data: Micro; driverData: number }>` cuyo `fromDriver` aplica `toMicro` (que comprueba `Number.isSafeInteger`), más `check()` de no negativo. Los productos intermedios, con `BigInt` en el dominio. Las agregaciones `sql<number>` se pasan por `toMicro` en el repositorio.
 - **Justificación**: docs de Drizzle (`SQLiteTransactionConfig.behavior`, `generate --custom`, `schema` con glob, `breakpoints`); constitución I y «Datos y almacenamiento».
-- **Alternativas consideradas**: `sql\`BEGIN IMMEDIATE\`` a mano (duplica lo que ofrece Drizzle); `blob({ mode: 'bigint' })` (rompe `CHECK` y sumas); `.$type<Micro>()` (se salta la comprobación de entero seguro).
+- **Alternativas consideradas**: `sql\`BEGIN IMMEDIATE\``a mano (duplica lo que ofrece Drizzle);`blob({ mode: 'bigint' })`(rompe`CHECK`y sumas);`.$type<Micro>()` (se salta la comprobación de entero seguro).
 - **Pendiente de comprobar en L01**:
   - Formato de salida de drizzle-kit 0.31 (`0000_x.sql` + `meta/_journal.json`; la doc de context7 muestra el de la 1.0 beta).
   - Que el migrador ejecute bien los `CREATE TRIGGER` con `;` internos.
@@ -96,9 +95,9 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
   - Los `id` de `.meta({ id })` llevan el prefijo de la funcionalidad.
   - Mensajes: `z.config({ customError: (iss) => … })` mapea `iss.code` (`invalid_type`, `too_small`, `too_big`, `invalid_format`, `unrecognized_keys`…) a `m.validation_*()` sin usar `iss.input`. Se registra en `init` del servidor y en `hooks.client.ts`, desde `$lib/schemas/common/`.
   - `z.strictObject` en entradas; `z.file().max(bytes).mime([...])` construido por una fábrica con `max_audio_mb`; `z.input`/`z.output`.
-  - *Branded*: un único tipo por concepto, `type Micro = number & z.$brand<'Micro'>`. El constructor de `$lib/shared` es la única aserción permitida; los esquemas usan `.brand<'Micro'>()`, así que no hace falta `transform` en las respuestas.
+  - _Branded_: un único tipo por concepto, `type Micro = number & z.$brand<'Micro'>`. El constructor de `$lib/shared` es la única aserción permitida; los esquemas usan `.brand<'Micro'>()`, así que no hace falta `transform` en las respuestas.
   - Validación de respuestas en los tests: con los mismos esquemas Zod, sin validador JSON Schema (sería una dependencia nueva).
-- **Justificación**: docs de zod v4.6.5 (`z.config`, `z.file`, `.brand` con dirección `out` por defecto); README y tipos de zod-openapi; npm: `zod-openapi@6.0.2` con *peer* `zod ^4.0.0`.
+- **Justificación**: docs de zod v4.6.5 (`z.config`, `z.file`, `.brand` con dirección `out` por defecto); README y tipos de zod-openapi; npm: `zod-openapi@6.0.2` con _peer_ `zod ^4.0.0`.
 - **Alternativas consideradas**: generar el OpenAPI en el build (complica el build sin secretos); `transform` a `Micro` en las respuestas (zod-openapi no puede representar el tipo de salida).
 - **Pendiente de comprobar en L01**:
   - Cómo representa zod-openapi 6 `z.file()` en `multipart/form-data` (`format: binary`).
@@ -109,14 +108,14 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
 ## R05 Paraglide 2.27 en SvelteKit 2
 
 - **Decisión**:
-  - `project.inlang/settings.json` con `baseLocale: 'es'`, `locales: ['es']` y el plugin *message format* con `pathPattern: './messages/{locale}.json'`.
+  - `project.inlang/settings.json` con `baseLocale: 'es'`, `locales: ['es']` y el plugin _message format_ con `pathPattern: './messages/{locale}.json'`.
   - En `vite.config.ts`, `paraglideVitePlugin({ project: './project.inlang', outdir: './src/lib/paraglide', strategy: ['baseLocale'] })`. La salida no se versiona y queda fuera de ESLint y Prettier.
   - Sin estrategia de URL no hace falta `reroute` ni `deLocalizeUrl`.
   - En `handle`: `paraglideMiddleware(event.request, ({ request }) => resolve({ ...event, request }))`, en la posición que fija la constitución. Activa el `AsyncLocalStorage` del servidor; `app.html` lleva `lang="es"` literal.
   - Uso: `import { m } from '$lib/paraglide/messages'` en componentes, servidor y plantillas de email (funciones puras en `notifications`). El dominio devuelve códigos, nunca mensajes.
   - Las tareas de `croner` se ejecutan fuera de una petición y usan `baseLocale`.
 - **Justificación**: docs de paraglide-js (firma de `paraglideMiddleware(request, resolve, options)`, `compile` y opciones del plugin, ejemplo de SvelteKit); `ARCHITECTURE.md` §8 (no usar `@inlang/paraglide-sveltekit`).
-- **Alternativas consideradas**: prescindir del *middleware* con un solo idioma (más simple, pero la constitución lo fija y deja preparada la incorporación de otros idiomas).
+- **Alternativas consideradas**: prescindir del _middleware_ con un solo idioma (más simple, pero la constitución lo fija y deja preparada la incorporación de otros idiomas).
 - **Pendiente de comprobar en L01**:
   - Que `getLocale()` fuera de una petición devuelva `es` sin error.
   - Si hace falta `emitTsDeclarations` para que `svelte-check --fail-on-warnings` no avise con los JS generados.
@@ -137,16 +136,16 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
   - Tailwind 4.3 no tiene opción para prohibir valores arbitrarios, y una clase de la paleta desactivada **no genera CSS en silencio**: solo la detecta `lint:tokens` (NO VERIFICADO).
   - Soporte por navegador, a confirmar en MDN o caniuse:
     - `light-dark()`: Chrome 123, Firefox 120 y Safari 17.5;
-    - `prefers-reduced-transparency`: solo Chromium (Firefox tras un *flag*, Safari no), así que el ajuste propio es el mecanismo universal;
+    - `prefers-reduced-transparency`: solo Chromium (Firefox tras un _flag_, Safari no), así que el ajuste propio es el mecanismo universal;
     - `prefers-contrast` y `forced-colors`: soportados en los tres (`forced-colors` solo tiene efecto real en Windows).
 
 ## R07 ESLint 10 + typescript-eslint + eslint-plugin-svelte
 
 - **Decisión**:
-  - `eslint.config.js` *flat*: `@eslint/js` recommended, `tseslint.configs.strictTypeChecked` con `parserOptions.projectService`, `svelte.configs.recommended` con el parser de TS en `.svelte`, `eslint-config-prettier` al final y `globals`.
+  - `eslint.config.js` _flat_: `@eslint/js` recommended, `tseslint.configs.strictTypeChecked` con `parserOptions.projectService`, `svelte.configs.recommended` con el parser de TS en `.svelte`, `eslint-config-prettier` al final y `globals`.
   - **`svelte/no-navigation-without-resolve` existe** (desde 3.12.0, incluida en `recommended`; la versión fijada es 3.23.1, compatible con ESLint 10 desde 3.15.0). Cubre `<a href>`, `goto`, `pushState` y `replaceState`, **no `redirect()`**: para `redirect` se añade `no-restricted-syntax` sobre `CallExpression[callee.name='redirect'] > Literal`.
   - Pureza del dominio: bloques `files` por carpeta con `no-restricted-imports` (patrones `$app/*`, `$env/*`, `drizzle-orm*`, `node:*`, `$lib/server/features/*`…), `no-restricted-globals` (`fetch`, `process`) y `no-restricted-syntax` (`NewExpression[callee.name='Date']`, `Date.now()`).
-  - **Ojo**: en *flat config* un bloque posterior **sustituye** las opciones de la misma regla, no las fusiona. Las listas se componen a partir de constantes compartidas (base + específicas).
+  - **Ojo**: en _flat config_ un bloque posterior **sustituye** las opciones de la misma regla, no las fusiona. Las listas se componen a partir de constantes compartidas (base + específicas).
   - `@typescript-eslint/consistent-type-assertions: ['error', { assertionStyle: 'never' }]` (`as const` sigue permitido), con excepción en `src/lib/shared/**`; `no-non-null-assertion` ya está en `strict`.
   - `--concurrency auto` (multihilo, desde ESLint 9.34).
   - Sin `--cache`: la caché por fichero no invalida cuando un cambio de tipos en otro fichero altera el resultado del lint con tipos, además del fallo con configuraciones que contienen funciones que registra `Historias.md` 15.26.
@@ -165,13 +164,13 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
     - `unit`: Node, `src/**/*.test.ts` + `tests/architecture/**`;
     - `component`: `environment: 'jsdom'`, `*.svelte.test.ts`, plugin `svelteTesting()` de `@testing-library/svelte/vite` (condición `browser` y limpieza automática);
     - `integration`: Node, `**/*.int.test.ts`, una BD temporal por fichero;
-    - `http`: Node, `tests/http/**`, `globalSetup` que arranca `node build` con un conjunto mínimo de variables (sin `.env`), y un único *worker*.
+    - `http`: Node, `tests/http/**`, `globalSetup` que arranca `node build` con un conjunto mínimo de variables (sin `.env`), y un único _worker_.
   - Cobertura v8 con `include: ['src/lib/**']`:
     - umbral global de 80 en las cuatro métricas;
     - por glob: `'src/lib/server/features/*/domain/**'`, `'src/lib/shared/**'` y `'src/lib/server/shared/**'` a 100 (los globs **no heredan** el umbral global ni `perFile`).
     - `test:coverage` se limita a los tres proyectos sin `http`.
-  - Svelte 5: `render(Componente, { props })`; las *runes* funcionan en `.svelte.test.ts`.
-  - Propiedades: `@fast-check/vitest` (`test.prop([fc.integer()])(…)`), con `fc.configureGlobal({ seed, numRuns })` en el *setup* del proyecto `unit` para que sea determinista. Otra semilla en la ejecución nocturna.
+  - Svelte 5: `render(Componente, { props })`; las _runes_ funcionan en `.svelte.test.ts`.
+  - Propiedades: `@fast-check/vitest` (`test.prop([fc.integer()])(…)`), con `fc.configureGlobal({ seed, numRuns })` en el _setup_ del proyecto `unit` para que sea determinista. Otra semilla en la ejecución nocturna.
   - `vitest related <ficheros> --run` para el nivel 1.
   - Test de arquitectura:
     - API de `typescript`: `parseJsonConfigFileContent` del `tsconfig.json` (requiere `svelte-kit sync`), `preProcessFile` y `resolveModuleName` para los alias `$lib`;
@@ -182,7 +181,7 @@ para la versión fijada se marca **NO VERIFICADO — comprobar en L01**.
 - **Alternativas consideradas**: Vitest Browser Mode (excluido en 15.3); expresiones regulares para los imports (frágiles con los alias).
 - **Pendiente de comprobar en L01**:
   - Si un fichero que coincide con un glob de umbral también cuenta en el global.
-  - El nombre exacto de la opción de *workers* por proyecto en Vitest 5 (`maxWorkers`/`fileParallelism`).
+  - El nombre exacto de la opción de _workers_ por proyecto en Vitest 5 (`maxWorkers`/`fileParallelism`).
   - Compatibilidad de `@testing-library/svelte` 5.4.2 con Vitest 5 y Svelte 5.57.
   - Que `resolveModuleName` no resuelve `.svelte` (se trata a mano).
 
@@ -252,11 +251,12 @@ que corresponda).
 ## R10 pino 10 + Log Gateway
 
 - **Decisión**:
-  - **Destinos**: `pino.transport({ targets: [...] })` con dos destinos en el *worker*:
+  - **Destinos**: `pino.transport({ targets: [...] })` con dos destinos en el _worker_:
     - `pino/file` con `destination: 1` (stdout);
-    - el *transport* propio `log-gateway`, solo en staging y producción.
+    - el _transport_ propio `log-gateway`, solo en staging y producción.
 
     Así el hilo principal no hace E/S.
+
   - **Transport propio** (`build` de `pino-abstract-transport`):
     - el bucle `for await` solo **encola** en un array acotado (p. ej. 5.000 eventos) y nunca
       espera a la red;
@@ -265,7 +265,7 @@ que corresponda).
     - si la cola se llena, descarta los **más antiguos**, cuenta los descartes y escribe
       `log.gateway.dropped` en stdout;
     - si falla un envío, reintenta el lote con espera exponencial acotada;
-    - en `close()` hace un último envío con un *timeout* de 4 s o menos.
+    - en `close()` hace un último envío con un _timeout_ de 4 s o menos.
   - **Cierre**: al recibir `sveltekit:shutdown` (adapter-node, tras SIGTERM) se registra
     `app.stopping` y se llama a `transport.end()`, con un límite total de 5 s.
   - **`redact`**: `{ paths: [...], remove: true }` sobre `req.headers.authorization`,
@@ -274,14 +274,14 @@ que corresponda).
     es una subclase de nuestro error tipado; el `message` de bibliotecas y proveedores **nunca**
     se registra.
   - **Desarrollo**:
-    - `pino-pretty` dentro de un módulo *target* propio (las funciones no pueden cruzar al
-      *worker*);
+    - `pino-pretty` dentro de un módulo _target_ propio (las funciones no pueden cruzar al
+      _worker_);
     - `customPrettifiers.time` con `Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid' })`;
     - además, `pino/file` hacia `.logs/app.log`.
   - **Navegador**: `loglevel` con `setLevel(nivel, false)`, para que el nivel **no** se guarde en
     `localStorage` ni en una cookie. `window.onerror` y `unhandledrejection` envían a
     `/client-errors` (esquema de XI).
-  - **Adaptador del Gateway (D-06)**: el envío se diseña como adaptador con interfaz; el *transport*
+  - **Adaptador del Gateway (D-06)**: el envío se diseña como adaptador con interfaz; el _transport_
     recibe por opciones `url`, `authHeaderName`, `key`, `maxBatch`, `maxBytes` y el formato del lote
     (`ndjson` o `json-array`). Hasta que el propietario entregue el contrato de ingesta (entrada de
     L01), solo se escribe en stdout. Con el servidor simulado se prueban los lotes, el error y la caída.
@@ -289,8 +289,8 @@ que corresponda).
     producción (ecosistema oficial de pino; con pnpm una dependencia transitiva no se puede
     importar). Se justifica en el plan; no es transversal y no necesita ADR.
 - **Justificación**:
-  - `pino.transport` crea un *worker* (`thread-stream`) y vacía en `beforeExit` y `exit`.
-  - Un error del *transport* es fatal, así que la cola nunca debe propagar errores de red.
+  - `pino.transport` crea un _worker_ (`thread-stream`) y vacía en `beforeExit` y `exit`.
+  - Un error del _transport_ es fatal, así que la cola nunca debe propagar errores de red.
   - `redact.remove` está documentado (pino 10.4.0 depende de `@pinojs/redact` y de
     `pino-abstract-transport ^3`).
   - `loglevel` 1.9.2 persiste el nivel salvo que se pase `persist=false`.
@@ -300,7 +300,7 @@ que corresponda).
   - **Un `Writable` propio sin `pino-abstract-transport`**: posible, pero reimplementa el troceado
     de líneas y el cierre.
 - **Pendiente de comprobar en L01**:
-  - cómo localizar el fichero del *transport* tras `vite build`: un `.mjs` sin compilar resuelto
+  - cómo localizar el fichero del _transport_ tras `vite build`: un `.mjs` sin compilar resuelto
     con `new URL(..., import.meta.url)`, o una copia a `build/`. **NO VERIFICADO**;
   - **contrato del Log Gateway** (entrada de L01, lo entrega el propietario):
     - URL de ingesta;
@@ -313,7 +313,7 @@ que corresponda).
 ## R11 Proveedores de IA
 
 - **Decisión**:
-  - **Chat**: `POST https://openrouter.ai/api/v1/chat/completions`, sin *streaming*, con
+  - **Chat**: `POST https://openrouter.ai/api/v1/chat/completions`, sin _streaming_, con
     `provider: { data_collection: "deny", allow_fallbacks: true, order?, require_parameters? }`,
     `max_tokens`, `temperature`, `response_format: { type: "json_schema", json_schema }` y
     `tools`/`tool_choice`, más las cabeceras `HTTP-Referer` y `X-Title`.
@@ -332,12 +332,12 @@ que corresponda).
     (BE-FR-56). Si falta (p. ej. en staging), la alerta de saldo queda desactivada y se registra
     `ai.provider_balance.check_disabled` al arrancar.
   - **Cancelación**: el `AbortSignal` de la petición se combina con `AbortSignal.timeout` mediante
-    `AbortSignal.any`. Sin *streaming*, OpenRouter **factura la respuesta completa** aunque se
+    `AbortSignal.any`. Sin _streaming_, OpenRouter **factura la respuesta completa** aunque se
     aborte (D-05): la operación queda `cancelled` sin cobro al usuario; cuando se conoce el coste
     del proveedor (en la respuesta o con la consulta posterior de la generación), se guarda en
     `ai_operations.cost_micro_usd` y cuenta en estadísticas como **pérdida por cancelación**
     (BE-FR-37, BE-FR-54); se registra `ai.cancellation_cost.recorded`.
-  - **Voxtral**: `POST https://api.mistral.ai/v1/audio/transcriptions` en *multipart*
+  - **Voxtral**: `POST https://api.mistral.ai/v1/audio/transcriptions` en _multipart_
     (`model=voxtral-mini-latest`, `file`). De la respuesta se usan `text` y
     `usage.prompt_audio_seconds`.
   - **ffprobe**:
@@ -352,10 +352,10 @@ que corresponda).
     la imagen) a mp3 o wav, con `execFile` sin shell y en el mismo directorio temporal; los
     temporales se borran en el `finally`.
 - **Justificación**: documentación de OpenRouter (contabilidad de uso, `get-a-generation`,
-  `get-credits`, `get-models`, enrutado de proveedores, *streaming* y errores) y referencia de la
+  `get-credits`, `get-models`, enrutado de proveedores, _streaming_ y errores) y referencia de la
   API de Mistral (`/v1/audio/transcriptions`).
 - **Alternativas consideradas**:
-  - ***Streaming* interno**: obtiene el `id` antes y permite cancelar en algunos proveedores, pero
+  - **_Streaming_ interno**: obtiene el `id` antes y permite cancelar en algunos proveedores, pero
     exige analizar SSE. Se pospone.
   - **`GET /api/v1/key`** (`limit_remaining`) en lugar de `/credits`: no necesita clave de gestión,
     pero solo mide el tope de esa clave. Descartada (D-04).
@@ -450,7 +450,7 @@ que corresponda).
   - **Envoltorio**: mide la duración, registra el resultado una sola vez
     (`<f>.job.completed` o `<f>.job.failed`) y nunca relanza.
   - **`protect`**: evita que una ejecución empiece mientras sigue la anterior de la misma tarea, y
-    su *callback* registra `debug`.
+    su _callback_ registra `debug`.
   - **Horas**: ninguna tarea diaria entre las **02:00 y las 03:00** locales.
     - croner **omite** las ejecuciones que caen en el hueco del cambio de hora de marzo y ejecuta
       **una sola vez** las del solapamiento de octubre.
@@ -479,7 +479,7 @@ que corresponda).
     puede deducir su estado de sus propios datos.
 - **Pendiente de comprobar en L14**:
   - el comportamiento con `vi.useFakeTimers()` y `vi.setSystemTime()` (croner fragmenta los
-    *timeouts* largos): **NO VERIFICADO**; por eso la planificación se prueba con `nextRuns`;
+    _timeouts_ largos): **NO VERIFICADO**; por eso la planificación se prueba con `nextRuns`;
   - que `domAndDow` sustituye a `legacyMode` en la 10.0.1 (sin efecto si no se combinan día del
     mes y día de la semana).
 
@@ -495,7 +495,7 @@ que corresponda).
       `litestream-0.5.17-linux-x86_64.deb`, con su suma de comprobación de `checksums.txt`;
     - `USER node`;
     - `/data` creado con `chown node:node` antes de declararlo como volumen.
-  - **Litestream en el mismo contenedor** como supervisor. El *entrypoint* hace:
+  - **Litestream en el mismo contenedor** como supervisor. El _entrypoint_ hace:
     1. `litestream restore -if-db-not-exists -if-replica-exists -config /etc/litestream.yml "$DATABASE_PATH"`;
     2. `exec litestream replicate -exec "node build" -config /etc/litestream.yml`.
   - **Configuración de Litestream** (formato 0.5):
@@ -515,8 +515,8 @@ que corresponda).
   - **Staging**: otra aplicación de Coolify en el mismo servidor, puerto 7312, con su propio
     volumen, bucket, clave de B2 y clave del Gateway.
 - **Justificación**: referencia de Litestream (configuración 0.5, `restore`, guías de Backblaze y
-  Docker: «Litestream will monitor your application's process»), guías de Coolify (*rolling
-  updates* y *health checks*), adapter-node (SIGTERM, `SHUTDOWN_TIMEOUT` y `sveltekit:shutdown`)
+  Docker: «Litestream will monitor your application's process»), guías de Coolify (_rolling
+  updates_ y _health checks_), adapter-node (SIGTERM, `SHUTDOWN_TIMEOUT` y `sveltekit:shutdown`)
   y la página del paquete en Debian.
 - **Alternativas consideradas**:
   - **Litestream como contenedor aparte (Compose)**: no se puede ordenar la restauración antes del
@@ -541,8 +541,8 @@ que corresponda).
       `spawn(process.execPath, ['build/index.js'], { env: mínimo, stdio: 'pipe' })`, **sin shell**
       (válido en Windows);
     - espera a que `/api/v1/health` responda y pasa las URL con `provide`/`inject`;
-    - en el *teardown*, `child.kill()` y cierre de los simuladores;
-    - el proyecto se ejecuta con un solo *worker* (`fileParallelism: false`).
+    - en el _teardown_, `child.kill()` y cierre de los simuladores;
+    - el proyecto se ejecuta con un solo _worker_ (`fileParallelism: false`).
   - **Simuladores**: `node:http` en `tests/mock-servers/<proveedor>.ts` (OpenRouter, Mistral,
     Resend, BCE, Turnstile, GitHub y Gateway).
     - Cada uno escucha en el puerto 0, reproduce el formato real (p. ej. el CSV del BCE, el 200
