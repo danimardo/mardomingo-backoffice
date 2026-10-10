@@ -4,10 +4,10 @@
 |---|---|
 | Estado | Diseño en revisión (v2: plataforma multi-app) |
 | Fecha | 2026-10-10 |
-| Versión del documento | 2.0 (sustituye a la 1.0 del 2026-10-06) |
-| Copias | `secretario-backend/Historias.md` (original) y `secretario2/docs/v4-backend-spec.md` (copia literal para la app). Se editan en el original y se vuelven a copiar. |
+| Versión del documento | 2.1 (2026-10-10: estrategia de testing, sección 15; sustituye a la 2.0 y a la 1.0 del 2026-10-06) |
+| Copias | `mardomingo-backoffice/Historias.md` (original) y `secretario2/docs/v4-backend-spec.md` (copia literal para la app). Se editan en el original y se vuelven a copiar. |
 | Primera app cliente | Secretario AI — cambios en la app: `secretario2/docs/v4-app-spec.md` |
-| Repositorio del backend | Privado, `mardomingo-backoffice` (carpeta local actual: `secretario-backend`) |
+| Repositorio del backend | Privado, `mardomingo-backoffice` (https://github.com/danimardo/mardomingo-backoffice) |
 | Marca y dominios | «Cuenta Mardomingo». API: `https://api.mardomingo.com` · Web (registro, login, panel, administración): `https://cuenta.mardomingo.com` |
 
 > Este documento es el **diseño del backend**. No sustituye a `secretario2/Especificaciones/specs.md`, que sigue siendo la fuente de verdad funcional de la app Secretario. Cuando se implemente cada bloque, su contenido se volcará a la documentación del repositorio que corresponda.
@@ -394,6 +394,7 @@ El proveedor activo se elige con una **variable de entorno del servidor** (`PAYM
 - CA1: Si `APP_ENV != production`, cualquier usuario puede simular compras.
 - CA2: Si `APP_ENV = production`, solo los usuarios con rol `tester` o `admin` pueden; para el resto, los botones de compra aparecen desactivados con el texto "Próximamente".
 - CA3: Las compras simuladas se excluyen de los ingresos en estadísticas, no generan factura y no cuentan como "compra" para el tope diario (BE-FR-11.6).
+- CA4: Al abrir la página de compra, el servidor genera un **identificador de intento** de un solo uso que viaja en el formulario. La compra es idempotente por ese identificador: un doble clic, un reenvío o volver atrás y reenviar muestran la misma compra sin acreditar de nuevo. Funciona sin JavaScript y vale igual para el proveedor `stripe` (sesión de checkout).
 
 **BE-FR-26 — Aceptación previa al pago.** Antes de comprar, el usuario marca una casilla por la que acepta el inicio inmediato del servicio y reconoce la pérdida del derecho de desistimiento sobre el contenido digital. Se registra con fecha y versión del texto. En el mismo paso puede indicar que quiere **factura completa** (BE-FR-74).
 
@@ -998,7 +999,7 @@ Solo las variables de entorno listadas al final de esta sección (secretos e inf
 | `model_price_change_alert_pct` | 20 % | Global | Alerta de cambio de precio de un modelo asignado |
 | `price_reference_window_days` / `price_reference_min_samples` | 30 / 50 | Global | Cálculo de precios orientativos |
 | `flagged_ops_alert_per_day` | 3 | Global | Operaciones marcadas por moderación que disparan alerta |
-| `support_email` | Por definir | Global / por app | Email de soporte |
+| `support_email` | `soporte@mardomingo.com` | Global / por app | Email de soporte |
 | Paquetes | 5 € → 5.000 (+0 %), 10 € → 10.500 (+5 %), 25 € → 27.500 (+10 %) | Global | BE-FR-23 |
 | Operaciones (modelo, respaldos, `max_output_tokens`, `max_cost_credits`, *timeout*…) | Equivalentes a los sugeridos hoy por el asistente de Secretario | Por operación | BE-FR-77 |
 | Transcripción | Voxtral activo, backup configurable | Por operación | BE-FR-35 |
@@ -1026,7 +1027,7 @@ Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`st
 - **Coolify**: una aplicación (contenedor Node con `adapter-node` y **ffmpeg/ffprobe** en la imagen) con volumen persistente para el fichero SQLite; dominios `api.mardomingo.com` y `cuenta.mardomingo.com` con TLS, servidos por la misma instancia.
 - **Entornos**:
   - `production`: dominios anteriores.
-  - `staging`: `api-staging.mardomingo.com` y `cuenta-staging.mardomingo.com`, con su propia base de datos, su propio bucket de backups, claves de proveedores de IA propias con **límite de gasto** (clave de OpenRouter con tope de crédito), claves de prueba de Turnstile y pago simulado para todos (`APP_ENV = staging`). Nunca se copian datos de producción a staging.
+  - `staging`: en el **mismo servidor** que producción (otra aplicación de Coolify, en otro puerto), con `api-staging.mardomingo.com` y `cuenta-staging.mardomingo.com`, con su propia base de datos, su propio bucket de backups, claves de proveedores de IA propias con **límite de gasto** (clave de OpenRouter con tope de crédito), claves de prueba de Turnstile y pago simulado para todos (`APP_ENV = staging`). Nunca se copian datos de producción a staging.
   - Las apps de escritorio apuntan a staging con su mecanismo de desarrollo (en Secretario, `SECRETARIO_BACKEND_URL`, `v4-app-spec.md` APP-FR-10).
 - **Una sola instancia por entorno** (requisito de SQLite). El despliegue debe evitar dos contenedores simultáneos escribiendo en el mismo fichero (despliegue con parada previa o estrategia equivalente). Al arrancar se liberan las reservas abiertas (BE-FR-71).
 - **Backups**: Litestream replica en continuo el SQLite a Backblaze B2 (región UE, API compatible con S3) con retención mínima de 30 días. Procedimiento de **restauración documentado y probado** antes del lanzamiento público (requisito: el dinero de los usuarios depende de él).
@@ -1693,12 +1694,12 @@ Cachés de pnpm y de los navegadores de Playwright. *Sharding* solo si la suite 
 
 Mientras no se resuelvan se aplican suposiciones conservadoras, y cada una genera una tarea de confirmación en el plan.
 
-1. **Doble envío de la compra simulada.** `Historias.md` no define cómo se evita que un doble clic cree dos compras. *Suposición:* el formulario de compra lleva un identificador de intento de un solo uso y la compra es idempotente por ese identificador; lo comprueba el E2E 4.
-2. **Formato del BCE** (XML o API SDMX). *Suposición:* lo decide el plan y el simulador reproduce el formato elegido.
-3. **Inmutabilidad en la BD.** *Suposición:* además del test de arquitectura, *triggers* de SQLite impiden `UPDATE` y `DELETE` en las tablas inmutables (salvo la anonimización, que usa una vía dedicada).
-4. **Versiones de navegador soportadas.** *Suposición:* las dos últimas versiones estables de Chrome, Edge, Firefox y Safari.
+1. ~~**Doble envío de la compra simulada.**~~ **Resuelta (2026-10-10):** identificador de intento de un solo uso (BE-FR-25 CA4); lo comprueba el E2E 4.
+2. ~~**Formato del BCE.**~~ **Resuelta (2026-10-10):** API SDMX del BCE (`data-api.ecb.europa.eu`) en formato CSV; el simulador reproduce ese formato.
+3. ~~**Inmutabilidad en la BD.**~~ **Resuelta (2026-10-10):** además del test de arquitectura, *triggers* de SQLite impiden `UPDATE` y `DELETE` en `credit_movements`, `admin_audit`, `invoices` y `prompt_templates`; la anonimización legal usa una vía dedicada y testeada.
+4. ~~**Versiones de navegador soportadas.**~~ **Resuelta (2026-10-10):** las dos últimas versiones estables de Chrome, Edge, Firefox y Safari (incluido iOS).
 5. **Duración máxima aceptable de una PR.** *Suposición:* se mide en L01–L03 y se fija como objetivo.
-6. **Smoke después de cada despliegue a staging** (sin datos de producción). *Suposición:* sí, `test:e2e:smoke` contra `cuenta-staging` con una cuenta de prueba dedicada, más la verificación de proxy de la constitución.
+6. ~~**Smoke después de cada despliegue a staging.**~~ **Resuelta (2026-10-10):** sí, `test:e2e:smoke` contra `cuenta-staging` con una cuenta de prueba dedicada (sin datos de producción), más la verificación de proxy de la constitución.
 7. **Pruebas de la app Secretario** (cliente): quedan fuera de este documento; corresponden a `v4-app-spec.md`.
 
 ### 15.28 Integración con Spec Kit

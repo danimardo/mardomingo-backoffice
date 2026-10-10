@@ -745,7 +745,7 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | `ADMIN_EMAIL` | Email del administrador | La cuenta que se registra y **verifica** con ese email (normalizado) recibe el rol `admin`. Nunca hay más de una cuenta `admin`: si ya existe otra, no se promueve y se registra un error. Cambiar la variable no retira el rol al anterior; eso exige una acción explícita, auditada. |
 | `BETTER_AUTH_URL` y orígenes de confianza | Las URL de `cuenta.` y `api.` del entorno | Better Auth atiende los dos dominios. |
 | `PUBLIC_TURNSTILE_SITE_KEY` | Clave pública de Turnstile | No es secreta. |
-| `EMAIL_FROM` | Remitente de los emails | Dominio con SPF, DKIM y DMARC. |
+| `EMAIL_FROM` | `Cuenta Mardomingo <no-reply@mardomingo.com>` | Dominio con SPF, DKIM y DMARC. `Reply-To`: el email de soporte (`soporte@mardomingo.com`). |
 | `LOG_LEVEL` | `info` en producción; `debug` en staging y desarrollo | Valores de pino. |
 | `CLIENT_LOG_LEVEL` | `warn` en producción; `debug` en desarrollo | No es secreta. Llega al navegador en los datos del layout raíz. |
 | `LOG_GATEWAY_URL` | URL de ingesta del Log Gateway | Obligatoria en staging y producción; ausente en desarrollo. |
@@ -884,4 +884,4 @@ visible, su reflejo en el panel de administración y en la auditoría. Los lotes
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 1.4.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 1.4.1 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
