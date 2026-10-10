@@ -4,7 +4,7 @@
 |---|---|
 | Estado | Diseño en revisión (v2: plataforma multi-app) |
 | Fecha | 2026-10-10 |
-| Versión del documento | 2.2 (2026-10-10: experiencia de usuario y diseño, sección 16; la 2.1 añadió la estrategia de testing, sección 15; sustituye a la 2.0 y a la 1.0 del 2026-10-06) |
+| Versión del documento | 2.4 (2026-10-10: revisión cruzada de los prompts de preparación: modelo de datos, secciones 15 y 16; la 2.3 añadió la arquitectura por funcionalidades, 15.2 y 15.28; la 2.2 añadió la experiencia de usuario y diseño, sección 16, y la 2.1, la estrategia de testing, sección 15; sustituye a la 2.0 y a la 1.0 del 2026-10-06) |
 | Copias | `mardomingo-backoffice/Historias.md` (original) y `secretario2/docs/v4-backend-spec.md` (copia literal para la app). Se editan en el original y se vuelven a copiar. |
 | Primera app cliente | Secretario AI — cambios en la app: `secretario2/docs/v4-app-spec.md` |
 | Repositorio del backend | Privado, `mardomingo-backoffice` (https://github.com/danimardo/mardomingo-backoffice) |
@@ -115,11 +115,11 @@ Ofrecer una **plataforma común** para las apps de IA del propietario (escritori
 
 | Pieza | Elección | Notas |
 |---|---|---|
-| Framework | **SvelteKit** (`adapter-node`) | Un único proyecto para landing, panel de usuario, panel de administración y API (`+server.js`). Sirve los dos dominios (API y web) desde la misma instancia. |
+| Framework | **SvelteKit** (`adapter-node`) | Un único proyecto para landing, panel de usuario, panel de administración y API (`+server.ts`). Sirve los dos dominios (API y web) desde la misma instancia. |
 | Base de datos | **SQLite** en modo **WAL** | Un fichero en volumen persistente. Las escrituras se serializan, lo que garantiza que dos peticiones simultáneas no gasten ni reserven el mismo crédito. |
 | ORM | **Drizzle** (`sv add drizzle`) | Migraciones versionadas en el repositorio. |
 | Autenticación | **Better Auth** (`sv add better-auth`) con adaptador Drizzle | Plugins: `bearer`, `admin`, `captcha` (Turnstile); *rate limit* integrado con almacenamiento en base de datos; cambio de email con verificación. |
-| Validación y contrato | Esquemas de validación (p. ej. **Zod**) | De ellos se genera el **OpenAPI** de la API (ver 7.1). |
+| Validación y contrato | **Zod 4** + **zod-openapi** | De los esquemas se genera el **OpenAPI** de la API (ver 7.1). |
 | Audio | **ffprobe** (ffmpeg) en la imagen del contenedor | Para medir en el servidor la duración del audio (ver BE-FR-44). |
 | Internacionalización | **Paraglide** (`sv add paraglide`) | Solo `es` en la v4. |
 | Estilos | **Tailwind CSS** | |
@@ -127,7 +127,7 @@ Ofrecer una **plataforma común** para las apps de IA del propietario (escritori
 | Emails | **Resend** | Tras una interfaz de envío propia (ver 5.13). |
 | Backups | **Litestream** → **Backblaze B2** (región UE, EU Central) | Bucket privado dedicado; clave de aplicación limitada a ese bucket. |
 | Despliegue | **Coolify** | Una sola instancia por entorno (requisito de SQLite); entornos `production` y `staging`. |
-| Logs y monitorización | **OpenObserve** | |
+| Logs y monitorización | **pino** (servidor) y **loglevel** (navegador) → stdout + **Log Gateway** → **OpenObserve** | Constitución, principio XI. |
 
 ### 4.2 Componentes lógicos
 
@@ -690,14 +690,14 @@ Tablas principales (las de Better Auth — `user`, `session`, `account`, `verifi
 | `apps` | `id`, `slug` (único), `name`, `description`, `client_types`, `status` (`active`/`disabled`), `links` (JSON), `min_app_version`, `recommended_app_version`, `enforce_version`, `maintenance_active`, `maintenance_message`, `allowed_origins`, `settings_overrides` (JSON), `sync_schema` (JSON), `support_email`, `created_at`, `updated_at` |
 | `app_operations` | `id`, `app_id`, `key`, `name`, `kind` (`chat`/`transcription`/`image`), `mode` (`libre`/`plantilla`), `model`, `fallback_models` (JSON), `preferred_provider`, `margin_override`, `temperature`, `max_output_tokens`, `max_cost_µc`, `estimated_max_cost_µusd`, `timeout_ms`, `capabilities` (JSON), `limits` (JSON), `transcription_config` (JSON), `group`, `active`, `updated_at` — único (`app_id`, `key`) |
 | `prompt_templates` | `id`, `operation_id`, `version`, `messages` (JSON), `variables` (JSON), `response_format` (JSON), `tools` (JSON), `created_at` — **inmutable** por versión |
-| `user` (Better Auth) | `id`, `email`, `email_verified`, `role` (lista separada por comas: `user`, `tester`, `admin`, como admite el plugin `admin`), `banned`, `ban_reason`, **`email_normalized`** (único), **`signup_app_id`**, **`has_real_purchase`**, **`low_balance_threshold_µc`**, **`low_balance_notified`**, **`deleted_at`**, `created_at`. Estado derivado sin campos duplicados: sin verificar = `email_verified = false`; bloqueada = `banned`; borrada = `deleted_at` no nulo |
+| `user` (Better Auth) | `id`, `email`, `email_verified`, `role` (lista separada por comas: `user`, `tester`, `admin`, como admite el plugin `admin`), `banned`, `ban_reason`, **`email_normalized`** (único), **`signup_app_id`**, **`deleted_at`**, `created_at`. Estado derivado sin campos duplicados: sin verificar = `email_verified = false`; bloqueada = `banned`; borrada = `deleted_at` no nulo |
 | `session` (Better Auth) | `id`, `user_id`, `token`, `expires_at`, `ip_address`, `user_agent`, **`app_id`** (nulo en la web de la cuenta), **`device_name`**, **`app_version`**, **`last_used_at`** |
 | `login_attempts` | `email_normalized_hash`, `failures`, `window_start`, `locked_until` |
 | `legal_documents` | `id`, `document` (`terms`/`privacy`/`cookies`/`aup`/`withdrawal_waiver`), `version`, `published_at`, `requires_reacceptance`, `content_hash` |
 | `terms_acceptances` | `id`, `user_id`, `document` (los de `legal_documents` + `age_declaration`), `version`, `accepted_at`, `ip`, `app_id` (desde dónde se aceptó) |
 | `welcome_grants` | `email_normalized_hash` (único), `granted_at` — sobrevive al borrado de cuentas |
 | `credit_buckets` | `id`, `user_id`, `kind` (`free`/`paid`), `initial_µc`, `remaining_µc`, `expires_at` (nulo en `paid`), `source` (`welcome`/`purchase`/`adjustment`), `payment_id`, `simulated`, `created_at` |
-| `user_balances` | `user_id`, `debt_µc`, `updated_at` (saldo materializado = Σ `remaining_µc` − `debt_µc`) |
+| `user_balances` | `user_id`, `debt_µc`, **`has_real_purchase`**, **`low_balance_threshold_µc`**, **`low_balance_notified`**, `updated_at` (saldo materializado = Σ `remaining_µc` − `debt_µc`). Los tres campos en negrita pasaron de `user` a esta tabla (2.4) para que los gestione `credits` sin depender de `accounts` |
 | `credit_holds` | `id`, `user_id`, `operation_id`, `amount_µc`, `created_at`, `expires_at`, `released_at` |
 | `credit_movements` | `id`, `user_id`, `type`, `amount_µc` (con signo), `bucket_id`, `operation_id`, `app_id` (informativo), `payment_id`, `admin_reason`, `created_at` — **inmutable** |
 | `ai_operations` | `id`, `user_id`, `app_id`, `session_id`, `operation`, `template_version`, `provider`, `model`, `used_fallback`, `status` (`ok`/`provider_error`/`cancelled`/`undelivered`/`interrupted`/`rejected`), `idempotency_key`, `input_tokens`, `output_tokens`, `audio_seconds`, `cost_µusd`, `cost_estimated`, `hold_µc`, `charged_µc`, `absorbed_µc`, `truncated`, `flagged`, `duration_ms`, `app_version`, `error_code`, `provider_generation_id`, `created_at` — **sin contenido**; único (`user_id`, `idempotency_key`) cuando la clave existe |
@@ -710,10 +710,14 @@ Tablas principales (las de Better Auth — `user`, `session`, `account`, `verifi
 | `settings` | `key`, `value` (JSON), `updated_at` — parámetros globales de la sección 9 |
 | `model_cache` | `model_id`, `pricing` (JSON), `modalities` (JSON), `supported_parameters` (JSON), `fetched_at` |
 | `price_references` | `app_id`, `operation`, `typical_µc`, `sample_size`, `source` (`auto`/`manual`), `computed_at` |
+| `fx_rates` | `id`, `usd_eur_ppm`, `source` (`ecb`/`manual`), `ecb_rate_ppm`, `buffer_ppm`, `effective_from`, `created_at` — histórico del tipo de cambio aplicado (BE-FR-87 CA1) |
 | `announcements` | `id`, `app_id` (nulo = todas), `level`, `message`, `link`, `starts_at`, `ends_at`, `min_version`, `max_version`, `active` |
 | `admin_audit` | `id`, `admin_id`, `action`, `entity`, `entity_id`, `before`, `after`, `reason`, `created_at` — **inmutable** |
 | `alerts_state` | `key`, `active`, `last_sent_at` — evita emails repetidos por el mismo cruce de umbral |
 | `disposable_domains` | `domain` |
+| `rate_limit` (Better Auth) | Contadores del *rate limit* de autenticación por IP (BE-FR-45), con el esquema que define Better Auth |
+| `protection_state` | `key`, `value` (JSON), `updated_at` — estado del freno global del día y su liberación manual (BE-FR-46) |
+| `release_downloads` | `app_id`, `day`, `downloads`, `fetched_at` — descargas diarias del instalador desde GitHub Releases (BE-FR-54, embudo de alta) |
 
 Toda escritura que afecte a saldo o reservas (reserva, cobro, compra, ajuste, caducidad, reembolso) se ejecuta en **una única transacción** que actualiza bolsas, deuda, reservas y ledger a la vez.
 
@@ -1005,7 +1009,7 @@ Solo las variables de entorno listadas al final de esta sección (secretos e inf
 | Operaciones (modelo, respaldos, `max_output_tokens`, `max_cost_credits`, *timeout*…) | Equivalentes a los sugeridos hoy por el asistente de Secretario | Por operación | BE-FR-77 |
 | Transcripción | Voxtral activo, backup configurable | Por operación | BE-FR-35 |
 
-Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`staging`/`production`), `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `PAYMENTS_PROVIDER`, `INVOICING_PROVIDER`, `DATABASE_PATH`, `BETTER_AUTH_SECRET`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `RESEND_API_KEY`, `TURNSTILE_SECRET`, `BODY_SIZE_LIMIT`, credenciales S3 de Litestream y, en la fase Stripe, sus claves y las del proveedor de facturación.
+Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`test`/`staging`/`production`), `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `PAYMENTS_PROVIDER`, `INVOICING_PROVIDER`, `DATABASE_PATH`, `BETTER_AUTH_SECRET`, `OPENROUTER_API_KEY`, `MISTRAL_API_KEY`, `RESEND_API_KEY`, `TURNSTILE_SECRET`, `BODY_SIZE_LIMIT`, credenciales S3 de Litestream y, en la fase Stripe, sus claves y las del proveedor de facturación.
 
 ---
 
@@ -1015,7 +1019,7 @@ Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`st
 2. **Contraseñas** con el algoritmo de hash de Better Auth; nunca se registran en logs.
 3. **Secretos** (claves de proveedores, Resend, Turnstile, Litestream, pagos, facturación) solo en variables de entorno de Coolify; nunca en el repositorio. Claves distintas por entorno.
 4. **Tests obligatorios** (Vitest) de: fórmula de cobro (con comisión del proveedor) y redondeo, orden de consumo de bolsas, **reservas con peticiones simultáneas**, estimación del coste máximo, deuda y su liquidación, caducidad, idempotencia de pagos y de `/ai/*`, reconstrucción del saldo desde el ledger, concurrencia de cobros, conflicto de sincronización, validación del documento de sincronización por esquema, aislamiento entre apps (sesión, sincronización y operaciones) y cumplimiento del contrato OpenAPI.
-5. **Logs** en OpenObserve con identificador de petición, app, usuario (id, no email), operación, estado y duración. **Prohibido** registrar cuerpos de petición o respuesta de `/ai/*` y `/sync`.
+5. **Logs** (stdout + Log Gateway → OpenObserve; constitución, principio XI) con identificador de petición, app, usuario (id, no email), operación, estado y duración. **Prohibido** registrar cuerpos de petición o respuesta de `/ai/*` y `/sync`.
 6. **Sin contenido persistido** (BE-FR-38).
 7. **Proveedores**: `data_collection: "deny"` en OpenRouter (BE-FR-33).
 8. **Retención y encargados del tratamiento**: BE-FR-83.
@@ -1048,7 +1052,7 @@ Variables de entorno (no editables desde el panel): `APP_ENV` (`development`/`st
     - aviso y borrado de cuentas inactivas (BE-FR-86);
     - contador de descargas de GitHub Releases para el embudo de alta (BE-FR-54).
   - Semanal: actualización de la lista de dominios desechables.
-- **Monitorización**: `/health`, logs y errores en OpenObserve, alertas por email (5.13).
+- **Monitorización**: `/health`, logs y errores en OpenObserve (a través del Log Gateway), alertas por email (5.13).
 
 ---
 
@@ -1151,6 +1155,11 @@ Resumen de las decisiones tomadas con el propietario del producto durante el dis
 | **Temas (2026-10-10)** | Claro y oscuro; selector Sistema / Claro / Oscuro con Sistema inicial, sin JavaScript y sin destello (16.4) |
 | **Adaptación (2026-10-10)** | Mobile-first en toda la web, también en el panel de administración; objetivos táctiles de 44 × 44 px (16.5) |
 | **Usabilidad (2026-10-10)** | Prueba ligera con 3–5 personas antes del lanzamiento público con cobros reales (16.10) |
+| **Arquitectura (2026-10-10)** | Monolito modular por funcionalidades con API pública, dueño único de cada tabla y fronteras comprobadas por ESLint y un test de arquitectura (constitución v2.0.0, `ARCHITECTURE.md`, ADR 0005) |
+| **Logging (2026-10-10)** | pino en el servidor y loglevel en el navegador; stdout + Log Gateway → OpenObserve; sin IP ni contenido; catálogo de eventos por funcionalidad (constitución XI) |
+| **Validación (2026-10-10)** | Zod 4 en todas las fronteras, estricto en las entradas y tolerante en layouts y proveedores, `z.input` para lo que llega y sin aserciones de tipo (constitución XII) |
+| **Entorno (2026-10-10)** | `$env/dynamic/private` y `$env/dynamic/public` leídos solo en `env.ts`, validados en `init` con `building`; `APP_ENV=test` para las pruebas |
+| **Revisión cruzada (2026-10-10)** | `privacy` como funcionalidad propia; compra real y saldo bajo en `user_balances` (`credits`); `$lib/shared/` y `$lib/server/api/`; tests de integración junto a su funcionalidad; cobertura del 80 % sobre `src/lib`; tokens canónicos en el código desde L01 (constitución v2.1.0, ADR 0007) |
 
 ---
 
@@ -1195,13 +1204,16 @@ Cambios que este documento exige en la especificación de la app. **Incorporados
 
 | Zona | Ubicación | Runtime | Nivel principal | Necesita |
 |---|---|---|---|---|
-| Dominio puro (tarificación, bolsas, reservas, deuda, estimación, normalización, validación de sincronización, idempotencia, fechas) | `src/lib/server/domain/` | Node | Unit + property-based + mutation | Nada (funciones puras) |
-| Servicios (casos de uso, transacciones) | `src/lib/server/services/` | Node | Integración | SQLite temporal, *fakes* de adaptadores, `Clock` y `Logger` falsos |
-| Repositorios y esquema | `src/lib/server/db/` | Node | Integración | SQLite temporal con migraciones reales |
-| Adaptadores (OpenRouter, Mistral, Resend, BCE, Turnstile, GitHub, pagos, facturación) | `src/lib/server/adapters/` | Node | Integración de adaptador | Servidor HTTP simulado local |
+| Dominio puro (tarificación, bolsas, reservas, deuda, estimación, normalización, validación de sincronización, idempotencia, fechas) y núcleos comunes | `src/lib/server/features/*/domain/`, `src/lib/shared/`, `src/lib/server/shared/` | Node | Unit + property-based + mutation | Nada (funciones puras) |
+| Servicios (casos de uso, transacciones) | `src/lib/server/features/*/service.ts` | Node | Integración | SQLite temporal, *fakes* de adaptadores, `Clock` y `Logger` falsos |
+| Repositorios y esquema | `src/lib/server/features/*/{repository,schema}.ts`, `src/lib/server/db/` (cliente, transacción, migraciones) | Node | Integración | SQLite temporal con migraciones reales |
+| Adaptadores (OpenRouter, Mistral, Resend, BCE, Turnstile, GitHub, pagos, facturación) y sus `fake.ts` | `src/lib/server/adapters/` | Node | Integración de adaptador | Servidor HTTP simulado local |
+| Utilidades de la API (errores 7.1, cabeceras comunes, OpenAPI) | `src/lib/server/api/` | Node | Unit + N3 HTTP | Datos conocidos |
 | Configuración y entorno | `src/lib/server/config/` | Node | Unit | Objetos de entorno de prueba |
 | Logging (servidor) | `src/lib/server/logging/` | Node | Unit + emisión real | Registrador falso; stdout capturado |
-| Presenters, helper de formularios, guards | `src/lib/server/presenters/`, `forms/`, guards | Node | Unit | Datos conocidos |
+| Presenters, composición de modelos de vista, helper de formularios, guards | `src/lib/server/features/*/presenters.ts`, `src/routes/**/*.data.server.ts`, `src/lib/server/forms/`, guards de `accounts` | Node | Unit (claves exactas con `toStrictEqual`) | Datos conocidos |
+| Reglas de arquitectura (fronteras, dueños de tablas, estado de módulo, lector del entorno, eventos) | `tests/architecture/` | Node | Test de arquitectura | Nada (lee el código) |
+| Tema, efectos y componentes del marco | `src/lib/design-system/`, `src/lib/components/{ui,layout}/` | Navegador | N2 + E2E (16.11) | jsdom / build |
 | Formato compartido (importes BE-FR-22, fechas) | `src/lib/format/` | Node y navegador | Unit | Nada |
 | Esquemas compartidos | `src/lib/schemas/` | Node y navegador | Unit | Nada |
 | Form actions | `src/routes/**/+page.server.ts` | Node | Integración (llamada directa con evento falso) | SQLite temporal |
@@ -1271,11 +1283,14 @@ Las comprobaciones de N0 **no sustituyen** a ningún test. La cobertura es una s
 #### Lote L0X — <nombre>
 - Historia / requisitos: BE-FR-…
 - Objetivo y funcionalidad:
+- Funcionalidades afectadas y aristas nuevas entre ellas (ARCHITECTURE.md):
 - Rutas / componentes / código servidor / código cliente:
 - Comportamientos observables, estados, interacciones:
 - Reglas, errores, casos límite, riesgos:
 - Tests previstos: unit · componente · integración · aceptación (CA) · E2E · responsive · a11y · visual
 - Datos, fixtures, builders, fakes y dependencias sustituidas:
+- Entorno de los tests (variables mínimas, servidores simulados):
+- UX (si hay interfaz): estados de 16.6, criterios UX-xx y combinaciones de la matriz de 16.11:
 - Eventos de log del catálogo (principio XI):
 - Suite de cierre y criterios del checkpoint:
 ```
@@ -1286,7 +1301,7 @@ El plan los refina; aquí se fijan el orden y los tests clave.
 
 | Lote | Contenido (requisitos) | Riesgo | Tests clave | Suite de cierre |
 |---|---|---|---|---|
-| L01 | Esqueleto: proyecto, entorno, logging, hooks (requestId, separación por host, CSP), `/health`, OpenAPI vacío, CI, smoke; base visual (16.12: tokens, tema y efectos, layout base) | Medio | Arquitectura, entorno inválido, HTTP de hooks, smoke E2E | N0 + N3 HTTP + smoke |
+| L01 | Esqueleto: proyecto, entorno, logging, hooks (requestId, separación por host, preferencias, CSP), `/health`, OpenAPI vacío, punto de composición, CI, smoke; base visual (16.12: tokens, tema y efectos, marco) | Medio | Arquitectura, entorno inválido, HTTP de hooks, smoke E2E, a11y en ambos temas | N0 + N3 HTTP + smoke + a11y |
 | L02 | Esquema, migraciones, seed (app `secretario`, settings, paquetes), servicio de configuración (BE-FR-61, 62) | Alto | Migraciones sobre BD vacía, herencia global → app → operación, validación y auditoría de settings | N1 + N3 |
 | L03 | Registro, verificación, login web, sesiones, recuperación, bloqueo, edad (BE-FR-01–06, 64, 67, 69, 11.1–11.5) | Alto | Antienumeración, normalización de email, bloqueo, sesión deslizante, E2E de registro | N1 + N3 + E2E crítico |
 | L04 | Login de apps con Bearer, sesión por app, CORS, versión, mantenimiento, `/app/status`, anuncios, soporte (BE-FR-03, 47, 48, 62, 65, 84, 85) | Alto | Matriz de cabeceras, app y sesión; 426, 503, 400, 401 | N3 HTTP |
@@ -1297,11 +1312,11 @@ El plan los refina; aquí se fijan el orden y los tests clave.
 | L09 | Protecciones: tope diario, freno global, límites, altas por IP (BE-FR-11.4, 11.6, 43, 45, 46) | Alto | Límites por usuario y globales, IP real del proxy | N3 + N3 HTTP |
 | L10 | Paquetes, compra simulada, testers, contracargos, reembolsos, datos fiscales, interfaces de facturación (BE-FR-23–28, 74–76) | **Crítico** | Idempotencia de la acreditación, liquidación de deuda, `simulated` excluido, CSV contable | N1 + N3 + E2E de compra |
 | L11 | Sincronización y predeterminados (BE-FR-39–42) | Alto | Validación por estrategia, 412 concurrente, siembra con `updatedAt = 0`, copia con vista previa | N1 + PBT + N3 |
-| L12 | Panel de usuario (BE-FR-07, 08, 49, 66, 70) | Medio | Presenters sin campos internos, CSV, gráficas con tabla, sin JS | N2 + N3 + E2E |
+| L12 | Panel de usuario y privacidad (BE-FR-07, 08, 49, 66, 70) | Medio | Presenters sin campos internos, CSV, gráficas con tabla, sin JS, **primera prueba de carga** y Web Vitals de laboratorio | N2 + N3 + E2E + carga |
 | L13 | Panel de administración (BE-FR-18, 27, 50–57) | Alto | Guards de admin, auditoría inmutable, ajustes con motivo | N3 + E2E de admin |
 | L14 | Emails y tareas programadas (BE-FR-16, 54, 56, 58, 68, 73, 80, 83, 86) | Medio | Reloj falso (cambios de día en Madrid), umbrales sin repetición (`alerts_state`) | N3 |
 | L15 | Landings, legales, precios (BE-FR-59, 60, 73) | Bajo | axe, responsive, visual | Smoke E2E + a11y |
-| L16 | Endurecimiento previo a la beta: auditoría manual de accesibilidad, matriz de navegadores, línea base visual y de mutation, prueba de carga, simulacro de restauración | Alto | 15.18 y 15.20 | Nivel 4 completo |
+| L16 | Endurecimiento previo a la beta: auditoría manual de accesibilidad, matriz de navegadores, línea base visual y de mutation, repetición de la prueba de carga y de las Web Vitals, simulacro de restauración | Alto | 15.18 y 15.20 | Nivel 4 completo |
 
 ### 15.7 Unit testing (N1)
 
@@ -1376,7 +1391,7 @@ Los nombres accesibles pueden incluir el indicador de obligatorio («Email *»):
 - Mistral: reintentos a los 2, 4 y 8 s **con temporizador falso**, *timeout* de 45 s por intento, *fallback* al backup, errores 401/402/429 de facturación (alerta).
 - BCE (formato que decida el plan), Turnstile, Resend, GitHub Releases y saldo de OpenRouter: éxito, error, respuesta inválida y servicio caído.
 
-**Form actions** (llamada directa con un evento mínimo falso: `request` con `FormData`, `locals` con usuario y rol, `params`, `cookies` y logger):
+**Form actions** (llamada directa con un evento falso **completo y tipado**, creado por una fábrica de `RequestEvent` en `tests/builders/` sin aserciones de tipo: `request` con `FormData`, `locals` con usuario y rol, `params`, `cookies` y logger):
 
 - Lo que se **devuelve** (`fail(...)`) se comprueba con `toMatchObject({ status: 400 })`.
 - Lo que se **lanza** (`redirect`, `error`) se comprueba con `rejects.toSatisfy((e) => isRedirect(e))` o `isHttpError(e) && e.status === 403`.
@@ -1396,7 +1411,7 @@ Los nombres accesibles pueden incluir el indicador de obligatorio («Email *»):
 
 | Artefacto | Cómo se prueba |
 |---|---|
-| `load` de página y layout | No se llama directamente: su evento no se puede fabricar sin aserciones de tipo. Si compone varios servicios, la composición vive en un módulo normal (`*.data.ts`) que se prueba en N3. Las restricciones de query (`strictObject` en la página, `object` en el layout) se prueban con E2E que abren cada página **con** parámetros |
+| `load` de página y layout | No se llama directamente: su evento no se puede fabricar sin aserciones de tipo. Si compone varios servicios, la composición vive en un módulo `*.data.server.ts` (o en `presenters.ts`) que se prueba en N3 comparando las claves exactas (`toStrictEqual`). Las restricciones de query (`strictObject` en la página, `object` en el layout) se prueban con E2E que abren cada página **con** parámetros |
 | Actions | N3, llamada directa (15.10) |
 | `+server.ts` | N3 HTTP contra el build |
 | Hooks | N3 HTTP contra el build; las funciones puras que usan (resolución de host, guards), en N1 |
@@ -1468,7 +1483,7 @@ Nunca se usan contraseñas, tokens ni proveedores reales.
 
 ### 15.16 Tests funcionales derivados de historias de usuario
 
-**Trazabilidad:** cada test que demuestra un criterio lleva su identificador en el nombre (`[BE-FR-71/CA1]`) o, en Playwright, como etiqueta (`@BE-FR-71`). Un script `test:trace` cruza los `CA` de `Historias.md` con los nombres de los tests y lista los criterios sin test. Se agrupan los comportamientos relacionados; no se crea un test por frase. Se puede usar el formato Given/When/Then en el nombre o en un comentario, sin Cucumber.
+**Trazabilidad:** cada test que demuestra un criterio lleva su identificador en el nombre (`[BE-FR-71/CA1]`) o, en Playwright, como etiqueta (`@BE-FR-71`). Un script `test:trace` cruza los `CA` de `Historias.md` y los criterios de UX de la sección 16 (`UX-TEMA/CAn`, `UX-EFECTOS/CAn`, `UX-01`…`UX-18`, etiqueta `@UX-05`) con los nombres de los tests y lista los criterios sin test. Se agrupan los comportamientos relacionados; no se crea un test por frase. Se puede usar el formato Given/When/Then en el nombre o en un comentario, sin Cucumber.
 
 | Requisito / CA | Comportamiento | Nivel | Lote | E2E | Prioridad |
 |---|---|---|---|---|---|
@@ -1539,7 +1554,7 @@ Para cada fila se contemplan, cuando apliquen: camino correcto, validación, vac
 7. Nueva versión legal que exige aceptación: aviso en el panel y aceptación.
 8. Admin: ajuste de saldo con motivo y su entrada en la auditoría; activar el mantenimiento de la app → la API responde 503.
 9. Admin: copia de predeterminados con vista previa y exclusión de elementos.
-10. **Sin JavaScript**: registro, login, compra, datos fiscales, aceptación legal y una action de administración.
+10. **Sin JavaScript**: login, compra, datos fiscales, aceptación legal, una action de administración, el selector de tema y de efectos, y un filtro con paginación (formulario GET). El registro comprueba solo el aviso de `<noscript>` (excepción del captcha).
 
 **Errores del navegador:** en todos los E2E se escuchan `pageerror`, `console.error`, `requestfailed` y las respuestas 5xx, distinguiendo errores funcionales, de infraestructura y del simulador. No hay recursos externos opcionales: cualquier petición a un dominio externo es un fallo.
 
@@ -1573,7 +1588,10 @@ Para cada fila se contemplan, cuando apliquen: camino correcto, validación, vac
 
 **Regresión visual** (nocturna, Chromium): landing, login, saldo del panel, compra y una pantalla de administración, en móvil y escritorio y en tema claro y oscuro (unas 8–10 capturas). Se controlan los datos (sembrados y fijos), el reloj (`page.clock`), el locale (`es-ES`), las fuentes (propias), las animaciones (desactivadas) y `reducedMotion`. Solo se enmascaran regiones legítimamente dinámicas. **Las capturas se generan solo en el contenedor oficial de Playwright** de la misma versión que el paquete, nunca en Windows, porque el renderizado de fuentes es distinto. Solo se actualizan si el cambio es intencionado, se ha revisado y va en el mismo PR.
 
-**Rendimiento** (L16; opcional, pero conviene hacerlo pronto): `perf:seed` (siembra con los servicios y semilla fija) y `perf:load` (script propio con `fetch`), en cuanto existan el panel y `/ai/chat` con un proveedor simulado con latencia.
+**Rendimiento** (obligatorio por primera vez en **L12** y repetido en L16 y en cada release): `perf:seed` (siembra con los servicios y semilla fija) y `perf:load` (script propio con `fetch`), en cuanto existan el panel y `/ai/chat` con un proveedor simulado con latencia.
+
+- El script es repetible: credenciales sembradas, login real y las peticiones de la web con `Accept: text/html` (para recibir el `303` de las actions). Se ejecuta con Node y un resolutor de `$lib` (`node --import`), contra el build.
+- **Web Vitals de laboratorio** (16.8): LCP, INP y CLS con perfil móvil limitado en las páginas de 16.8, comparando la versión con cristal y la de efectos reducidos.
 
 - Se mide una sola sesión (tiempo de servicio) y 20 sesiones con pausas de unos 5 s con *jitter* y arranque escalonado.
 - Se comprueba que las reservas siguen siendo correctas bajo carga y se mide el volumen de logs por petición.
@@ -1587,16 +1605,30 @@ Para cada fila se contemplan, cuando apliquen: camino correcto, validación, vac
 - Un dato corrupto que se rechaza al leerlo registra su propio evento, sin copiar el contenido.
 - `console.log` puede no aparecer en el informe de Vitest: para inspeccionar un valor, se fuerza un `expect` que falle con el dato dentro de la comparación.
 
+**Reglas de logging y validación → mecanismo → evidencia:**
+
+| Regla | Mecanismo | Evidencia |
+|---|---|---|
+| Cada evento solo lleva sus campos permitidos | Firma tipada por evento | `check` + test del catálogo |
+| Los códigos de evento son únicos y llevan el prefijo de su funcionalidad | Test de arquitectura | `tests/architecture/` |
+| El `message` de los errores de bibliotecas no llega al log | Serializador propio | Test unitario del serializador |
+| Datos sensibles redactados | `redact` de pino | Test con el registrador real sobre stdout |
+| `/client-errors`: máximo 4 KB y `204` sin log al superar el límite | Esquema estricto + límite | Test HTTP |
+| El error de entorno no incluye valores | `env-schema.ts` | Test unitario con valores secretos de prueba |
+| Proveedor caído → `PROVIDER_ERROR` + evento con `operationId` | Adaptador + servicio | Test de integración con el servidor simulado |
+| Discrepancia del ledger → evento `error` y email | Tarea de verificación | Test de integración con datos corruptos |
+| Ningún log contiene contenido del usuario | Marcador de privacidad | E2E y tests HTTP (15.16) |
+
 ### 15.20 Mutation testing
 
-- **Piloto** tras cerrar L05 y L06, sobre `src/lib/server/domain/**` (tarificación, bolsas, reservas, deuda, estimación, normalización, idempotencia, fechas). Se excluyen la interfaz, el CSS, la configuración, los adaptadores simples, el logging y el código generado.
+- **Piloto** tras cerrar L05 y L06, sobre `src/lib/server/features/*/domain/**` y los módulos de dinero y fecha de `src/lib/shared/**` (tarificación, bolsas, reservas, deuda, estimación, normalización, idempotencia, fechas). Se excluyen la interfaz, el CSS, la configuración, los adaptadores simples, el logging y el código generado.
 - Se registran los mutantes, *killed*, *survived*, sin cobertura, *timeouts*, errores y tiempo total. Cada superviviente se clasifica (aserción insuficiente, caso límite ausente, mutación equivalente, código muerto o comportamiento no observable) y se corrige o se documenta.
 - **Sin umbral fijo de partida**: se crea una línea base y el umbral que bloquea la release se fija después (nunca un 100 % automático).
 - Ejecución semanal programada y en las PR que modifiquen el dominio (modo incremental). Nunca en el bucle de desarrollo ni sobre suites inestables.
 
 ### 15.21 Cobertura
 
-Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones y sentencias en el dominio y 80 % global), medidos con `@vitest/coverage-v8` sobre las suites de Vitest. Atención especial a las ramas de validación, errores, permisos, límites y reglas. No se escriben tests sin valor para subirla, y una cobertura alta no sustituye a los tests de aceptación, los E2E ni el mutation testing. El informe se publica en cada PR para ver los cambios.
+Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones y sentencias en `features/*/domain/**` y en los dos `shared/`, y 80 % en `src/lib/**`), medidos con `@vitest/coverage-v8` sobre las suites de Vitest. Las rutas, los *hooks* y los `+server.ts` quedan fuera de ese denominador porque se ejecutan en el proceso del build; los cubren los tests HTTP, los E2E y `test:trace`. Atención especial a las ramas de validación, errores, permisos, límites y reglas. No se escriben tests sin valor para subirla, y una cobertura alta no sustituye a los tests de aceptación, los E2E ni el mutation testing. El informe se publica en cada PR para ver los cambios.
 
 ### 15.22 Determinismo
 
@@ -1604,7 +1636,7 @@ Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones 
 - **Aleatoriedad e ids:** generador inyectable con semilla y UUID conocidos en los fixtures.
 - **Zona horaria:** el ejecutor corre con `TZ=UTC`; los tests de Europe/Madrid fijan la zona en el propio cálculo, nunca en la del sistema.
 - **Locale:** `es-ES` explícito en todo formateo.
-- **Entorno de los tests:** un conjunto mínimo documentado (`APP_ENV=test`, `DATABASE_PATH` temporal y secretos aleatorios generados al arrancar la suite) que se exporta solo para el comando de tests. No se crea un `.env` para los tests, y `APP_ENV=test` no exige las variables de producción.
+- **Entorno de los tests:** los tests unitarios y de integración no leen el entorno (reciben la configuración por parámetro). Solo los tests HTTP y Playwright arrancan el build con un conjunto mínimo documentado (`APP_ENV=test`, `DATABASE_PATH` temporal, dos hosts distintos para la API y la web, y secretos aleatorios generados al arrancar la suite), pasado por `webServer.env` o por el proceso que lanza el `globalSetup`, sin sintaxis de shell (Windows). No se crea un `.env` para los tests, y `APP_ENV=test` no exige las variables de producción.
 
 ### 15.23 Servicios externos
 
@@ -1612,7 +1644,7 @@ Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones 
 |---|---|---|---|
 | OpenRouter (chat, imagen, audio, modelos, saldo, generación) | *Fake* del puerto `AiGateway` + servidor simulado para el adaptador | Servidor simulado | Éxito, coste ausente, 5xx, *timeout*, JSON inválido, moderación, respaldo, saldo bajo |
 | Mistral (Voxtral) | Servidor simulado | Servidor simulado | Éxito, reintentos a 2/4/8 s, *timeout*, 401/402/429 de facturación, *fallback* |
-| Resend | *Fake* de `EmailSender` (en memoria) | *Outbox* en fichero | Éxito, error (log `warn`, sin reintento infinito) |
+| Resend | *Fake* de `EmailSender` (en memoria) | *Outbox* en fichero (`.outbox/`, ignorado por Git) | Éxito, error (log `warn`, sin reintento infinito) |
 | Turnstile | *Fake* de captcha | *Fake* (sin widget) | Válido, inválido, servicio caído |
 | BCE | Servidor simulado | Valor fijo | Éxito, error, días sin actualizar (alerta) |
 | GitHub Releases | Servidor simulado | — | Éxito, error |
@@ -1631,7 +1663,9 @@ Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones 
 | 3 Historia / PR | Antes de integrar | Puertas del CI (constitución) + smoke + E2E `@critical` afectados en Chromium + navegadores según el riesgo | Minutos |
 | 4 Completa | Nocturna y release | Todo: E2E en los tres navegadores, visual, a11y completa, cobertura, build de la imagen, mutation (semanal), carga (release) | Mayor |
 
-**Se amplía la selección** cuando cambia un componente `ui/` muy usado, un layout, los hooks, la autenticación o las sesiones, el esquema o las migraciones, la serialización o el OpenAPI, el tema o el CSS global, `svelte.config.*`, `vite.config.*`, el adaptador o una dependencia principal. En esos casos se ejecuta el nivel 3 completo.
+**Se amplía la selección** cuando cambia `$lib/shared` o `$lib/server/shared`, el `index.ts` de una funcionalidad (se ejecutan los tests de sus consumidores), un componente `ui/` o `layout/` muy usado, un layout, los hooks, la autenticación o las sesiones, el esquema o las migraciones, la serialización o el OpenAPI, el tema o el CSS global, `svelte.config.*`, `vite.config.*`, el adaptador o una dependencia principal. En esos casos se ejecuta el nivel 3 completo.
+
+El **test de arquitectura** se ejecuta siempre en el nivel 2: `vitest related` no lo selecciona porque no importa el código que comprueba.
 
 Los tiempos no se fijan de antemano: se miden (T-TEST-001) y se registran antes y después de cada optimización.
 
@@ -1639,10 +1673,14 @@ Los tiempos no se fijan de antemano: se miden (T-TEST-001) y se registran antes 
 
 ```text
 src/lib/**/X.test.ts            unit y componente (junto al código)
+src/lib/server/features/<f>/*.int.test.ts
+                                integración de la funcionalidad (servicios, repositorios)
+src/lib/server/adapters/<p>/    fake.ts e integración del adaptador
+src/routes/**/*.int.test.ts     actions y composición de modelos de vista
 tests/
-  integration/                  servicios, repositorios, actions, adaptadores
   http/                         hooks y API contra el build
-  fixtures/  builders/  fakes/  mock-servers/
+  architecture/                 fronteras y reglas estáticas
+  fixtures/  builders/  mock-servers/
 e2e/
   setup/                        storageState por rol
   smoke.spec.ts
@@ -1654,17 +1692,17 @@ scripts/
   lint-changed.*  test-trace.*  perf-seed.*  perf-load.*
 ```
 
-Vitest se organiza en **proyectos**: `unit` (Node), `component` (jsdom), `integration` (Node, una BD por fichero) y `http` (Node, build compartido, un *worker*). Playwright, en los proyectos `setup`, `chromium`, `firefox`, `webkit`, `mobile-webkit` y `visual`.
+Vitest se organiza en **proyectos** (`test.projects`): `unit` (Node, incluye `tests/architecture`), `component` (jsdom), `integration` (Node, ficheros `*.int.test.ts`, una BD por fichero) y `http` (Node, build compartido, un *worker*). Playwright, en los proyectos `setup`, `chromium`, `firefox`, `webkit`, `mobile-webkit` y `visual`.
 
 Scripts propuestos (pnpm; se crean en L01 y se documentan en `CLAUDE.md`):
 
 | Script | Propósito |
 |---|---|
-| `test` | Vitest: unit + componente + integración |
+| `test` | Vitest: unit + componente + integración (sin `http`) |
 | `test:unit` / `test:component` / `test:int` / `test:http` | Un proyecto de Vitest |
 | `test:related` | `vitest related` sobre los ficheros indicados |
 | `test:coverage` | Vitest con cobertura y umbrales |
-| `test:trace` | Lista los `CA` sin test |
+| `test:trace` | Lista los `CA` y los criterios `UX-xx` sin test |
 | `test:e2e` | Playwright, Chromium, todo |
 | `test:e2e:smoke` / `test:e2e:critical` | Por etiqueta |
 | `test:e2e:a11y` / `test:e2e:visual` | Accesibilidad / capturas |
@@ -1672,15 +1710,16 @@ Scripts propuestos (pnpm; se crean en L01 y se documentan en `CLAUDE.md`):
 | `test:e2e:ui` / `test:e2e:headed` / `test:e2e:debug` | Depuración |
 | `test:mutation` | Stryker (incremental por defecto) |
 | `lint:changed` | ESLint solo sobre los ficheros cambiados respecto al último commit (más los nuevos), con `--concurrency auto` y reintento en un hilo; si cambia la configuración de ESLint o un `tsconfig`, lint completo |
-| `perf:seed` / `perf:load` | Prueba de carga (L16) |
+| `perf:seed` / `perf:load` | Prueba de carga (L12, L16 y release) |
+| `lint:tokens` | Sin colores literales fuera de los tokens (puerta 10) |
 
 ### 15.26 CI, tests inestables y optimización
 
 **CI (GitHub Actions):**
 
-- **PR**: puertas de la constitución + `test:e2e:smoke` + `test:e2e:critical` (Chromium) + Firefox y WebKit si la PR toca las áreas de riesgo (15.18) + Stryker incremental si toca el dominio.
-- **`main`**: E2E completos en Chromium + a11y completa.
-- **Nocturna**: matriz de tres navegadores, regresión visual y vídeo de los fallos.
+- **PR**: puertas de la constitución (incluida la spec a11y de todas las páginas en ambos temas) + `test:e2e:smoke` + `test:e2e:critical` (Chromium) + Firefox y WebKit si la PR toca las áreas de riesgo (15.18) + Stryker incremental si toca el dominio.
+- **`main`**: E2E completos en Chromium.
+- **Nocturna**: matriz de tres navegadores, regresión visual, matriz completa de UX (16.11) y vídeo de los fallos.
 - **Semanal**: mutation completo sobre el dominio.
 - **Release**: nivel 4 contra la **imagen Docker** que se va a desplegar + prueba de carga.
 
@@ -1692,6 +1731,7 @@ Cachés de pnpm y de los navegadores de Playwright. *Sharding* solo si la suite 
 
 - Antes de recortar nada, se mide: coste fijo del lint con un solo fichero, número de ficheros del programa de TypeScript, perfil de CPU y latencia de `stat`.
 - Las librerías con índices enormes (p. ej. de iconos) se importan por ruta individual.
+- `Design/` (documentación y código archivado del sistema de diseño, ADR 0007) se excluye de Prettier, ESLint y `tsconfig`.
 - Si el antivirus en tiempo real domina, se excluyen la carpeta del proyecto y las cachés de pnpm (script en `scripts/` con opción de deshacerlo; requiere administrador).
 - Las suites no se ejecutan en paralelo entre sí, porque compiten por disco y CPU: se encadenan. `testTimeout` global de 30 s en Vitest para absorber la carga de la suite completa.
 - `eslint --cache` falla con configuraciones que contienen funciones (typescript-eslint): no se usa; en su lugar, `lint:changed`. El lint completo se parte en dos pasadas (`src tests` con `--concurrency auto` y el resto en serie). Un lint completo que pasa de 10 minutos se interrumpe y se sustituye por el parcial.
@@ -1707,6 +1747,7 @@ Mientras no se resuelvan se aplican suposiciones conservadoras, y cada una gener
 5. **Duración máxima aceptable de una PR.** *Suposición:* se mide en L01–L03 y se fija como objetivo.
 6. ~~**Smoke después de cada despliegue a staging.**~~ **Resuelta (2026-10-10):** sí, `test:e2e:smoke` contra `cuenta-staging` con una cuenta de prueba dedicada (sin datos de producción), más la verificación de proxy de la constitución.
 7. **Pruebas de la app Secretario** (cliente): quedan fuera de este documento; corresponden a `v4-app-spec.md`.
+8. **Hosts en modo test.** *Suposición:* dos nombres de host distintos (p. ej. `localhost` para la web y `127.0.0.1` para la API) para que la separación por host también se ejerza en los E2E; lo confirma el plan de L01.
 
 ### 15.28 Integración con Spec Kit
 
@@ -1721,17 +1762,24 @@ Mientras no se resuelvan se aplican suposiciones conservadoras, y cada una gener
 ```text
 T-TEST-001 Inventario de arquitectura y runtimes (15.2) y medición inicial de tiempos.
 T-TEST-002 Proyectos de Vitest, globalSetup de la BD plantilla y build compartido para http.
-T-TEST-003 Clock, generador de ids, Logger falso, builders y fakes base.
+T-TEST-003 Clock, generador de ids, Logger falso, fábrica tipada de RequestEvent, builders y fakes base.
 T-TEST-004 Servidores simulados (IA, BCE, Turnstile, Resend, GitHub, Log Gateway).
 T-TEST-005 Modo APP_ENV=test (adaptadores falsos, outbox en fichero), rechazado fuera de test.
 T-TEST-006 Scripts (15.25), lint:changed, test:trace y documentación en CLAUDE.md.
+T-TEST-007 Velocidad de verificación: medir el programa de TypeScript (tsc --listFilesOnly),
+           eslint --concurrency, testTimeout global y tiempos de cada comprobación.
+T-TEST-008 Script de exclusiones de Windows Defender (con -Remove) para la carpeta del
+           proyecto y las cachés de pnpm. Lo ejecuta una persona administradora, nunca el agente.
+T-ARCH-001 Reglas de ESLint de pureza del dominio y test de arquitectura de fronteras entre
+           funcionalidades (ARCHITECTURE.md, sección 9).
 T-PLAY-001 Configuración de Playwright contra el build, proyectos, artefactos y storageState por rol.
 T-PLAY-002 Smoke con detección de errores de página, consola e hidratación.
 T-A11Y-001 Spec a11y que recorre todas las rutas en ambos temas.
 T-QUAL-001 Cobertura con umbrales y publicación del informe en la PR.
 T-VIS-001  Capturas visuales en el contenedor de Playwright (L15 / L16).
 T-MUT-001  Piloto de Stryker sobre el dominio y línea base (tras L05–L06).
-T-QUAL-002 Prueba de carga (perf:seed / perf:load) y registro de resultados (L16).
+T-QUAL-002 Prueba de carga (perf:seed / perf:load) y registro de resultados (L12, L16 y release).
+T-QUAL-004 Web Vitals de laboratorio (16.8) con y sin efectos (L12 y L16).
 ```
 
 ### 15.29 Definition of Checkpoint (cierre de lote)
@@ -1739,11 +1787,13 @@ T-QUAL-002 Prueba de carga (perf:seed / perf:load) y registro de resultados (L16
 Un lote se cierra cuando:
 
 - La implementación prevista está completa.
-- `check`, `lint:changed` y el build son correctos.
+- `check`, `lint:changed` y el build son correctos, y pasa el test de arquitectura.
 - Están creados los tests obligatorios del lote, incluidos los que se escriben antes o inmediatamente después (15.5).
 - Pasan los tests afectados y la aceptación del lote.
 - Existen los fixtures y fakes necesarios.
 - No hay errores críticos ni tests pendientes sin justificar.
+- Si el lote tiene interfaz: sus estados de 16.6 y sus criterios UX-xx tienen test, y se han hecho las comprobaciones de UX de la definición de terminado de la constitución.
+- Si el lote añade dependencias: se vuelve a medir el número de ficheros del programa de TypeScript (T-TEST-007).
 - **No queda deuda de tests del lote.**
 
 No hace falta ejecutar en cada checkpoint todos los E2E, navegadores, viewports, capturas, mutation testing ni suites no afectadas.
@@ -1759,7 +1809,7 @@ Una historia está terminada cuando:
 - Los tests son deterministas, sin esperas arbitrarias ni tests ignorados sin justificar.
 - Las puertas del CI están en verde.
 - Los E2E críticos afectados pasan en Chromium y en los navegadores que exija el riesgo.
-- Se ha verificado el responsive mínimo.
+- Se ha verificado el responsive mínimo y, si tiene interfaz, las comprobaciones de UX de la constitución (temas, efectos reducidos, 320 px, teclado y sin JavaScript), con su estado declarado.
 - Las capturas coinciden o se han actualizado intencionadamente.
 - No hay errores inesperados de consola ni de página.
 - La cobertura no empeora sin justificación.
@@ -1804,27 +1854,28 @@ Todo lo que sigue son **hipótesis del propietario**: no hay investigación con 
 
 ### 16.2 Sistema de diseño
 
-- **Fuente canónica:** la carpeta `Design/`, con la identidad visual **«Aurora Salvia»**: azul noche, acento verde salvia y luz ambiental violeta, en tema claro y oscuro. Procede del sistema de diseño de **NetworkBench** (otra app del propietario, de escritorio con Tauri), reciclado con paleta propia el 2026-10-10. Para conocer los valores implementados manda `Design/src/lib/design-system/tokens.css` sobre las tablas de `DESIGN_TOKENS.md`.
+- **Fuente canónica:** la carpeta `Design/`, con la identidad visual **«Aurora Salvia»**: azul noche, acento verde salvia y luz ambiental violeta, en tema claro y oscuro. Procede del sistema de diseño de **NetworkBench** (otra app del propietario, de escritorio con Tauri), reciclado con paleta propia el 2026-10-10. Para conocer los valores implementados manda `Design/src/lib/design-system/tokens.css` sobre las tablas de `DESIGN_TOKENS.md`. **Desde L01** la fuente canónica pasa al código de la app (`src/lib/design-system/` y `src/lib/components/{ui,layout}/`), y `Design/` queda como documentación de la identidad (ADR 0007).
 - **Se reutiliza:**
   - la estructura de tokens por rol con su pareja clara y oscura;
   - los tres materiales de cristal (`glass-chrome`, `glass-card`, `glass-overlay`), cada uno con su respaldo opaco;
   - la regla de «ningún color literal fuera de los tokens» y su script `verify-tokens`;
   - adaptados, los componentes `Button`, `Card`, `Dialog`, `TextField`, `Toast`, `Tooltip`, `StatusPill`, `ProgressBar`, `Icon`, `Sidebar` (navegación del panel de administración) y `ThemeToggle`.
-- **No se aplica** lo propio de NetworkBench: `AVISOS.md`, `FLUJOS.md`, `PANTALLAS-H1.md`, `maqueta-navegable.html` y los componentes `TitleBar`, `DeviceCard`, `ExecutionLink`, `ChecklistItem`, `HomeScreenExample` y `VerificationCode`. Quedan como referencia hasta que se archiven.
+- **No se aplica** lo propio de NetworkBench: `AVISOS.md`, `FLUJOS.md`, `PANTALLAS-H1.md`, `maqueta-navegable.html` y los componentes `TitleBar`, `DeviceCard`, `ExecutionLink`, `ChecklistItem`, `HomeScreenExample` y `VerificationCode`, ni los tramos de escritorio de `RESPONSIVE-I18N.md` (1000 y 1400 px), porque la web es mobile-first (16.5). Quedan como referencia hasta que se archiven.
 
 **Adaptaciones pendientes** (contradicciones con esta especificación o con la constitución; se resuelven en el sistema de diseño, de forma centralizada, no con estilos locales):
 
 | ID | Adaptación | Motivo | Cuándo |
 |---|---|---|---|
-| DS-01 | Renombrar a Cuenta Mardomingo: títulos, clave `networkbench.theme` y documentos de NetworkBench archivados o reescritos | Es la identidad de otro producto | L01 |
+| DS-01 | Renombrar a Cuenta Mardomingo: títulos, clave `networkbench.theme` y documentos de NetworkBench archivados o reescritos | Es la identidad de otro producto | Ahora, en `Design/` |
 | DS-02 | Que el modo **Sistema** funcione sin JavaScript: sin elección explícita, los tokens siguen `prefers-color-scheme` en CSS; `data-theme` solo se usa para Claro u Oscuro elegidos, y el servidor lo pinta desde la cookie | Hoy `:root` es el tema oscuro, así que con SSR y sin JS un usuario con el sistema en claro vería el oscuro o un destello | L01 |
-| DS-03 | El controlador de tema guarda la preferencia en una **cookie técnica** (no en `localStorage`) y vive en el contexto del árbol de componentes, sin estado mutable a nivel de módulo | Constitución, «Estado y componentes»; el servidor necesita la preferencia para la primera pintura | L01 |
+| DS-03 | El controlador de tema guarda la preferencia en una **cookie técnica** (no en `localStorage`) y vive en el contexto del árbol de componentes, sin estado mutable a nivel de módulo | Constitución, «Estado y componentes»; el servidor necesita la preferencia para la primera pintura. `ThemeToggle` pasa a ser un formulario que funciona sin JavaScript (16.4) | L01 |
 | DS-04 | Tipografía para la web: tamaños en `rem` (no `px`); tamaño de cuerpo adecuado a la lectura web (el plan fija el valor; los 14 px de escritorio se revisan); pila de fuentes multiplataforma o fuentes propias autoalojadas, con licencia y peso medidos | Respetar la ampliación de texto del navegador; Segoe UI Variable y Cascadia Mono solo existen en Windows; las capturas visuales de 15.18 necesitan fuentes deterministas | L01 |
 | DS-05 | Tratar `prefers-reduced-transparency`, `prefers-reduced-motion`, `prefers-contrast` y `forced-colors`, y un atributo para el ajuste propio de efectos (p. ej. `data-effects="reduced"`) que retira el *blur* y el movimiento no esencial | Hoy solo existe el respaldo `@supports not (backdrop-filter)` | L01 |
-| DS-06 | Componentes propios de esta web: tabla de datos (encabezados, orden, desplazamiento local), paginación, grupos de casillas y de opciones, selector, aviso o *banner* (anuncios y documentos pendientes), estado vacío, contenedor de gráfica con tabla equivalente, cabecera y pie con navegación, y menú de cuenta | No existen en el sistema de NetworkBench | En el lote que los necesite por primera vez |
+| DS-06 | Componentes propios de esta web: tabla de datos (encabezados, orden, desplazamiento local), paginación, grupos de casillas y de opciones, selector, aviso o *banner* (anuncios y documentos pendientes), estado vacío, contenedor de gráfica con tabla equivalente, cabecera y pie con navegación, y menú de cuenta. Cada componente documenta sus estados, teclado, temas y efectos reducidos | No existen en el sistema de NetworkBench | El marco (`components/layout/`) en L01; el resto, en el lote que lo necesite por primera vez |
 | DS-07 | Nombres de token por rol: `--color-lavender` (ahora verde salvia) y `--color-mauve` (ahora violeta) | Los nombres heredados inducen a error | L01 |
-| DS-08 | Integración con Tailwind 4: los tokens se exponen a Tailwind sin duplicar valores; `verify-tokens` se adapta a la estructura del repositorio y pasa a ser una puerta del CI | Constitución: componentes propios sobre Tailwind; puertas del CI | L01 |
-| DS-09 | Medir el contraste sobre la composición real (cristal sobre el fondo ambiental, en los dos temas y con efectos reducidos), no solo entre pares de tokens | Hoy el contraste está verificado por cálculo entre tokens | En cada lote con interfaz |
+| DS-08 | Integración con Tailwind 4: los tokens se exponen a Tailwind sin duplicar valores; `verify-tokens` se adapta a la estructura del repositorio y pasa a ser la puerta 10 del CI (`lint:tokens`); la paleta por defecto de Tailwind se desactiva y se rechazan los colores arbitrarios (`bg-[#fff]`) | Constitución: componentes propios sobre Tailwind, solo con tokens | L01 |
+| DS-09 | Medir el contraste sobre la composición real (cristal sobre el fondo ambiental, en los dos temas y con efectos reducidos), no solo entre pares de tokens | Hoy el contraste está verificado por cálculo entre tokens | Ahora, en `Design/`; después, en cada lote con interfaz |
+| DS-10 | Semántica web de los componentes heredados: `Button` con `href` (enlace) y con `name`/`value`/`formaction` y `aria-busy`; `Sidebar` con `<a>` y `aria-current`; `ThemeToggle` como formulario; `Card` sin `div role="button"`; `Dialog` con alternativa sin JavaScript; `TextField` sin altura fija; textos de Paraglide; *snippets* en lugar de `<slot />`; y retirar las reglas de «aspecto nativo» (enlaces sin subrayar, `cursor: default`, `user-select: none`, prohibición del `<select>` nativo) | Contradicen los principios IX y XIII y la mejora progresiva | L01 (`Button`, `TextField`, `ThemeToggle`, marco); `Sidebar` en el lote de la administración |
 
 ### 16.3 Lenguaje visual: cristal selectivo
 
@@ -1870,6 +1921,7 @@ Las dos cookies son de preferencias estrictamente necesarias y se declaran en la
 - Funciona con zoom al 200 % y con el espaciado de texto de WCAG (interlineado 1,5; párrafos 2; letras 0,12; palabras 0,16).
 - El campo con el foco, su ayuda y la acción necesaria siguen visibles con el teclado virtual abierto y bajo las barras fijas.
 - Interfaz solo en español, con textos de Paraglide y formatos `es-ES`, sin concatenar textos que impidan traducir.
+- **Orientación:** cada página tiene un `<title>` propio que coincide con su `h1` y con el texto del enlace que lleva a ella; la ubicación actual en la navegación se marca con `aria-current="page"` además de la señal visual.
 
 ### 16.6 Estados por área
 
@@ -1920,7 +1972,7 @@ Cada especificación define los estados que apliquen a su área y justifica las 
 | UX-06 | BE-FR-25 CA2 | Cuando no se puede comprar, el texto «Próximamente» y su explicación son visibles y accesibles (no basta con un botón desactivado, que no recibe el foco) |
 | UX-07 | BE-FR-07 | La confirmación del borrado muestra el saldo que se pierde (en créditos y euros) y las apps afectadas, y pide la contraseña. La acción se llama «Borrar mi cuenta» y el foco inicial no está en ella. Al terminar, la sesión está cerrada y se confirma el borrado |
 | UX-08 | BE-FR-49.5 | Las gráficas tienen título, periodo y unidad, y tabla equivalente. «Sin datos» no se dibuja como cero. El selector de 30/90 días es un formulario GET (funciona sin JS y la URL se puede compartir) |
-| UX-09 | BE-FR-49.3, 49.4, 49.6 | Las listas paginadas conservan los filtros y la página en la URL, y al volver se restauran. La exportación CSV indica el rango y los filtros aplicados |
+| UX-09 | BE-FR-49.3, 49.4, 49.6 | Filtros, orden y paginación son un formulario GET con botón visible y enlaces de página (funcionan sin JavaScript; aplicar al cambiar es solo una mejora). Las listas conservan los filtros y la página en la URL, y al volver se restauran. La exportación CSV indica el rango y los filtros aplicados |
 | UX-10 | BE-FR-49.8, BE-FR-06 | La sesión actual se identifica («Esta sesión»). El texto de «cerrar todas» dice si la actual se mantiene |
 | UX-11 | BE-FR-70 CA2–CA3 | El aviso de documentos pendientes enlaza a cada documento, permite aceptarlos y explica qué deja de funcionar en las apps hasta hacerlo |
 | UX-12 | BE-FR-85 CA1 | Los anuncios del panel muestran su nivel con icono y texto además del color |
@@ -1954,9 +2006,11 @@ Complementa 15.18.
 
 - **Matriz proporcional:**
   - en las páginas clave: tema claro y oscuro × efectos normales y reducidos × anchos de 320, 390 y 1366 px;
-  - además: `forced-colors` y `reducedMotion` emulados en Playwright;
+  - además: `forced-colors`, `reducedMotion` y `contrast` emulados en Playwright; `prefers-reduced-transparency`, por el protocolo de Chromium o marcado como «no verificable» si no se puede emular;
+  - frecuencia: la spec a11y (todas las páginas, ambos temas) en cada PR; la matriz completa, en la ejecución nocturna;
   - el cambio de apariencia del sistema con Sistema seleccionado (`emulateMedia`) actualiza la página sin recargar y sin perder lo escrito.
-- **Sin JavaScript:** los flujos críticos y el selector de tema y de efectos funcionan con JavaScript desactivado. La excepción del captcha del registro está en la constitución, «Mejora progresiva».
+- **Sin JavaScript:** los flujos críticos, el selector de tema y de efectos, y los filtros y la paginación funcionan con JavaScript desactivado.
+- **axe sobre cristal:** cuando axe no puede calcular el contraste (resultado `incomplete`) en una superficie de cristal, cuenta como pendiente y se mide a mano (DS-09), no como aprobado. La excepción del captcha del registro está en la constitución, «Mejora progresiva».
 - **Regresión visual:** una de las capturas de 15.18 se toma con efectos reducidos.
 - **Estado de cada comprobación:** comprobado, pendiente, no verificable en este entorno o no aplica (con el motivo). La ausencia de errores automáticos no demuestra accesibilidad ni usabilidad.
 
@@ -1969,6 +2023,6 @@ Complementa 15.18.
   - la herramienta de medición del rendimiento y la matriz de pruebas.
 - **`/speckit-tasks`:** los estados, la accesibilidad, los temas y la adaptación **no** se dejan para el final como «pulido».
 - **L01** incluye la base visual:
-  - DS-01 a DS-05, DS-07 y DS-08;
-  - el layout base con el selector de tema y el ajuste de efectos.
-  Así el smoke y la spec de accesibilidad prueban los dos temas desde el principio. DS-06 y DS-09 se resuelven en cada lote con interfaz.
+  - DS-03, DS-08 y DS-10 (componentes del marco), migrando los tokens y componentes de `Design/` al código (ADR 0007), con DS-01, 02, 04, 05, 07 y 09 ya resueltos en `Design/`;
+  - el marco (`components/layout/`, parte de DS-06) con el selector de tema y el ajuste de efectos.
+  Así el smoke y la spec de accesibilidad prueban los dos temas desde el principio. El resto de DS-06 y la medición de DS-09 se resuelven en cada lote con interfaz.
