@@ -25,7 +25,8 @@ const effectsForm = z.strictObject({
 
 export const load: PageServerLoad = ({ locals, url }) => ({
 	appearance: locals.appearance,
-	redirectTo: safeInternalPath(url.searchParams.get('redirectTo'))
+	// Sin `redirectTo` en la query, vuelve a esta misma página tras guardar (no a la portada).
+	redirectTo: safeInternalPath(url.searchParams.get('redirectTo') ?? url.pathname)
 });
 
 export const actions: Actions = {
