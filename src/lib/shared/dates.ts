@@ -30,17 +30,17 @@ interface WallClock {
 }
 
 function wallClockOf(instant: EpochMs): WallClock {
-	const wall: Record<string, number> = {};
-	for (const part of formatter.formatToParts(instant)) {
-		wall[part.type] = Number(part.value);
-	}
+	// `Number` acepta `undefined`: las seis partes siempre están presentes en el formato de arriba.
+	const fields = new Map(
+		formatter.formatToParts(instant).map((part) => [part.type, part.value] as const)
+	);
 	return {
-		year: wall.year,
-		month: wall.month,
-		day: wall.day,
-		hour: wall.hour,
-		minute: wall.minute,
-		second: wall.second
+		year: Number(fields.get('year')),
+		month: Number(fields.get('month')),
+		day: Number(fields.get('day')),
+		hour: Number(fields.get('hour')),
+		minute: Number(fields.get('minute')),
+		second: Number(fields.get('second'))
 	};
 }
 
