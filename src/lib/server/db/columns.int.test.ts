@@ -9,14 +9,15 @@ import {
 	boolCheck,
 	civilDate,
 	civilDateCheck,
+	enumCheck,
 	epochMs,
 	json,
 	jsonCheck,
-	enumCheck,
 	micro,
 	nonNegativeCheck
 } from './columns';
-import { toCivilDate } from '$lib/shared/time';
+import { toCivilDate, toEpochMs } from '$lib/shared/time';
+import { toMicro } from '$lib/shared/money';
 
 const ledger = sqliteTable(
 	'ledger_test',
@@ -64,9 +65,9 @@ describe('columnas de dominio', () => {
 		db.insert(ledger)
 			.values({
 				flag: false,
-				amountMicro: 776_480,
+				amountMicro: toMicro(776_480),
 				day: toCivilDate('2026-10-25'),
-				createdAt: 1_792_879_200_000,
+				createdAt: toEpochMs(1_792_879_200_000),
 				active: true,
 				payload: { kind: 'chat' }
 			})
@@ -81,17 +82,9 @@ describe('columnas de dominio', () => {
 		const db = open();
 
 		expect(() =>
-			db
-				.insert(ledger)
-				.values({
-					flag: false,
-					amountMicro: -1,
-					day: toCivilDate('2026-10-25'),
-					createdAt: 1,
-					active: true,
-					payload: { kind: 'x' }
-				})
-				.run()
+			db.run(
+				sql`INSERT INTO ledger_test (amount_micro, day, created_at, active, payload) VALUES (-1, '2026-10-25', 1, 1, '{}')`
+			)
 		).toThrow();
 	});
 
