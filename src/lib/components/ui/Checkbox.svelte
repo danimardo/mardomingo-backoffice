@@ -45,8 +45,10 @@
 		align-items: start;
 	}
 	input {
-		min-width: 1.25rem;
-		min-height: 1.25rem;
+		/* 24 px: mínimo de objetivo táctil (WCAG 2.2 AA). Una casilla nativa toma su tamaño de width/height. */
+		width: 1.5rem;
+		height: 1.5rem;
+		margin: 0;
 		margin-top: 0.15rem;
 	}
 	.error {
