@@ -31,7 +31,7 @@ import {
 
 export { seedDisposableDomains } from './service';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
-import type { SessionUser } from './guards';
+import { denialOf, type Access, type SessionUser } from './guards';
 export { ACCOUNTS_LOG_EVENTS, type AccountsLogFields } from './events';
 export { normalizeEmail } from './domain/email';
 export type { AccountsBase, LoginInput, RegisterInput };
@@ -158,4 +158,13 @@ export function sessionUserOf(raw: unknown): SessionUser | null {
 		role: parsed.data.role ?? 'user'
 	};
 }
+/**
+ * Registra en `accounts.guard.denied` una denegación del guard (motivo y estado HTTP, sin datos personales). Las rutas la
+ * llaman antes de redirigir; un acceso permitido no hace nada.
+ */
+export function reportDenial(logger: Logger, access: Access): void {
+	const denial = denialOf(access);
+	if (denial !== null) logger.emit('accounts.guard.denied', denial);
+}
+
 export { safeRedirect } from './domain/redirect';

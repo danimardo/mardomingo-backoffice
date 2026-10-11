@@ -3,11 +3,13 @@
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
-import { accessFor } from '$lib/server/features/accounts';
+import { accessFor, reportDenial } from '$lib/server/features/accounts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
-	if (accessFor(locals.user, 'user').kind !== 'allow') {
+	const access = accessFor(locals.user, 'user');
+	reportDenial(locals.log, access);
+	if (access.kind !== 'allow') {
 		const login = `${resolve('/login')}?redirectTo=${encodeURIComponent(resolve('/logout'))}`;
 		redirect(303, login);
 	}
