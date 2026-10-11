@@ -108,6 +108,31 @@ no se ha ejecutado completo.
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
+## Lote L04 (parte US2): login de app, sesión por app y CORS
+
+**Estado**: parte US2 hecha salvo `GET /api/v1/me` (T136) y lo marcado como parcial en `tasks.md`. El cierre de L04 (T195) queda para después.
+
+**Hecho**: cabeceras `X-App-Id`, `X-App-Version` y `X-Device-Name`; `UNKNOWN_APP` y `APP_DISABLED` (exigidos por `requireApp` en cada ruta, para que las rutas inexistentes sigan dando `404`); CORS por app con _preflight_; sesión por Bearer ligada a la app (`other_app`, `cookie_on_api`, `bearer_on_web`); última actividad como mucho una vez por minuto; login de app con documentos pendientes y actividad en `user_app_activity`; logout (204); reenvío de verificación (202); esquemas en OpenAPI.
+
+**Decisiones tomadas esta noche (a confirmar)**
+
+1. La sesión de app (`app_id`, `device_name`, `app_version`) se escribe en el servicio tras el login, no con `databaseHooks` de Better Auth: el hook no recibe la app. Resultado igual, en la misma petición.
+2. Una app desconocida o desactivada no se rechaza en el paso «app» de `hooks`, sino en cada ruta con `requireApp`: así una ruta inexistente sigue dando `404 NOT_FOUND`, como exigen las pruebas que ya existían.
+3. El `Balance` de `/me` (T136) espera a L05 (`credits`), que el plan pone antes de L04.
+
+**Pendiente**
+
+- **T136** `GET /api/v1/me`: necesita `credits` (L05).
+- **T132** `accounts.session.renewed`: Better Auth renueva la sesión y aquí no se distingue.
+- **T131** preflight permitido (204): sin prueba HTTP, porque el build no tiene apps con orígenes permitidos.
+- **T139**: faltan la app `disabled`, el token de otra app y `/me`, que necesitan datos de prueba por HTTP.
+- **T140**: el escenario V02 de `quickstart.md` no se ha ejecutado.
+- **L09 (T205)**: el contador por IP del login de app.
+
+**Verificación**: `pnpm validate` completo, código 0 (2275 ficheros sin problemas; 406 pruebas unitarias, de componentes e integración; ramas 83,36 %; 52 E2E en Chromium). `pnpm test:http`, 59 de 59. `pnpm lint:tokens`, pasa. Arquitectura, 22 pruebas unitarias y de arquitectura, pasan.
+
+**E2E intermitentes (corregidos)**: tres pruebas fallaban de forma aleatoria con `net::ERR_ABORTED` en `__data.json`. La causa era que la prueba terminaba con una carga de datos de SvelteKit en vuelo, y el guard de consola lo cuenta como fallo. Se corrigió esperando a que la página esté estable y apartando el ratón del botón tras la navegación (precarga por hover). Seis ciclos de la suite de Chromium: cinco limpios y uno con un fallo de contención (`ERR_NO_BUFFER_SPACE` al cargar un CSS), que no se ha tocado.
+
 ## Checkpoint de L02 (T084)
 
 **Resultado**: comprobaciones del lote en verde salvo el E2E completo (no ejecutado: solo el _smoke_). No es `pnpm validate` completo.
