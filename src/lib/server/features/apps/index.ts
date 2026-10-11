@@ -2,7 +2,9 @@
 export {
 	createApp,
 	createOperation,
+	appAccessOf,
 	chatOperationOf,
+	type AppAccess,
 	largestAudioMbOf,
 	type ChatOperation,
 	type ChatTemplate,

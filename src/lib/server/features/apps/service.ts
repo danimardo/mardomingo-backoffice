@@ -27,6 +27,7 @@ import {
 	FallbackModels,
 	OperationLimits,
 	PromptTemplateBody,
+	SETTING_SCHEMAS,
 	SettingsOverrides,
 	SyncSchema,
 	TranscriptionConfig,
@@ -137,6 +138,30 @@ function loadSettings(deps: AppsDeps): ReadonlyMap<SettingKey, SettingValue> {
 }
 
 /** Configuración efectiva de una app, y de una operación si se indica (BE-FR-61 CA2). */
+/** Acceso de una app para `protections`: versiones, mantenimiento propio y el global (FR-073, FR-074, T191). */
+export interface AppAccess {
+	readonly enforceVersion: boolean;
+	readonly minAppVersion: string | null;
+	readonly recommendedAppVersion: string | null;
+	readonly maintenance: { readonly active: boolean; readonly message: string };
+	readonly globalMaintenance: { readonly active: boolean; readonly message: string };
+}
+
+/** Lee lo necesario para decidir el acceso de una petición a la app; `undefined` si la app no existe. */
+export function appAccessOf(deps: AppsDeps, appId: string): AppAccess | undefined {
+	const app = readApp(deps.db, deps.logger, appId);
+	if (app === undefined) return undefined;
+	const global = SETTING_SCHEMAS.maintenance.safeParse(getSetting(deps, 'maintenance'));
+	if (!global.success) throw new AppError('INTERNAL_ERROR', { reason: 'settings_missing' });
+	return {
+		enforceVersion: app.enforceVersion,
+		minAppVersion: app.minAppVersion,
+		recommendedAppVersion: app.recommendedAppVersion,
+		maintenance: { active: app.maintenanceActive, message: app.maintenanceMessage },
+		globalMaintenance: global.data
+	};
+}
+
 /** Mayor `max_audio_mb` efectivo entre el global y las apps: el límite del cuerpo debe cubrirlo (FR-070, T185). */
 export function largestAudioMbOf(deps: AppsDeps): number {
 	const global = getSetting(deps, 'max_audio_mb');

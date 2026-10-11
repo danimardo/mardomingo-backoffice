@@ -11,6 +11,10 @@ import { CREDITS_LOG_EVENTS, type CreditsLogFields } from '$lib/server/features/
 import { PRICING_LOG_EVENTS, type PricingLogFields } from '$lib/server/features/pricing';
 import { AI_LOG_EVENTS, type AiLogFields } from '$lib/server/features/ai';
 import {
+	PROTECTIONS_LOG_EVENTS,
+	type ProtectionsLogFields
+} from '$lib/server/features/protections';
+import {
 	NOTIFICATIONS_LOG_EVENTS,
 	type NotificationsLogFields
 } from '$lib/server/features/notifications';
@@ -74,7 +78,8 @@ export type LogEventFieldMap = InfraLogFields &
 	NotificationsLogFields &
 	CreditsLogFields &
 	PricingLogFields &
-	AiLogFields;
+	AiLogFields &
+	ProtectionsLogFields;
 
 export type LogEventCode = keyof LogEventFieldMap;
 
@@ -96,6 +101,7 @@ export const LOG_EVENTS: Readonly<Record<LogEventCode, LogEventMeta>> = Object.f
 	...LEGAL_LOG_EVENTS,
 	...NOTIFICATIONS_LOG_EVENTS,
 	...AI_LOG_EVENTS,
+	...PROTECTIONS_LOG_EVENTS,
 	...CREDITS_LOG_EVENTS,
 	...PRICING_LOG_EVENTS
 });

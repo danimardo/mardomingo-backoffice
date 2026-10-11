@@ -18,6 +18,7 @@ const headers = {
 	'content-type': 'application/json',
 	accept: 'application/json',
 	'x-app-id': 'secretario',
+	'x-app-version': '4.0.0',
 	authorization: `Bearer ${token}`
 };
 

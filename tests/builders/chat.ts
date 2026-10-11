@@ -114,7 +114,7 @@ export function chatFixture(options: ChatFixtureOptions = {}): ChatFixture {
 				appId: SEEDED_APP_ID,
 				appTitle: 'Secretario AI',
 				sessionId: null,
-				appVersion: '1.0.0',
+				appVersion: '4.0.0',
 				idempotencyKey: null,
 				signal: new AbortController().signal,
 				...overrides

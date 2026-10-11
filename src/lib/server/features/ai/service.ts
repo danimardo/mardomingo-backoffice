@@ -22,6 +22,7 @@ import {
 	type PricingDeps
 } from '$lib/server/features/pricing';
 import { alertKeys, raiseAlert, type AlertDeps } from '$lib/server/features/notifications';
+import { guardAccess } from '$lib/server/features/protections';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError, type ErrorCode } from '$lib/server/shared/errors';
 import type { IdGenerator } from '$lib/server/shared/ids';
@@ -341,6 +342,11 @@ export async function runChat(
 	ctx: ChatContext,
 	body: ChatRequestBody
 ): Promise<ChatResponseBody | null> {
+	// Pasos 6 y 7 de §8: versión mínima y mantenimiento (FR-073, FR-074).
+	guardAccess(
+		{ apps: deps.apps, logger: deps.logger },
+		{ endpoint: 'ai', appId: ctx.appId, appVersion: ctx.appVersion }
+	);
 	const now = toEpochMs(deps.clock.now());
 	const key = ctx.idempotencyKey;
 

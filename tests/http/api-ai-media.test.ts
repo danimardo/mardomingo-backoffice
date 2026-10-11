@@ -12,7 +12,11 @@ const mistralUrl = inject('mistralMockUrl');
 const apiHost = new URL(baseUrl).host;
 
 const BOUNDARY = `frontera-${randomBytes(6).toString('hex')}`;
-const bearer = { 'x-app-id': 'secretario', authorization: `Bearer ${token}` };
+const bearer = {
+	'x-app-id': 'secretario',
+	'x-app-version': '4.0.0',
+	authorization: `Bearer ${token}`
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
