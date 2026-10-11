@@ -45,6 +45,7 @@ import {
 	type ChatContext
 } from './service';
 import { insertOperation, updateOperation } from './repository';
+import { guardAccess } from '$lib/server/features/protections';
 
 /** Adaptadores de audio y de Voxtral. `transcriber` es `null` si no hay clave: el principal figura como no configurado. */
 export interface MediaDeps {
@@ -90,6 +91,11 @@ export async function runTranscription(
 	ctx: ChatContext,
 	input: { readonly operation: string; readonly audio: AudioUpload }
 ): Promise<TranscriptionResponseBody | null> {
+	// Pasos 6 y 7 de §8: versión mínima y mantenimiento (FR-073, FR-074).
+	guardAccess(
+		{ apps: deps.apps, logger: deps.logger },
+		{ endpoint: 'ai', appId: ctx.appId, appVersion: ctx.appVersion }
+	);
 	const now = toEpochMs(deps.clock.now());
 	const { replay } = admissionOf(deps, ctx, input.operation, now);
 
@@ -436,6 +442,11 @@ export async function runImage(
 	ctx: ChatContext,
 	input: ImageInput
 ): Promise<ImageResponseBody | null> {
+	// Pasos 6 y 7 de §8: versión mínima y mantenimiento (FR-073, FR-074).
+	guardAccess(
+		{ apps: deps.apps, logger: deps.logger },
+		{ endpoint: 'ai', appId: ctx.appId, appVersion: ctx.appVersion }
+	);
 	const now = toEpochMs(deps.clock.now());
 	const { replay } = admissionOf(deps, ctx, input.operation, now);
 

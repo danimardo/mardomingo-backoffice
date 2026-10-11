@@ -38,6 +38,10 @@ export function apiErrorResponse(code: ErrorCode, options: ApiErrorOptions = {})
 
 /** Respuesta para un error tipado; los `details` del error pasan tal cual (los define quien lo lanza). */
 export function appErrorResponse(error: AppError): Response {
+	// `MAINTENANCE` lleva el texto que escribió el administrador (BE-FR-47); no se repite en los detalles.
+	if (error.code === 'MAINTENANCE' && typeof error.details.message === 'string') {
+		return apiErrorResponse(error.code, { message: error.details.message });
+	}
 	return apiErrorResponse(error.code, { details: error.details });
 }
 
