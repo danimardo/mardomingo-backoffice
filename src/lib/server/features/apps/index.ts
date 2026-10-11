@@ -2,6 +2,9 @@
 export {
 	createApp,
 	createOperation,
+	chatOperationOf,
+	type ChatOperation,
+	type ChatTemplate,
 	createTemplateVersion,
 	activeAppOrigins,
 	findActiveAppBySlug,
@@ -25,3 +28,5 @@ export { DEFAULT_PACKS, DEFAULT_SETTINGS, type DefaultPack } from './defaults';
 export { seedApps } from './seed';
 export { appHeadersOf, type AppHeaders } from './contract';
 export { APPS_LOG_EVENTS, type AppsLogFields } from './events';
+
+export { totalTimeoutMs, fitWithin, type TimedAttempt } from './domain/total-timeout';

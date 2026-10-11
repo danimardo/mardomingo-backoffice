@@ -10,12 +10,17 @@ import type { EmailSender } from './adapters/resend/email-sender';
 import { createResendSender } from './adapters/resend/resend-sender';
 import { withOutbox } from './adapters/resend/outbox';
 import { createTurnstileVerifier } from './adapters/turnstile/turnstile-verifier';
+import { createEcbFxSource } from './adapters/ecb/ecb-fx-source';
+import { createOpenRouterGateway } from './adapters/openrouter/openrouter';
 import type { CaptchaVerifier } from './adapters/turnstile/captcha-verifier';
 import { createAccounts, type Accounts } from './features/accounts';
+import type { AiDeps } from './features/ai';
+import type { AuditDeps } from './features/audit';
 import { supportEmail, type AppsDeps } from './features/apps';
 import { createCredits, type Credits } from './features/credits';
+import { type PricingDeps } from './features/pricing';
 import type { LegalDeps } from './features/legal';
-import type { NotificationsDeps } from './features/notifications';
+import type { AlertDeps, NotificationsDeps } from './features/notifications';
 import type { Env } from './config/env-schema';
 import { openDatabase, type Db } from './db/client';
 import type { Logger } from './logging/logger';
@@ -23,6 +28,8 @@ import { createIdGenerator, type IdGenerator } from './shared/ids';
 
 const TURNSTILE_ENDPOINT = 'https://challenges.cloudflare.com';
 const OUTBOX_DIR = '.outbox';
+const ECB_ENDPOINT = 'https://data-api.ecb.europa.eu';
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai';
 
 export interface Composition {
 	readonly config: Env;
@@ -35,6 +42,8 @@ export interface Composition {
 	readonly apps: AppsDeps;
 	readonly legal: LegalDeps;
 	readonly credits: Credits;
+	readonly pricing: PricingDeps;
+	readonly ai: AiDeps;
 	close(): void;
 }
 
@@ -107,6 +116,40 @@ export function createComposition(
 		...(options.requestEvent === undefined ? {} : { requestEvent: options.requestEvent })
 	});
 
+	const auditDeps: AuditDeps = { clock, ids, logger };
+	const alerts: AlertDeps = {
+		db,
+		logger,
+		clock,
+		sender,
+		adminEmail: () => config.ADMIN_EMAIL ?? null,
+		supportEmail: () => supportEmail(apps)
+	};
+	const pricing: PricingDeps = {
+		db,
+		logger,
+		clock,
+		ids,
+		apps,
+		audit: auditDeps,
+		alerts,
+		fxSource: createEcbFxSource({ endpoint: config.MOCK_BCE_URL ?? ECB_ENDPOINT })
+	};
+	const ai: AiDeps = {
+		db,
+		logger,
+		clock,
+		ids,
+		apps,
+		credits,
+		pricing,
+		alerts,
+		gateway: createOpenRouterGateway({
+			baseUrl: config.MOCK_OPENROUTER_URL ?? OPENROUTER_ENDPOINT,
+			apiKey: config.OPENROUTER_API_KEY
+		})
+	};
+
 	return {
 		config,
 		logger,
@@ -118,6 +161,8 @@ export function createComposition(
 		apps,
 		legal,
 		credits,
+		pricing,
+		ai,
 		close: () => {
 			sqlite.close();
 		}

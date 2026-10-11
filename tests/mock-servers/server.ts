@@ -7,6 +7,8 @@ export interface MockRequest {
 	readonly path: string;
 	readonly body: string;
 	readonly scenario: string;
+	/** Cabeceras recibidas, en minúsculas (para comprobar `Authorization`, `HTTP-Referer` o `X-Title`). */
+	readonly headers: Readonly<Record<string, string | string[] | undefined>>;
 }
 
 export interface MockReply {
@@ -50,7 +52,8 @@ export function startMockServer(
 			method: req.method ?? 'GET',
 			path: new URL(req.url ?? '/', 'http://localhost').pathname,
 			body,
-			scenario
+			scenario,
+			headers: req.headers
 		};
 		requests.push(request);
 		const reply = handler(request);

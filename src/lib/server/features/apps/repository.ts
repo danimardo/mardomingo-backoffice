@@ -187,6 +187,23 @@ export function readOperationById(db: Db, logger: Logger, id: string): Operation
 	return validatedOperation(row, logger);
 }
 
+/** Fila completa de la plantilla vigente de una operación (la de mayor `version`), o `undefined` si no hay ninguna. */
+export function readCurrentTemplate(
+	db: Db,
+	logger: Logger,
+	operationId: string
+): TemplateRow | undefined {
+	return readGuarded(logger, 'prompt_templates', () =>
+		db
+			.select()
+			.from(promptTemplates)
+			.where(eq(promptTemplates.operationId, operationId))
+			.orderBy(desc(promptTemplates.version))
+			.limit(1)
+			.get()
+	);
+}
+
 /** Versión vigente de una operación: la de mayor `version`, o `undefined` si nunca se ha publicado. */
 export function latestTemplateVersion(db: Db, operationId: string): number | undefined {
 	return db

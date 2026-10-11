@@ -18,6 +18,7 @@ import { appearanceAttributes, appearanceFromCookies } from '$lib/appearance/pre
 import { createComposition, type Composition } from '$lib/server/composition';
 import { sessionUserOf } from '$lib/server/features/accounts';
 import { activeAppOrigins, appHeadersOf, resolveAppBySlug } from '$lib/server/features/apps';
+import { interruptOperationsOnStartup } from '$lib/server/features/ai';
 import { bearerOnlyHeaders } from '$lib/server/api/session';
 import { apiErrorResponse } from '$lib/server/api/errors';
 import { getComposition, setComposition } from '$lib/server/composition.cache';
@@ -103,6 +104,8 @@ export const init: ServerInit = async () => {
 	setComposition(composition);
 	// Reservas abiertas de un arranque anterior: se liberan sin cobro, como interrumpidas (BE-FR-71, T125).
 	composition.credits.releaseOpenHoldsOnStartup();
+	// Operaciones que quedaron en curso: pasan a `interrupted` sin cobro (FR-028, BE-FR-71, T171).
+	interruptOperationsOnStartup(composition.ai);
 	logger.emit('app.started', { count: 0 });
 
 	process.on('sveltekit:shutdown', (reason: unknown) => {

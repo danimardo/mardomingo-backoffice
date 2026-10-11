@@ -7,6 +7,7 @@ import {
 	boolCheck,
 	enumCheck,
 	epochMs,
+	json,
 	micro,
 	microUsd,
 	nowMs
@@ -122,3 +123,17 @@ export const aiOperations = sqliteTable(
 		check('ai_operations_flagged_bool', boolCheck(table.flagged.name))
 	]
 );
+
+/** Caché del catálogo de modelos del proveedor (BE-FR-80, BE-FR-81; data-model 2.12; T155). Solo lectura para la estimación. */
+export interface ModelPricingJson {
+	readonly inputPerMTokMicroUsd: number;
+	readonly outputPerMTokMicroUsd: number;
+}
+
+export const modelCache = sqliteTable('model_cache', {
+	modelId: text('model_id').primaryKey(),
+	pricing: json<ModelPricingJson>('pricing').notNull(),
+	modalities: json<readonly string[]>('modalities').notNull(),
+	supportedParameters: json<readonly string[]>('supported_parameters').notNull(),
+	fetchedAt: epochMs('fetched_at').notNull()
+});
