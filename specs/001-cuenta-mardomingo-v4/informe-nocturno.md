@@ -108,6 +108,41 @@ no se ha ejecutado completo.
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
+## Lote L07: chat de IA (E07): flujo, proveedor, cobro, moderación y cancelación
+
+**Estado**: parcial. Núcleo del chat hecho y verificado; faltan la suite HTTP (T178), parte de T166 y varias pruebas de T174–T176, y los escenarios manuales del quickstart. El checkpoint T179 queda abierto.
+
+**Hecho**: dominio puro de `ai` (idempotencia, estados y cobro, pipeline de §8, respaldos, validación de entrada y de variables de plantilla) y `apps/domain/total-timeout.ts`; contrato E07 (`contract.ts`, OpenAPI); adaptador de OpenRouter con su puerto, su doble y su simulador HTTP; migración `0005` de `model_cache`; repositorio, catálogo de eventos y servicio de chat (`runChat`, en dos partes); arranque que interrumpe las operaciones en curso; ruta `POST /api/v1/ai/chat`; cableado en la composición (`pricing`, `ai`). Evento `legal.acceptance.required` añadido al catálogo de `legal`.
+
+**Decisiones tomadas (a confirmar)**
+
+1. `timeout_ms` de la operación es el tiempo máximo de **cada intento** (45 s en el chat). El total de la operación es la suma de sus intentos y esperas, la cifra que informa `/app/status`. No es un tope: si el principal agota su tiempo, el respaldo corre con el suyo. Una versión anterior usaba `timeout_ms` como tope y el respaldo nunca llegaba a ejecutarse; se corrigió.
+2. Reintentos del principal: 1 reintento tras 2 s (`DEFAULT_RETRY_POLICY`). La especificación no fija el número; es una elección conservadora.
+3. Una repetición tras `undelivered` no reserva saldo: vuelve a llamar al proveedor y su coste queda absorbido (`absorbed_reason = undelivered_replay`), sin cobro al usuario.
+4. Sin saldo (402): la fila queda `rejected` sin reserva. El rechazo lo registra `credits.hold.rejected`; `ai.operation.rejected` solo lleva los motivos del catálogo, que no incluyen saldo.
+5. Coste máximo: sin precio conocido del modelo, la estimación es `estimated_max_cost_micro_usd` de la operación, o el propio tope de la operación si tampoco existe. Con precio, la estimación usa el más caro entre principal y respaldos (BE-FR-72).
+6. Coste real: el de la respuesta; si falta, `/generation`; si falta también, la estimación por el precio del modelo (`cost_estimated`); si no hay precio, se cobra la reserva (el máximo acordado).
+7. Reserva mínima de 1 µc (la restricción de `hold_micro` exige positivo).
+8. Tamaño de imagen estimado por exceso (sin restar el relleno): conservador para `max_image_mb`.
+9. Mensajes con rol `tool` y `tool_calls` admitidos en modo libre, como dice el contrato.
+10. Cancelación antes de la respuesta: sin cobro. No se registra coste de cancelación (`ai.cancellation_cost.recorded`): el adaptador aborta sin id de generación, así que no hay forma de conocer el coste. Si el proveedor ya respondió y el cliente se fue, la operación queda `undelivered` y se cobra.
+11. `ai.operation.interrupted` solo se emite al arrancar si hay operaciones afectadas.
+12. Moderación: estado `provider_error` con `flagged = true`, sin cobro. El aviso del umbral se emite cuando el recuento del día llega exactamente al umbral; la alerta del día tiene su propia clave, así que no se repite.
+13. En las pruebas, la operación de chat se activa por SQL: la activación real (con su comprobación de compatibilidad) es de L13.
+
+**Pendiente (no cerrado)**
+
+- **T178 (suite HTTP contra el build)**: el global setup arranca el servidor con `APP_ENV=test` y sin `MOCK_OPENROUTER_URL`, y no hay sesión Bearer posible por HTTP (el captcha no tiene simulador). Hace falta arrancar el simulador de OpenRouter en el global setup, sembrar usuario, sesión, aceptaciones, créditos y activación en la base del servidor. Sin esto, la cifra `chargedMicro: 776480` por HTTP no está verificada.
+- **T166**: `checkOperationActivatable`, `activateOperation` en `apps` y `detectAssignedModelIssues` (retirados y cambios de precio). Van con L13 y L14.
+- **T170**: `ai.cancellation_cost.recorded` (ver decisión 10).
+- **T174–T176**: deuda dentro de `max_debt` (−3.236.000 µc), dos apps en concurrencia, y cancelación con coste de la respuesta.
+- **T165**: validación Zod de las columnas JSON de `model_cache` al leer.
+- **T179 / quickstart V02–V04 y V13**: no ejecutados. El resto del checkpoint (N1, N3 en integración, privacidad, arquitectura, lint, check, build) está verificado.
+
+**Verificación**: `pnpm validate` completo, código 0 (613 pruebas en 93 ficheros; cobertura con el 100 % en `domain/`; build; 53 E2E). `pnpm exec eslint` y `prettier --check` limpios. Arquitectura en verde.
+
+**Incidencias**: la prueba de migraciones pasa a 26 tablas con `model_cache`. Una versión previa de `runChat` lanzaba el fallo del proveedor dentro del `try` de liberación y lo sobrescribía como `INTERNAL_ERROR`; se separó el `try` a la llamada del proveedor. El piloto de mutación de L06 sigue sin resultados válidos (ver su sección).
+
 ## Lote L06: tarificación, coste máximo, tipo de cambio y alertas
 
 **Estado**: lote hecho salvo el piloto de mutación (T154, parcial).
