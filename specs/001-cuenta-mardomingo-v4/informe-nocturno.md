@@ -108,6 +108,31 @@ no se ha ejecutado completo.
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
+## Lote L06: tarificación, coste máximo, tipo de cambio y alertas
+
+**Estado**: lote hecho salvo el piloto de mutación (T154, parcial).
+
+**Hecho**: fórmula de cobro en enteros con `BigInt` (ejemplos exactos de BE-FR-22); estimación del coste máximo con el precio más caro entre principal y respaldos; tipo de cambio en ppm sin `float`, con vigencia y valor manual; adaptador del BCE con validación del CSV y simulador con escenarios; `alerts_state` y la regla de alertas (envío, supresión, rearme); servicio de precios con auditoría; regresión de extremo a extremo del formato de D-07.
+
+**Decisiones tomadas (a confirmar)**
+
+1. El tipo de cambio se redondea al ppm más cercano (mitad hacia arriba). El cobro sube siempre al µc superior (`ceil`).
+2. Una observación del BCE solo cuenta como actual si es la última publicación esperada (hoy si es laborable; el viernes si es fin de semana). Una observación antigua es un fallo de contenido.
+3. Un envío de alerta fallido deja la alerta inactiva, para que el siguiente cruce la reintente (no se pierde el aviso).
+4. Sin filas de tipo de cambio, el valor por defecto de la configuración (920.000 ppm).
+5. Desactivar el manual inserta una fila `ecb` con el último valor del BCE; sin ningún valor del BCE no hay a qué volver y no hace nada.
+6. El dominio de precios, notificaciones y créditos llega al 100 % de cobertura (umbral de `vite.config.ts`).
+
+**Pendiente**
+
+- **T154 (piloto de mutación, parcial)**: Stryker no produce resultados válidos en este proyecto. Con el runner de Vitest por proyectos, la cobertura por prueba no llega a los mutantes (`covered 0`), y la ejecución completa agota el tiempo inicial. La configuración (`stryker.config.mjs`) carga el plugin explícitamente, pero la integración no está resuelta. Hace falta investigarla antes de dar el piloto por hecho.
+- **Composición**: `pricing` y `alerts` todavía no están cableados en `composition.ts`; los necesita L07 (cobro del chat).
+- **Tarea `fx-ecb` (L14)** y **interfaz del valor manual (L13)**: fuera de este lote.
+
+**Verificación**: `pnpm validate` completo, código 0 (2155 ficheros sin problemas; 519 pruebas; ramas 83,86 %; 53 E2E). Cobertura del 100 % en `domain/` de créditos, precios y notificaciones. Arquitectura, 17 pruebas, en verde.
+
+**Incidencias**: la prueba de migraciones fijaba 24 tablas; con `alerts_state` son 25 y se actualizó. El cuerpo del piloto de mutación (Stryker) falló en la configuración de la integración con Vitest por proyectos, descrito arriba.
+
 ## Lote L05: saldo, bolsas, reservas, deuda, caducidad y ajustes
 
 **Estado**: lote hecho salvo T-MUT-001 (piloto de _mutation_, tras L06, según la tarea). Lo que no está en las tareas del lote queda anotado abajo.
