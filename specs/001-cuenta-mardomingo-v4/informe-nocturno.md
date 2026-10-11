@@ -31,11 +31,77 @@ _(Se actualiza al cerrar cada grupo.)_
 | Resto de L01                                             | T049–T066                      | Hecho (T001, T005, T038, T044, T055, T060 quedan con motivo, ver arriba)       | `ad2265d`, `4d49a2a`, `e0a1e4f`, `799042e`, `1db151f`, `15bc157`, `c90ae26`, `5a630e4` |
 | Fase 16 (convergencia)                                   | T381–T392                      | Hecho; T390 se cierra en L02 (global-setup migra con `migrateDatabase`)         | `c887cb0`, `e0ad9da`, `ea1bf3a`                         |
 | L02, fechas y columnas                                   | T067, T068                     | Hecho (incluye la corrección de tipos del punto siguiente)                      | `bac8df6` y el commit de corrección                     |
-| L02, esquemas, migraciones, servicios y pruebas          | T069–T083, T390                | Hecho; verificado con las comprobaciones del checkpoint (ver abajo)             | pendiente de commit en el momento de escribir esto      |
+| L02, esquemas, migraciones, servicios y pruebas          | T069–T083, T390                | Hecho; verificado con las comprobaciones del checkpoint (ver abajo)             | `0482722`, `0734ecd`                                     |
 | L02, datos del propietario                               | T079                           | **Abierto**: requiere respuestas del propietario (valores provisionales en uso) | —                                                       |
-| L02, checkpoint                                          | T084                           | Hecho salvo `pnpm validate` completo (E2E completo no ejecutado)                | —                                                       |
+| L02, checkpoint                                          | T084                           | Hecho salvo `pnpm validate` completo (E2E completo no ejecutado)                | `53732c6`                                               |
+| L03, backend de cuentas, adaptadores y legales           | T085–T099                    | Hecho (ver «Lote L03» abajo)                                                    | `98d44e4`                                               |
+| L03, páginas, sesión web, CSP y pruebas web             | T100–T107, T110, T111        | Hecho en su mayoría; E2E de cuentas en Chromium (7) y HTTP (7)                  | `b62e6b3`, y el commit de pruebas HTTP y componentes    |
+| L03, pendientes                                          | T092, T095, T098, T100, T108, T109, T112, T113, T114 | **Abiertos o parciales** (ver «Lote L03») | —                                                       |
 
 **Nota de honestidad**: el commit `bac8df6` (fechas y columnas) se hizo sin ejecutar `pnpm check`. `svelte-check` encontró 13 errores de tipos que no había visto. Se corrigen en un commit posterior; no se reescribe la historia.
+
+## Lote L03 (en curso): registro, verificación, login y recuperación
+
+**Estado**: el backend y las páginas de L03 están hechos y probados; **el lote no está cerrado**. El checkpoint (T114)
+no se ha ejecutado completo.
+
+### Hecho y verificado
+
+- **Backend**: normalización del email y su hash HMAC (TDD), validación de `redirectTo` y de formularios, repositorio de
+  contadores, intentos fallidos y dominios desechables, servicio de cuentas (registro con su antiabuso en el orden de la
+  especificación, verificación, reenvío, login con bloqueo, recuperación, cierre y promoción por `ADMIN_EMAIL`).
+- **Better Auth 1.7.7** (`auth.ts`): probado con SQLite real. Sin `svelteKitHandler`, sin plugin `captcha` ni `rateLimit`,
+  transacciones desactivadas. Las columnas de tiempo que gestiona en `timestamp_ms` (mismo DDL).
+- **Adaptadores**: Turnstile (siteverify validado y con tiempo límite), Resend con el SDK y clave de idempotencia, outbox
+  en `APP_ENV=test`, memoria y simuladores de R12.
+- **Notificaciones y legal**: plantillas de los tres emails con texto plano y escapado; versiones legales con comprobación
+  de versión vigente; seed provisional.
+- **Rutas**: W08, W09, W10, W11, W12, W13, W15, W19 y el panel con su guard. Paso de sesión en `hooks.server.ts`. CSP de
+  Turnstile solo en `/registro`.
+- **Pruebas**: integración de cuentas (15), Better Auth (5), unitarias (213 en total), componentes (14), HTTP de la web (7),
+  E2E de cuentas en Chromium (7, incluida la página sin JavaScript) y smoke (2).
+
+### Decisiones tomadas esta noche (conservadoras, a confirmar)
+
+1. **Eslint**: `fetch` queda permitido solo en `src/lib/server/adapters/**` (la regla decía «usa un adaptador»).
+2. **`timestamp_ms` en las tablas de Better Auth**: Better Auth escribe `Date`; drizzle convierte en la frontera.
+3. **Verificación «ya usada»**: Better Auth responde igual la primera vez y la repetida (`user: null`), así que el servicio
+   decide con el estado de la cuenta leído antes de llamar (el token se valida igual).
+4. **Registro de un email ya existente**: Better Auth devuelve un usuario sintético (anti-enumeración). El servicio lo
+   detecta porque ese id no está en la base de datos y responde lo mismo, sin email ni escrituras.
+5. **Remitente y reply-to**: `EMAIL_FROM` ya existía (constitución); el soporte se lee de `settings` al enviar.
+6. **Email de soporte en la auditoría**: redactado (`[redactado]`), igual que en L02.
+7. **Eventos**: el catálogo de `accounts` está completo (3.8) y registrado; los eventos de guard no se emiten desde las rutas
+   todavía.
+
+### Pendiente (no cerrado)
+
+- **T092 (propietario)**: los textos definitivos de los documentos legales. Hoy son provisionales y no se publican.
+- **T095**: los tests de antiabuso están dentro de `accounts.int.test.ts`; no existen `domain/abuse.test.ts` ni
+  `abuse.int.test.ts` como pide la tarea.
+- **T098**: `accounts.guard.denied` no se emite desde las rutas. El paso de sesión sí está hecho.
+- **T100**: `RegisterForm`, `LoginForm` y `ResetForm` no existen como componentes; los formularios están en sus páginas.
+- **T108**: faltan los tests de sesión deslizante con reloj falso y de revocación inmediata.
+- **T109**: faltan los tests unitarios de las _actions_ (`makeRequestEvent`) y la matriz de roles (`roles-l03.test.ts`).
+- **T111**: faltan la cookie `Secure`/`HttpOnly`/`SameSite` en HTTP y la cabecera `cache-control` del panel.
+- **T112**: falta el flujo crítico completo (registro → `.outbox` → verificación → bienvenida) y los _builders_ de usuarios
+  con `storageState`. El captcha de test no permite registrarse por la interfaz sin un simulador conectado al servidor.
+- **T113**: a11y de las rutas nuevas en `e2e/fixtures/routes.ts`, 320 px y DS-09 (medición manual: requiere una persona).
+- **T114**: checkpoint de L03. No se ha ejecutado `pnpm validate` completo tras L03.
+
+### Verificación de L03 (lo ejecutado)
+
+| Comprobación | Resultado |
+|---|---|
+| `pnpm check` | 0 errores, 0 avisos |
+| ESLint sobre `src/lib/server`, `src/lib/schemas`, `src/routes/(web)`, `src/lib/components`, `e2e` | Pasa |
+| `db:check` y deriva del esquema | Sin cambios |
+| Unitarias (incluye arquitectura y dominio de cuentas) | 213 pasan |
+| Integración (SQLite real) | 79 pasan |
+| Componentes | 14 pasan |
+| HTTP contra el build | 45 pasan (38 previas + 7 de cuentas) |
+| E2E smoke y cuentas en Chromium | 2 y 7 pasan |
+| E2E completo, Firefox y WebKit | **No ejecutados** |
 
 ## Checkpoint de L02 (T084)
 
