@@ -108,6 +108,41 @@ no se ha ejecutado completo.
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
+## Lote L09 (parcial): versiones, mantenimiento y protecciones de la API
+
+**Estado**: parcial. Hechos T189 a T191 (versiones, reglas de acceso y servicio de protecciones, compuesto en `ai`). **Bloqueados T192, T193 y T203 por dos decisiones de frontera** que no tomo yo. El resto (T194 a T202, T195 checkpoint) no se ha empezado.
+
+**Hecho**: `shared/semver.ts` (x.y.z, comparación por partes, rangos inclusivos con extremos nulos); `protections/domain/access.ts` con la tabla de endpoints de api-v1 1.8 y D-19, la versión mínima (`enforce_version`, 426 si falta o es menor) y el mantenimiento (el global tiene prioridad, con su mensaje); `protections/service.ts` (`guardAccess`) con su catálogo de eventos; `apps/appAccessOf`; el guard en los pasos 6 y 7 de §8 del chat, la transcripción y la imagen (no en las rutas, no en logout ni en `/app/status`). `MAINTENANCE` lleva el texto del administrador como `message` en la respuesta, no en los detalles.
+
+**Decisiones tomadas (a confirmar)**
+
+1. La versión mínima solo se exige cuando `enforce_version` está activo. Una versión mínima mal formada también bloquea (es un dato de configuración roto, no un acceso permitido).
+2. La app sembrada `secretario` exige 4.0.0 con enforcement activo. Los constructores de prueba y las cabeceras HTTP pasan ya `X-App-Version: 4.0.0`, como harían los clientes reales. Antes de este cambio, una petición sin versión habría sido aceptada.
+3. El guard vive en `ai` (no en las rutas), porque el plan lo sitúa en pasos concretos de §8. Las rutas `sync` y `/me` usarán su propio guard cuando lleguen sus lotes.
+
+**Decisiones de frontera que necesito que tomes**
+
+- **T192 y T193 (anuncios)**: el plan pone la tabla `announcements` en `notifications/schema.ts` con clave foránea a `apps`. Pero en ARQUITECTURA §3, `notifications` (orden 2) va antes que `apps` (orden 3), así que esa clave foránea rompe la regla de que cada funcionalidad solo importa de las anteriores. Opciones:
+  - **A (recomendada)**: la tabla y su lectura viven en `apps` (el dueño de `app_id`), y `/app/status` la lee desde `apps` sin cruzar fronteras. Ningún cambio en el orden.
+  - **B**: mantener la tabla en `notifications` sin clave foránea (`app_id` como texto validado en el servicio). Pierde integridad referencial.
+  - **C**: un ADR que admita la arista `notifications` → `apps`. Es la decisión más costosa.
+- **T203 (freno global)**: el freno de `protections` necesita el coste diario de `ai`, y `ai` ya depende de `protections` (guard). Es un ciclo. Opciones:
+  - **A (recomendada)**: `protections` recibe el coste diario por parámetro (un puerto que compone la composición), así no importa de `ai`. La agregación sigue en `ai/repository.ts`.
+  - **B**: mover el freno a `ai`, con el guard en `protections` solo para la frecuencia.
+
+**Hallazgo de pruebas (contención, no defecto)**
+
+- En la validación completa han fallado, en dos ejecuciones distintas, dos E2E diferentes de `accounts.spec.ts` (inicio de sesión con datos erróneos, y recuperación de contraseña, con `__data.json` abortado). **Ambos pasan aislados, y el fichero completo de cuentas pasa (10/10)**. Según las reglas del proyecto, no los he tocado. Queda pendiente decidir si se estabilizan con las esperas de `networkidle` documentadas en `e2e-playwright-trampas`.
+
+**Pendiente (no cerrado)**
+
+- T192, T193 y T203 (bloqueados, ver arriba).
+- T194 (integración y HTTP de anuncios) y T195 (checkpoint L04): dependen de T192.
+- T196 a T202 (estado de protecciones, límites por minuto con `Retry-After`, tope diario en la reserva, freno global y ranura de transcripción): no empezados. T197 a T199 son TDD y se pueden hacer sin decisiones pendientes, salvo el puerto del freno.
+- La decisión de T060 (protección de `main` y `staging`) no se ha aplicado: su condición previa ("ci.yml pase en el remoto") no se cumple, porque CI nunca se ha ejecutado en remoto. Las comprobaciones obligatorias serían nombres de trabajos que nunca han corrido.
+
+**Verificación**: `pnpm validate`: 684 pruebas en verde en las tres ejecuciones; un E2E de contención en cada una de dos de ellas (ver arriba). Cobertura del dominio al 100 % (tras eliminar una rama defensiva). `pnpm test:http`: 79 pruebas en verde, con la cabecera de versión.
+
 ## Lote L08: transcripción (E08) e imagen (E09)
 
 **Estado**: parcial. Implementado y verificado con dobles y con ffprobe y ffmpeg reales en la suite HTTP. Quedan los pasos manuales de staging y del quickstart (V05) y el checkpoint T188 abierto por ellos.
