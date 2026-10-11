@@ -41,6 +41,8 @@ test('@critical el login con una cuenta verificada abre el panel y el cierre de 
 
 	await expect(page).toHaveURL(/\/panel$/);
 	await expect(page.getByRole('heading', { name: 'Tu cuenta' })).toBeVisible();
+	// El panel carga sus datos tras el login: se espera a que termine antes de salir de la página.
+	await page.waitForLoadState('networkidle');
 
 	await page.goto('/logout');
 	await page.waitForLoadState('networkidle');
@@ -50,8 +52,12 @@ test('@critical el login con una cuenta verificada abre el panel y el cierre de 
 	await expect(page).toHaveURL(/\/login\?aviso=logged_out$/);
 	await expect(page.getByText('Has cerrado sesión.')).toBeVisible();
 
-	await page.goto('/panel');
-	await expect(page).toHaveURL(/\/login/);
+	// Sin navegar la página: un `goto` aquí aborta la carga de datos del login que acaba de mostrar el cierre.
+	const panel = await page.request.get('/panel', { maxRedirects: 0 });
+	expect(panel.status()).toBe(303);
+	expect(panel.headers().location).toContain('/login');
+	// La página del cierre puede seguir cargando datos: se espera antes de terminar, para no cortar esa carga.
+	await page.waitForLoadState('networkidle');
 });
 
 test('@critical la recuperación cambia la contraseña con el enlace del email y deja entrar con la nueva', async ({
@@ -80,4 +86,6 @@ test('@critical la recuperación cambia la contraseña con el enlace del email y
 	await page.getByRole('button', { name: 'Entrar' }).click();
 	await page.waitForLoadState('networkidle');
 	await expect(page).toHaveURL(/\/panel$/);
+	// El panel puede seguir cargando sus datos: se espera antes de terminar, para no cortar esa carga al cerrar el test.
+	await page.waitForLoadState('networkidle');
 });
