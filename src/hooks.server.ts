@@ -101,7 +101,8 @@ export const init: ServerInit = async () => {
 	}
 
 	setComposition(composition);
-	// Las reservas de créditos aún no existen (llegan con L02): no se libera ninguna al arrancar.
+	// Reservas abiertas de un arranque anterior: se liberan sin cobro, como interrumpidas (BE-FR-71, T125).
+	composition.credits.releaseOpenHoldsOnStartup();
 	logger.emit('app.started', { count: 0 });
 
 	process.on('sveltekit:shutdown', (reason: unknown) => {

@@ -9,6 +9,9 @@ import type { Db } from '$lib/server/db/client';
 import type { Logger } from '$lib/server/logging/logger';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import type { AppsDeps } from '$lib/server/features/apps';
+import type { Credits } from '$lib/server/features/credits';
+import { hashNormalizedEmail } from './email-hash';
+import { normalizeEmail } from './domain/email';
 import type { LegalDeps } from '$lib/server/features/legal';
 import { sendAccountEmail, type NotificationsDeps } from '$lib/server/features/notifications';
 import { createAuth, type Auth } from './auth';
@@ -57,6 +60,8 @@ export interface AccountsConfig {
 	readonly notifications: NotificationsDeps;
 	readonly apps: AppsDeps;
 	readonly legal: LegalDeps;
+	/** Bolsa de bienvenida al verificar (BE-FR-12, D-20): `accounts` → `credits`. */
+	readonly credits: Credits;
 	readonly emailHashKey: string;
 	readonly adminEmail: string | null;
 	readonly authSecret: string;
@@ -141,6 +146,11 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		},
 		onEmailVerified: (userId, email) => {
 			promoteAdminIfEligible(base, userId, email);
+			// Transacción propia de `credits`: la bienvenida se concede una vez por forma normalizada (BE-FR-11.5).
+			config.credits.grantWelcome({
+				userId,
+				emailNormalizedHash: hashNormalizedEmail(normalizeEmail(email), config.emailHashKey)
+			});
 		},
 		...(config.requestEvent === undefined ? {} : { requestEvent: config.requestEvent })
 	});

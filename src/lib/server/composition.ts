@@ -13,6 +13,7 @@ import { createTurnstileVerifier } from './adapters/turnstile/turnstile-verifier
 import type { CaptchaVerifier } from './adapters/turnstile/captcha-verifier';
 import { createAccounts, type Accounts } from './features/accounts';
 import { supportEmail, type AppsDeps } from './features/apps';
+import { createCredits, type Credits } from './features/credits';
 import type { LegalDeps } from './features/legal';
 import type { NotificationsDeps } from './features/notifications';
 import type { Env } from './config/env-schema';
@@ -33,6 +34,7 @@ export interface Composition {
 	readonly accounts: Accounts;
 	readonly apps: AppsDeps;
 	readonly legal: LegalDeps;
+	readonly credits: Credits;
 	close(): void;
 }
 
@@ -74,6 +76,14 @@ export function createComposition(
 
 	const apps: AppsDeps = { db, logger, clock, ids };
 	const legal: LegalDeps = { db, logger, ids };
+	const credits = createCredits({
+		db,
+		logger,
+		clock,
+		ids,
+		apps,
+		auditDeps: { clock, ids, logger }
+	});
 	const sender = emailSenderFor(config, clock);
 	const notifications: NotificationsDeps = {
 		sender,
@@ -89,6 +99,7 @@ export function createComposition(
 		notifications,
 		apps,
 		legal,
+		credits,
 		emailHashKey: config.EMAIL_HASH_KEY,
 		adminEmail: config.ADMIN_EMAIL ?? null,
 		authSecret: config.BETTER_AUTH_SECRET,
@@ -106,6 +117,7 @@ export function createComposition(
 		accounts,
 		apps,
 		legal,
+		credits,
 		close: () => {
 			sqlite.close();
 		}
