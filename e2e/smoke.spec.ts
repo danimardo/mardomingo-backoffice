@@ -18,6 +18,7 @@ test('@smoke la navegación cliente vuelve a la portada sin recargar la página'
 	page
 }) => {
 	await page.goto('/preferencias');
+	await page.waitForLoadState('networkidle');
 	await page.evaluate(() => {
 		window.__sinRecarga = true;
 	});
