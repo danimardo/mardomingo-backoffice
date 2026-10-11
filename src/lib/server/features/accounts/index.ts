@@ -1,6 +1,7 @@
 // API pública de `accounts` (ARCHITECTURE.md §4). `createAccounts` monta Better Auth con sus callbacks de email y
 // devuelve los casos de uso ya enlazados a sus dependencias. La composición lo llama una vez, en `init`.
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import type { RequestEvent } from '@sveltejs/kit';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { CaptchaVerifier } from '$lib/server/adapters/turnstile/captcha-verifier';
@@ -21,6 +22,7 @@ import {
 	resendVerification,
 	resetPassword,
 	verifyEmail,
+	tokenStateOf,
 	type AccountsBase,
 	type AccountsDeps,
 	type LoginInput,
@@ -29,6 +31,7 @@ import {
 
 export { seedDisposableDomains } from './service';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
+import type { SessionUser } from './guards';
 export { ACCOUNTS_LOG_EVENTS, type AccountsLogFields } from './events';
 export { normalizeEmail } from './domain/email';
 export type { AccountsBase, LoginInput, RegisterInput };
@@ -65,6 +68,7 @@ export interface Accounts {
 	}): Promise<void>;
 	resetPassword(input: { readonly token: string; readonly password: string }): Promise<void>;
 	logout(headers: Headers): Promise<void>;
+	tokenState(token: string): 'valid' | 'used' | 'invalid';
 	readSession(headers: Headers): ReturnType<typeof readSession>;
 	auth: Auth;
 }
@@ -129,6 +133,29 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		requestPasswordReset: (input) => requestPasswordReset(deps, input),
 		resetPassword: (input) => resetPassword(deps, input),
 		logout: (headers) => logout(deps, headers),
+		tokenState: (token) => tokenStateOf(deps, token),
 		readSession: (headers) => readSession(deps, headers)
 	};
 }
+
+const SESSION_USER = z.object({
+	id: z.string(),
+	email: z.string(),
+	emailVerified: z.boolean(),
+	banned: z.boolean().nullish(),
+	role: z.string().nullish()
+});
+
+/** Usuario de la sesión en la forma que usan los guards; `null` si la forma no encaja. */
+export function sessionUserOf(raw: unknown): SessionUser | null {
+	const parsed = SESSION_USER.safeParse(raw);
+	if (!parsed.success) return null;
+	return {
+		id: parsed.data.id,
+		email: parsed.data.email,
+		emailVerified: parsed.data.emailVerified,
+		banned: parsed.data.banned === true,
+		role: parsed.data.role ?? 'user'
+	};
+}
+export { safeRedirect } from './domain/redirect';

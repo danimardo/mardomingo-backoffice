@@ -2,6 +2,7 @@
 // for information about these interfaces
 import type { Appearance } from '$lib/appearance/preferences';
 import type { Logger } from '$lib/server/logging/logger';
+import type { SessionUser } from '$lib/server/features/accounts';
 
 declare global {
 	namespace App {
@@ -16,9 +17,9 @@ declare global {
 			appearance: Appearance;
 			/** Se rellena con la app de `X-App-Id` en L04. */
 			app: null;
-			/** Se rellena con la sesión en L03. */
-			user: null;
-			session: null;
+			/** Usuario de la sesión web (cookie), o `null` si no hay sesión válida (L03). */
+			user: SessionUser | null;
+			session: { readonly id: string } | null;
 		}
 		// interface PageData {}
 		// interface PageState {}
