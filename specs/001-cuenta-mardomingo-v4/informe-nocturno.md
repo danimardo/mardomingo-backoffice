@@ -108,6 +108,36 @@ no se ha ejecutado completo.
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
+## Lote L05: saldo, bolsas, reservas, deuda, caducidad y ajustes
+
+**Estado**: lote hecho salvo T-MUT-001 (piloto de _mutation_, tras L06, según la tarea). Lo que no está en las tareas del lote queda anotado abajo.
+
+**Hecho**: esquema de `credits` (cinco tablas) y migraciones (`0002` con las tablas, `0003` con los disparadores de solo-anexar sobre `credit_movements`); dominio puro `domain/ledger.ts`; propiedades con semilla fija; formato de importes (`src/lib/format/credits.ts`); servicio con una transacción `BEGIN IMMEDIATE` por operación; bienvenida al verificar; W19 con importe, caducidad o explicación; eventos y presentadores; arranque con reservas interrumpidas; E2E de bienvenida y de la segunda cuenta de Gmail.
+
+**Decisiones tomadas (a confirmar)**
+
+1. Un solo módulo `domain/ledger.ts` en lugar de los siete ficheros de T119.
+2. Formato: `Intl` de es-ES no agrupa cifras de cuatro dígitos (1000, no 1.000), como manda la RAE. El texto de la especificación dice «1.000»; no lo he cambiado.
+3. Los ajustes negativos reducen solo bolsas del tipo indicado, y nunca superan el disponible (D-16).
+4. Una bolsa gratuita sin caducidad (el esquema no la admite) se consume al final entre las gratuitas.
+5. Los eventos de créditos no llevan importes, saldos ni emails (Historias 15.19).
+6. El cambio de esquema del índice de caducidades se resolvió regenerando la migración, porque nunca se había aplicado en ningún entorno.
+7. Un ajuste positivo liquida la deuda en el mismo par que el dominio (D13). La pérdida de un ajuste gratuito (D14) se calcula, pero no se guarda en estadísticas: esa tabla no es de L05.
+
+**Pendiente (no cerrado)**
+
+- **T-MUT-001**: piloto de _mutation_, tras cerrar L06.
+- **Tope diario sin compras (BE-FR-11.6)** y **aviso de saldo bajo**: aparecen en la fila de `credits` de `ARCHITECTURE.md`, pero no en las tareas de L05. Van a un lote posterior.
+- **Compras**: el asiento de `purchase` lo crea L10 (pagos). El esquema ya lo admite.
+- **`app.started` sin `count`** de reservas liberadas: el evento `credits.hold.released_on_startup` sí lo lleva.
+- **Reservas de `ai_operations`**: las filas `in_progress` de los tests las inserta el builder hasta que L07 introduzca el servicio de `ai`.
+
+**Verificación**: `pnpm validate` completo, código 0 (2134 ficheros sin problemas; 464 pruebas unitarias, de componentes e integración; ramas 83,95 %; 53 E2E en Chromium). `pnpm test:http`, 59 de 59. Cobertura: 100 % en `domain/` y en `src/lib/format/credits.ts` (umbrales en `vite.config.ts`). Arquitectura y `db:check` sin cambios. Trazado de BE-FR-15/CA1, 18/CA1 y 71/CA1–CA2 sin huecos.
+
+**Bug de prueba corregido**: la prueba de reconstrucción usaba un tope de deuda de 200 créditos, así que pedía un saldo que el propio tope impedía. Se subió el tope en esa prueba.
+
+**Incidencia E2E**: `appearance.spec` falló por una petición `__data.json` abortada al cerrar la página. Se arregló esperando a que la página esté estable antes de comprobar el resultado, sin excepción en el guard. Tres ciclos seguidos pasan.
+
 ## Lote L04 (parte US2): login de app, sesión por app y CORS
 
 **Estado**: parte US2 hecha salvo `GET /api/v1/me` (T136) y lo marcado como parcial en `tasks.md`. El cierre de L04 (T195) queda para después.
