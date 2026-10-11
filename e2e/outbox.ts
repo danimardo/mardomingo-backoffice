@@ -60,6 +60,11 @@ export function uniqueEmail(prefix: string): string {
 	return `${prefix}.${String(Date.now())}.${randomUUID().slice(0, 8)}@ejemplo.es`;
 }
 
+/** Dirección única de gmail: el buzón de la forma normalizada del saldo de bienvenida (BE-FR-11.5). */
+export function uniqueGmail(prefix: string): string {
+	return `${prefix}.${String(Date.now())}.${randomUUID().slice(0, 8)}@gmail.com`;
+}
+
 /** Alta por el formulario de registro (acción `registrar`), con el captcha del simulador y el origen propio. */
 export async function registerThroughForm(
 	request: APIRequestContext,

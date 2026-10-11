@@ -63,6 +63,8 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 		).toHaveAttribute('aria-pressed', 'true');
 		const kept = await page.evaluate(() => window.__sinRecarga === true);
 		expect(kept).toBe(true);
+		// La acción del tema pide datos a SvelteKit; se espera a que terminen antes de cerrar la prueba.
+		await page.waitForLoadState('networkidle');
 		const cookies = await page.context().cookies();
 		expect(cookies.find((c) => c.name === 'mdm_theme')?.value).toBe('dark');
 		recordUx(testInfo, 'tema elegido sin recargar', 'comprobado');

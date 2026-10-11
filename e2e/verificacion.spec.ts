@@ -5,6 +5,10 @@
 import { expect, test } from './fixtures';
 import { PASSWORD, uniqueEmail, verificationTokenFor } from './outbox';
 
+// Una petición de datos de SvelteKit (`__data.json`) puede quedar abortada al cerrar la página, una vez terminada la
+// prueba. No es un fallo de la página: las aserciones verifican el comportamiento. Solo se admite ese caso.
+test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
+
 const PROVISIONAL_LEGAL_VERSION = '2026-10-11';
 
 test('@critical registro, verificación y bienvenida con el enlace del email', async ({
@@ -46,6 +50,10 @@ test('@critical registro, verificación y bienvenida con el enlace del email', a
 	await expect(page.getByRole('heading', { name: 'Bienvenido' })).toBeVisible();
 	await expect(
 		page.getByText('Inicia sesión con tu email en la app que quieras usar.')
+	).toBeVisible();
+	// La bienvenida: 1.000 créditos gratuitos (1 €), con su día de caducidad.
+	await expect(
+		page.getByText(/Te hemos concedido 1000 créditos gratuitos\. Caducan el /)
 	).toBeVisible();
 	// La página puede tener una carga de datos en vuelo: se espera antes de terminar, para no cortarla al cerrar el test.
 	await page.waitForLoadState('networkidle');

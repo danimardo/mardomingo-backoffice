@@ -323,3 +323,29 @@ describe('sesiones', () => {
 		}
 	});
 });
+
+describe('bienvenida al verificar (BE-FR-02 CA1, BE-FR-11 CA1)', () => {
+	function idOf(address: string): string {
+		return db().select({ id: user.id }).from(user).where(eq(user.email, address)).get()?.id ?? '';
+	}
+
+	it('[BE-FR-02/CA1] verificar concede la bolsa de bienvenida de 1.000 créditos', async () => {
+		await fixture.accounts.register(registration({ email: EMAIL }));
+		await fixture.accounts.verifyEmail(verificationTokenFor(fixture.mail, EMAIL));
+
+		expect(fixture.config.credits.getBalance(idOf(EMAIL)).totalMicro).toBe(1_000_000_000);
+	});
+
+	it('[BE-FR-11/CA1] una segunda dirección del mismo buzón de gmail no recibe la bienvenida', async () => {
+		const base = 'juan.perez@gmail.com';
+		const plus = 'juanperez+2@gmail.com';
+		await fixture.accounts.register(registration({ email: base }));
+		await fixture.accounts.verifyEmail(verificationTokenFor(fixture.mail, base));
+		await fixture.accounts.register(registration({ email: plus }));
+		await fixture.accounts.verifyEmail(verificationTokenFor(fixture.mail, plus));
+
+		expect(fixture.config.credits.getBalance(idOf(base)).totalMicro).toBe(1_000_000_000);
+		expect(fixture.config.credits.getBalance(idOf(plus)).totalMicro).toBe(0);
+		expect(fixture.config.credits.welcomeOf(idOf(plus))).toBeNull();
+	});
+});

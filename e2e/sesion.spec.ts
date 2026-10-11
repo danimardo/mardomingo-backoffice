@@ -8,18 +8,21 @@ import {
 	PASSWORD,
 	registerThroughForm,
 	resetTokenFor,
-	uniqueEmail,
+	uniqueGmail,
 	verificationTokenFor,
 	verifyThroughForm
 } from './outbox';
 
 test.describe.configure({ mode: 'serial' });
+// Una petición de datos de SvelteKit (`__data.json`) puede quedar abortada al cerrar la página, una vez terminada la
+// prueba. No es un fallo de la página: las aserciones verifican el comportamiento. Solo se admite ese caso.
+test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
 
 let email = '';
 
 test.beforeAll(async ({ baseURL }) => {
 	const base = baseURL ?? 'http://localhost:7390';
-	email = uniqueEmail('sesion');
+	email = uniqueGmail('sesion');
 	const request = await playwrightRequest.newContext({ baseURL: base });
 	try {
 		await registerThroughForm(request, base, email);
@@ -37,6 +40,7 @@ test('@critical el login con una cuenta verificada abre el panel y el cierre de 
 	await page.getByLabel('Email').fill(email);
 	await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
 	await page.getByRole('button', { name: 'Entrar' }).click();
+	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 
 	await expect(page).toHaveURL(/\/panel$/);
@@ -47,6 +51,7 @@ test('@critical el login con una cuenta verificada abre el panel y el cierre de 
 	await page.goto('/logout');
 	await page.waitForLoadState('networkidle');
 	await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 
 	await expect(page).toHaveURL(/\/login\?aviso=logged_out$/);
@@ -76,6 +81,7 @@ test('@critical la recuperación cambia la contraseña con el enlace del email y
 	await page.goto(`/recuperar/nueva?token=${encodeURIComponent(resetTokenFor(email))}`);
 	await page.getByLabel('Nueva contraseña').fill(PASSWORD);
 	await page.getByRole('button', { name: 'Guardar la nueva contraseña' }).click();
+	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 
 	await expect(page).toHaveURL(/\/login\?aviso=password_reset$/);
@@ -84,8 +90,29 @@ test('@critical la recuperación cambia la contraseña con el enlace del email y
 	await page.getByLabel('Email').fill(email);
 	await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
 	await page.getByRole('button', { name: 'Entrar' }).click();
+	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 	await expect(page).toHaveURL(/\/panel$/);
 	// El panel puede seguir cargando sus datos: se espera antes de terminar, para no cortar esa carga al cerrar el test.
+	await page.waitForLoadState('networkidle');
+});
+
+test('@critical una segunda cuenta con el mismo buzón de gmail no recibe la bienvenida y lo explica', async ({
+	page,
+	request,
+	baseURL
+}) => {
+	const base = baseURL ?? 'http://localhost:7390';
+	const plus = email.replace('@gmail.com', '+2@gmail.com');
+	await registerThroughForm(request, base, plus);
+
+	await page.goto(`/verificar?token=${encodeURIComponent(verificationTokenFor(plus))}`);
+	await page.waitForLoadState('networkidle');
+	await page.getByRole('button', { name: 'Confirmar mi email' }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page).toHaveURL(/\/panel\/bienvenida$/);
+	await expect(page.getByText('Tu cuenta no recibe créditos de bienvenida')).toBeVisible();
+	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 });
