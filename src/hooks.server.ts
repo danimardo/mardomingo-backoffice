@@ -19,6 +19,8 @@ import { createComposition, type Composition } from '$lib/server/composition';
 import { sessionUserOf } from '$lib/server/features/accounts';
 import { activeAppOrigins, appHeadersOf, resolveAppBySlug } from '$lib/server/features/apps';
 import { interruptOperationsOnStartup } from '$lib/server/features/ai';
+import { largestAudioMbOf } from '$lib/server/features/apps';
+import { bodyLimitBytes } from '$lib/server/config/body-limit';
 import { bearerOnlyHeaders } from '$lib/server/api/session';
 import { apiErrorResponse } from '$lib/server/api/errors';
 import { getComposition, setComposition } from '$lib/server/composition.cache';
@@ -102,6 +104,16 @@ export const init: ServerInit = async () => {
 	}
 
 	setComposition(composition);
+	// El cuerpo de una subida de audio debe caber: `BODY_SIZE_LIMIT` cubre el mayor `max_audio_mb` de cualquier app (FR-070).
+	const largestAudioMb = largestAudioMbOf(composition.apps);
+	const bodyLimit = config.BODY_SIZE_LIMIT ?? '512K';
+	if (!(bodyLimitBytes(bodyLimit) >= largestAudioMb * 1024 * 1024)) {
+		logger.emit('app.config.body_limit_incoherent', { maxAudioMb: largestAudioMb });
+		process.stderr
+			.write(`BODY_SIZE_LIMIT (${bodyLimit}) no cubre ${String(largestAudioMb)} MB de audio.
+`);
+		process.exit(1);
+	}
 	// Reservas abiertas de un arranque anterior: se liberan sin cobro, como interrumpidas (BE-FR-71, T125).
 	composition.credits.releaseOpenHoldsOnStartup();
 	// Operaciones que quedaron en curso: pasan a `interrupted` sin cobro (FR-028, BE-FR-71, T171).

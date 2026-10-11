@@ -85,6 +85,8 @@ export default defineConfig({
 					environment: 'node',
 					include: ['tests/http/**/*.test.ts'],
 					globalSetup: ['tests/setup/http.global-setup.ts'],
+					// Comparten servidor, usuario y saldo: los ficheros HTTP van en serie para que los saldos sean exactos.
+					fileParallelism: false,
 					// El global setup carga servicios que leen tokens.css con `?raw` (correo): sin esto, el CSS llega vacío.
 					css: { include: [/tokens\.css(\?raw)?$/] }
 				}

@@ -15,6 +15,11 @@ import { createOpenRouterGateway } from './adapters/openrouter/openrouter';
 import type { CaptchaVerifier } from './adapters/turnstile/captcha-verifier';
 import { createAccounts, type Accounts } from './features/accounts';
 import type { AiDeps } from './features/ai';
+import type { MediaDeps } from './features/ai/media';
+import { createMistralTranscriber } from './adapters/mistral/transcriber';
+import { createFfprobe } from './adapters/ffprobe/prober';
+import { createFfmpeg } from './adapters/ffmpeg/converter';
+import { tmpdir } from 'node:os';
 import type { AuditDeps } from './features/audit';
 import { supportEmail, type AppsDeps } from './features/apps';
 import { createCredits, type Credits } from './features/credits';
@@ -30,6 +35,7 @@ const TURNSTILE_ENDPOINT = 'https://challenges.cloudflare.com';
 const OUTBOX_DIR = '.outbox';
 const ECB_ENDPOINT = 'https://data-api.ecb.europa.eu';
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai';
+const MISTRAL_ENDPOINT = 'https://api.mistral.ai';
 
 export interface Composition {
 	readonly config: Env;
@@ -44,6 +50,7 @@ export interface Composition {
 	readonly credits: Credits;
 	readonly pricing: PricingDeps;
 	readonly ai: AiDeps;
+	readonly media: MediaDeps;
 	close(): void;
 }
 
@@ -150,6 +157,19 @@ export function createComposition(
 		})
 	};
 
+	const media: MediaDeps = {
+		transcriber:
+			config.MISTRAL_API_KEY === '' && config.MOCK_MISTRAL_URL === undefined
+				? null
+				: createMistralTranscriber({
+						baseUrl: config.MOCK_MISTRAL_URL ?? MISTRAL_ENDPOINT,
+						apiKey: config.MISTRAL_API_KEY === '' ? 'clave-de-prueba' : config.MISTRAL_API_KEY
+					}),
+		prober: createFfprobe(),
+		converter: createFfmpeg(),
+		tempRoot: tmpdir()
+	};
+
 	return {
 		config,
 		logger,
@@ -163,6 +183,7 @@ export function createComposition(
 		credits,
 		pricing,
 		ai,
+		media,
 		close: () => {
 			sqlite.close();
 		}

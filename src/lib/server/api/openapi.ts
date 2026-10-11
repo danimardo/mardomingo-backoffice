@@ -7,7 +7,7 @@ import {
 	AppLoginResponse,
 	ResendVerificationBody
 } from '$lib/server/features/accounts';
-import { ChatRequestBody } from '$lib/server/features/ai';
+import { ChatRequestBody, ImageRequestBody } from '$lib/server/features/ai';
 
 export const apiErrorSchema = z
 	.object({
@@ -60,6 +60,60 @@ export function buildOpenApiDocument(publicApiUrl: string) {
 						'400': { description: 'Validación o cabecera X-App-Id' },
 						'401': { description: 'Credenciales erróneas o cuenta sin verificar' },
 						'503': { description: 'App desactivada' }
+					}
+				}
+			},
+			'/ai/transcribe': {
+				post: {
+					summary: 'Transcripción de un audio (multipart; Bearer; Idempotency-Key opcional)',
+					requestBody: {
+						required: true,
+						content: {
+							'multipart/form-data': {
+								schema: {
+									type: 'object',
+									required: ['operation', 'file'],
+									properties: {
+										operation: { type: 'string' },
+										file: {
+											type: 'string',
+											format: 'binary',
+											description: 'Audio, acotado por max_audio_mb de la app'
+										}
+									}
+								}
+							}
+						}
+					},
+					responses: {
+						'200': {
+							description:
+								'Texto, proveedor usado (primary o backup), segundos, saldo; nunca el modelo'
+						},
+						'400': {
+							description: 'Operación, fichero o Idempotency-Key no válidos, o audio ilegible'
+						},
+						'401': { description: 'Sin sesión válida para la app' },
+						'402': { description: 'Saldo insuficiente' },
+						'413': {
+							description: 'Audio demasiado largo (AUDIO_TOO_LONG) o fichero demasiado grande'
+						},
+						'502': {
+							description:
+								'Fallaron Voxtral y el respaldo (TRANSCRIPTION_FAILED, con motivos saneados)'
+						}
+					}
+				}
+			},
+			'/ai/image': {
+				post: {
+					summary: 'Imagen generada por el modelo, como data URL (no se guarda)',
+					requestBody: { content: { 'application/json': { schema: ImageRequestBody } } },
+					responses: {
+						'200': { description: 'Imagen como data URL, saldo y créditos cobrados' },
+						'400': { description: 'Validación de la operación o de los campos' },
+						'402': { description: 'Saldo insuficiente' },
+						'502': { description: 'El modelo no devolvió imagen o falló' }
 					}
 				}
 			},

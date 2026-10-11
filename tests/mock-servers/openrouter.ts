@@ -10,12 +10,20 @@ export const MODELS_PATH = '/api/v1/models';
 /** Ruta de lectura del número de llamadas de chat recibidas (para comprobar que una petición llegó al proveedor). */
 export const CHAT_CALLS_PATH = '/__chat_calls';
 
+/** Imagen que devuelve el escenario `image` (un PNG de 1 píxel); no se guarda en ningún sitio. */
+export const SIMULATED_IMAGE_URL =
+	'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
 /** Coste simulado de la respuesta `ok`: 0,0004 USD = 400 µUSD (ejemplo de api-v1 7.3: 776.480 µc). */
 export const SIMULATED_COST_USD = 0.0004;
 export const SIMULATED_GENERATION_COST_USD = 0.0012;
 
 function completion(model: string, scenario: string): unknown {
-	const message = { role: 'assistant', content: 'Respuesta simulada' };
+	const message: Record<string, unknown> = { role: 'assistant', content: 'Respuesta simulada' };
+	if (scenario === 'image') {
+		message.content = null;
+		message.images = [{ type: 'image_url', image_url: { url: SIMULATED_IMAGE_URL } }];
+	}
 	const choice = {
 		index: 0,
 		finish_reason: scenario === 'truncated' ? 'length' : 'stop',

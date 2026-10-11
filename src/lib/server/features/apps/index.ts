@@ -3,6 +3,7 @@ export {
 	createApp,
 	createOperation,
 	chatOperationOf,
+	largestAudioMbOf,
 	type ChatOperation,
 	type ChatTemplate,
 	createTemplateVersion,

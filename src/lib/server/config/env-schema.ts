@@ -80,7 +80,8 @@ const baseSchema = z.object({
 	ADDRESS_HEADER: z.string().default('x-forwarded-for'),
 	XFF_DEPTH: intFromEnv(0, 10).default(1),
 	PROTOCOL_HEADER: z.string().default('x-forwarded-proto'),
-	BODY_SIZE_LIMIT: z.string().default('10M'),
+	/** Sin valor, SvelteKit usa 512K: la comprobación de arranque lo tiene en cuenta (FR-070). */
+	BODY_SIZE_LIMIT: z.string().optional(),
 	MOCK_OPENROUTER_URL: z.url().optional(),
 	MOCK_MISTRAL_URL: z.url().optional(),
 	MOCK_RESEND_URL: z.url().optional(),

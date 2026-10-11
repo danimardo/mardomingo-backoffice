@@ -102,7 +102,7 @@ export interface ChatContext {
 
 type RejectReason = AiLogFields['ai.operation.rejected']['reason'];
 
-function numberSetting(deps: AiDeps, key: Parameters<typeof getSetting>[1]): number {
+export function numberSetting(deps: AiDeps, key: Parameters<typeof getSetting>[1]): number {
 	const value = getSetting(deps.apps, key);
 	if (typeof value !== 'number')
 		throw new AppError('INTERNAL_ERROR', { reason: 'settings_missing' });
@@ -110,7 +110,7 @@ function numberSetting(deps: AiDeps, key: Parameters<typeof getSetting>[1]): num
 }
 
 /** Rechazo antes de llamar al proveedor (`ai.operation.rejected`, sin cobro). Nunca devuelve. */
-function reject(
+export function reject(
 	deps: AiDeps,
 	operation: string,
 	reason: RejectReason,
@@ -121,7 +121,7 @@ function reject(
 	throw new AppError(code, details);
 }
 
-function toDefs(template: NonNullable<ChatOperation['template']>): TemplateVariableDef[] {
+export function toDefs(template: NonNullable<ChatOperation['template']>): TemplateVariableDef[] {
 	return template.variables.map((variable) => ({
 		name: variable.name,
 		type: variable.type,
@@ -158,7 +158,7 @@ function tokenCostMicroUsd(
 }
 
 /** Espera de reintento que se interrumpe si el cliente se va. */
-function waitAbortable(ms: number, signal: AbortSignal): Promise<void> {
+export function waitAbortable(ms: number, signal: AbortSignal): Promise<void> {
 	return new Promise((resolve) => {
 		if (signal.aborted) {
 			resolve();
@@ -176,15 +176,15 @@ function waitAbortable(ms: number, signal: AbortSignal): Promise<void> {
 	});
 }
 
-type ProviderOk = Extract<ChatOutcome, { status: 'ok' }>;
-type ProviderResult =
+export type ProviderOk = Extract<ChatOutcome, { status: 'ok' }>;
+export type ProviderResult =
 	| { readonly kind: 'ok'; readonly outcome: ProviderOk; readonly attempt: PlannedAttempt }
 	| { readonly kind: 'flagged' }
 	| { readonly kind: 'cancelled' }
 	| { readonly kind: 'failed'; readonly code: 'PROVIDER_ERROR' | 'PROVIDER_TIMEOUT' };
 
 /** Intentos del principal y después cada respaldo, en orden y dentro del tiempo total de la operación (BE-FR-77 CA4). */
-async function callProvider(
+export async function callProvider(
 	deps: AiDeps,
 	ctx: ChatContext,
 	operationId: string,
@@ -237,7 +237,7 @@ async function callProvider(
 }
 
 /** Fila de una operación que no llega a llamar al proveedor (rechazo) o que empieza (`in_progress`). */
-function rowOf(
+export function rowOf(
 	ctx: ChatContext,
 	op: ChatOperation,
 	id: string,
@@ -274,18 +274,18 @@ function rowOf(
 }
 
 /**
- * Chat (E07). Devuelve la respuesta, o `null` si el cliente se fue antes de recibirla: la operación queda `cancelled`
- * (sin cobro) o `undelivered` (cobrada, porque el proveedor ya había respondido).
+ * Pasos 9 y 10 de §8: documentos legales pendientes (TERMS_ACCEPTANCE_REQUIRED) e idempotencia (BE-FR-81). Lanza si la
+ * petición no puede seguir; si sigue, devuelve si es la repetición de una operación no entregada (sin cobro).
  */
-export async function runChat(
+export function admissionOf(
 	deps: AiDeps,
 	ctx: ChatContext,
-	body: ChatRequestBody
-): Promise<ChatResponseBody | null> {
-	const now = toEpochMs(deps.clock.now());
+	operation: string,
+	now: EpochMs
+): { readonly replay: boolean } {
 	const key = ctx.idempotencyKey;
 
-	// Paso 9: documentos legales pendientes (TERMS_ACCEPTANCE_REQUIRED).
+	// Documentos legales pendientes (TERMS_ACCEPTANCE_REQUIRED).
 	const pending = pendingAcceptancesOf(deps.db, ctx.userId, now);
 	if (pending.length > 0) {
 		deps.logger.emit('legal.acceptance.required', { count: pending.length });
@@ -294,7 +294,7 @@ export async function runChat(
 		});
 	}
 
-	// Paso 10: idempotencia por usuario y clave, dentro de la ventana de la configuración (BE-FR-81).
+	// Idempotencia
 	const windowMs = numberSetting(deps, 'idempotency_window_minutes') * 60_000;
 	const last =
 		key === null
@@ -314,20 +314,38 @@ export async function runChat(
 		windowMs
 	});
 	if (decision.action === 'in_progress') {
-		reject(deps, body.operation, 'request_in_progress', 'REQUEST_IN_PROGRESS');
+		reject(deps, operation, 'request_in_progress', 'REQUEST_IN_PROGRESS');
 	}
 	if (decision.action === 'duplicate') {
-		reject(deps, body.operation, 'duplicate_request', 'DUPLICATE_REQUEST', {
+		reject(deps, operation, 'duplicate_request', 'DUPLICATE_REQUEST', {
 			operationId: decision.operationId
 		});
 	}
-	const replay = decision.replayOfUndelivered;
-	if (replay && last !== undefined) {
+	const replayOfUndelivered = decision.replayOfUndelivered;
+	if (replayOfUndelivered && last !== undefined) {
 		deps.logger.emit('ai.idempotency.replayed', {
 			operationId: last.id,
 			reason: 'undelivered_retry'
 		});
 	}
+
+	return { replay: replayOfUndelivered };
+}
+
+/**
+ * Chat (E07). Devuelve la respuesta, o `null` si el cliente se fue antes de recibirla: la operación queda `cancelled`
+ * (sin cobro) o `undelivered` (cobrada, porque el proveedor ya había respondido).
+ */
+export async function runChat(
+	deps: AiDeps,
+	ctx: ChatContext,
+	body: ChatRequestBody
+): Promise<ChatResponseBody | null> {
+	const now = toEpochMs(deps.clock.now());
+	const key = ctx.idempotencyKey;
+
+	// Pasos 9 y 10: documentos legales e idempotencia (compartido con la transcripción y la imagen).
+	const { replay } = admissionOf(deps, ctx, body.operation, now);
 
 	// Paso 11: la operación existe, está activa y es de chat. Sin fila si no es válida.
 	const op = chatOperationOf(deps.apps, ctx.appId, body.operation);
@@ -500,7 +518,7 @@ export async function runChat(
 }
 
 /** Fallo inesperado tras reservar: libera la reserva y deja la fila como error interno, sin cobro. */
-function abandonUnexpected(
+export function abandonUnexpected(
 	deps: AiDeps,
 	operationId: string,
 	holdId: string | null,
@@ -517,7 +535,7 @@ function abandonUnexpected(
 }
 
 /** Cancelada antes de la respuesta del proveedor: sin cobro, reserva liberada, y el evento (BE-FR-37 CA1, D-05). */
-function settleAbandoned(
+export function settleAbandoned(
 	deps: AiDeps,
 	operationId: string,
 	operation: string,
@@ -533,7 +551,7 @@ function settleAbandoned(
 }
 
 /** Moderación del proveedor: operación marcada sin contenido ni cobro. Aviso al umbral diario (FR-061, BE-FR-82). */
-async function settleFlagged(
+export async function settleFlagged(
 	deps: AiDeps,
 	ctx: ChatContext,
 	operationId: string,
@@ -564,7 +582,7 @@ async function settleFlagged(
 }
 
 /** Todos los intentos fallaron: sin cobro, reserva liberada, y el error genérico que ve el cliente. */
-function settleFailed(
+export function settleFailed(
 	deps: AiDeps,
 	operationId: string,
 	operation: string,
@@ -595,39 +613,65 @@ interface SettleOk {
 	readonly responseFormat: boolean;
 }
 
+/** Datos de una operación servida que hay que cobrar y cerrar (compartido por el chat, la transcripción y la imagen). */
+export interface BillingInput {
+	readonly operationId: string;
+	readonly operation: string;
+	readonly holdId: string | null;
+	readonly replay: boolean;
+	readonly now: EpochMs;
+	/** Reserva de la operación, que se usa si no hay coste conocido ni precio del modelo. */
+	readonly holdMicro: number;
+	readonly provider: 'openrouter' | 'mistral';
+	readonly model: string;
+	readonly usedFallback: boolean;
+	readonly inputTokens: number | null;
+	readonly outputTokens: number | null;
+	readonly truncated: boolean;
+	readonly generationId: string | null;
+	/** Coste real en micro-USD si lo conoce el llamante (Voxtral, o la respuesta del proveedor); `null` si hay que buscarlo. */
+	readonly costMicroUsd: number | null;
+	readonly audioMs: number | null;
+}
+
 /**
- * Respuesta recibida: coste real (respuesta, `/generation` o estimación por el precio del modelo), cobro y liberación en
- * la transacción 2, y la respuesta si el cliente sigue conectado. Si se fue, la operación queda `undelivered` y cobrada.
+ * Cobra y cierra una operación servida: coste real (el dado, `/generation`, o la estimación por el precio del modelo),
+ * cobro y liberación de la reserva en la transacción 2, y cierre de la fila. Una repetición tras `undelivered` no cobra:
+ * absorbe el coste (BE-FR-81 CA1). `delivered` es falso si el cliente se fue; la operación queda `undelivered` y cobrada.
  */
-async function settleOk(
+export async function billAndClose(
 	deps: AiDeps,
 	ctx: ChatContext,
-	input: SettleOk
-): Promise<ChatResponseBody | null> {
-	const { outcome, attempt } = input.result;
+	input: BillingInput
+): Promise<{ readonly delivered: boolean; readonly charged: number }> {
 	const delivered = !ctx.signal.aborted;
 	const status: OperationStatus = delivered ? 'ok' : 'undelivered';
 
-	let costMicroUsd: number | null = outcome.costMicroUsd;
-	if (costMicroUsd === null) {
+	let costMicroUsd = input.costMicroUsd;
+	if (costMicroUsd === null && input.generationId !== null) {
 		costMicroUsd = await deps.gateway.generationCostMicroUsd(
-			outcome.generationId,
+			input.generationId,
 			AbortSignal.timeout(10_000)
 		);
 	}
 	let costEstimated = false;
-	if (costMicroUsd === null) {
-		const price = pricesOf(deps.db, [outcome.model]).get(outcome.model);
+	if (
+		costMicroUsd === null &&
+		input.provider === 'openrouter' &&
+		input.inputTokens !== null &&
+		input.outputTokens !== null
+	) {
+		const price = pricesOf(deps.db, [input.model]).get(input.model);
 		if (price !== undefined) {
 			costEstimated = true;
 			costMicroUsd = tokenCostMicroUsd(
-				{ input: outcome.inputTokens, output: outcome.outputTokens },
+				{ input: input.inputTokens, output: input.outputTokens },
 				price
 			);
 			deps.logger.emit('ai.cost.estimated', {
 				operationId: input.operationId,
 				provider: 'openrouter',
-				model: outcome.model
+				model: input.model
 			});
 		}
 	}
@@ -638,7 +682,7 @@ async function settleOk(
 					appId: ctx.appId,
 					operationKey: input.operation,
 					costMicroUsd,
-					provider: 'openrouter'
+					provider: input.provider
 				});
 	// Sin coste conocido ni precio del modelo, se cobra la reserva: es el máximo que se había acordado.
 	const chargeMicro = priced?.chargeMicro ?? input.holdMicro;
@@ -663,27 +707,58 @@ async function settleOk(
 		}
 		const patch: OperationPatch = {
 			status,
-			provider: 'openrouter',
-			model: outcome.model,
-			usedFallback: attempt.isFallback,
-			inputTokens: outcome.inputTokens,
-			outputTokens: outcome.outputTokens,
+			provider: input.provider,
+			model: input.model,
+			usedFallback: input.usedFallback,
+			inputTokens: input.inputTokens,
+			outputTokens: input.outputTokens,
+			audioMs: input.audioMs,
 			costMicroUsd: toMicroUsd(costMicroUsd ?? 0),
 			costEstimated,
 			fxRateId,
 			chargedMicro: toMicro(charged),
 			absorbedMicro: toMicro(absorbed),
 			absorbedReason,
-			truncated: outcome.truncated,
-			providerGenerationId: outcome.generationId,
+			truncated: input.truncated,
+			providerGenerationId: input.generationId,
 			completedAt: input.now,
 			errorCode: null
 		};
 		updateOperation(tx, input.operationId, patch);
-		return { charged, absorbed };
+		return { charged };
+	});
+	return { delivered, charged: settled.charged };
+}
+
+/**
+ * Respuesta del chat servida: cobro con `billAndClose`, salida con el texto y, con esquema, el JSON y su validez. Una
+ * respuesta no válida se cobra igual (BE-FR-79 CA1). Si el cliente se fue, no hay respuesta.
+ */
+async function settleOk(
+	deps: AiDeps,
+	ctx: ChatContext,
+	input: SettleOk
+): Promise<ChatResponseBody | null> {
+	const { outcome, attempt } = input.result;
+	const billing = await billAndClose(deps, ctx, {
+		operationId: input.operationId,
+		operation: input.operation,
+		holdId: input.holdId,
+		replay: input.replay,
+		now: input.now,
+		holdMicro: input.holdMicro,
+		provider: 'openrouter',
+		model: outcome.model,
+		usedFallback: attempt.isFallback,
+		inputTokens: outcome.inputTokens,
+		outputTokens: outcome.outputTokens,
+		truncated: outcome.truncated,
+		generationId: outcome.generationId,
+		costMicroUsd: outcome.costMicroUsd,
+		audioMs: null
 	});
 
-	if (!delivered) {
+	if (!billing.delivered) {
 		deps.logger.emit('ai.operation.cancelled', {
 			operationId: input.operationId,
 			operation: input.operation,
@@ -692,7 +767,7 @@ async function settleOk(
 		return null;
 	}
 
-	// Salida: el texto y, con esquema, el JSON y su validez. Una respuesta no válida se cobra igual (BE-FR-79 CA1).
+	// Salida: el texto y, con esquema, el JSON y su validez.
 	let json: unknown = null;
 	let structuredValid: boolean | null = null;
 	if (input.responseFormat) {
@@ -740,7 +815,7 @@ async function settleOk(
 		toolCalls: outcome.toolCalls.length > 0 ? [...outcome.toolCalls] : null,
 		truncated: outcome.truncated,
 		operationId: input.operationId,
-		chargedMicro: settled.charged,
+		chargedMicro: billing.charged,
 		balance: {
 			totalMicro: view.totalMicro,
 			reservedMicro: view.reservedMicro,

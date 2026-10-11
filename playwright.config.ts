@@ -74,6 +74,8 @@ export default defineConfig({
 			PUBLIC_API_URL: API_ORIGIN,
 			PUBLIC_WEB_URL: WEB_ORIGIN,
 			BETTER_AUTH_URL: WEB_ORIGIN,
+			// Cubre el mayor max_audio_mb (10 MB): el arranque se niega si no (FR-070).
+			BODY_SIZE_LIMIT: '10M',
 			// Base nueva en cada carga: el servidor arranca siempre con datos vacíos.
 			DATABASE_PATH: join(E2E_DIR, `app-${randomUUID()}.db`),
 			BETTER_AUTH_SECRET: randomBytes(32).toString('hex'),

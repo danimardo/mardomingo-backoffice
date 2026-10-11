@@ -21,6 +21,7 @@ export interface InfraLogFields {
 	'app.started': { count: number };
 	'app.stopping': { reason: 'sigterm' | 'sigint' | 'idle' };
 	'app.config.invalid': { count: number };
+	'app.config.body_limit_incoherent': { maxAudioMb: number };
 	'app.db.migrated': { count: number; durationMs: number };
 	'app.db.migration_failed': { err: unknown };
 	'app.db.seed_failed': { err: unknown };
@@ -42,6 +43,10 @@ export const INFRA_LOG_EVENTS = Object.freeze({
 	'app.started': { level: 'info', msg: 'Aplicación iniciada' },
 	'app.stopping': { level: 'info', msg: 'Aplicación deteniéndose' },
 	'app.config.invalid': { level: 'fatal', msg: 'Configuración de entorno inválida' },
+	'app.config.body_limit_incoherent': {
+		level: 'fatal',
+		msg: 'BODY_SIZE_LIMIT no cubre el audio máximo de una app'
+	},
 	'app.db.migrated': { level: 'info', msg: 'Migraciones aplicadas' },
 	'app.db.migration_failed': { level: 'fatal', msg: 'Migración fallida' },
 	'app.db.seed_failed': { level: 'fatal', msg: 'Datos iniciales no aplicados' },

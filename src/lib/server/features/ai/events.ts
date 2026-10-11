@@ -19,12 +19,14 @@ export interface AiLogFields {
 			| 'payload_too_large'
 			| 'operation_too_expensive'
 			| 'request_in_progress'
-			| 'duplicate_request';
+			| 'duplicate_request'
+			| 'audio_too_long'
+			| 'audio_unreadable';
 	};
 	'ai.operation.failed': {
 		operationId: string;
 		operation: string;
-		errorCode: 'PROVIDER_ERROR' | 'PROVIDER_TIMEOUT';
+		errorCode: 'PROVIDER_ERROR' | 'PROVIDER_TIMEOUT' | 'TRANSCRIPTION_FAILED';
 	};
 	'ai.operation.cancelled': {
 		operationId: string;
@@ -36,6 +38,9 @@ export interface AiLogFields {
 		reason: 'from_response' | 'from_generation_lookup';
 	};
 	'ai.operation.interrupted': { count: number };
+	'ai.provider.billing_error': { provider: 'mistral'; httpStatus: number | null };
+	'ai.transcription.backup_used': { operationId: string; provider: 'openrouter' };
+	'ai.temp_file.cleanup_failed': { operationId: string };
 	'ai.operation.flagged': { operationId: string; operation: string; provider: string };
 	'ai.flagged.threshold_reached': { count: number };
 	'ai.provider.retry': {
@@ -72,6 +77,9 @@ export const AI_LOG_EVENTS = Object.freeze({
 		msg: 'Coste de una operación cancelada registrado'
 	},
 	'ai.operation.interrupted': { level: 'warn', msg: 'Operaciones interrumpidas por reinicio' },
+	'ai.provider.billing_error': { level: 'warn', msg: 'Error de facturación del proveedor' },
+	'ai.transcription.backup_used': { level: 'warn', msg: 'Transcripción servida por el backup' },
+	'ai.temp_file.cleanup_failed': { level: 'error', msg: 'No se pudo borrar el temporal de audio' },
 	'ai.operation.flagged': {
 		level: 'warn',
 		msg: 'Contenido rechazado por moderación del proveedor'
