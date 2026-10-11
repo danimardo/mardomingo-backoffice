@@ -1,5 +1,5 @@
 // _Seed_ de `apps` contra SQLite real (T082, T080): idempotente, no pisa lo que el administrador cambió, y deja la app
-// `secretario` con su perfil y sus operaciones inactivas.
+// `secretario` con su perfil, sus operaciones inactivas y los modelos aprobados (T079).
 import { afterEach, describe, expect, it } from 'vitest';
 import { copyOfTemplate, type TestDatabase } from '../../../../../tests/builders/database';
 import { appsTestContext, fixedClock } from '../../../../../tests/builders/apps';
@@ -57,7 +57,7 @@ describe('datos iniciales', () => {
 		expect(row?.value).toBe(150_000);
 	});
 
-	it('siembra secretario con su perfil y sus once operaciones inactivas, sin modelo', () => {
+	it('siembra secretario con su perfil, sus once operaciones inactivas y los modelos aprobados (T079)', () => {
 		database = copyOfTemplate();
 		const app = database.db
 			.select()
@@ -65,6 +65,7 @@ describe('datos iniciales', () => {
 			.all()
 			.find((a) => a.id === SEEDED_APP_ID);
 		const operations = database.db.select().from(appOperations).all();
+		const byKey = (key: string) => operations.find((operation) => operation.key === key);
 
 		expect(app).toMatchObject({
 			slug: 'secretario',
@@ -74,12 +75,26 @@ describe('datos iniciales', () => {
 			status: 'active'
 		});
 		expect(operations).toHaveLength(11);
-		expect(operations.every((operation) => !operation.active && operation.model === null)).toBe(
-			true
-		);
+		expect(operations.every((operation) => !operation.active)).toBe(true);
+		expect(byKey('improve')).toMatchObject({
+			model: 'anthropic/claude-haiku-5.5',
+			fallbackModels: ['openai/gpt-5.6-luna'],
+			maxOutputTokens: 8_192,
+			maxCostMicro: 12_000_000
+		});
+		expect(byKey('direct-prompt')).toMatchObject({
+			model: 'openai/gpt-5.6-sol',
+			fallbackModels: ['anthropic/claude-sonnet-5.5'],
+			maxCostMicro: 100_000_000
+		});
+		expect(byKey('image-generation')).toMatchObject({
+			model: 'google/gemini-3.1-flash-image',
+			estimatedMaxCostMicroUsd: 80_000,
+			maxCostMicro: 80_000_000
+		});
 	});
 
-	it('la transcripción sembrada tiene primario y respaldo nulo (PROVISIONAL, T079)', () => {
+	it('la transcripción sembrada tiene primario Voxtral y respaldo aprobado (T079)', () => {
 		database = copyOfTemplate();
 		const transcription = database.db
 			.select()
@@ -94,7 +109,10 @@ describe('datos iniciales', () => {
 				timeout_ms: 45_000,
 				retry_delays_ms: [2000, 4000, 8000]
 			},
-			backup: null
+			backup: {
+				model: 'google/gemini-3.7-flash',
+				timeout_ms: 60_000
+			}
 		});
 	});
 });
