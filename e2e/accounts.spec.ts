@@ -83,3 +83,17 @@ test.describe('sin JavaScript', () => {
 		expect(await page.content()).toContain('Para crear la cuenta necesitas JavaScript');
 	});
 });
+
+test.describe('320 px sin desplazamiento horizontal', () => {
+	for (const path of ['/login', '/registro', '/recuperar']) {
+		test(`@critical ${path} cabe en 320 px de ancho`, async ({ page }) => {
+			await page.setViewportSize({ width: 320, height: 640 });
+			await page.goto(path);
+
+			const overflow = await page.evaluate(
+				() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+			);
+			expect(overflow).toBeLessThanOrEqual(0);
+		});
+	}
+});

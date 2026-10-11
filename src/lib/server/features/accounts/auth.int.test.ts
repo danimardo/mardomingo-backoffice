@@ -142,3 +142,19 @@ describe('Better Auth con SQLite real', () => {
 		expect(login.user.email).toBe(EMAIL);
 	});
 });
+
+describe('revocación de sesiones', () => {
+	it('revocar todas las sesiones deja sin sesión a la cuenta en la siguiente petición', async () => {
+		await register();
+		await auth.api.sendVerificationEmail({ body: { email: EMAIL } });
+		await auth.api.verifyEmail({ query: { token: sent[0]?.token ?? '' } });
+		const login = await auth.api.signInEmail({ body: { email: EMAIL, password: PASSWORD } });
+		const headers = new Headers({ authorization: `Bearer ${login.token}` });
+		expect(await auth.api.getSession({ headers })).not.toBeNull();
+
+		await auth.api.revokeSessions({ headers });
+
+		expect(await auth.api.getSession({ headers })).toBeNull();
+		expect(sessionTokens()).not.toContain(login.token);
+	});
+});
