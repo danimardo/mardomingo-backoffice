@@ -2,6 +2,7 @@
 // signo menos es U+2212, como en la especificación.
 import { describe, expect, it } from 'vitest';
 import { formatCredits } from './credits';
+import { computeCharge } from '$lib/server/features/pricing/domain/charge';
 
 describe('formatCredits', () => {
 	it('los ejemplos de BE-FR-22 salen exactos (D-07)', () => {
@@ -42,5 +43,29 @@ describe('formatCredits', () => {
 	it('usa coma decimal y el agrupado de miles de es-ES (sin separador a partir de 4 cifras, como la RAE)', () => {
 		expect(formatCredits(1_234_567_000)).toBe('1235');
 		expect(formatCredits(1_234_567_000_000)).toBe('1.234.567');
+	});
+});
+
+describe('regresión de extremo a extremo: cobro y formato (T143, D-07)', () => {
+	const DEFAULTS = {
+		providerFeePpm: 55_000,
+		fxUsdEurPpm: 920_000,
+		marginPpm: 2_000_000,
+		creditsPerEurUsage: 1000
+	};
+
+	it('los cuatro importes de D-07 salen como en BE-FR-22 desde el coste real', () => {
+		const fix = computeCharge({ costMicroUsd: 400, ...DEFAULTS });
+		const transcription = computeCharge({ costMicroUsd: 2_000, ...DEFAULTS, providerFeePpm: 0 });
+		const prompt = computeCharge({ costMicroUsd: 30_000, ...DEFAULTS });
+		// Saldo 55 créditos menos el cobro de 58,236 créditos: −3,236 créditos.
+		const balance = 55_000_000 - prompt;
+
+		expect([fix, transcription, prompt, balance].map(formatCredits)).toEqual([
+			'0,8',
+			'3,7',
+			'58',
+			'−3,2'
+		]);
 	});
 });

@@ -3,8 +3,9 @@
 // fija una línea base y después el umbral que bloquea la release.
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 const config = {
+	plugins: ['@stryker-mutator/vitest-runner'],
 	testRunner: 'vitest',
-	vitest: { configFile: 'vite.config.ts', related: false },
+	vitest: { configFile: 'vite.config.ts', related: true },
 	mutate: [
 		'src/lib/server/features/*/domain/**/*.ts',
 		'src/lib/shared/**/*.ts',
@@ -12,6 +13,8 @@ const config = {
 		'!src/**/*.test.ts',
 		'!src/**/*.component.test.ts'
 	],
+	// Con `perTest` el runner de Vitest (proyectos) no recoge la cobertura por prueba y marca los mutantes como vivos sin ejecutarlos.
+	coverageAnalysis: 'all',
 	incremental: true,
 	incrementalFile: 'reports/stryker-incremental.json',
 	tempDirName: '.stryker-tmp',
@@ -19,7 +22,7 @@ const config = {
 	htmlReporter: { fileName: 'reports/mutation/index.html' },
 	// Umbrales de referencia para el informe; no bloquean hasta fijar la línea base.
 	thresholds: { high: 80, low: 60, break: null },
-	ignoreStatic: true,
+	ignoreStatic: false,
 	timeoutMS: 30000
 };
 
