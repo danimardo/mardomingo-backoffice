@@ -82,21 +82,22 @@ no se ha ejecutado completo.
 - **T111 (parcial)**: el atributo `Secure` no se verifica en el entorno http.
 - **T112 (parcial)**: faltan los `storageState` de admin, cuenta bloqueada y tester, y ampliar `smoke`. El servidor de pruebas no da acceso a su base y no hay herramienta de administración todavía.
 - **T113 (parcial)**: falta el recorrido completo con teclado y la medición de DS-09 (manual).
-- **T114**: checkpoint de L03 no cerrado: quedan los parciales de arriba.
+- **T114**: checkpoint de L03 no cerrado. El propietario decide cerrar L03 como parcial: quedan los parciales de arriba, anotados en cada tarea de `tasks.md`.
+- **Push**: pendiente. El remoto `danimardo/mardomingo-backoffice` no responde: no existe para las cuentas de `gh` disponibles. Los commits están en local en `001-cuenta-mardomingo-v4`.
 - **Corrección de esta noche**: la página de nueva contraseña marcaba como no válido cualquier enlace válido. Lo encontró el E2E de recuperación y está corregido (`78a9b2d`).
 
 ### Verificación de L03 (lo ejecutado)
 
-| Comprobación                                                  | Resultado                                                                                                       |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `pnpm validate` (check, lint, test:coverage, build, test:e2e) | Pasa (código 0)                                                                                                 |
-| Unitarias, componentes e integración                          | 392 pasan en 66 ficheros                                                                                        |
-| Cobertura                                                     | Ramas 85,13 % (umbral 80 %); el resto de umbrales también pasan                                                 |
-| E2E en Chromium                                               | 52 pasan: críticos 1, 2 y 3, 320 px, accesibilidad de todas las páginas en ambos temas, teclado y apariencia    |
-| `pnpm test:http`                                              | 46 pasan                                                                                                        |
-| `pnpm lint:tokens`                                            | **Falla**: `notifications/emails/layout.ts` tiene colores literales (ya en HEAD). No forma parte de `validate`. |
-| `db:check`                                                    | Sin cambios en la última ejecución; no se ha repetido en este ciclo                                             |
-| E2E completo, Firefox y WebKit                                | **No ejecutados** (`test:e2e` solo usa Chromium)                                                                |
+| Comprobación                                                  | Resultado                                                                                                                                    |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm validate` (check, lint, test:coverage, build, test:e2e) | Última ejecución: 1 fallo intermitente en el crítico 2 (`sesion.spec.ts`, login: se queda en `/login`). Un E2E completo posterior pasa 52/52, y el fichero aislado pasa 6/6. Sin diagnosticar; ver el trace del fallo en `test-results/`                                                                                                                              |
+| Unitarias, componentes e integración                          | 392 pasan en 66 ficheros                                                                                                                     |
+| Cobertura                                                     | Ramas 85,05 % (umbral 80 %); el resto de umbrales también pasan                                                                              |
+| E2E en Chromium                                               | 52 pasan: críticos 1, 2 y 3, 320 px, accesibilidad de todas las páginas en ambos temas, teclado y apariencia                                 |
+| `pnpm test:http`                                              | 46 pasan                                                                                                                                     |
+| `pnpm lint:tokens`                                            | Pasa. Los dos colores de los emails están en `tokens.css` como `--email-*`, y la plantilla los lee con `?raw`. No forma parte de `validate`. |
+| `db:check`                                                    | Sin cambios en la última ejecución; no se ha repetido en este ciclo                                                                          |
+| E2E completo, Firefox y WebKit                                | **No ejecutados** (`test:e2e` solo usa Chromium)                                                                                             |
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
