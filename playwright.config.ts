@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
+import { TURNSTILE_MOCK_URL } from './e2e/constants';
 
 const PORT = 7390;
 const WEB_ORIGIN = `http://localhost:${String(PORT)}`;
@@ -61,7 +62,7 @@ export default defineConfig({
 		}
 	],
 	webServer: {
-		// Requiere `pnpm build` antes (la cadena `validate` lo hace). Los simuladores externos se añaden en L03.
+		// Requiere `pnpm build` antes (la cadena `validate` lo hace). El captcha va al simulador de Turnstile del global setup (`MOCK_TURNSTILE_URL`).
 		command: 'node build/index.js',
 		url: `${WEB_ORIGIN}/api/v1/health`,
 		reuseExistingServer: !process.env.CI,
@@ -77,7 +78,9 @@ export default defineConfig({
 			DATABASE_PATH: join(E2E_DIR, `app-${randomUUID()}.db`),
 			BETTER_AUTH_SECRET: randomBytes(32).toString('hex'),
 			EMAIL_HASH_KEY: randomBytes(32).toString('hex'),
-			LOG_LEVEL: 'debug'
+			LOG_LEVEL: 'debug',
+			// Captcha de pruebas: el simulador que arranca el global setup en este mismo puerto.
+			MOCK_TURNSTILE_URL: TURNSTILE_MOCK_URL
 		}
 	}
 });

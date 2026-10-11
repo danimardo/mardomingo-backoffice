@@ -34,6 +34,7 @@ test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ p
 	}
 
 	await page.getByRole('button', { name: 'Crear cuenta' }).click();
+	await page.waitForLoadState('networkidle');
 
 	await expect(page.getByRole('alert')).toContainText(
 		'No hemos podido comprobar que eres una persona'
@@ -47,6 +48,7 @@ test('@critical el inicio de sesión con datos erróneos da un error genérico',
 	await page.getByLabel('Contraseña', { exact: true }).fill('mal-escrita');
 
 	await page.getByRole('button', { name: 'Entrar' }).click();
+	await page.waitForLoadState('networkidle');
 
 	await expect(page.getByRole('alert')).toContainText('Email o contraseña incorrectos.');
 });
@@ -56,6 +58,7 @@ test('@critical la recuperación responde lo mismo exista o no el email', async 
 	await page.getByLabel('Email').fill('nadie@ejemplo.es');
 
 	await page.getByRole('button', { name: 'Enviar el enlace' }).click();
+	await page.waitForLoadState('networkidle');
 
 	await expect(page.getByRole('status')).toContainText('Si la cuenta existe');
 });
