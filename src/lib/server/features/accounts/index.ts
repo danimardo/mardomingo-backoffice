@@ -14,6 +14,7 @@ import { sendAccountEmail, type NotificationsDeps } from '$lib/server/features/n
 import { createAuth, type Auth } from './auth';
 import {
 	login,
+	loginFromApp,
 	logout,
 	promoteAdminIfEligible,
 	readSession,
@@ -27,12 +28,22 @@ import {
 	type AccountsBase,
 	type AccountsDeps,
 	type LoginInput,
+	touchAppSession,
+	type AppLoginInput,
+	type AppLoginResult,
 	type RegisterInput
 } from './service';
 
 export { seedDisposableDomains } from './service';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
+export type { AppLoginInput, AppLoginResult } from './service';
 import { denialOf, type Access, type SessionUser } from './guards';
+export {
+	AppLoginBody,
+	AppLoginResponse,
+	PendingAcceptanceSchema,
+	ResendVerificationBody
+} from './contract';
 export { ACCOUNTS_LOG_EVENTS, type AccountsLogFields } from './events';
 export { normalizeEmail } from './domain/email';
 export type { AccountsBase, LoginInput, RegisterInput };
@@ -72,6 +83,12 @@ export interface Accounts {
 	}): Promise<void>;
 	resetPassword(input: { readonly token: string; readonly password: string }): Promise<void>;
 	logout(headers: Headers): Promise<void>;
+	loginFromApp(input: AppLoginInput): Promise<AppLoginResult>;
+	touchAppSession(input: {
+		readonly sessionId: string;
+		readonly userId: string;
+		readonly appId: string;
+	}): void;
 	/** Estado sin consumir el token: `verification` (JWT, con «used») o `reset` (opaco, «valid» o «invalid»). */
 	tokenState(token: string, kind: TokenKind): 'valid' | 'used' | 'invalid';
 	readSession(headers: Headers): ReturnType<typeof readSession>;
@@ -138,6 +155,10 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		requestPasswordReset: (input) => requestPasswordReset(deps, input),
 		resetPassword: (input) => resetPassword(deps, input),
 		logout: (headers) => logout(deps, headers),
+		loginFromApp: (input) => loginFromApp(deps, input),
+		touchAppSession: (input) => {
+			touchAppSession(deps, input);
+		},
 		tokenState: (token, kind) =>
 			kind === 'reset' ? resetTokenStateOf(deps, token) : verificationTokenStateOf(deps, token),
 		readSession: (headers) => readSession(deps, headers)

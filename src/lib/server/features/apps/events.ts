@@ -9,6 +9,7 @@ export interface AppsLogFields {
 		scope: 'global' | 'app';
 		reason: 'validation' | 'ceiling';
 	};
+	'apps.app.rejected': { reason: 'unknown_app' | 'app_disabled' };
 	'apps.config.corrupt': { table: string; field: string };
 	'apps.template.versioned': { version: number };
 }
@@ -19,6 +20,7 @@ export const APPS_LOG_EVENTS = Object.freeze({
 		level: 'info',
 		msg: 'Cambio de configuración rechazado por validación'
 	},
+	'apps.app.rejected': { level: 'info', msg: 'Petición rechazada por la app de X-App-Id' },
 	'apps.config.corrupt': { level: 'error', msg: 'Columna de configuración no válida al leer' },
 	'apps.template.versioned': { level: 'info', msg: 'Nueva versión de plantilla publicada' }
 } as const satisfies Record<keyof AppsLogFields, LogEventMeta>);

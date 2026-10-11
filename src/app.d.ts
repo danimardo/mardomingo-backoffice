@@ -15,11 +15,21 @@ declare global {
 			requestId: string;
 			log: Logger;
 			appearance: Appearance;
-			/** Se rellena con la app de `X-App-Id` en L04. */
-			app: null;
-			/** Usuario de la sesión web (cookie), o `null` si no hay sesión válida (L03). */
+			/** App de `X-App-Id` en la API (paso «app», L04); `null` en la web y en `/api/v1/health` y `openapi.json`. */
+			app: {
+				readonly id: string;
+				readonly slug: string;
+				readonly name: string;
+				readonly allowedOrigins: readonly string[];
+				readonly version: string | null;
+				readonly deviceName: string | null;
+			} | null;
+			/** Por qué no hay app en la API: `X-App-Id` desconocida o mal formada, o app desactivada. `requireApp` lo usa. */
+			appRejection: 'unknown_app' | 'app_disabled' | null;
+			/** Usuario de la sesión: por cookie en la web, por Bearer en la API. `null` si no hay sesión válida. */
 			user: SessionUser | null;
-			session: { readonly id: string } | null;
+			/** `appId` es la app con la que se abrió la sesión (`null` en las sesiones web). */
+			session: { readonly id: string; readonly appId: string | null } | null;
 		}
 		// interface PageData {}
 		// interface PageState {}

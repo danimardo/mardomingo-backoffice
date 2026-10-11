@@ -3,14 +3,20 @@
 // recuperación son siempre neutras (no revelan si el email existe). Los errores de negocio son `AppError` con el código
 // del catálogo; los errores de Better Auth se traducen en un único sitio (`betterAuthCode`).
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { CaptchaVerifier } from '$lib/server/adapters/turnstile/captcha-verifier';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import { findActiveAppBySlug, getSetting, type AppsDeps } from '$lib/server/features/apps';
-import { currentVersions, recordAcceptances, type LegalDeps } from '$lib/server/features/legal';
+import {
+	currentVersions,
+	pendingAcceptancesOf,
+	recordAcceptances,
+	type LegalDeps,
+	type PendingAcceptance
+} from '$lib/server/features/legal';
 import { sendAccountEmail, type NotificationsDeps } from '$lib/server/features/notifications';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError, type ErrorCode } from '$lib/server/shared/errors';
@@ -31,7 +37,7 @@ import {
 	recordLoginFailure,
 	setSignupMetadata
 } from './repository';
-import { user, verification } from './schema';
+import { session, user, userAppActivity, verification } from './schema';
 
 /** Lo que `accounts` necesita de la composición. El `Auth` se añade al montar el servicio (ver `index.ts`). */
 export interface AccountsBase {
@@ -294,11 +300,11 @@ export async function verifyEmail(
 // ---------------------------------------------------------------------------------------------------------------------
 // Login, recuperación y cierre (W11–W15)
 
-/** Login web (W11): el bloqueo por intentos se lleva por email normalizado, exista o no la cuenta (BE-FR-67 CA1). */
-export async function login(
-	deps: AccountsDeps,
-	input: LoginInput
-): Promise<{ readonly redirectTo: string }> {
+/**
+ * Autenticación común de la web y de las apps (BE-FR-03, BE-FR-67): bloqueo por intentos por email normalizado, exista o
+ * no la cuenta (CA1); luego credenciales, cuenta bloqueada y cuenta sin verificar. Devuelve el token de la sesión nueva.
+ */
+async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<string> {
 	const now = deps.clock.now();
 	const hash = hashNormalizedEmail(normalizeEmail(input.email), deps.emailHashKey);
 	const state = readLoginAttempt(deps.db, hash);
@@ -312,11 +318,12 @@ export async function login(
 		});
 	}
 
+	let token: string;
 	try {
-		await deps.auth.api.signInEmail({
+		({ token } = await deps.auth.api.signInEmail({
 			body: { email: input.email, password: input.password },
 			headers: headersFor(input.remoteIp)
-		});
+		}));
 	} catch (error) {
 		if (isNotVerified(error)) {
 			deps.logger.emit('accounts.login.failed', {
@@ -359,8 +366,141 @@ export async function login(
 	immediateTransaction(deps.db, (tx) => {
 		clearLoginAttempts(tx, hash);
 	});
+	return token;
+}
+
+/** Login web (W11): la misma política que `authenticate`, y la página a la que volver, ya saneada. */
+export async function login(
+	deps: AccountsDeps,
+	input: LoginInput
+): Promise<{ readonly redirectTo: string }> {
+	await authenticate(deps, input);
 	deps.logger.emit('accounts.login.succeeded', { status: 'web' });
 	return { redirectTo: safeRedirect(input.redirectTo) };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Login de app y sesión por app (BE-FR-03 CA2–CA3, BE-FR-65 CA3, D-13; T132–T133)
+
+const MINUTE_MS = 60 * 1000;
+
+export interface AppLoginInput {
+	readonly email: string;
+	readonly password: string;
+	readonly remoteIp: string | null;
+	readonly appId: string;
+	readonly deviceName: string | null;
+	readonly appVersion: string | null;
+}
+
+export interface AppLoginResult {
+	readonly token: string;
+	readonly expiresAt: string;
+	readonly user: { readonly email: string; readonly roles: readonly string[] };
+	readonly pendingAcceptances: readonly PendingAcceptance[];
+}
+
+/**
+ * Login de una app: la misma política que la web, y la sesión queda ligada a la app, al equipo y a la versión. Lo que
+ * Better Auth no rellena en la sesión (`app_id`, `device_name`, `app_version`) se escribe aquí, en la misma petición, en
+ * vez de con un `databaseHooks` (que no recibe la app). Se registra la actividad de la cuenta en la app (`user_app_activity`).
+ */
+export async function loginFromApp(
+	deps: AccountsDeps,
+	input: AppLoginInput
+): Promise<AppLoginResult> {
+	const token = await authenticate(deps, {
+		email: input.email,
+		password: input.password,
+		redirectTo: undefined,
+		remoteIp: input.remoteIp
+	});
+	const now = deps.clock.now();
+	const created = deps.db
+		.select({ id: session.id, userId: session.userId, expiresAt: session.expiresAt })
+		.from(session)
+		.where(eq(session.token, token))
+		.get();
+	if (created === undefined) throw new AppError('INTERNAL_ERROR', { reason: 'session_missing' });
+	const account = deps.db
+		.select({ email: user.email, role: user.role })
+		.from(user)
+		.where(eq(user.id, created.userId))
+		.get();
+	if (account === undefined) throw new AppError('INTERNAL_ERROR', { reason: 'user_missing' });
+
+	immediateTransaction(deps.db, (tx) => {
+		tx.update(session)
+			.set({
+				appId: input.appId,
+				deviceName: input.deviceName,
+				appVersion: input.appVersion,
+				lastUsedAt: now
+			})
+			.where(eq(session.id, created.id))
+			.run();
+		const activity = tx
+			.select({ lastUsedAt: userAppActivity.lastUsedAt })
+			.from(userAppActivity)
+			.where(
+				and(eq(userAppActivity.userId, created.userId), eq(userAppActivity.appId, input.appId))
+			)
+			.get();
+		if (activity === undefined) {
+			tx.insert(userAppActivity)
+				.values({ userId: created.userId, appId: input.appId, firstLoginAt: now, lastUsedAt: now })
+				.run();
+		} else {
+			tx.update(userAppActivity)
+				.set({ lastUsedAt: now })
+				.where(
+					and(eq(userAppActivity.userId, created.userId), eq(userAppActivity.appId, input.appId))
+				)
+				.run();
+		}
+	});
+	deps.logger.emit('accounts.login.succeeded', { status: 'app' });
+	return {
+		token,
+		expiresAt: created.expiresAt.toISOString(),
+		user: { email: account.email, roles: account.role.split(',') },
+		pendingAcceptances: pendingAcceptancesOf(deps.db, created.userId, now)
+	};
+}
+
+/**
+ * Renueva `last_used_at` de la sesión y de la actividad de la app como mucho una vez por minuto (T132). Así una app que
+ * llama mucho no escribe en cada petición.
+ */
+export function touchAppSession(
+	deps: AccountsDeps,
+	input: { readonly sessionId: string; readonly userId: string; readonly appId: string }
+): void {
+	const now = deps.clock.now();
+	const cutoff = now - MINUTE_MS;
+	immediateTransaction(deps.db, (tx) => {
+		const current = tx
+			.select({ lastUsedAt: session.lastUsedAt })
+			.from(session)
+			.where(eq(session.id, input.sessionId))
+			.get();
+		if (current !== undefined && (current.lastUsedAt === null || current.lastUsedAt < cutoff)) {
+			tx.update(session).set({ lastUsedAt: now }).where(eq(session.id, input.sessionId)).run();
+		}
+		const activity = tx
+			.select({ lastUsedAt: userAppActivity.lastUsedAt })
+			.from(userAppActivity)
+			.where(and(eq(userAppActivity.userId, input.userId), eq(userAppActivity.appId, input.appId)))
+			.get();
+		if (activity !== undefined && activity.lastUsedAt < cutoff) {
+			tx.update(userAppActivity)
+				.set({ lastUsedAt: now })
+				.where(
+					and(eq(userAppActivity.userId, input.userId), eq(userAppActivity.appId, input.appId))
+				)
+				.run();
+		}
+	});
 }
 
 /** Solicitud de recuperación (W12): siempre neutra; el email solo sale si la cuenta existe. */

@@ -42,6 +42,7 @@ import {
 	latestTemplateVersion,
 	listAppOverrides,
 	readApp,
+	listApps,
 	readAppBySlug,
 	readOperation,
 	readOperationById,
@@ -551,6 +552,37 @@ export function findActiveAppBySlug(
 	const app = readAppBySlug(deps.db, deps.logger, slug);
 	if (app === undefined || app.status !== 'active') return undefined;
 	return { id: app.id, name: app.name };
+}
+
+/** App por su slug, desactivada incluida: el paso «app» distingue `APP_DISABLED` de `UNKNOWN_APP` (BE-FR-62). */
+export function resolveAppBySlug(
+	deps: AppsDeps,
+	slug: string
+):
+	| {
+			readonly id: string;
+			readonly slug: string;
+			readonly name: string;
+			readonly status: 'active' | 'disabled';
+			readonly allowedOrigins: readonly string[];
+	  }
+	| undefined {
+	const app = readAppBySlug(deps.db, deps.logger, slug);
+	if (app === undefined) return undefined;
+	return {
+		id: app.id,
+		slug: app.slug,
+		name: app.name,
+		status: app.status,
+		allowedOrigins: app.allowedOrigins
+	};
+}
+
+/** Orígenes permitidos por alguna app activa: el _preflight_ de CORS solo pide que el origen figure en alguna (T131). */
+export function activeAppOrigins(deps: AppsDeps): readonly string[] {
+	return listApps(deps.db, deps.logger)
+		.filter((app) => app.status === 'active')
+		.flatMap((app) => app.allowedOrigins);
 }
 
 /** Email de soporte global (`support_email`, BE-FR-58): el que va en el pie de los emails y en Reply-To. */
