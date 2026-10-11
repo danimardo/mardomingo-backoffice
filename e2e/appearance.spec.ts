@@ -68,6 +68,23 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 		recordUx(testInfo, 'tema elegido sin recargar', 'comprobado');
 	});
 
+	test('con «Sistema», cambiar el sistema en /login no borra lo escrito', async ({ page }) => {
+		await emulate(page, { colorScheme: 'light' });
+		await page.goto('/login');
+		await page.getByLabel('Email').fill('texto que no se pierde');
+		await page.evaluate(() => {
+			window.__sinRecarga = true;
+		});
+		const before = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+		await emulate(page, { colorScheme: 'dark' });
+
+		const after = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+		expect(after).not.toBe(before);
+		expect(await page.getByLabel('Email').inputValue()).toBe('texto que no se pierde');
+		expect(await page.evaluate(() => window.__sinRecarga === true)).toBe(true);
+	});
+
 	test('con «Sistema», cambiar el sistema cambia la página sin recargar', async ({ page }) => {
 		await emulate(page, { colorScheme: 'light' });
 		await page.goto('/preferencias');

@@ -237,7 +237,12 @@ const appStep: Handle = ({ event, resolve }) => {
 const sessionStep: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 	event.locals.session = null;
-	if (event.url.pathname.startsWith(API_PREFIX)) return resolve(event);
+	if (event.url.pathname.startsWith(API_PREFIX)) {
+		// El host de la API no escribe cookies: nunca sale un `set-cookie` de una respuesta de API (T098).
+		const response = await resolve(event);
+		response.headers.delete('set-cookie');
+		return response;
+	}
 	if (event.request.headers.has('authorization')) {
 		event.locals.log.emit('accounts.session.rejected', {
 			reason: 'bearer_on_web',
