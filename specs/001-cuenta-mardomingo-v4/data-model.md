@@ -850,6 +850,29 @@ ejecutan sus funciones de anonimización o borrado.
 Notación: `?` opcional; `Micro`, `Ppm`, etc. son enteros seguros no negativos salvo que se diga.
 Todos los objetos son estrictos (`z.strictObject`): una clave desconocida se rechaza.
 
+### 3.0 Valores aprobados de `secretario` (T079, 2026-10-11)
+
+Aprobados por el propietario. Los precios son los consultados ese día en la API pública de OpenRouter y en el anuncio de
+Voxtral de Mistral (4-feb-2026). Implementado en `apps/defaults.ts` (`approvedOperationOf`) y sembrado en `apps/seed.ts`.
+Las operaciones se siembran **inactivas**: las activa el administrador.
+
+| Operaciones                                                | Modelo principal                                           | Respaldo                              | `max_output_tokens` | `max_cost_credits`                    |
+| ---------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------- | ------------------- | ------------------------------------- |
+| Procesar, Mejorar, Corregir, Embellecer Markdown, Traducir | `anthropic/claude-haiku-5.5`                               | `openai/gpt-5.6-luna`                 | 8.192               | 12                                    |
+| Transcripción de imagen                                    | `openai/gpt-5.6-luna`                                      | `anthropic/claude-haiku-5.5`          | 8.192               | 12                                    |
+| Prompt directo, Prompts personalizados, Prompt ad hoc      | `openai/gpt-5.6-sol`                                       | `anthropic/claude-sonnet-5.5`         | 8.192               | 100                                   |
+| Transcripción de audio                                     | `voxtral-mini-latest` (primario de `transcription_config`) | `google/gemini-3.7-flash` (60.000 ms) | —                   | 25                                    |
+| Generación de imagen                                       | `google/gemini-3.1-flash-image`                            | —                                     | —                   | 80; `estimated_max_cost_usd` 0,08 USD |
+
+- `voxtral_price_per_minute_usd`: 0,003 USD (3.000 micro-USD por minuto).
+- `download_url`: `https://github.com/danimardo/secretario2/releases/latest/download/SecretarioAI-Setup.exe` (nombre fijo,
+  sin versión; hasta que exista una release con ese nombre el enlace no resuelve).
+- Supuestos del tope (BE-FR-72): entrada máxima de 8.000 tokens (24.000 caracteres a 3 por token), 1.500 tokens por imagen,
+  audio de 310 s (300 s más la tolerancia de 10 s), 1 € = 1.000 créditos y USD → EUR a 0,92. El tope usa el modelo más caro
+  del grupo (principal o respaldo).
+- Pendiente de comprobar con una llamada real: los modelos `gpt-5.x` razonan y el razonamiento cuenta como salida, así que
+  `max_output_tokens` puede cortar respuestas largas (BE-FR-72 CA2, `truncated`). El coste por imagen es una estimación.
+
 ### 3.1 `settings.value` (por clave)
 
 | Clave                                                                                              | Tipo del valor                                    | Defecto (seed)                   |

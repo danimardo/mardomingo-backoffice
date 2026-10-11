@@ -32,7 +32,7 @@ _(Se actualiza al cerrar cada grupo.)_
 | Fase 16 (convergencia)                          | T381–T392                                            | Hecho; T390 se cierra en L02 (global-setup migra con `migrateDatabase`)            | `c887cb0`, `e0ad9da`, `ea1bf3a`                                                        |
 | L02, fechas y columnas                          | T067, T068                                           | Hecho (incluye la corrección de tipos del punto siguiente)                         | `bac8df6` y el commit de corrección                                                    |
 | L02, esquemas, migraciones, servicios y pruebas | T069–T083, T390                                      | Hecho; verificado con las comprobaciones del checkpoint (ver abajo)                | `0482722`, `0734ecd`                                                                   |
-| L02, datos del propietario                      | T079                                                 | **Abierto**: requiere respuestas del propietario (valores provisionales en uso)    | —                                                                                      |
+| L02, datos del propietario                      | T079                                                 | **Hecho el 2026-10-11**: valores aprobados (ver `data-model.md` 3.0)               | —                                                                                      |
 | L02, checkpoint                                 | T084                                                 | Hecho salvo `pnpm validate` completo (E2E completo no ejecutado)                   | `53732c6`                                                                              |
 | L03, backend de cuentas, adaptadores y legales  | T085–T099                                            | Hecho (ver «Lote L03» abajo)                                                       | `98d44e4`                                                                              |
 | L03, páginas, sesión web, CSP y pruebas web     | T100–T107, T110, T111                                | Hecho en su mayoría; E2E de cuentas (8 + 3 de 320 px), HTTP (7) y componentes (14) | `b62e6b3`, `e3cdee8`, `35dd866`, `208a4ec`, y el commit de 320 px y revocación         |
@@ -144,23 +144,23 @@ Son caminos de error que piden pruebas de integración; quedan para una pasada p
 3. **`ON DELETE RESTRICT`** en las claves a `apps` y `user` que la especificación no detalla. Es el valor más estricto; no borra nada en cascada salvo donde la especificación lo pide (`session`, `account`, `terms_acceptances.user_id`, `user_app_activity.user_id`).
 4. **Prefijo de los eventos de funcionalidad**: `tests/architecture/log-events.test.ts` aceptaba solo prefijos de infraestructura. Ahora acepta también el nombre de cada funcionalidad, como dice su propia cabecera y `contracts/log-events.md` 1.1.
 5. **Error de configuración corrupta**: `INTERNAL_ERROR` (no se añade ningún código nuevo). El evento `apps.config.corrupt` queda en el log con la tabla y la columna, nunca con el valor.
-6. **Modelo de la transcripción**: `primary` = `voxtral-mini-latest` (lo fija la documentación) y `backup` = nulo (PROVISIONAL, T079).
+6. **Modelo de la transcripción**: `primary` = `voxtral-mini-latest` y `backup` = `google/gemini-3.7-flash`, aprobados el 2026-10-11 (T079).
 7. **`price_references` y `model_cache`** no se declaran: ninguna tarea de L02 las pide y pertenecen a lotes posteriores.
 
-### Valores PROVISIONALES (T079): no activar operaciones antes de confirmarlos
+### Valores de `secretario` (T079, aprobados el 2026-10-11)
 
-- **Operaciones de `secretario`**: inactivas (`active = 0`) y sin modelo. Ninguna petición real puede usarlas hasta que el propietario dé modelos, topes y respaldos.
-- **`voxtral_price_per_minute_usd` = 0**: PROVISIONAL. Si se activa la transcripción sin el precio real, el coste sería cero. Por eso la transcripción está inactiva.
-- **Topes de salida y de coste**: 4096 tokens en chat; 1, 5 y 10 créditos de tope en chat, transcripción e imagen. Todos PROVISIONALES.
-- **Respaldo de transcripción**: nulo. Con el primario activo, la configuración es válida, pero no hay respaldo.
-- **URL de descarga de `secretario`** (D-21): nula. Sin ella, la landing no muestra botón de descarga.
+- **Operaciones de `secretario`**: modelos, respaldos y topes aprobados. Siguen inactivas (`active = 0`): las activa el administrador.
+- **`voxtral_price_per_minute_usd`** = 0,003 USD por minuto, aprobado. La transcripción sigue inactiva hasta que se active.
+- **Topes**: 8.192 tokens de salida en chat; 12 créditos en el Corrector y en la transcripción de imagen, 100 en PRO, 25 en la transcripción de audio y 80 en la imagen. Aprobados; el coste por imagen es una estimación.
+- **Respaldo de transcripción**: `google/gemini-3.7-flash` (60 s), aprobado.
+- **URL de descarga de `secretario`** (D-21): `https://github.com/danimardo/secretario2/releases/latest/download/SecretarioAI-Setup.exe`. No resuelve hasta que haya una release con ese nombre; la 3.4.0 usa otro.
 - **Textos de `legal_documents`**: no se siembran aquí (son de L03, T092).
 
 ### Pendiente de tu revisión (no es un bloqueo)
 
-- **T079**: el propietario debe dar los valores anteriores y anotarlos en `data-model.md` §3.
+- **T079**: hecho. Valores en `data-model.md` 3.0 y en `apps/defaults.ts`. Pendiente de comprobar con una llamada real que `max_output_tokens` no corta las respuestas de los modelos GPT-5.x.
 - **E2E completo, a11y, Firefox y WebKit**: no se han ejecutado tras L02. El smoke de Chromium pasa.
-- **Commits**: todo es local. No hay push ni cambios en `main`.
+- **Commits**: en la rama de trabajo `001-cuenta-mardomingo-v4`, subidos a `origin` a petición del propietario. Nada en `main`.
 
 ## Checkpoint de L01 (T066)
 

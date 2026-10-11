@@ -1,9 +1,9 @@
 // Valores por defecto de la configuración (data-model.md 3.1; Historias §9) y perfil inicial de `secretario`
 // (BE-FR-62, BE-FR-31, BE-FR-39). Es el origen del _seed_ de `apps` y de `payments` (T080).
 //
-// PROVISIONAL (T079): los valores marcados así no los fija la documentación y los debe dar el propietario. El
-// _seed_ los escribe como provisionales, y las operaciones de `secretario` quedan inactivas (`active = 0`) hasta
-// que se sustituyan. Una clave ya existente en la BD nunca se sobrescribe desde aquí.
+// Modelos, respaldos y topes de `secretario`: aprobados por el propietario el 2026-10-11 (T079, `approvedOperationOf`).
+// Las operaciones se siembran inactivas (`active = 0`): las activa el administrador. Una clave ya existente en la BD
+// nunca se sobrescribe desde aquí.
 import type {
 	SettingKey,
 	SettingValue,
@@ -22,8 +22,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
 	margin_global: 2_000_000,
 	provider_fee_pct_openrouter: 55_000,
 	provider_fee_pct_mistral: 0,
-	// PROVISIONAL (T079): «tarifa vigente» de Voxtral sin confirmar; las operaciones de transcripción están inactivas.
-	voxtral_price_per_minute_usd: 0,
+	// Tarifa de Voxtral por minuto (Mistral, 0,003 USD; anuncio de 4-feb-2026), aprobada el 2026-10-11 (T079).
+	voxtral_price_per_minute_usd: 3_000,
 	welcome_credits: 1_000_000_000,
 	free_credits_expiry_days: 30,
 	free_expiry_warning_days: 7,
@@ -75,10 +75,14 @@ export const DEFAULT_PACKS: readonly DefaultPack[] = Object.freeze([
 	{ id: 'pck_seed_25eur', name: 'Pack 25 €', priceEurCents: 2500, bonusPpm: 100_000, sortOrder: 3 }
 ]);
 
-/** Enlaces de `secretario`. La URL de descarga es PROVISIONAL (D-21): sin ella no hay botón de descarga. */
+/**
+ * Enlaces de `secretario`. La descarga apunta a la última release de su repositorio, con un nombre de fichero fijo y sin
+ * versión (T079, D-21). Hasta que exista una release con ese nombre, el enlace no resuelve.
+ */
 export const SECRETARIO_LINKS = Object.freeze({
 	landing: { type: 'internal' },
-	download_url: null,
+	download_url:
+		'https://github.com/danimardo/secretario2/releases/latest/download/SecretarioAI-Setup.exe',
 	release_notes_url: null
 } satisfies AppLinks);
 
@@ -117,8 +121,7 @@ export const SECRETARIO_OVERRIDES = Object.freeze({
 export type OperationKind = (typeof OPERATION_KINDS)[number];
 
 /**
- * Operaciones de `secretario` (BE-FR-31). Todas libres (`mode = libre`). Los campos marcados como PROVISIONAL en el
- * _seed_ (`max_output_tokens`, `max_cost_micro`, modelo y respaldo) no los fija la documentación (T079).
+ * Operaciones de `secretario` (BE-FR-31). Todas libres (`mode = libre`). Modelos, respaldos y topes: `approvedOperationOf` (T079).
  */
 export interface DefaultOperation {
 	readonly key: string;
@@ -242,17 +245,93 @@ export const SECRETARIO_OPERATIONS: readonly DefaultOperation[] = Object.freeze(
 	}
 ] satisfies DefaultOperation[]);
 
-/** Tope de salida de las operaciones de chat, PROVISIONAL (T079). */
-export const PROVISIONAL_CHAT_MAX_OUTPUT_TOKENS = 4096;
+/** Modelo de respaldo de la transcripción, aprobado el 2026-10-11 (T079): el que sugiere el asistente de Secretario. */
+export const TRANSCRIPTION_BACKUP_MODEL = 'google/gemini-3.7-flash';
 
-/** Tope de coste en µc de las operaciones de chat, PROVISIONAL (T079): 1 crédito. */
-export const PROVISIONAL_CHAT_MAX_COST_MICRO = 1_000_000;
+/** Tiempo máximo de cada intento del respaldo de transcripción (ms). */
+export const TRANSCRIPTION_BACKUP_TIMEOUT_MS = 60_000;
 
-/** Tope de coste en µc de la transcripción, PROVISIONAL (T079): 5 créditos. */
-export const PROVISIONAL_TRANSCRIPTION_MAX_COST_MICRO = 5_000_000;
+/**
+ * Modelo, respaldos y topes de una operación de `secretario`, aprobados por el propietario el 2026-10-11 (T079). Los
+ * precios son los de la API pública de OpenRouter y los del anuncio de Voxtral de Mistral, consultados ese día. El tope
+ * es duro (BE-FR-72) y se fija con el peor caso: 8.000 tokens de entrada, `max_output_tokens` y el modelo más caro del
+ * grupo (principal o respaldo).
+ */
+export interface ApprovedOperation {
+	readonly model: string | null;
+	readonly fallbackModels: readonly string[];
+	readonly maxOutputTokens: number | null;
+	/** Tope duro en micro-créditos (1 crédito = 1.000.000 µc). */
+	readonly maxCostMicro: number;
+	/** Coste máximo estimado en micro-USD, cuando el precio por imagen no se conoce. */
+	readonly estimatedMaxCostMicroUsd: number | null;
+}
 
-/** Tope de coste en µc de la generación de imagen, PROVISIONAL (T079): 10 créditos. */
-export const PROVISIONAL_IMAGE_MAX_COST_MICRO = 10_000_000;
+const CHAT_MAX_OUTPUT_TOKENS = 8_192;
+
+const CORRECTOR: ApprovedOperation = Object.freeze({
+	model: 'anthropic/claude-haiku-5.5',
+	fallbackModels: Object.freeze(['openai/gpt-5.6-luna']),
+	maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
+	maxCostMicro: 12_000_000,
+	estimatedMaxCostMicroUsd: null
+});
+
+const IMAGE_TRANSCRIPTION: ApprovedOperation = Object.freeze({
+	model: 'openai/gpt-5.6-luna',
+	fallbackModels: Object.freeze(['anthropic/claude-haiku-5.5']),
+	maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
+	maxCostMicro: 12_000_000,
+	estimatedMaxCostMicroUsd: null
+});
+
+const PRO: ApprovedOperation = Object.freeze({
+	model: 'openai/gpt-5.6-sol',
+	fallbackModels: Object.freeze(['anthropic/claude-sonnet-5.5']),
+	maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
+	maxCostMicro: 100_000_000,
+	estimatedMaxCostMicroUsd: null
+});
+
+const TRANSCRIPTION: ApprovedOperation = Object.freeze({
+	model: null,
+	fallbackModels: Object.freeze([]),
+	maxOutputTokens: null,
+	maxCostMicro: 25_000_000,
+	estimatedMaxCostMicroUsd: null
+});
+
+const IMAGE: ApprovedOperation = Object.freeze({
+	model: 'google/gemini-3.1-flash-image',
+	fallbackModels: Object.freeze([]),
+	maxOutputTokens: null,
+	maxCostMicro: 80_000_000,
+	estimatedMaxCostMicroUsd: 80_000
+});
+
+/** Valores aprobados de una operación de `secretario`, por su clave. Una clave desconocida es un error de programación. */
+export function approvedOperationOf(key: string): ApprovedOperation {
+	switch (key) {
+		case 'improve':
+		case 'enhance':
+		case 'fix':
+		case 'beautify':
+		case 'translate':
+			return CORRECTOR;
+		case 'image-transcription':
+			return IMAGE_TRANSCRIPTION;
+		case 'direct-prompt':
+		case 'custom-prompt':
+		case 'adhoc-prompt':
+			return PRO;
+		case 'transcription':
+			return TRANSCRIPTION;
+		case 'image-generation':
+			return IMAGE;
+		default:
+			throw new Error(`operación de secretario sin valores aprobados: ${key}`);
+	}
+}
 
 /** Modelo del primario de transcripción (3.4): «voxtral-mini-latest». Confirmado por la documentación. */
 export const TRANSCRIPTION_PRIMARY_MODEL = 'voxtral-mini-latest';
