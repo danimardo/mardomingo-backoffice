@@ -108,6 +108,39 @@ no se ha ejecutado completo.
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
+## Lote L08: transcripción (E08) e imagen (E09)
+
+**Estado**: parcial. Implementado y verificado con dobles y con ffprobe y ffmpeg reales en la suite HTTP. Quedan los pasos manuales de staging y del quickstart (V05) y el checkpoint T188 abierto por ellos.
+
+**Hecho**: contratos E08 y E09 (con registro en OpenAPI y `format: binary`); puerto y adaptador de Voxtral con su simulador; adaptadores de ffprobe y ffmpeg con `execFile` sin shell (tiempo máximo, `SIGKILL`, señal); reglas de transcripción en `ai/domain/transcription.ts`; `ai/media.ts` con transcripción e imagen; rutas `api/v1/ai/transcribe` e `api/v1/ai/image`; comprobación fatal de `BODY_SIZE_LIMIT` en el arranque. Refactor de `service.ts`: se extraen `admissionOf` (legal e idempotencia) y `billAndClose` (cobro y cierre), que usan el chat, la transcripción y la imagen. El chat sigue en verde (23 pruebas de integración y 11 HTTP).
+
+**Decisiones tomadas (a confirmar)**
+
+1. Voxtral reintenta según `retry_delays_ms` de la operación (2, 4 y 8 s), con 45 s por intento. El respaldo por OpenRouter recibe el audio en mp3 con `input_audio` y su propio tiempo (60 s). Un 401, 402 o 429 es de facturación: no reintenta y pasa al respaldo.
+2. Se cobra solo lo que factura cada proveedor. Voxtral: segundos del proveedor o, si no los informa, los medidos en el servidor (nunca los del cliente), × precio por minuto / 60. Respaldo: su coste (respuesta, `/generation` o estimación).
+3. Coste máximo de la transcripción: el mayor entre Voxtral y el respaldo. Sin coste estimado del respaldo se usa el tope de la operación, así que la reserva es de hasta 25 créditos por petición; es conservador.
+4. Un fichero no legible o más largo que `max_audio_seconds` más la tolerancia se rechaza antes de reservar nada. Sobre el tamaño, se responde 413 si la cabecera declara más que `max_audio_mb`.
+5. La imagen se devuelve como data URL y no se guarda. Sin imagen en la respuesta, `PROVIDER_ERROR` sin cobro.
+6. El temporal de audio es un directorio de `mkdtemp` con el original y el convertido, con permisos `0o600` en los ficheros, y se borra en `finally`. Si el borrado falla, se registra `ai.temp_file.cleanup_failed`.
+7. Las pruebas de integración usan dobles de Voxtral, ffprobe y ffmpeg, como se acordó. La suite HTTP usa los binarios reales, porque el plan (T188) exige que ffmpeg y ffprobe estén disponibles en el checkpoint. Están instalados en este equipo (`C:\ProgramData\chocolatey\bin`).
+
+**Hallazgos que necesitan tu decisión**
+
+- **Imagen (valor aprobado)**: con los valores aprobados en T079, `image-generation` estima 80.000 µUSD (0,08 USD) por imagen, que con la comisión, el tipo de cambio y el margen por defecto son unos 155 créditos. Su tope es de 80 créditos. **Toda imagen se rechazaría con `OPERATION_TOO_EXPENSIVE`**. En las pruebas he subido el tope a 200 créditos, sin tocar el valor sembrado. Hay que decidir si se sube el tope o se baja la estimación.
+- **`BODY_SIZE_LIMIT` es obligatorio en el despliegue**: SvelteKit usa 512 KB si la variable no existe. He quitado el valor por defecto `10M` del esquema de entorno, porque no llegaba al adaptador y ocultaba el problema. La aplicación ahora **se niega a arrancar** si `BODY_SIZE_LIMIT` no cubre los 10 MB de audio. En Coolify hay que definir `BODY_SIZE_LIMIT=10M` antes de desplegar esta versión.
+- **CI no verificado**: `ci.yml` usa `ubuntu-24.04` y no instala ffmpeg de forma explícita. CI nunca se ha ejecutado en remoto, así que no lo puedo comprobar.
+- **Dockerfile**: `trixie` con `ffmpeg` por apt (7.1; ffprobe va en el mismo paquete). Leído, no ejecutado.
+
+**Pendiente (no cerrado)**
+
+- **Staging**: probar el respaldo con conversión real en staging y anotar el comando de ffmpeg confirmado en `research.md` (R11, T187).
+- **Quickstart V05** y el checkpoint T188 (escenarios manuales).
+- **Activación de las operaciones de medios** en la base de prueba: se hace por SQL como precondición, hasta que L13 active operaciones desde el administrador.
+
+**Verificación**: `pnpm validate` en código 0 (664 pruebas en 100 ficheros; cobertura del dominio al 100 %; build; 53 E2E). `pnpm test:http` en verde (79 pruebas, con 9 de medios contra el build, ffprobe y ffmpeg reales). Arquitectura y lint en verde.
+
+**Incidencias**: la comprobación de `BODY_SIZE_LIMIT` falló en el E2E porque el servidor de Playwright no lo definía; ya está en su configuración. Una subida por encima del límite del servidor llegaba como 400 y ahora responde 413 por la cabecera declarada. La regex de claves de operación no admitía guiones (`image-generation`).
+
 ## Lote L07: chat de IA (E07): flujo, proveedor, cobro, moderación y cancelación
 
 **Estado**: parcial. Núcleo del chat hecho y verificado, y la suite HTTP contra el build (T178) en verde. Faltan parte de T166, varias pruebas de T174–T176 y los escenarios manuales del quickstart. El checkpoint T179 queda abierto por esos escenarios.
