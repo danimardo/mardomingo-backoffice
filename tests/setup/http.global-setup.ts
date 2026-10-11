@@ -7,12 +7,32 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import type { TestProject } from 'vitest/node';
 import { send } from '../http/client';
+import { startOpenRouterMock } from '../mock-servers/openrouter';
+import { openDatabase } from '$lib/server/db/client';
+import { createSystemClock } from '$lib/server/adapters/clock/clock';
+import { session, user } from '$lib/server/features/accounts/schema';
+import { createIdGenerator } from '$lib/server/shared/ids';
+import { createFakeLogger } from '../builders/fake-logger';
+import { seededRandomBytes } from '../builders/ids';
+import {
+	activateChatOperation,
+	acceptCurrentLegal,
+	grantChatWelcome
+} from '../builders/chat-account';
+import { SEEDED_APP_ID } from './integration.global-setup';
 
 declare module 'vitest' {
 	export interface ProvidedContext {
 		httpBaseUrl: string;
+		/** Token Bearer de la cuenta de chat sembrada (T178). */
+		httpChatToken: string;
+		/** Simulador de OpenRouter que usa el servidor construido (T178). */
+		openrouterMockUrl: string;
 	}
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const CHAT_USER_ID = 'usr_http_chat';
 
 const DIR = join('tests', '.tmp', 'http');
 
@@ -60,6 +80,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	const baseUrl = `http://127.0.0.1:${String(port)}`;
 	const secret = randomBytes(32).toString('hex');
 
+	const openrouter = await startOpenRouterMock();
 	const child: ChildProcess = spawn(process.execPath, [join('build', 'index.js')], {
 		env: {
 			APP_ENV: 'test',
@@ -71,13 +92,19 @@ export default async function setup(project: TestProject): Promise<() => Promise
 			DATABASE_PATH: join(DIR, 'app.db'),
 			BETTER_AUTH_SECRET: secret,
 			EMAIL_HASH_KEY: randomBytes(32).toString('hex'),
-			LOG_LEVEL: 'debug'
+			LOG_LEVEL: 'debug',
+			MOCK_OPENROUTER_URL: openrouter.url
 		},
 		stdio: 'ignore'
 	});
 
 	await waitForHealth(baseUrl, 30_000);
 	project.provide('httpBaseUrl', baseUrl);
+	// La base la migra y la siembra el propio servidor al arrancar; la cuenta de chat se escribe después, en la misma base.
+	const chatToken = randomBytes(32).toString('hex');
+	seedChatAccount(join(DIR, 'app.db'), chatToken);
+	project.provide('httpChatToken', chatToken);
+	project.provide('openrouterMockUrl', openrouter.url);
 
 	return async () => {
 		// En Windows la BD sigue abierta hasta que el proceso termina: se espera antes de borrarla.
@@ -87,6 +114,53 @@ export default async function setup(project: TestProject): Promise<() => Promise
 			});
 			child.kill();
 		});
+		await openrouter.close();
 		rmSync(DIR, { recursive: true, force: true });
 	};
+}
+
+/**
+ * Cuenta verificada con una sesión de la app `secretario`, la operación de chat activa, la aceptación vigente de los
+ * documentos legales y la bienvenida. El token Bearer es la propia `session.token`: el servidor lo firma al leerlo.
+ */
+function seedChatAccount(file: string, token: string): void {
+	const { sqlite, db } = openDatabase(file);
+	try {
+		const clock = createSystemClock();
+		const now = new Date(clock.now());
+		db.insert(user)
+			.values({
+				id: CHAT_USER_ID,
+				email: 'chat@ejemplo.es',
+				emailNormalized: 'chat@ejemplo.es',
+				emailVerified: true,
+				createdAt: now,
+				updatedAt: now
+			})
+			.run();
+		db.insert(session)
+			.values({
+				id: 'ses_http_chat',
+				userId: CHAT_USER_ID,
+				token,
+				expiresAt: new Date(now.getTime() + 30 * DAY_MS),
+				appId: SEEDED_APP_ID,
+				deviceName: 'Prueba HTTP',
+				appVersion: '4.0.0',
+				createdAt: now,
+				updatedAt: now
+			})
+			.run();
+		const deps = {
+			db,
+			logger: createFakeLogger(),
+			clock,
+			ids: createIdGenerator(seededRandomBytes(91))
+		};
+		activateChatOperation(db);
+		grantChatWelcome(deps, CHAT_USER_ID);
+		acceptCurrentLegal(deps, CHAT_USER_ID);
+	} finally {
+		sqlite.close();
+	}
 }

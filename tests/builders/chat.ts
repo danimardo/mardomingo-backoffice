@@ -9,19 +9,22 @@ import {
 	createFakeEmailSender,
 	type FakeEmailSender
 } from '$lib/server/adapters/resend/fake-sender';
-import { immediateTransaction } from '$lib/server/db/tx';
 import { appOperations } from '$lib/server/features/apps/schema';
-import { currentVersions, recordAcceptances, type LegalDeps } from '$lib/server/features/legal';
 import type { PricingDeps } from '$lib/server/features/pricing';
 import { createIdGenerator } from '$lib/server/shared/ids';
 import { toMicro } from '$lib/shared/money';
-import { toEpochMs } from '$lib/shared/time';
 import { creditsFixture, type CreditsFixture } from './credits';
+import {
+	activateChatOperation,
+	acceptCurrentLegal,
+	CHAT_KEY,
+	grantChatWelcome,
+	type ChatAccountDeps
+} from './chat-account';
 import { seededRandomBytes } from './ids';
 import { SEEDED_APP_ID } from '../setup/integration.global-setup';
 
-/** Operación de chat sembrada (corrector, libre, modelo principal y un respaldo; sin imagen, salida estructurada ni tools). */
-export const CHAT_KEY = 'improve';
+export { CHAT_KEY } from './chat-account';
 export const CHAT_MESSAGE = 'Hola, revisa este párrafo.';
 /** Tope de coste de la operación sembrada (12 créditos). */
 export const SEEDED_MAX_COST_MICRO = 12_000_000;
@@ -62,35 +65,10 @@ export function chatFixture(options: ChatFixtureOptions = {}): ChatFixture {
 	const fx = createFakeFxSource();
 	const userId = base.addUser(options.userId ?? 'usr_chat');
 
-	// Las operaciones se siembran inactivas y solo las activa el administrador (L13). Aquí se activa la de chat directamente
-	// en la base de prueba: es una precondición del escenario, no un paso del flujo que se prueba.
-	base.db
-		.update(appOperations)
-		.set({ active: true })
-		.where(and(eq(appOperations.appId, SEEDED_APP_ID), eq(appOperations.key, CHAT_KEY)))
-		.run();
-
-	const legal: LegalDeps = { db: base.db, logger: base.logger, ids };
-	if (options.welcome ?? options.ready ?? true) {
-		base.credits.grantWelcome({ userId, emailNormalizedHash: `hash-${userId}` });
-	}
-	if (options.ready ?? true) {
-		const now = toEpochMs(base.clock.now());
-		const versions = currentVersions({ db: base.db }, now, ['terms', 'privacy', 'aup']);
-		immediateTransaction(base.db, (tx) => {
-			recordAcceptances(tx, legal, {
-				userId,
-				appId: null,
-				ip: null,
-				now,
-				accepted: [
-					{ document: 'terms', version: versions.get('terms')?.version ?? '' },
-					{ document: 'privacy', version: versions.get('privacy')?.version ?? '' },
-					{ document: 'aup', version: versions.get('aup')?.version ?? '' }
-				]
-			});
-		});
-	}
+	const account: ChatAccountDeps = { db: base.db, logger: base.logger, clock: base.clock, ids };
+	activateChatOperation(base.db);
+	if (options.welcome ?? options.ready ?? true) grantChatWelcome(account, userId);
+	if (options.ready ?? true) acceptCurrentLegal(account, userId);
 
 	const apps = { db: base.db, logger: base.logger, clock: base.clock, ids };
 	const pricing: PricingDeps = {
