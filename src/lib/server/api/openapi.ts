@@ -7,6 +7,7 @@ import {
 	AppLoginResponse,
 	ResendVerificationBody
 } from '$lib/server/features/accounts';
+import { ChatRequestBody } from '$lib/server/features/ai';
 
 export const apiErrorSchema = z
 	.object({
@@ -59,6 +60,30 @@ export function buildOpenApiDocument(publicApiUrl: string) {
 						'400': { description: 'Validación o cabecera X-App-Id' },
 						'401': { description: 'Credenciales erróneas o cuenta sin verificar' },
 						'503': { description: 'App desactivada' }
+					}
+				}
+			},
+			'/ai/chat': {
+				post: {
+					summary: 'Chat de una operación de IA (Bearer; Idempotency-Key opcional, UUID)',
+					requestBody: { content: { 'application/json': { schema: ChatRequestBody } } },
+					responses: {
+						'200': {
+							description:
+								'Texto o JSON, saldo resumido y créditos cobrados; nunca modelo ni proveedor'
+						},
+						'400': {
+							description: 'Validación de la operación, la forma o la cabecera Idempotency-Key'
+						},
+						'401': { description: 'Sin sesión válida para la app' },
+						'402': { description: 'Saldo insuficiente' },
+						'403': { description: 'Documentos legales pendientes' },
+						'409': { description: 'Petición en curso o ya entregada con esa clave' },
+						'413': { description: 'Operación demasiado cara o contenido demasiado grande' },
+						'429': { description: 'Límite de frecuencia' },
+						'502': { description: 'Error del proveedor o moderación' },
+						'503': { description: 'Mantenimiento o app desactivada' },
+						'504': { description: 'Tiempo agotado con el proveedor' }
 					}
 				}
 			},

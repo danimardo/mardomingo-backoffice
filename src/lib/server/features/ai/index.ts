@@ -1,0 +1,13 @@
+// API pública de `ai` (ARCHITECTURE.md §4): el chat de la v4 (E07), la vigilancia del catálogo, el arranque y el
+// contrato de la ruta. Las demás funcionalidades y las rutas importan solo de aquí.
+export {
+	DEFAULT_RETRY_POLICY,
+	interruptOperationsOnStartup,
+	refreshModelCache,
+	runChat,
+	type AiDeps,
+	type ChatContext,
+	type RetryPolicy
+} from './service';
+export { ChatRequestBody, idempotencyKeyOf, type ChatResponseBody } from './contract';
+export { AI_LOG_EVENTS, type AiLogFields } from './events';

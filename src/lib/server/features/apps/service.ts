@@ -32,8 +32,12 @@ import {
 	TranscriptionConfig,
 	isSettingKey,
 	parseSettingValue,
+	type ResponseFormat,
 	type SettingKey,
-	type SettingValue
+	type SettingValue,
+	type TemplateMessages,
+	type TemplateTools,
+	type TemplateVariables
 } from './json-schemas';
 import {
 	insertApp,
@@ -42,6 +46,7 @@ import {
 	latestTemplateVersion,
 	listAppOverrides,
 	readApp,
+	readCurrentTemplate,
 	listApps,
 	readAppBySlug,
 	readOperation,
@@ -132,6 +137,79 @@ function loadSettings(deps: AppsDeps): ReadonlyMap<SettingKey, SettingValue> {
 }
 
 /** Configuración efectiva de una app, y de una operación si se indica (BE-FR-61 CA2). */
+/** Plantilla vigente tal como la usa `ai` para renderizar una petición (3.3, 3.5). */
+export interface ChatTemplate {
+	readonly id: string;
+	readonly version: number;
+	readonly messages: TemplateMessages;
+	readonly variables: TemplateVariables;
+	readonly responseFormat: ResponseFormat | null;
+	readonly tools: TemplateTools | null;
+}
+
+/** Operación completa para atender una petición de chat: campos de la operación y su plantilla vigente si es `plantilla`. */
+export interface ChatOperation {
+	readonly id: string;
+	readonly appId: string;
+	readonly key: string;
+	readonly kind: OperationKind;
+	readonly mode: 'libre' | 'plantilla';
+	readonly active: boolean;
+	readonly model: string | null;
+	readonly fallbackModels: readonly string[];
+	readonly preferredProvider: string | null;
+	readonly temperatureMilli: number;
+	readonly maxOutputTokens: number | null;
+	readonly maxCostMicro: number;
+	readonly estimatedMaxCostMicroUsd: number | null;
+	readonly timeoutMs: number;
+	readonly capabilities: Capabilities;
+	readonly limits: OperationLimits;
+	readonly template: ChatTemplate | null;
+}
+
+/** Lee la operación de una app para atender una petición; `undefined` si la clave no existe en esa app. */
+export function chatOperationOf(
+	deps: AppsDeps,
+	appId: string,
+	key: string
+): ChatOperation | undefined {
+	const row = readOperation(deps.db, deps.logger, appId, key);
+	if (row === undefined) return undefined;
+	const templateRow =
+		row.mode === 'plantilla' ? readCurrentTemplate(deps.db, deps.logger, row.id) : undefined;
+	const template: ChatTemplate | null =
+		templateRow === undefined
+			? null
+			: {
+					id: templateRow.id,
+					version: templateRow.version,
+					messages: templateRow.messages,
+					variables: templateRow.variables,
+					responseFormat: templateRow.responseFormat ?? null,
+					tools: templateRow.tools ?? null
+				};
+	return {
+		id: row.id,
+		appId: row.appId,
+		key: row.key,
+		kind: row.kind,
+		mode: row.mode,
+		active: row.active,
+		model: row.model,
+		fallbackModels: row.fallbackModels,
+		preferredProvider: row.preferredProvider,
+		temperatureMilli: row.temperatureMilli,
+		maxOutputTokens: row.maxOutputTokens,
+		maxCostMicro: row.maxCostMicro,
+		estimatedMaxCostMicroUsd: row.estimatedMaxCostMicroUsd,
+		timeoutMs: row.timeoutMs,
+		capabilities: row.capabilities,
+		limits: row.limits,
+		template
+	};
+}
+
 export function getEffectiveConfig(
 	deps: AppsDeps,
 	input: { readonly appId: string; readonly operationKey?: string }
