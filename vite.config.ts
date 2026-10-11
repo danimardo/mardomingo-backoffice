@@ -54,7 +54,9 @@ export default defineConfig({
 					environment: 'node',
 					include: ['src/**/*.test.ts', 'tests/architecture/**/*.test.ts'],
 					exclude: ['src/**/*.int.test.ts', 'src/**/*.component.test.ts'],
-					setupFiles: ['tests/setup/unit.setup.ts']
+					setupFiles: ['tests/setup/unit.setup.ts'],
+					// Los emails toman los colores de tokens.css con `?raw`; sin esto Vitest devuelve el CSS vacío.
+					css: { include: [/tokens\.css(\?raw)?$/] }
 				}
 			},
 			{
@@ -70,7 +72,9 @@ export default defineConfig({
 					name: 'integration',
 					environment: 'node',
 					include: ['src/**/*.int.test.ts'],
-					globalSetup: ['tests/setup/integration.global-setup.ts']
+					globalSetup: ['tests/setup/integration.global-setup.ts'],
+					// Igual que en unit: los emails de cuentas leen tokens.css con `?raw` al cargar el servicio.
+					css: { include: [/tokens\.css(\?raw)?$/] }
 				}
 			},
 			{

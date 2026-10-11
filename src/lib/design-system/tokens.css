@@ -434,3 +434,10 @@
 		--shadow-field-focus: none;
 	}
 }
+
+/* Colores de los emails transaccionales. Los clientes de correo no leen variables CSS: la plantilla de
+   email los toma de aquí al compilar (`?raw`, notifications/emails/layout.ts). Cambiarlos aquí cambia los emails. */
+:root {
+	--email-action-bg: #3f6b5a;
+	--email-action-text: #ffffff;
+}

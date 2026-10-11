@@ -2,6 +2,17 @@
 // con los textos de Paraglide. Texto plano completo (el enlace también va visible), pie con el email de soporte y
 // `color-scheme light dark`. Ningún dato dinámico llega al HTML sin escapar.
 import * as m from '$lib/paraglide/messages.js';
+import tokensCss from '$lib/design-system/tokens.css?raw';
+
+/** Valor de un token de email de `tokens.css` (`--email-*`); falla al cargar si falta, nunca en silencio. */
+function emailToken(name: string): string {
+	const match = new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})\\s*;`).exec(tokensCss);
+	if (match?.[1] === undefined) throw new Error(`falta el token de email --${name} en tokens.css`);
+	return match[1];
+}
+
+const ACTION_BG = emailToken('email-action-bg');
+const ACTION_TEXT = emailToken('email-action-text');
 
 export interface EmailContent {
 	readonly subject: string;
@@ -51,7 +62,7 @@ export function renderLayout(input: LayoutInput): EmailContent {
 	const actionHtml =
 		input.action === undefined
 			? ''
-			: `<p><a href="${escapeHtml(input.action.url)}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#3f6b5a;color:#ffffff;text-decoration:none;">${escapeHtml(input.action.label)}</a></p>` +
+			: `<p><a href="${escapeHtml(input.action.url)}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:${ACTION_BG};color:${ACTION_TEXT};text-decoration:none;">${escapeHtml(input.action.label)}</a></p>` +
 				`<p>${escapeHtml(input.action.fallback)}<br><a href="${escapeHtml(input.action.url)}">${escapeHtml(input.action.url)}</a></p>`;
 	const appHtml = appLine.map((line) => `<p>${escapeHtml(line)}</p>`).join('');
 	const html =
