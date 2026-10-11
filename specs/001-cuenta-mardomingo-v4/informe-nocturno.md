@@ -35,7 +35,7 @@ _(Se actualiza al cerrar cada grupo.)_
 | L02, datos del propietario                               | T079                           | **Abierto**: requiere respuestas del propietario (valores provisionales en uso) | —                                                       |
 | L02, checkpoint                                          | T084                           | Hecho salvo `pnpm validate` completo (E2E completo no ejecutado)                | `53732c6`                                               |
 | L03, backend de cuentas, adaptadores y legales           | T085–T099                    | Hecho (ver «Lote L03» abajo)                                                    | `98d44e4`                                               |
-| L03, páginas, sesión web, CSP y pruebas web             | T100–T107, T110, T111        | Hecho en su mayoría; E2E de cuentas en Chromium (7) y HTTP (7)                  | `b62e6b3`, y el commit de pruebas HTTP y componentes    |
+| L03, páginas, sesión web, CSP y pruebas web             | T100–T107, T110, T111        | Hecho en su mayoría; E2E de cuentas (8 + 3 de 320 px), HTTP (7) y componentes (14) | `b62e6b3`, `e3cdee8`, `35dd866`, `208a4ec`, y el commit de 320 px y revocación |
 | L03, pendientes                                          | T092, T095, T098, T100, T108, T109, T112, T113, T114 | **Abiertos o parciales** (ver «Lote L03») | —                                                       |
 
 **Nota de honestidad**: el commit `bac8df6` (fechas y columnas) se hizo sin ejecutar `pnpm check`. `svelte-check` encontró 13 errores de tipos que no había visto. Se corrigen en un commit posterior; no se reescribe la historia.
@@ -81,12 +81,15 @@ no se ha ejecutado completo.
   `abuse.int.test.ts` como pide la tarea.
 - **T098**: `accounts.guard.denied` no se emite desde las rutas. El paso de sesión sí está hecho.
 - **T100**: `RegisterForm`, `LoginForm` y `ResetForm` no existen como componentes; los formularios están en sus páginas.
-- **T108**: faltan los tests de sesión deslizante con reloj falso y de revocación inmediata.
+- **T108**: faltan los tests de sesión deslizante con reloj falso, de caducidad de 24 h del enlace, de cuenta bloqueada, de `signup_app_id` y de eventos sin email. La revocación inmediata ya está probada.
 - **T109**: faltan los tests unitarios de las _actions_ (`makeRequestEvent`) y la matriz de roles (`roles-l03.test.ts`).
 - **T111**: faltan la cookie `Secure`/`HttpOnly`/`SameSite` en HTTP y la cabecera `cache-control` del panel.
-- **T112**: falta el flujo crítico completo (registro → `.outbox` → verificación → bienvenida) y los _builders_ de usuarios
-  con `storageState`. El captcha de test no permite registrarse por la interfaz sin un simulador conectado al servidor.
-- **T113**: a11y de las rutas nuevas en `e2e/fixtures/routes.ts`, 320 px y DS-09 (medición manual: requiere una persona).
+- **T112**: el crítico 1 (registro → `.outbox` → verificación → bienvenida) está hecho en `e2e/verificacion.spec.ts`, con el
+  simulador de Turnstile conectado al servidor de pruebas. Faltan los _builders_ de usuarios con `storageState` (`auth.setup.ts`)
+  y los críticos 2 y 3 completos (login y logout con sesión real, recuperación de extremo a extremo con el `.outbox`).
+- **T113**: las rutas nuevas entran solas en la matriz de accesibilidad (ambos temas, todas pasan tras corregir `/registro`).
+  Hecho: 320 px sin desplazamiento en login, registro y recuperación. Faltan: navegación con teclado, el cambio de tema del sistema
+  en `/login` (`appearance.spec.ts`) y la medición de DS-09 (manual: requiere una persona).
 - **T114**: checkpoint de L03. No se ha ejecutado `pnpm validate` completo tras L03.
 
 ### Verificación de L03 (lo ejecutado)
@@ -100,7 +103,8 @@ no se ha ejecutado completo.
 | Integración (SQLite real) | 79 pasan |
 | Componentes | 14 pasan |
 | HTTP contra el build | 45 pasan (38 previas + 7 de cuentas) |
-| E2E smoke y cuentas en Chromium | 2 y 7 pasan |
+| E2E smoke, cuentas, flujo crítico 1, 320 px y accesibilidad en Chromium | Pasan (smoke 2, cuentas 8, flujo 1, 320 px 3, accesibilidad de todas las páginas en ambos temas) |
+| Revocación de sesiones (Better Auth real) | Pasa (1 prueba) |
 | E2E completo, Firefox y WebKit | **No ejecutados** |
 
 ## Checkpoint de L02 (T084)
