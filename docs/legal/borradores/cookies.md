@@ -66,7 +66,7 @@ Si cambiamos esta política, la nueva versión indicará si requiere tu aceptaci
 
 ## 7. Más información
 
-Sobre cómo tratamos tus datos personales, consulta la política de privacidad. Para cualquier duda, escribe a [EMAIL DE SOPORTE].
+Sobre cómo tratamos tus datos personales, consulta la política de privacidad. Para cualquier duda, escribe a soporte@mardomingo.com.
 
 Responsable: [NOMBRE DEL TITULAR], NIF [NIF], [DOMICILIO].
 

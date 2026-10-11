@@ -72,7 +72,7 @@ Si incumples esta política o los términos de uso, podemos bloquear tu cuenta, 
 
 ## 7. Cómo comunicar un abuso
 
-Si detectas un uso que incumpla esta política, escribe a [EMAIL DE SOPORTE] con la mayor información posible. No incluyas contraseñas ni datos personales de terceros.
+Si detectas un uso que incumpla esta política, escribe a soporte@mardomingo.com con la mayor información posible. No incluyas contraseñas ni datos personales de terceros.
 
 ## 8. Cambios
 

@@ -8,7 +8,7 @@ Versión del borrador: 0.1 (2026-10-11). Clave `privacy`. Ruta prevista: `/priva
 
 - Responsable: [NOMBRE DEL TITULAR], autónomo, NIF [NIF].
 - Domicilio: [DOMICILIO].
-- Contacto para cualquier asunto de privacidad: [EMAIL DE SOPORTE].
+- Contacto para cualquier asunto de privacidad: soporte@mardomingo.com.
 
 ## 2. Servicios cubiertos
 
@@ -100,7 +100,7 @@ OpenRouter y sus proveedores de modelos tratan datos fuera de la Unión Europea,
 
 ## 9. Tus derechos
 
-Puedes pedir acceso, rectificación, supresión, limitación, oposición y portabilidad de tus datos. Desde el panel puedes descargar tus datos en JSON y borrar tu cuenta. Para cualquier otra petición, escribe a [EMAIL DE SOPORTE]. Responderemos en el plazo que fija la ley.
+Puedes pedir acceso, rectificación, supresión, limitación, oposición y portabilidad de tus datos. Desde el panel puedes descargar tus datos en JSON y borrar tu cuenta. Para cualquier otra petición, escribe a soporte@mardomingo.com. Responderemos en el plazo que fija la ley.
 
 Puedes presentar una reclamación ante la Agencia Española de Protección de Datos (aepd.es).
 
