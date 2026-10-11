@@ -27,6 +27,7 @@ test('@critical el registro muestra los campos y ninguna casilla premarcada', as
 
 test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ page }) => {
 	await page.goto('/registro');
+	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill('nueva.persona@ejemplo.es');
 	await page.getByLabel('Contraseña', { exact: true }).fill('contraseña-larga-123');
 	for (const name of ['acceptTerms', 'acceptPrivacy', 'acceptAup', 'ageDeclaration']) {
@@ -55,6 +56,7 @@ test('@critical el inicio de sesión con datos erróneos da un error genérico',
 
 test('@critical la recuperación responde lo mismo exista o no el email', async ({ page }) => {
 	await page.goto('/recuperar');
+	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill('nadie@ejemplo.es');
 
 	await page.getByRole('button', { name: 'Enviar el enlace' }).click();

@@ -38,12 +38,17 @@ test('@critical registro, verificación y bienvenida con el enlace del email', a
 
 	await page.goto(`/verificar?token=${encodeURIComponent(verificationTokenFor(email))}`);
 	await page.getByRole('button', { name: 'Confirmar mi email' }).click();
+	// El ratón se queda sobre el botón; tras la navegación, la precarga por hover de SvelteKit pediría datos de lo que quede
+	// debajo, y esa petición se cortaría al cerrar el test. Se aparta el ratón.
+	await page.mouse.move(0, 0);
 
 	await expect(page).toHaveURL(/\/panel\/bienvenida$/);
 	await expect(page.getByRole('heading', { name: 'Bienvenido' })).toBeVisible();
 	await expect(
 		page.getByText('Inicia sesión con tu email en la app que quieras usar.')
 	).toBeVisible();
+	// La página puede tener una carga de datos en vuelo: se espera antes de terminar, para no cortarla al cerrar el test.
+	await page.waitForLoadState('networkidle');
 
 	// La cookie de sesión no es legible desde JavaScript y no viaja en peticiones de otros sitios.
 	// El atributo Secure depende de la URL base (https en producción; el entorno de pruebas es http) y no se comprueba aquí.
@@ -52,6 +57,7 @@ test('@critical registro, verificación y bienvenida con el enlace del email', a
 	expect(session).toMatchObject({ httpOnly: true, sameSite: 'Lax', path: '/' });
 
 	// El panel de un usuario verificado no se guarda en caché.
-	const panel = await page.goto('/panel');
-	expect(panel?.headers()['cache-control']).toContain('no-store');
+	// Con la petición del contexto, sin navegar: un `goto` aquí aborta la carga de datos de la bienvenida.
+	const panel = await page.request.get('/panel', { maxRedirects: 0 });
+	expect(panel.headers()['cache-control']).toContain('no-store');
 });

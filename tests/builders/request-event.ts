@@ -55,6 +55,7 @@ export function makeApiEvent(options: ApiEventOptions = {}): TestApiEvent {
 			log: logger,
 			appearance,
 			app: null,
+			appRejection: null,
 			user: null,
 			session: null
 		}
