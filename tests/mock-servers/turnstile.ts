@@ -2,7 +2,8 @@
 // `valid` (por defecto), `invalid` (token rechazado), `down` (503) y `broken` (respuesta que no encaja con el esquema).
 import { startMockServer, type MockReply, type MockRequest, type MockServer } from './server';
 
-export function startTurnstileMock(): Promise<MockServer> {
+/** Puerto fijo opcional: el E2E lo necesita para apuntar el servidor de pruebas a una dirección conocida. */
+export function startTurnstileMock(port?: number): Promise<MockServer> {
 	return startMockServer(
 		(request: MockRequest): MockReply => {
 			if (request.method !== 'POST' || request.path !== '/turnstile/v0/siteverify')
@@ -21,6 +22,6 @@ export function startTurnstileMock(): Promise<MockServer> {
 					return { status: 200, body: { unexpected: true } };
 			}
 		},
-		{ initialScenario: 'valid' }
+		{ initialScenario: 'valid', ...(port === undefined ? {} : { port }) }
 	);
 }
