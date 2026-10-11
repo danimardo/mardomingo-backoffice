@@ -2,11 +2,12 @@
 // siguientes son los genéricos mientras no haya app de origen con texto propio (`apps.post_verify_text`, L04/L05).
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { accessFor } from '$lib/server/features/accounts';
+import { accessFor, reportDenial } from '$lib/server/features/accounts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	const access = accessFor(locals.user, 'verified');
+	reportDenial(locals.log, access);
 	if (access.kind === 'anonymous' || access.kind === 'blocked') {
 		const login = `${resolve('/login')}?redirectTo=${encodeURIComponent(url.pathname)}`;
 		redirect(303, login);
