@@ -69,6 +69,22 @@ describe('sesión en la web', () => {
 	});
 });
 
+describe('cookies en el host de la API', () => {
+	it('una cookie de sesión no cambia la respuesta de la API y la API nunca devuelve set-cookie', async () => {
+		const plain = await send(baseUrl, '/api/v1/health', {
+			host: webHost,
+			headers: { accept: 'application/json' }
+		});
+		const withCookie = await send(baseUrl, '/api/v1/health', {
+			host: webHost,
+			headers: { accept: 'application/json', cookie: 'better-auth.session_token=cookie-falsa' }
+		});
+
+		expect(withCookie.status).toBe(plain.status);
+		expect(withCookie.headers['set-cookie']).toBeUndefined();
+	});
+});
+
 describe('Turnstile solo en el registro (FR-102)', () => {
 	it('la CSP de /registro admite el origen de Turnstile en script-src y frame-src', async () => {
 		const result = await send(baseUrl, '/registro', { host: webHost });
