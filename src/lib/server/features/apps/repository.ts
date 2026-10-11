@@ -274,3 +274,10 @@ export function seedInsertSetting(
 ): void {
 	tx.insert(settings).values({ key, value, updatedAt: now }).onConflictDoNothing().run();
 }
+
+/** Todas las apps validadas, para los orígenes permitidos de las apps activas (CORS, T131). */
+export function listApps(db: Db, logger: Logger): AppRow[] {
+	return readGuarded(logger, 'apps', () => db.select().from(apps).all()).map((row) =>
+		validatedApp(row, logger)
+	);
+}

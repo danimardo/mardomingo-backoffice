@@ -3,9 +3,11 @@ export {
 	createApp,
 	createOperation,
 	createTemplateVersion,
+	activeAppOrigins,
 	findActiveAppBySlug,
 	getEffectiveConfig,
 	getSetting,
+	resolveAppBySlug,
 	supportEmail,
 	updateAppOverrides,
 	updateSetting,
@@ -21,4 +23,5 @@ export {
 export type { AppSettings } from './config';
 export { DEFAULT_PACKS, DEFAULT_SETTINGS, type DefaultPack } from './defaults';
 export { seedApps } from './seed';
+export { appHeadersOf, type AppHeaders } from './contract';
 export { APPS_LOG_EVENTS, type AppsLogFields } from './events';

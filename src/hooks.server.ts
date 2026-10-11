@@ -2,7 +2,13 @@
 // contracts/web-routes.md 1.4 y 1.8). `handle` aplica el orden de la constitución: contexto → host → origen
 // (solo web) → Paraglide → apariencia → app → sesión → cabeceras de seguridad.
 import { building } from '$app/environment';
-import { isHttpError, type Handle, type HandleServerError, type ServerInit } from '@sveltejs/kit';
+import {
+	isHttpError,
+	type Handle,
+	type HandleServerError,
+	type RequestEvent,
+	type ServerInit
+} from '@sveltejs/kit';
 import { getRequestEvent } from '$app/server';
 import { sequence } from '@sveltejs/kit/hooks';
 import { dirname, join } from 'node:path';
@@ -11,6 +17,9 @@ import { paraglideMiddleware } from '$lib/paraglide/server.js';
 import { appearanceAttributes, appearanceFromCookies } from '$lib/appearance/preferences';
 import { createComposition, type Composition } from '$lib/server/composition';
 import { sessionUserOf } from '$lib/server/features/accounts';
+import { activeAppOrigins, appHeadersOf, resolveAppBySlug } from '$lib/server/features/apps';
+import { bearerOnlyHeaders } from '$lib/server/api/session';
+import { apiErrorResponse } from '$lib/server/api/errors';
 import { getComposition, setComposition } from '$lib/server/composition.cache';
 import { readEnv } from '$lib/server/config/env';
 import { EnvConfigError, type Env } from '$lib/server/config/env-schema';
@@ -224,10 +233,98 @@ const appearance: Handle = ({ event, resolve }) => {
 	});
 };
 
-/** Identificación de la app (`X-App-Id`). Paso sin efecto hasta L04. */
+/** Rutas de la API que no exigen `X-App-Id` (contracts/api-v1.md 1.2): el _healthcheck_ y el documento OpenAPI. */
+const APP_EXEMPT_PATHS: readonly string[] = Object.freeze([HEALTH_PATH, '/api/v1/openapi.json']);
+
+/**
+ * Identificación de la app (`X-App-Id`, BE-FR-62 CA1–CA2; T130). Solo en la API. Sin app válida, `400 UNKNOWN_APP`; una
+ * app desactivada, `503 APP_DISABLED`. El _preflight_ de CORS no lleva `X-App-Id` y pasa sin resolver la app.
+ */
 const appStep: Handle = ({ event, resolve }) => {
 	event.locals.app = null;
+	event.locals.appRejection = null;
+	const { pathname } = event.url;
+	if (!pathname.startsWith(API_PREFIX) || APP_EXEMPT_PATHS.includes(pathname))
+		return resolve(event);
+	if (event.request.method === 'OPTIONS') return resolve(event);
+
+	// No rechaza aquí: una ruta inexistente debe seguir dando `404 NOT_FOUND`. Cada ruta que necesita la app la exige con
+	// `requireApp`, que responde `UNKNOWN_APP` o `APP_DISABLED` según `appRejection`.
+	const header = appHeadersOf(event.request.headers);
+	const app = header.ok ? resolveAppBySlug(getComposition().apps, header.appId) : undefined;
+	if (app === undefined) {
+		event.locals.appRejection = 'unknown_app';
+		return resolve(event);
+	}
+	if (app.status === 'disabled') {
+		event.locals.appRejection = 'app_disabled';
+		return resolve(event);
+	}
+	event.locals.app = {
+		id: app.id,
+		slug: app.slug,
+		name: app.name,
+		allowedOrigins: app.allowedOrigins,
+		version: header.ok ? header.version : null,
+		deviceName: header.ok ? header.deviceName : null
+	};
 	return resolve(event);
+};
+
+const CORS_EXPOSED_HEADERS = 'X-Request-Id, Retry-After';
+const CORS_PREFLIGHT_HEADERS =
+	'Authorization, Content-Type, X-App-Id, X-App-Version, X-Device-Name, Idempotency-Key, If-Match';
+
+/** Cabeceras CORS de una respuesta a un origen permitido. Nunca `*` ni credenciales (BE-FR-65 CA2). */
+function corsHeaders(origin: string): Record<string, string> {
+	return {
+		'access-control-allow-origin': origin,
+		vary: 'Origin',
+		'access-control-expose-headers': CORS_EXPOSED_HEADERS
+	};
+}
+
+/**
+ * CORS por app (BE-FR-65 CA2, D-19; T131). Solo en la API y solo con `Origin` (el escritorio no lo envía). El _preflight_
+ * se responde si el origen figura en alguna app activa; una petición real, si figura en la app de `X-App-Id`.
+ */
+const corsStep: Handle = async ({ event, resolve }) => {
+	const origin = event.request.headers.get('origin');
+	if (!event.url.pathname.startsWith(API_PREFIX) || origin === null) return resolve(event);
+
+	if (event.request.method === 'OPTIONS') {
+		if (activeAppOrigins(getComposition().apps).includes(origin)) {
+			return new Response(null, {
+				status: 204,
+				headers: {
+					...corsHeaders(origin),
+					'access-control-allow-headers': CORS_PREFLIGHT_HEADERS,
+					'access-control-allow-methods': 'GET, POST, PUT',
+					'access-control-max-age': '600'
+				}
+			});
+		}
+		event.locals.log.emit('http.cors.rejected', {
+			reason: 'origin_not_allowed',
+			errorCode: 'ORIGIN_NOT_ALLOWED'
+		});
+		return apiErrorResponse('ORIGIN_NOT_ALLOWED');
+	}
+
+	const app = event.locals.app;
+	if (app === null) return resolve(event);
+	if (!app.allowedOrigins.includes(origin)) {
+		event.locals.log.emit('http.cors.rejected', {
+			reason: 'origin_not_allowed',
+			errorCode: 'ORIGIN_NOT_ALLOWED'
+		});
+		return apiErrorResponse('ORIGIN_NOT_ALLOWED');
+	}
+	const response = await resolve(event);
+	for (const [name, value] of Object.entries(corsHeaders(origin))) {
+		response.headers.set(name, value);
+	}
+	return response;
 };
 
 /**
@@ -238,7 +335,17 @@ const sessionStep: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 	event.locals.session = null;
 	if (event.url.pathname.startsWith(API_PREFIX)) {
-		// El host de la API no escribe cookies: nunca sale un `set-cookie` de una respuesta de API (T098).
+		// La API solo lee la sesión del Bearer; una cookie se ignora y se registra (BE-FR-65 CA3). El host de la API no
+		// escribe cookies: ninguna respuesta de API lleva `set-cookie` (T098).
+		if (event.request.headers.has('cookie')) {
+			event.locals.log.emit('accounts.session.rejected', {
+				reason: 'cookie_on_api',
+				errorCode: 'UNAUTHENTICATED'
+			});
+		}
+		if (event.request.headers.has('authorization')) {
+			await loadSession(event, bearerOnlyHeaders(event.request.headers));
+		}
 		const response = await resolve(event);
 		response.headers.delete('set-cookie');
 		return response;
@@ -250,13 +357,20 @@ const sessionStep: Handle = async ({ event, resolve }) => {
 		});
 		return resolve(event);
 	}
-	const current = await getComposition().accounts.readSession(event.request.headers);
-	if (current !== null) {
-		event.locals.user = sessionUserOf(current.user);
-		event.locals.session = { id: current.session.id };
-	}
+	await loadSession(event, event.request.headers);
 	return resolve(event);
 };
+
+/** Carga la sesión de las cabeceras dadas en `locals`; sin sesión válida, lo deja en `null`. */
+async function loadSession(event: RequestEvent, headers: Headers): Promise<void> {
+	const current = await getComposition().accounts.readSession(headers);
+	if (current === null) return;
+	event.locals.user = sessionUserOf(current.user);
+	event.locals.session = {
+		id: current.session.id,
+		appId: typeof current.session.appId === 'string' ? current.session.appId : null
+	};
+}
 
 const REGISTER_PATH = '/registro';
 const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
@@ -305,6 +419,7 @@ export const handle: Handle = sequence(
 	localization,
 	appearance,
 	appStep,
+	corsStep,
 	sessionStep,
 	turnstileCsp
 );
