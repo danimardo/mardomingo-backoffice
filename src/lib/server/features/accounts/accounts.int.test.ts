@@ -229,6 +229,35 @@ describe('recuperación de contraseña (W12, W13)', () => {
 	});
 });
 
+describe('estado de los tokens sin consumirlos (W09, W13)', () => {
+	it('el enlace de recuperación se ve válido antes de usarlo, y no válido después', async () => {
+		await registerAndVerify(EMAIL);
+		await fixture.accounts.requestPasswordReset({ email: EMAIL, remoteIp: IP });
+		const resetLink = fixture.mail.sent.find((item) =>
+			item.text.includes('/recuperar/nueva?token=')
+		);
+		const token = decodeURIComponent(/token=([^\s&]+)/.exec(resetLink?.text ?? '')?.[1] ?? '');
+
+		expect(fixture.accounts.tokenState(token, 'reset')).toBe('valid');
+		expect(fixture.accounts.tokenState('token-inventado', 'reset')).toBe('invalid');
+
+		await fixture.accounts.resetPassword({ token, password: 'nueva-contraseña-456' });
+
+		expect(fixture.accounts.tokenState(token, 'reset')).toBe('invalid');
+	});
+
+	it('el enlace de verificación se ve válido y después usado', async () => {
+		await fixture.accounts.register(registration());
+		const token = verificationTokenFor(fixture.mail, EMAIL);
+
+		expect(fixture.accounts.tokenState(token, 'verification')).toBe('valid');
+
+		await fixture.accounts.verifyEmail(token);
+
+		expect(fixture.accounts.tokenState(token, 'verification')).toBe('used');
+	});
+});
+
 describe('administrador por ADMIN_EMAIL', () => {
 	it('la cuenta con ADMIN_EMAIL pasa a administrador al verificar', async () => {
 		await registerAndVerify(ADMIN_EMAIL);

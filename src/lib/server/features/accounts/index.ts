@@ -22,7 +22,8 @@ import {
 	resendVerification,
 	resetPassword,
 	verifyEmail,
-	tokenStateOf,
+	resetTokenStateOf,
+	verificationTokenStateOf,
 	type AccountsBase,
 	type AccountsDeps,
 	type LoginInput,
@@ -54,6 +55,9 @@ export interface AccountsConfig {
 	readonly requestEvent?: () => RequestEvent;
 }
 
+/** Qué tipo de token se consulta: el de verificación (JWT) o el de recuperación (opaco en Better Auth). */
+export type TokenKind = 'verification' | 'reset';
+
 export interface Accounts {
 	register(input: RegisterInput): Promise<{ readonly sentTo: string }>;
 	resendVerification(input: {
@@ -68,7 +72,8 @@ export interface Accounts {
 	}): Promise<void>;
 	resetPassword(input: { readonly token: string; readonly password: string }): Promise<void>;
 	logout(headers: Headers): Promise<void>;
-	tokenState(token: string): 'valid' | 'used' | 'invalid';
+	/** Estado sin consumir el token: `verification` (JWT, con «used») o `reset` (opaco, «valid» o «invalid»). */
+	tokenState(token: string, kind: TokenKind): 'valid' | 'used' | 'invalid';
 	readSession(headers: Headers): ReturnType<typeof readSession>;
 	auth: Auth;
 }
@@ -133,7 +138,8 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		requestPasswordReset: (input) => requestPasswordReset(deps, input),
 		resetPassword: (input) => resetPassword(deps, input),
 		logout: (headers) => logout(deps, headers),
-		tokenState: (token) => tokenStateOf(deps, token),
+		tokenState: (token, kind) =>
+			kind === 'reset' ? resetTokenStateOf(deps, token) : verificationTokenStateOf(deps, token),
 		readSession: (headers) => readSession(deps, headers)
 	};
 }

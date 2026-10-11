@@ -15,7 +15,10 @@ export const load: PageServerLoad = ({ url }) => {
 	const token = url.searchParams.get('token') ?? '';
 	return {
 		token,
-		tokenState: token === '' ? ('invalid' as const) : getComposition().accounts.tokenState(token)
+		tokenState:
+			token === ''
+				? ('invalid' as const)
+				: getComposition().accounts.tokenState(token, 'verification')
 	};
 };
 
