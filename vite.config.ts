@@ -39,6 +39,8 @@ export default defineConfig({
 					statements: 100
 				},
 				'src/lib/shared/**': { lines: 100, functions: 100, branches: 100, statements: 100 },
+				// Formato de los importes en créditos (BE-FR-22, T120): 100 %.
+				'src/lib/format/credits.ts': { lines: 100, functions: 100, branches: 100, statements: 100 },
 				'src/lib/server/shared/**': {
 					lines: 100,
 					functions: 100,

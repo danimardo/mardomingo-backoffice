@@ -7,6 +7,7 @@ import { AUDIT_LOG_EVENTS, type AuditLogFields } from '$lib/server/features/audi
 import { APPS_LOG_EVENTS, type AppsLogFields } from '$lib/server/features/apps';
 import { ACCOUNTS_LOG_EVENTS, type AccountsLogFields } from '$lib/server/features/accounts';
 import { LEGAL_LOG_EVENTS, type LegalLogFields } from '$lib/server/features/legal';
+import { CREDITS_LOG_EVENTS, type CreditsLogFields } from '$lib/server/features/credits';
 import {
 	NOTIFICATIONS_LOG_EVENTS,
 	type NotificationsLogFields
@@ -63,7 +64,8 @@ export type LogEventFieldMap = InfraLogFields &
 	AppsLogFields &
 	AccountsLogFields &
 	LegalLogFields &
-	NotificationsLogFields;
+	NotificationsLogFields &
+	CreditsLogFields;
 
 export type LogEventCode = keyof LogEventFieldMap;
 
@@ -83,5 +85,6 @@ export const LOG_EVENTS: Readonly<Record<LogEventCode, LogEventMeta>> = Object.f
 	...APPS_LOG_EVENTS,
 	...ACCOUNTS_LOG_EVENTS,
 	...LEGAL_LOG_EVENTS,
-	...NOTIFICATIONS_LOG_EVENTS
+	...NOTIFICATIONS_LOG_EVENTS,
+	...CREDITS_LOG_EVENTS
 });

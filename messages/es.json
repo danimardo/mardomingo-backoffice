@@ -151,6 +151,8 @@
 	"accounts_verify_resend_link": "Pedir un enlace nuevo",
 	"accounts_verify_title": "Confirmar el email",
 	"accounts_verify_used": "Este enlace ya se ha usado. Si ya confirmaste tu email, inicia sesión.",
+	"accounts_welcome_credits_granted": "Te hemos concedido {amount} créditos gratuitos. Caducan el {date}.",
+	"accounts_welcome_credits_not_granted": "Tu cuenta no recibe créditos de bienvenida: otra cuenta con la misma dirección (sin puntos ni sufijo «+») ya los recibió.",
 	"accounts_welcome_intro": "Tu email {email} está confirmado. Tu cuenta ya está lista.",
 	"accounts_welcome_next_generic": "Inicia sesión con tu email en la app que quieras usar.",
 	"accounts_welcome_next_title": "Próximos pasos",
