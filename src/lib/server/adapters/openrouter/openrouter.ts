@@ -64,7 +64,8 @@ const ChatBody = z.object({
 				finish_reason: z.string().nullish(),
 				message: z.object({
 					content: z.string().nullish(),
-					tool_calls: z.array(z.unknown()).nullish()
+					tool_calls: z.array(z.unknown()).nullish(),
+					images: z.array(z.object({ image_url: z.object({ url: z.string() }) })).nullish()
 				})
 			})
 		)
@@ -101,6 +102,14 @@ function classify(error: unknown, signal: AbortSignal): 'timeout' | 'aborted' | 
 function isFlagged(body: unknown): boolean {
 	const parsed = ErrorBody.safeParse(body);
 	return parsed.success && parsed.data.error.metadata?.flagged_input !== undefined;
+}
+
+/** Primera imagen de la respuesta, si es una _data URL_ de imagen; cualquier otra cosa se descarta. */
+function imageOf(
+	images: readonly { readonly image_url: { readonly url: string } }[] | null | undefined
+): string | null {
+	const url = images?.[0]?.image_url.url;
+	return url !== undefined && url.startsWith('data:image/') ? url : null;
 }
 
 export function createOpenRouterGateway(config: OpenRouterConfig): AiGateway {
@@ -141,6 +150,7 @@ export function createOpenRouterGateway(config: OpenRouterConfig): AiGateway {
 				...(input.responseFormat !== undefined ? { response_format: input.responseFormat } : {}),
 				...(input.tools !== undefined ? { tools: input.tools } : {}),
 				...(input.toolChoice !== undefined ? { tool_choice: input.toolChoice } : {}),
+				...(input.modalities !== undefined ? { modalities: input.modalities } : {}),
 				provider: {
 					data_collection: 'deny',
 					allow_fallbacks: true,
@@ -185,7 +195,8 @@ export function createOpenRouterGateway(config: OpenRouterConfig): AiGateway {
 				inputTokens: reply.usage.prompt_tokens,
 				outputTokens: reply.usage.completion_tokens,
 				costMicroUsd: typeof reply.usage.cost === 'number' ? usdToMicroUsd(reply.usage.cost) : null,
-				truncated: first?.finish_reason === 'length'
+				truncated: first?.finish_reason === 'length',
+				imageDataUrl: imageOf(first?.message.images)
 			};
 		},
 

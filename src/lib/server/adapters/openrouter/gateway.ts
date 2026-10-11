@@ -11,9 +11,16 @@ export interface ProviderImagePart {
 	readonly image_url: { readonly url: string };
 }
 
+/** Audio en base64 para transcribir con un modelo de chat (T184, respaldo de la transcripción). */
+export interface ProviderInputAudioPart {
+	readonly type: 'input_audio';
+	readonly input_audio: { readonly data: string; readonly format: 'mp3' | 'wav' };
+}
+
 export interface ProviderMessage {
 	readonly role: 'system' | 'user' | 'assistant' | 'tool';
-	readonly content?: string | readonly (ProviderTextPart | ProviderImagePart)[] | undefined;
+	readonly content?:
+		string | readonly (ProviderTextPart | ProviderImagePart | ProviderInputAudioPart)[] | undefined;
 	readonly tool_calls?: readonly unknown[] | undefined;
 	readonly tool_call_id?: string | undefined;
 }
@@ -27,6 +34,8 @@ export interface ChatRequest {
 	readonly responseFormat?: unknown;
 	readonly tools?: unknown;
 	readonly toolChoice?: unknown;
+	/** Modalidades de salida (p. ej. `image` para generar imágenes). */
+	readonly modalities?: readonly string[] | undefined;
 	readonly order?: readonly string[];
 	readonly requireParameters: boolean;
 	/** Nombre de la app que llama, para la cabecera `X-Title`. */
@@ -50,6 +59,8 @@ export type ChatOutcome =
 			/** Coste de `usage.cost` en micro-USD; `null` si el proveedor no lo informa en la respuesta. */
 			readonly costMicroUsd: number | null;
 			readonly truncated: boolean;
+			/** Imagen generada como _data URL_ (solo con `modalities` = `image`); `null` si no llegó ninguna. */
+			readonly imageDataUrl: string | null;
 	  }
 	| { readonly status: 'flagged' }
 	| {

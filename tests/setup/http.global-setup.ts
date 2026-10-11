@@ -8,6 +8,8 @@ import { join } from 'node:path';
 import type { TestProject } from 'vitest/node';
 import { send } from '../http/client';
 import { startOpenRouterMock } from '../mock-servers/openrouter';
+import { startMistralMock } from '../mock-servers/mistral';
+import { prepareMediaOperations } from '../builders/media-account';
 import { openDatabase } from '$lib/server/db/client';
 import { createSystemClock } from '$lib/server/adapters/clock/clock';
 import { session, user } from '$lib/server/features/accounts/schema';
@@ -28,6 +30,8 @@ declare module 'vitest' {
 		httpChatToken: string;
 		/** Simulador de OpenRouter que usa el servidor construido (T178). */
 		openrouterMockUrl: string;
+		/** Simulador de Voxtral que usa el servidor construido (T187). */
+		mistralMockUrl: string;
 	}
 }
 
@@ -81,6 +85,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	const secret = randomBytes(32).toString('hex');
 
 	const openrouter = await startOpenRouterMock();
+	const mistral = await startMistralMock();
 	const child: ChildProcess = spawn(process.execPath, [join('build', 'index.js')], {
 		env: {
 			APP_ENV: 'test',
@@ -93,7 +98,9 @@ export default async function setup(project: TestProject): Promise<() => Promise
 			BETTER_AUTH_SECRET: secret,
 			EMAIL_HASH_KEY: randomBytes(32).toString('hex'),
 			LOG_LEVEL: 'debug',
-			MOCK_OPENROUTER_URL: openrouter.url
+			MOCK_OPENROUTER_URL: openrouter.url,
+			MOCK_MISTRAL_URL: mistral.url,
+			BODY_SIZE_LIMIT: '10M'
 		},
 		stdio: 'ignore'
 	});
@@ -105,6 +112,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	seedChatAccount(join(DIR, 'app.db'), chatToken);
 	project.provide('httpChatToken', chatToken);
 	project.provide('openrouterMockUrl', openrouter.url);
+	project.provide('mistralMockUrl', mistral.url);
 
 	return async () => {
 		// En Windows la BD sigue abierta hasta que el proceso termina: se espera antes de borrarla.
@@ -115,6 +123,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 			child.kill();
 		});
 		await openrouter.close();
+		await mistral.close();
 		rmSync(DIR, { recursive: true, force: true });
 	};
 }
@@ -160,6 +169,7 @@ function seedChatAccount(file: string, token: string): void {
 		activateChatOperation(db);
 		grantChatWelcome(deps, CHAT_USER_ID);
 		acceptCurrentLegal(deps, CHAT_USER_ID);
+		prepareMediaOperations(db);
 	} finally {
 		sqlite.close();
 	}

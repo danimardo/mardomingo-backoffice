@@ -10,7 +10,7 @@ const VariableName = z
 	.max(64);
 const OperationKey = z
 	.string()
-	.regex(/^[a-z][a-z0-9_]*$/)
+	.regex(/^[a-z][a-z0-9_-]*$/)
 	.max(64);
 
 /** Imagen en _data URL_ png, jpeg o webp; nunca una URL remota (api-v1 E07 3.3). */
@@ -101,4 +101,39 @@ export function idempotencyKeyOf(
 	if (value === null) return { ok: true, key: null };
 	const parsed = IdempotencyKeyHeader.safeParse(value);
 	return parsed.success ? { ok: true, key: parsed.data } : { ok: false };
+}
+
+/** E08 · `POST /ai/transcribe` (multipart): el fichero se acota con `max_audio_mb` de la app (api-v1 E08; T180). El MIME
+ *  declarado no es prueba: la duración y la legibilidad las comprueba ffprobe en el servidor. */
+export function transcriptionFormOf(maxAudioBytes: number) {
+	return z.strictObject({
+		operation: OperationKey,
+		file: z.file().max(maxAudioBytes)
+	});
+}
+
+/** E09 · `POST /ai/image`: `prompt` en modo libre, o `variables` en plantilla (api-v1 E09; T180). */
+export const ImageRequestBody = z.strictObject({
+	operation: OperationKey,
+	prompt: z.string().min(1).max(2_000_000).optional(),
+	variables: z.record(VariableName, z.string().max(2_000_000)).optional()
+});
+export type ImageRequestBody = z.infer<typeof ImageRequestBody>;
+
+/** Salida de E08 (api-v1 E08). Nunca el modelo ni el nombre del proveedor: solo `primary` o `backup`. */
+export interface TranscriptionResponseBody {
+	readonly text: string;
+	readonly providerUsed: 'primary' | 'backup';
+	readonly audioSeconds: number;
+	readonly operationId: string;
+	readonly chargedMicro: number;
+	readonly balance: ChatResponseBody['balance'];
+}
+
+/** Salida de E09 (api-v1 E09): la imagen como _data URL_, sin almacenarla. */
+export interface ImageResponseBody {
+	readonly imageDataUrl: string;
+	readonly operationId: string;
+	readonly chargedMicro: number;
+	readonly balance: ChatResponseBody['balance'];
 }

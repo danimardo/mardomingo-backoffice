@@ -11,3 +11,16 @@ export {
 } from './service';
 export { ChatRequestBody, idempotencyKeyOf, type ChatResponseBody } from './contract';
 export { AI_LOG_EVENTS, type AiLogFields } from './events';
+export {
+	runTranscription,
+	runImage,
+	type MediaDeps,
+	type AudioUpload,
+	type ImageInput
+} from './media';
+export {
+	ImageRequestBody,
+	transcriptionFormOf,
+	type ImageResponseBody,
+	type TranscriptionResponseBody
+} from './contract';

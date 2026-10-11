@@ -137,6 +137,17 @@ function loadSettings(deps: AppsDeps): ReadonlyMap<SettingKey, SettingValue> {
 }
 
 /** Configuración efectiva de una app, y de una operación si se indica (BE-FR-61 CA2). */
+/** Mayor `max_audio_mb` efectivo entre el global y las apps: el límite del cuerpo debe cubrirlo (FR-070, T185). */
+export function largestAudioMbOf(deps: AppsDeps): number {
+	const global = getSetting(deps, 'max_audio_mb');
+	if (typeof global !== 'number')
+		throw new AppError('INTERNAL_ERROR', { reason: 'settings_missing' });
+	return listApps(deps.db, deps.logger).reduce(
+		(largest, app) => Math.max(largest, app.settingsOverrides.max_audio_mb ?? global),
+		global
+	);
+}
+
 /** Plantilla vigente tal como la usa `ai` para renderizar una petición (3.3, 3.5). */
 export interface ChatTemplate {
 	readonly id: string;
@@ -165,6 +176,8 @@ export interface ChatOperation {
 	readonly timeoutMs: number;
 	readonly capabilities: Capabilities;
 	readonly limits: OperationLimits;
+	/** Configuración de transcripción (principal, respaldo y reintentos); `null` en las demás operaciones. */
+	readonly transcription: TranscriptionConfig | null;
 	readonly template: ChatTemplate | null;
 }
 
@@ -206,6 +219,7 @@ export function chatOperationOf(
 		timeoutMs: row.timeoutMs,
 		capabilities: row.capabilities,
 		limits: row.limits,
+		transcription: row.transcriptionConfig ?? null,
 		template
 	};
 }

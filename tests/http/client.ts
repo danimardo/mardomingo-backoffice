@@ -13,7 +13,7 @@ export interface SendOptions {
 	/** Valor de `Host`; por defecto, el de la propia `baseUrl`. */
 	readonly host?: string;
 	readonly headers?: Readonly<Record<string, string>>;
-	readonly body?: string;
+	readonly body?: string | Uint8Array;
 }
 
 export function send(

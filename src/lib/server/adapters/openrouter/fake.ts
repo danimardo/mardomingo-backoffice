@@ -35,7 +35,8 @@ export const FAKE_OK: Extract<ChatOutcome, { status: 'ok' }> = Object.freeze({
 	inputTokens: 100,
 	outputTokens: 50,
 	costMicroUsd: 400,
-	truncated: false
+	truncated: false,
+	imageDataUrl: null
 });
 
 const ABORTED: ChatOutcome = Object.freeze({
