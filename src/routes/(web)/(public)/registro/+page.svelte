@@ -143,5 +143,5 @@
 			{busy ? m.accounts_submit_busy() : m.accounts_register_submit()}
 		</Button>
 	</form>
-	<p><a href={resolve('/login')}>{m.accounts_login_link()}</a></p>
+	<Button variant="ghost" href={resolve('/login')}>{m.accounts_login_link()}</Button>
 {/if}

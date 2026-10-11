@@ -35,5 +35,8 @@ if (configChanged) {
 	args.push(...files);
 }
 
-const result = spawnSync('pnpm', ['exec', ...args], { stdio: 'inherit', shell: true });
+// Con `shell: true` los argumentos se unen en una sola línea de comandos: las rutas de grupo como `(web)` necesitan
+// comillas, o la shell las interpreta como sintaxis.
+const quoted = ['exec', ...args].map((arg) => (/[\s()]/.test(arg) ? `"${arg}"` : arg));
+const result = spawnSync('pnpm', quoted, { stdio: 'inherit', shell: true });
 process.exit(result.status ?? 1);
