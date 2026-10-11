@@ -8,6 +8,7 @@ test.describe('teclado', () => {
 
 	test('el login se recorre con Tab hasta «Entrar» y se envía con Enter', async ({ page }) => {
 		await page.goto('/login');
+		await page.waitForLoadState('networkidle');
 		await page.getByLabel('Email').fill('nadie@ejemplo.es');
 		await page.getByLabel('Contraseña', { exact: true }).fill('mal-escrita');
 		await page.getByLabel('Contraseña', { exact: true }).focus();
@@ -25,6 +26,7 @@ test.describe('teclado', () => {
 
 	test('la casilla del registro se marca con la barra espaciadora', async ({ page }) => {
 		await page.goto('/registro');
+		await page.waitForLoadState('networkidle');
 		const first = page.getByRole('checkbox').first();
 
 		await first.focus();

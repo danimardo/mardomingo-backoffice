@@ -33,6 +33,7 @@ test('@critical el login con una cuenta verificada abre el panel y el cierre de 
 	page
 }) => {
 	await page.goto('/login');
+	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill(email);
 	await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
 	await page.getByRole('button', { name: 'Entrar' }).click();
@@ -42,6 +43,7 @@ test('@critical el login con una cuenta verificada abre el panel y el cierre de 
 	await expect(page.getByRole('heading', { name: 'Tu cuenta' })).toBeVisible();
 
 	await page.goto('/logout');
+	await page.waitForLoadState('networkidle');
 	await page.getByRole('button', { name: 'Cerrar sesión' }).click();
 	await page.waitForLoadState('networkidle');
 
@@ -56,6 +58,7 @@ test('@critical la recuperación cambia la contraseña con el enlace del email y
 	page
 }) => {
 	await page.goto('/recuperar');
+	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill(email);
 	await page.getByRole('button', { name: 'Enviar el enlace' }).click();
 	await page.waitForLoadState('networkidle');
