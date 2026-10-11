@@ -84,7 +84,9 @@ export default defineConfig({
 					name: 'http',
 					environment: 'node',
 					include: ['tests/http/**/*.test.ts'],
-					globalSetup: ['tests/setup/http.global-setup.ts']
+					globalSetup: ['tests/setup/http.global-setup.ts'],
+					// El global setup carga servicios que leen tokens.css con `?raw` (correo): sin esto, el CSS llega vacío.
+					css: { include: [/tokens\.css(\?raw)?$/] }
 				}
 			}
 		]

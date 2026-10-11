@@ -7,6 +7,8 @@ import { startMockServer, type MockReply, type MockRequest, type MockServer } fr
 export const CHAT_PATH = '/api/v1/chat/completions';
 export const GENERATION_PATH = '/api/v1/generation';
 export const MODELS_PATH = '/api/v1/models';
+/** Ruta de lectura del número de llamadas de chat recibidas (para comprobar que una petición llegó al proveedor). */
+export const CHAT_CALLS_PATH = '/__chat_calls';
 
 /** Coste simulado de la respuesta `ok`: 0,0004 USD = 400 µUSD (ejemplo de api-v1 7.3: 776.480 µc). */
 export const SIMULATED_COST_USD = 0.0004;
@@ -58,8 +60,12 @@ function modelsCatalog(): unknown {
 }
 
 export function startOpenRouterMock(): Promise<MockServer> {
+	let chatCalls = 0;
 	return startMockServer((request: MockRequest): MockReply => {
 		const scenario = request.scenario;
+		if (request.method === 'GET' && request.path === CHAT_CALLS_PATH) {
+			return { status: 200, body: chatCalls };
+		}
 		if (request.method === 'GET' && request.path === MODELS_PATH) {
 			return { status: 200, body: modelsCatalog() };
 		}
@@ -68,6 +74,7 @@ export function startOpenRouterMock(): Promise<MockServer> {
 			return { status: 200, body: { data: { total_cost: SIMULATED_GENERATION_COST_USD } } };
 		}
 		if (request.method !== 'POST' || request.path !== CHAT_PATH) return { status: 404 };
+		chatCalls += 1;
 
 		const model = modelOf(request.body);
 		switch (scenario) {
