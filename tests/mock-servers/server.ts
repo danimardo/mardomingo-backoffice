@@ -12,6 +12,9 @@ export interface MockRequest {
 export interface MockReply {
 	readonly status: number;
 	readonly body?: unknown;
+	/** Cuerpo de texto plano (p. ej. CSV del BCE). Tiene prioridad sobre `body`; sin `contentType`, es `text/plain`. */
+	readonly text?: string;
+	readonly contentType?: string;
 	readonly delayMs?: number;
 }
 
@@ -45,13 +48,20 @@ export function startMockServer(
 
 		const request: MockRequest = {
 			method: req.method ?? 'GET',
-			path: req.url ?? '/',
+			path: new URL(req.url ?? '/', 'http://localhost').pathname,
 			body,
 			scenario
 		};
 		requests.push(request);
 		const reply = handler(request);
 		if (reply.delayMs !== undefined) await delay(reply.delayMs);
+		if (reply.text !== undefined) {
+			res.writeHead(reply.status, {
+				'content-type': reply.contentType ?? 'text/plain; charset=utf-8'
+			});
+			res.end(reply.text);
+			return;
+		}
 		res.writeHead(reply.status, { 'content-type': 'application/json; charset=utf-8' });
 		res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
 	}
