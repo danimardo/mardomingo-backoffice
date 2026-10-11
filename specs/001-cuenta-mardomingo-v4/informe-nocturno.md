@@ -26,17 +26,17 @@
 
 _(Se actualiza al cerrar cada grupo.)_
 
-| Grupo                                                    | Tareas                         | Estado                                                                          | Commit                                                  |
-| -------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Resto de L01                                             | T049–T066                      | Hecho (T001, T005, T038, T044, T055, T060 quedan con motivo, ver arriba)       | `ad2265d`, `4d49a2a`, `e0a1e4f`, `799042e`, `1db151f`, `15bc157`, `c90ae26`, `5a630e4` |
-| Fase 16 (convergencia)                                   | T381–T392                      | Hecho; T390 se cierra en L02 (global-setup migra con `migrateDatabase`)         | `c887cb0`, `e0ad9da`, `ea1bf3a`                         |
-| L02, fechas y columnas                                   | T067, T068                     | Hecho (incluye la corrección de tipos del punto siguiente)                      | `bac8df6` y el commit de corrección                     |
-| L02, esquemas, migraciones, servicios y pruebas          | T069–T083, T390                | Hecho; verificado con las comprobaciones del checkpoint (ver abajo)             | `0482722`, `0734ecd`                                     |
-| L02, datos del propietario                               | T079                           | **Abierto**: requiere respuestas del propietario (valores provisionales en uso) | —                                                       |
-| L02, checkpoint                                          | T084                           | Hecho salvo `pnpm validate` completo (E2E completo no ejecutado)                | `53732c6`                                               |
-| L03, backend de cuentas, adaptadores y legales           | T085–T099                    | Hecho (ver «Lote L03» abajo)                                                    | `98d44e4`                                               |
-| L03, páginas, sesión web, CSP y pruebas web             | T100–T107, T110, T111        | Hecho en su mayoría; E2E de cuentas (8 + 3 de 320 px), HTTP (7) y componentes (14) | `b62e6b3`, `e3cdee8`, `35dd866`, `208a4ec`, y el commit de 320 px y revocación |
-| L03, pendientes                                          | T092, T095, T098, T100, T108, T109, T112, T113, T114 | **Abiertos o parciales** (ver «Lote L03») | —                                                       |
+| Grupo                                           | Tareas                                               | Estado                                                                             | Commit                                                                                 |
+| ----------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Resto de L01                                    | T049–T066                                            | Hecho (T001, T005, T038, T044, T055, T060 quedan con motivo, ver arriba)           | `ad2265d`, `4d49a2a`, `e0a1e4f`, `799042e`, `1db151f`, `15bc157`, `c90ae26`, `5a630e4` |
+| Fase 16 (convergencia)                          | T381–T392                                            | Hecho; T390 se cierra en L02 (global-setup migra con `migrateDatabase`)            | `c887cb0`, `e0ad9da`, `ea1bf3a`                                                        |
+| L02, fechas y columnas                          | T067, T068                                           | Hecho (incluye la corrección de tipos del punto siguiente)                         | `bac8df6` y el commit de corrección                                                    |
+| L02, esquemas, migraciones, servicios y pruebas | T069–T083, T390                                      | Hecho; verificado con las comprobaciones del checkpoint (ver abajo)                | `0482722`, `0734ecd`                                                                   |
+| L02, datos del propietario                      | T079                                                 | **Abierto**: requiere respuestas del propietario (valores provisionales en uso)    | —                                                                                      |
+| L02, checkpoint                                 | T084                                                 | Hecho salvo `pnpm validate` completo (E2E completo no ejecutado)                   | `53732c6`                                                                              |
+| L03, backend de cuentas, adaptadores y legales  | T085–T099                                            | Hecho (ver «Lote L03» abajo)                                                       | `98d44e4`                                                                              |
+| L03, páginas, sesión web, CSP y pruebas web     | T100–T107, T110, T111                                | Hecho en su mayoría; E2E de cuentas (8 + 3 de 320 px), HTTP (7) y componentes (14) | `b62e6b3`, `e3cdee8`, `35dd866`, `208a4ec`, y el commit de 320 px y revocación         |
+| L03, pendientes                                 | T092, T095, T098, T100, T108, T109, T112, T113, T114 | **Abiertos o parciales** (ver «Lote L03»)                                          | —                                                                                      |
 
 **Nota de honestidad**: el commit `bac8df6` (fechas y columnas) se hizo sin ejecutar `pnpm check`. `svelte-check` encontró 13 errores de tipos que no había visto. Se corrigen en un commit posterior; no se reescribe la historia.
 
@@ -58,8 +58,8 @@ no se ha ejecutado completo.
   de versión vigente; seed provisional.
 - **Rutas**: W08, W09, W10, W11, W12, W13, W15, W19 y el panel con su guard. Paso de sesión en `hooks.server.ts`. CSP de
   Turnstile solo en `/registro`.
-- **Pruebas**: integración de cuentas (15), Better Auth (5), unitarias (213 en total), componentes (14), HTTP de la web (7),
-  E2E de cuentas en Chromium (7, incluida la página sin JavaScript) y smoke (2).
+- **Pruebas**: unitarias, de componentes e integración suman 358 (ver la verificación); HTTP de la web (7); E2E en Chromium
+  (47 en total, con las de cuentas, la página sin JavaScript, 320 px, el flujo crítico 1 y la accesibilidad).
 
 ### Decisiones tomadas esta noche (conservadoras, a confirmar)
 
@@ -82,7 +82,9 @@ no se ha ejecutado completo.
 - **T098**: `accounts.guard.denied` no se emite desde las rutas. El paso de sesión sí está hecho.
 - **T100**: `RegisterForm`, `LoginForm` y `ResetForm` no existen como componentes; los formularios están en sus páginas.
 - **T108**: faltan los tests de sesión deslizante con reloj falso, de caducidad de 24 h del enlace, de cuenta bloqueada, de `signup_app_id` y de eventos sin email. La revocación inmediata ya está probada.
-- **T109**: faltan los tests unitarios de las _actions_ (`makeRequestEvent`) y la matriz de roles (`roles-l03.test.ts`).
+- **T109**: faltan los tests de las _actions_ con `makeRequestEvent` y la matriz de roles (`roles-l03.test.ts`). Hechos los de
+  los guards (`accessFor`, `denialOf`), los auxiliares de las acciones (`clientIpOf`, `failureOf`), los textos de error y el
+  estado de formulario.
 - **T111**: faltan la cookie `Secure`/`HttpOnly`/`SameSite` en HTTP y la cabecera `cache-control` del panel.
 - **T112**: el crítico 1 (registro → `.outbox` → verificación → bienvenida) está hecho en `e2e/verificacion.spec.ts`, con el
   simulador de Turnstile conectado al servidor de pruebas. Faltan los _builders_ de usuarios con `storageState` (`auth.setup.ts`)
@@ -90,41 +92,50 @@ no se ha ejecutado completo.
 - **T113**: las rutas nuevas entran solas en la matriz de accesibilidad (ambos temas, todas pasan tras corregir `/registro`).
   Hecho: 320 px sin desplazamiento en login, registro y recuperación. Faltan: navegación con teclado, el cambio de tema del sistema
   en `/login` (`appearance.spec.ts`) y la medición de DS-09 (manual: requiere una persona).
-- **T114**: checkpoint de L03. No se ha ejecutado `pnpm validate` completo tras L03.
+- **T114**: checkpoint de L03, no cerrado. `pnpm validate` completo pasa (ver la verificación), pero siguen abiertas las
+  tareas de arriba (T092, T095, T098, T100, T108, T109, T111, T112 y T113).
 
 ### Verificación de L03 (lo ejecutado)
 
-| Comprobación | Resultado |
-|---|---|
-| `pnpm check` | 0 errores, 0 avisos |
-| ESLint sobre `src/lib/server`, `src/lib/schemas`, `src/routes/(web)`, `src/lib/components`, `e2e` | Pasa |
-| `db:check` y deriva del esquema | Sin cambios |
-| Unitarias (incluye arquitectura y dominio de cuentas) | 213 pasan |
-| Integración (SQLite real) | 79 pasan |
-| Componentes | 14 pasan |
-| HTTP contra el build | 45 pasan (38 previas + 7 de cuentas) |
-| E2E smoke, cuentas, flujo crítico 1, 320 px y accesibilidad en Chromium | Pasan (smoke 2, cuentas 8, flujo 1, 320 px 3, accesibilidad de todas las páginas en ambos temas) |
-| Revocación de sesiones (Better Auth real) | Pasa (1 prueba) |
-| E2E completo, Firefox y WebKit | **No ejecutados** |
+| Comprobación                                           | Resultado                                                                                                                   |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check` (en `pnpm validate`)                      | 0 errores y 0 avisos en 2090 ficheros                                                                                       |
+| `pnpm lint` (en `pnpm validate`)                       | Pasa                                                                                                                        |
+| Unitarias, componentes e integración (`test:coverage`) | 358 pasan en 61 ficheros                                                                                                    |
+| Cobertura (`test:coverage`)                            | Pasa: ramas 82,08 % (umbral 80 %), funciones 85,77 %, líneas 90,51 %, sentencias 89,16 %                                    |
+| `pnpm build` (en `pnpm validate`)                      | Pasa                                                                                                                        |
+| E2E en Chromium (`test:e2e`, en `pnpm validate`)       | 47 pasan: smoke, cuentas (8 y 3 de 320 px), flujo crítico 1, accesibilidad de todas las páginas en ambos temas y apariencia |
+| HTTP contra el build (`test:http`)                     | 45 pasan en la última ejecución, anterior a este ciclo; no forma parte de `validate`                                        |
+| `db:check` y deriva del esquema                        | Sin cambios en la última ejecución; no se ha repetido en este ciclo                                                         |
+| E2E completo, Firefox y WebKit                         | **No ejecutados**                                                                                                           |
+
+**Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido
+pruebas a los módulos de L03 sin cobertura de ramas: los _guards_ de la cuenta (`accessFor`, `denialOf`), los auxiliares de
+las acciones (`clientIpOf`, `failureOf`), los textos de error, el estado de formulario, `sessionUserOf`, el envío de
+notificaciones (también el fallo del proveedor), las excepciones del adaptador de Resend y los componentes `Checkbox` y
+`Notice`. No se ha bajado ningún umbral ni excluido ningún fichero. Con ello, las ramas pasan a 82,08 %.
+
+Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (36, L03) y `features/apps/service.ts` (27, L02).
+Son caminos de error que piden pruebas de integración; quedan para una pasada posterior.
 
 ## Checkpoint de L02 (T084)
 
 **Resultado**: comprobaciones del lote en verde salvo el E2E completo (no ejecutado: solo el _smoke_). No es `pnpm validate` completo.
 
-| Comprobación | Resultado |
-|---|---|
-| `check` (svelte-check) | 0 errores, 0 avisos (1433 ficheros) |
-| `lint` sobre `src/lib/server`, `src/lib/shared`, `tests` y `lint:changed` (44 ficheros) | Pasan |
-| `db:check` y comprobación de deriva (`generate` sin cambios) | Pasan: «No schema changes» |
-| Migraciones sobre BD vacía (SQL aplicado en SQLite, comprobado a mano y en `migrations.int.test.ts`) | 19 tablas, 4 triggers, `one_admin` y la inmutabilidad funcionan |
-| Tests de arquitectura (dentro de unit) | 17 pasan |
-| Unitarias (incluye esquemas JSON, configuración y declaración de tablas) | 174 pasan |
-| Integración (SQLite real, plantilla migrada con `migrateDatabase`) | 59 pasan |
-| Cobertura (`test:coverage`) | Pasa: funciones 84,85 % (umbral 80 %), líneas 91,36 %, ramas 85,28 %, sentencias 89,66 % |
-| `build` | Pasa (22,9 s) |
-| HTTP contra el build | 38 pasan |
-| E2E smoke (Chromium) | 2 pasan (la BD se siembra en el arranque) |
-| E2E completo, a11y, Firefox y WebKit tras L02 | **No ejecutados**: queda por verificar |
+| Comprobación                                                                                         | Resultado                                                                                |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `check` (svelte-check)                                                                               | 0 errores, 0 avisos (1433 ficheros)                                                      |
+| `lint` sobre `src/lib/server`, `src/lib/shared`, `tests` y `lint:changed` (44 ficheros)              | Pasan                                                                                    |
+| `db:check` y comprobación de deriva (`generate` sin cambios)                                         | Pasan: «No schema changes»                                                               |
+| Migraciones sobre BD vacía (SQL aplicado en SQLite, comprobado a mano y en `migrations.int.test.ts`) | 19 tablas, 4 triggers, `one_admin` y la inmutabilidad funcionan                          |
+| Tests de arquitectura (dentro de unit)                                                               | 17 pasan                                                                                 |
+| Unitarias (incluye esquemas JSON, configuración y declaración de tablas)                             | 174 pasan                                                                                |
+| Integración (SQLite real, plantilla migrada con `migrateDatabase`)                                   | 59 pasan                                                                                 |
+| Cobertura (`test:coverage`)                                                                          | Pasa: funciones 84,85 % (umbral 80 %), líneas 91,36 %, ramas 85,28 %, sentencias 89,66 % |
+| `build`                                                                                              | Pasa (22,9 s)                                                                            |
+| HTTP contra el build                                                                                 | 38 pasan                                                                                 |
+| E2E smoke (Chromium)                                                                                 | 2 pasan (la BD se siembra en el arranque)                                                |
+| E2E completo, a11y, Firefox y WebKit tras L02                                                        | **No ejecutados**: queda por verificar                                                   |
 
 ### Decisiones conservadoras tomadas esta noche (anotadas, a confirmar)
 
@@ -157,31 +168,31 @@ no se ha ejecutado completo.
 
 Comprobaciones del checkpoint:
 
-| Comprobación | Resultado |
-|---|---|
-| N0: `check` y `lint` completo | Pasan (0 errores, 0 avisos) |
-| N0: `build` sin secretos y `lint:tokens` | Pasan |
-| N0: imagen Docker | Construida; sana y parada limpia (ver T057) |
-| N1: unitarias, de componente e integración | 160 pruebas, pasan |
-| N2: E2E smoke y a11y en ambos temas | Pasan en Chromium; Firefox y WebKit también (70 pruebas, 2 no verificables en WebKit) |
-| N3: HTTP contra el build | 38 pruebas, pasan |
-| Tiempos anotados | En `CLAUDE.md` y `research.md` (T064–T065) |
-| CI en el remoto | **No ejecutada**: T060 pide autorización expresa |
+| Comprobación                               | Resultado                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| N0: `check` y `lint` completo              | Pasan (0 errores, 0 avisos)                                                           |
+| N0: `build` sin secretos y `lint:tokens`   | Pasan                                                                                 |
+| N0: imagen Docker                          | Construida; sana y parada limpia (ver T057)                                           |
+| N1: unitarias, de componente e integración | 160 pruebas, pasan                                                                    |
+| N2: E2E smoke y a11y en ambos temas        | Pasan en Chromium; Firefox y WebKit también (70 pruebas, 2 no verificables en WebKit) |
+| N3: HTTP contra el build                   | 38 pruebas, pasan                                                                     |
+| Tiempos anotados                           | En `CLAUDE.md` y `research.md` (T064–T065)                                            |
+| CI en el remoto                            | **No ejecutada**: T060 pide autorización expresa                                      |
 
 ### Estado del sistema de diseño (T003 y D-20)
 
-| Punto | Estado |
-|---|---|
-| DS-01 (renombrar a Cuenta Mardomingo) | Resuelto: títulos, cookie `mdm_theme` y `Design/` archivado |
-| DS-02 (Sistema sin JavaScript) | Resuelto: `light-dark()` con `color-scheme` y pintado desde la cookie |
-| DS-03 (tema por contexto y cookie) | Resuelto: `AppearanceState` en contexto, sin `localStorage` |
-| DS-04 (tipografía en rem) | Resuelto: cuerpo 1rem, pila del sistema |
-| DS-05 (accesibilidad de efectos) | Resuelto: `data-effects`, reducción de movimiento, contraste y colores forzados |
-| DS-06 (componentes del marco) | Parcial: marco en L01; `AccountMenu` pasa a L03 |
-| DS-07 (nombres por rol) | Resuelto: `--color-accent` y `--color-ambient` |
-| DS-08 (Tailwind) | Resuelto por decisión: no se exponen colores a Tailwind (Historias 2.10) |
-| DS-09 (contraste sobre cristal) | **Pendiente**: medición manual (T055 y T363) |
-| DS-10 (semántica de componentes) | Resuelto para `Button`, `TextField`, `ThemeToggle` y el marco |
+| Punto                                 | Estado                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| DS-01 (renombrar a Cuenta Mardomingo) | Resuelto: títulos, cookie `mdm_theme` y `Design/` archivado                     |
+| DS-02 (Sistema sin JavaScript)        | Resuelto: `light-dark()` con `color-scheme` y pintado desde la cookie           |
+| DS-03 (tema por contexto y cookie)    | Resuelto: `AppearanceState` en contexto, sin `localStorage`                     |
+| DS-04 (tipografía en rem)             | Resuelto: cuerpo 1rem, pila del sistema                                         |
+| DS-05 (accesibilidad de efectos)      | Resuelto: `data-effects`, reducción de movimiento, contraste y colores forzados |
+| DS-06 (componentes del marco)         | Parcial: marco en L01; `AccountMenu` pasa a L03                                 |
+| DS-07 (nombres por rol)               | Resuelto: `--color-accent` y `--color-ambient`                                  |
+| DS-08 (Tailwind)                      | Resuelto por decisión: no se exponen colores a Tailwind (Historias 2.10)        |
+| DS-09 (contraste sobre cristal)       | **Pendiente**: medición manual (T055 y T363)                                    |
+| DS-10 (semántica de componentes)      | Resuelto para `Button`, `TextField`, `ThemeToggle` y el marco                   |
 
 ### Pendientes de L01 (sin hacer, con motivo)
 
