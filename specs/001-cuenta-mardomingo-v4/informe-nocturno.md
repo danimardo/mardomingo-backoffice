@@ -61,7 +61,7 @@ no se ha ejecutado completo.
 - **Pruebas**: unitarias, de componentes e integración suman 358 (ver la verificación); HTTP de la web (7); E2E en Chromium
   (47 en total, con las de cuentas, la página sin JavaScript, 320 px, el flujo crítico 1 y la accesibilidad).
 
-### Decisiones tomadas esta noche (conservadoras, a confirmar)
+### Decisiones tomadas esta noche (confirmadas por el propietario el 2026-10-11)
 
 1. **Eslint**: `fetch` queda permitido solo en `src/lib/server/adapters/**` (la regla decía «usa un adaptador»).
 2. **`timestamp_ms` en las tablas de Better Auth**: Better Auth escribe `Date`; drizzle convierte en la frontera.
@@ -73,6 +73,13 @@ no se ha ejecutado completo.
 6. **Email de soporte en la auditoría**: redactado (`[redactado]`), igual que en L02.
 7. **Eventos**: el catálogo de `accounts` está completo (3.8) y registrado; los eventos de guard no se emiten desde las rutas
    todavía.
+
+### Respuestas del propietario (2026-10-11)
+
+- **Cookies de tema y efectos**: duran un año desde la última elección, como en el código. Corregido 16.4 CA3 de `Historias.md` (versión 2.11). Falta copiar `Historias.md` a `F:\Apps\secretario2\docs\v4-backend-spec.md` (regla de documentos): ese repositorio lo decide el propietario.
+- **Email de soporte**: `soporte@mardomingo.com` (sección 9). Sustituido en los borradores.
+- **Proveedor de alojamiento**: pendiente. El borrador de privacidad lo deja como marcador hasta el abogado.
+- **Decisiones conservadoras de la noche**: confirmadas.
 
 ### Pendiente (no cerrado)
 
@@ -88,16 +95,16 @@ no se ha ejecutado completo.
 
 ### Verificación de L03 (lo ejecutado)
 
-| Comprobación                                                  | Resultado                                                                                                                                    |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm validate` (check, lint, test:coverage, build, test:e2e) | Última ejecución: 1 fallo intermitente en el crítico 2 (`sesion.spec.ts`, login: se queda en `/login`). Un E2E completo posterior pasa 52/52, y el fichero aislado pasa 6/6. Sin diagnosticar; ver el trace del fallo en `test-results/`                                                                                                                              |
-| Unitarias, componentes e integración                          | 392 pasan en 66 ficheros                                                                                                                     |
-| Cobertura                                                     | Ramas 85,05 % (umbral 80 %); el resto de umbrales también pasan                                                                              |
-| E2E en Chromium                                               | 52 pasan: críticos 1, 2 y 3, 320 px, accesibilidad de todas las páginas en ambos temas, teclado y apariencia                                 |
-| `pnpm test:http`                                              | 46 pasan                                                                                                                                     |
-| `pnpm lint:tokens`                                            | Pasa. Los dos colores de los emails están en `tokens.css` como `--email-*`, y la plantilla los lee con `?raw`. No forma parte de `validate`. |
-| `db:check`                                                    | Sin cambios en la última ejecución; no se ha repetido en este ciclo                                                                          |
-| E2E completo, Firefox y WebKit                                | **No ejecutados** (`test:e2e` solo usa Chromium)                                                                                             |
+| Comprobación                                                  | Resultado                                                                                                                                                                                                                                |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm validate` (check, lint, test:coverage, build, test:e2e) | Última ejecución: 1 fallo intermitente en el crítico 2 (`sesion.spec.ts`, login: se queda en `/login`). Un E2E completo posterior pasa 52/52, y el fichero aislado pasa 6/6. Sin diagnosticar; ver el trace del fallo en `test-results/` |
+| Unitarias, componentes e integración                          | 392 pasan en 66 ficheros                                                                                                                                                                                                                 |
+| Cobertura                                                     | Ramas 85,05 % (umbral 80 %); el resto de umbrales también pasan                                                                                                                                                                          |
+| E2E en Chromium                                               | 52 pasan: críticos 1, 2 y 3, 320 px, accesibilidad de todas las páginas en ambos temas, teclado y apariencia                                                                                                                             |
+| `pnpm test:http`                                              | 46 pasan                                                                                                                                                                                                                                 |
+| `pnpm lint:tokens`                                            | Pasa. Los dos colores de los emails están en `tokens.css` como `--email-*`, y la plantilla los lee con `?raw`. No forma parte de `validate`.                                                                                             |
+| `db:check`                                                    | Sin cambios en la última ejecución; no se ha repetido en este ciclo                                                                                                                                                                      |
+| E2E completo, Firefox y WebKit                                | **No ejecutados** (`test:e2e` solo usa Chromium)                                                                                                                                                                                         |
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
@@ -120,7 +127,7 @@ no se ha ejecutado completo.
 | E2E smoke (Chromium)                                                                                 | 2 pasan (la BD se siembra en el arranque)                                                |
 | E2E completo, a11y, Firefox y WebKit tras L02                                                        | **No ejecutados**: queda por verificar                                                   |
 
-### Decisiones conservadoras tomadas esta noche (anotadas, a confirmar)
+### Decisiones conservadoras tomadas esta noche (confirmadas por el propietario el 2026-10-11)
 
 1. **Tablas de §2.8 no nombradas en ninguna tarea**: `auth_rate_limits`, `login_attempts`, `disposable_domains` y `user_app_activity` se declaran en `accounts/schema.ts`, porque son de su dueño y así la migración inicial queda completa (T071 solo nombraba las de Better Auth).
 2. **Auditoría de `support_email`**: el valor es una dirección de email y la auditoría nunca guarda emails (3.7). Se registra como `[redactado]` en `before` y `after`. El cambio sí queda auditado; el valor exacto no.

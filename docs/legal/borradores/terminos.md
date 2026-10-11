@@ -6,7 +6,7 @@ Versión del borrador: 0.1 (2026-10-11). Clave `terms`. Ruta prevista: `/termino
 
 ## 1. Quién presta el servicio
 
-Cuenta Mardomingo es un servicio de [NOMBRE DEL TITULAR], persona física que trabaja como autónomo, con NIF [NIF] y domicilio en [DOMICILIO]. Para cualquier asunto puedes escribir a [EMAIL DE SOPORTE].
+Cuenta Mardomingo es un servicio de [NOMBRE DEL TITULAR], persona física que trabaja como autónomo, con NIF [NIF] y domicilio en [DOMICILIO]. Para cualquier asunto puedes escribir a soporte@mardomingo.com.
 
 Cuenta Mardomingo ofrece una cuenta y un saldo únicos que sirven en todas las aplicaciones de la plataforma. La primera aplicación es Secretario AI.
 
@@ -132,7 +132,7 @@ Propuesta: legislación española.
 
 ## 15. Contacto
 
-[NOMBRE DEL TITULAR] · [DOMICILIO] · [EMAIL DE SOPORTE]
+[NOMBRE DEL TITULAR] · [DOMICILIO] · soporte@mardomingo.com
 
 ---
 
