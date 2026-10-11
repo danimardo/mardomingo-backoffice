@@ -9,6 +9,7 @@ import {
 	type FakeEmailSender
 } from '$lib/server/adapters/resend/fake-sender';
 import { createAccounts, type Accounts, type AccountsConfig } from '$lib/server/features/accounts';
+import { createCredits } from '$lib/server/features/credits';
 import { AppError, type ErrorCode } from '$lib/server/shared/errors';
 import { createIdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs } from '$lib/shared/time';
@@ -42,6 +43,14 @@ export function accountsFixture(): AccountsFixture {
 	// Reloj real del momento: Better Auth guarda `created_at` con el reloj real, y el límite por IP mira las últimas 24 h.
 	const clock = fixedClock(toEpochMs(Date.now()));
 	const ids = createIdGenerator(seededRandomBytes(21));
+	const credits = createCredits({
+		db,
+		logger,
+		clock,
+		ids,
+		apps: { db, logger, clock, ids },
+		auditDeps: { clock, ids, logger }
+	});
 	const config: AccountsConfig = {
 		db,
 		logger,
@@ -51,6 +60,7 @@ export function accountsFixture(): AccountsFixture {
 		notifications: { sender: mail, logger, supportEmail: () => 'soporte@mardomingo.com' },
 		apps: { db, logger, clock, ids },
 		legal: { db, logger, ids },
+		credits,
 		emailHashKey: 'clave-de-hash-de-prueba-de-32-caracteres!!',
 		adminEmail: ADMIN_EMAIL,
 		authSecret: 'secreto-de-prueba-de-al-menos-32-caracteres',
