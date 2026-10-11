@@ -423,10 +423,13 @@ export async function logout(deps: AccountsDeps, headers: Headers): Promise<void
 }
 
 /**
- * Estado de un token de verificación o recuperación, sin consumirlo (W09, W13). Un token inválido o de otra cuenta es
+ * Estado de un token de verificación, sin consumirlo (W09). Un token inválido o de otra cuenta es
  * «invalid»; uno de una cuenta ya verificada, «used». La caducidad la decide Better Auth al usarlo.
  */
-export function tokenStateOf(deps: AccountsBase, token: string): 'valid' | 'used' | 'invalid' {
+export function verificationTokenStateOf(
+	deps: AccountsBase,
+	token: string
+): 'valid' | 'used' | 'invalid' {
 	const email = emailOfToken(token);
 	if (email === undefined) return 'invalid';
 	const row = deps.db
@@ -436,6 +439,21 @@ export function tokenStateOf(deps: AccountsBase, token: string): 'valid' | 'used
 		.get();
 	if (row === undefined) return 'invalid';
 	return row.emailVerified ? 'used' : 'valid';
+}
+
+/**
+ * Estado de un token de recuperación, sin consumirlo (W13). Better Auth lo guarda opaco en `verification` con el
+ * identificador `reset-password:<token>` y lo borra al usarlo, así que «válido» es que la fila exista y no haya caducado.
+ * No hay estado «used»: un token usado ya no existe, y la página lo muestra como no válido.
+ */
+export function resetTokenStateOf(deps: AccountsBase, token: string): 'valid' | 'invalid' {
+	const row = deps.db
+		.select({ expiresAt: verification.expiresAt })
+		.from(verification)
+		.where(eq(verification.identifier, `reset-password:${token}`))
+		.get();
+	if (row === undefined || row.expiresAt.getTime() <= Date.now()) return 'invalid';
+	return 'valid';
 }
 
 /** Sesión de las cabeceras dadas, o `null` si no hay una válida. */
