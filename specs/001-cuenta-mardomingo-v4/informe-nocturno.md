@@ -76,47 +76,29 @@ no se ha ejecutado completo.
 
 ### Pendiente (no cerrado)
 
-- **T092 (propietario)**: los textos definitivos de los documentos legales. Hoy son provisionales y no se publican.
-- **T095**: los tests de antiabuso están dentro de `accounts.int.test.ts`; no existen `domain/abuse.test.ts` ni
-  `abuse.int.test.ts` como pide la tarea.
-- **T098**: `accounts.guard.denied` no se emite desde las rutas. El paso de sesión sí está hecho.
-- **T100**: `RegisterForm`, `LoginForm` y `ResetForm` no existen como componentes; los formularios están en sus páginas.
-- **T108**: faltan los tests de sesión deslizante con reloj falso, de caducidad de 24 h del enlace, de cuenta bloqueada, de `signup_app_id` y de eventos sin email. La revocación inmediata ya está probada.
-- **T109**: faltan los tests de las _actions_ con `makeRequestEvent` y la matriz de roles (`roles-l03.test.ts`). Hechos los de
-  los guards (`accessFor`, `denialOf`), los auxiliares de las acciones (`clientIpOf`, `failureOf`), los textos de error y el
-  estado de formulario.
-- **T111**: faltan la cookie `Secure`/`HttpOnly`/`SameSite` en HTTP y la cabecera `cache-control` del panel.
-- **T112**: el crítico 1 (registro → `.outbox` → verificación → bienvenida) está hecho en `e2e/verificacion.spec.ts`, con el
-  simulador de Turnstile conectado al servidor de pruebas. Faltan los _builders_ de usuarios con `storageState` (`auth.setup.ts`)
-  y los críticos 2 y 3 completos (login y logout con sesión real, recuperación de extremo a extremo con el `.outbox`).
-- **T113**: las rutas nuevas entran solas en la matriz de accesibilidad (ambos temas, todas pasan tras corregir `/registro`).
-  Hecho: 320 px sin desplazamiento en login, registro y recuperación. Faltan: navegación con teclado, el cambio de tema del sistema
-  en `/login` (`appearance.spec.ts`) y la medición de DS-09 (manual: requiere una persona).
-- **T114**: checkpoint de L03, no cerrado. `pnpm validate` completo pasa (ver la verificación), pero siguen abiertas las
-  tareas de arriba (T092, T095, T098, T100, T108, T109, T111, T112 y T113).
+- **T092 (abogado)**: los textos definitivos. Hay borradores no vigentes en `docs/legal/borradores/`, con los marcadores de lo que el abogado debe decidir.
+- **T095 (parcial)**: falta `domain/abuse.test.ts`.
+- **T109 (parcial)**: faltan las pruebas de acciones con `makeRequestEvent` y la matriz de roles. Sin simulador de captcha no se pueden crear usuarios por HTTP.
+- **T111 (parcial)**: el atributo `Secure` no se verifica en el entorno http.
+- **T112 (parcial)**: faltan los `storageState` de admin, cuenta bloqueada y tester, y ampliar `smoke`. El servidor de pruebas no da acceso a su base y no hay herramienta de administración todavía.
+- **T113 (parcial)**: falta el recorrido completo con teclado y la medición de DS-09 (manual).
+- **T114**: checkpoint de L03 no cerrado: quedan los parciales de arriba.
+- **Corrección de esta noche**: la página de nueva contraseña marcaba como no válido cualquier enlace válido. Lo encontró el E2E de recuperación y está corregido (`78a9b2d`).
 
 ### Verificación de L03 (lo ejecutado)
 
-| Comprobación                                           | Resultado                                                                                                                   |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm check` (en `pnpm validate`)                      | 0 errores y 0 avisos en 2090 ficheros                                                                                       |
-| `pnpm lint` (en `pnpm validate`)                       | Pasa                                                                                                                        |
-| Unitarias, componentes e integración (`test:coverage`) | 358 pasan en 61 ficheros                                                                                                    |
-| Cobertura (`test:coverage`)                            | Pasa: ramas 82,08 % (umbral 80 %), funciones 85,77 %, líneas 90,51 %, sentencias 89,16 %                                    |
-| `pnpm build` (en `pnpm validate`)                      | Pasa                                                                                                                        |
-| E2E en Chromium (`test:e2e`, en `pnpm validate`)       | 47 pasan: smoke, cuentas (8 y 3 de 320 px), flujo crítico 1, accesibilidad de todas las páginas en ambos temas y apariencia |
-| HTTP contra el build (`test:http`)                     | 45 pasan en la última ejecución, anterior a este ciclo; no forma parte de `validate`                                        |
-| `db:check` y deriva del esquema                        | Sin cambios en la última ejecución; no se ha repetido en este ciclo                                                         |
-| E2E completo, Firefox y WebKit                         | **No ejecutados**                                                                                                           |
+| Comprobación                                                  | Resultado                                                                                                       |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `pnpm validate` (check, lint, test:coverage, build, test:e2e) | Pasa (código 0)                                                                                                 |
+| Unitarias, componentes e integración                          | 392 pasan en 66 ficheros                                                                                        |
+| Cobertura                                                     | Ramas 85,13 % (umbral 80 %); el resto de umbrales también pasan                                                 |
+| E2E en Chromium                                               | 52 pasan: críticos 1, 2 y 3, 320 px, accesibilidad de todas las páginas en ambos temas, teclado y apariencia    |
+| `pnpm test:http`                                              | 46 pasan                                                                                                        |
+| `pnpm lint:tokens`                                            | **Falla**: `notifications/emails/layout.ts` tiene colores literales (ya en HEAD). No forma parte de `validate`. |
+| `db:check`                                                    | Sin cambios en la última ejecución; no se ha repetido en este ciclo                                             |
+| E2E completo, Firefox y WebKit                                | **No ejecutados** (`test:e2e` solo usa Chromium)                                                                |
 
-**Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido
-pruebas a los módulos de L03 sin cobertura de ramas: los _guards_ de la cuenta (`accessFor`, `denialOf`), los auxiliares de
-las acciones (`clientIpOf`, `failureOf`), los textos de error, el estado de formulario, `sessionUserOf`, el envío de
-notificaciones (también el fallo del proveedor), las excepciones del adaptador de Resend y los componentes `Checkbox` y
-`Notice`. No se ha bajado ningún umbral ni excluido ningún fichero. Con ello, las ramas pasan a 82,08 %.
-
-Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (36, L03) y `features/apps/service.ts` (27, L02).
-Son caminos de error que piden pruebas de integración; quedan para una pasada posterior.
+**Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
 ## Checkpoint de L02 (T084)
 
