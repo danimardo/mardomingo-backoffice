@@ -110,7 +110,7 @@ no se ha ejecutado completo.
 
 ## Lote L07: chat de IA (E07): flujo, proveedor, cobro, moderación y cancelación
 
-**Estado**: parcial. Núcleo del chat hecho y verificado; faltan la suite HTTP (T178), parte de T166 y varias pruebas de T174–T176, y los escenarios manuales del quickstart. El checkpoint T179 queda abierto.
+**Estado**: parcial. Núcleo del chat hecho y verificado, y la suite HTTP contra el build (T178) en verde. Faltan parte de T166, varias pruebas de T174–T176 y los escenarios manuales del quickstart. El checkpoint T179 queda abierto por esos escenarios.
 
 **Hecho**: dominio puro de `ai` (idempotencia, estados y cobro, pipeline de §8, respaldos, validación de entrada y de variables de plantilla) y `apps/domain/total-timeout.ts`; contrato E07 (`contract.ts`, OpenAPI); adaptador de OpenRouter con su puerto, su doble y su simulador HTTP; migración `0005` de `model_cache`; repositorio, catálogo de eventos y servicio de chat (`runChat`, en dos partes); arranque que interrumpe las operaciones en curso; ruta `POST /api/v1/ai/chat`; cableado en la composición (`pricing`, `ai`). Evento `legal.acceptance.required` añadido al catálogo de `legal`.
 
@@ -129,17 +129,19 @@ no se ha ejecutado completo.
 11. `ai.operation.interrupted` solo se emite al arrancar si hay operaciones afectadas.
 12. Moderación: estado `provider_error` con `flagged = true`, sin cobro. El aviso del umbral se emite cuando el recuento del día llega exactamente al umbral; la alerta del día tiene su propia clave, así que no se repite.
 13. En las pruebas, la operación de chat se activa por SQL: la activación real (con su comprobación de compatibilidad) es de L13.
+14. La suite HTTP escribe la cuenta de chat en la base del servidor después de su arranque: sesión con token Bearer propio (el servidor lo firma al leerlo), aceptaciones legales, bienvenida y operación activa. Son precondiciones del escenario, no pasos del flujo.
+15. El proyecto `http` de Vitest recibe la misma opción de CSS crudo que `unit` e `integration` (`css.include` de `tokens.css`): el global setup importa servicios que leen `tokens.css` con `?raw`.
 
 **Pendiente (no cerrado)**
 
-- **T178 (suite HTTP contra el build)**: el global setup arranca el servidor con `APP_ENV=test` y sin `MOCK_OPENROUTER_URL`, y no hay sesión Bearer posible por HTTP (el captcha no tiene simulador). Hace falta arrancar el simulador de OpenRouter en el global setup, sembrar usuario, sesión, aceptaciones, créditos y activación en la base del servidor. Sin esto, la cifra `chargedMicro: 776480` por HTTP no está verificada.
+- **T178**: hecho (ver verificación). Antes de cerrarlo hubo que añadir la opción de CSS crudo al proyecto `http` (decisión 15).
 - **T166**: `checkOperationActivatable`, `activateOperation` en `apps` y `detectAssignedModelIssues` (retirados y cambios de precio). Van con L13 y L14.
 - **T170**: `ai.cancellation_cost.recorded` (ver decisión 10).
 - **T174–T176**: deuda dentro de `max_debt` (−3.236.000 µc), dos apps en concurrencia, y cancelación con coste de la respuesta.
 - **T165**: validación Zod de las columnas JSON de `model_cache` al leer.
-- **T179 / quickstart V02–V04 y V13**: no ejecutados. El resto del checkpoint (N1, N3 en integración, privacidad, arquitectura, lint, check, build) está verificado.
+- **T179 / quickstart V02–V04 y V13**: no ejecutados. El resto del checkpoint (N1, N3 en integración y HTTP, privacidad, arquitectura, lint, check, build) está verificado.
 
-**Verificación**: `pnpm validate` completo, código 0 (613 pruebas en 93 ficheros; cobertura con el 100 % en `domain/`; build; 53 E2E). `pnpm exec eslint` y `prettier --check` limpios. Arquitectura en verde.
+**Verificación**: `pnpm validate` completo, código 0 (613 pruebas en 93 ficheros; cobertura con el 100 % en `domain/`; build; 53 E2E). `pnpm test:http` en verde (70 pruebas, 11 de ellas de chat contra el build). `pnpm exec eslint` y `prettier --check` limpios. Arquitectura en verde.
 
 **Incidencias**: la prueba de migraciones pasa a 26 tablas con `model_cache`. Una versión previa de `runChat` lanzaba el fallo del proveedor dentro del `try` de liberación y lo sobrescribía como `INTERNAL_ERROR`; se separó el `try` a la llamada del proveedor. El piloto de mutación de L06 sigue sin resultados válidos (ver su sección).
 
