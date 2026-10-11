@@ -10,6 +10,7 @@ import * as m from '$lib/paraglide/messages.js';
 import { paraglideMiddleware } from '$lib/paraglide/server.js';
 import { appearanceAttributes, appearanceFromCookies } from '$lib/appearance/preferences';
 import { createComposition, type Composition } from '$lib/server/composition';
+import { sessionUserOf } from '$lib/server/features/accounts';
 import { getComposition, setComposition } from '$lib/server/composition.cache';
 import { readEnv } from '$lib/server/config/env';
 import { EnvConfigError, type Env } from '$lib/server/config/env-schema';
@@ -229,11 +230,59 @@ const appStep: Handle = ({ event, resolve }) => {
 	return resolve(event);
 };
 
-/** Sesión de usuario. Sin efecto hasta L03. */
-const sessionStep: Handle = ({ event, resolve }) => {
+/**
+ * Sesión de usuario (BE-FR-03, FR-018; contracts/web-routes.md 1.2). En la web, solo la cookie de sesión: un
+ * `Authorization: Bearer` se ignora y se registra. El host de la API no lee cookies (su autenticación llega en L04).
+ */
+const sessionStep: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 	event.locals.session = null;
+	if (event.url.pathname.startsWith(API_PREFIX)) return resolve(event);
+	if (event.request.headers.has('authorization')) {
+		event.locals.log.emit('accounts.session.rejected', {
+			reason: 'bearer_on_web',
+			errorCode: 'UNAUTHENTICATED'
+		});
+		return resolve(event);
+	}
+	const current = await getComposition().accounts.readSession(event.request.headers);
+	if (current !== null) {
+		event.locals.user = sessionUserOf(current.user);
+		event.locals.session = { id: current.session.id };
+	}
 	return resolve(event);
+};
+
+const REGISTER_PATH = '/registro';
+const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
+
+/** Añade el origen de Turnstile a `script-src` y `frame-src` de una política CSP; el resto de la política no cambia. */
+function withTurnstile(policy: string): string {
+	const directives = policy
+		.split(';')
+		.map((directive) => directive.trim())
+		.filter((directive) => directive !== '');
+	for (const name of ['script-src', 'frame-src']) {
+		const present = directives.some((directive) => directive.split(' ')[0] === name);
+		if (!present) {
+			directives.push(`${name} 'self' ${TURNSTILE_ORIGIN}`);
+			continue;
+		}
+		for (let index = 0; index < directives.length; index += 1) {
+			const directive = directives[index] ?? '';
+			if (directive.split(' ')[0] === name) directives[index] = `${directive} ${TURNSTILE_ORIGIN}`;
+		}
+	}
+	return directives.join('; ');
+}
+
+/** Turnstile solo en el registro (FR-102; constitución): su origen entra en la CSP de esa página y de ninguna otra. */
+const turnstileCsp: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event);
+	if (event.url.pathname !== REGISTER_PATH) return response;
+	const policy = response.headers.get('content-security-policy');
+	if (policy !== null) response.headers.set('content-security-policy', withTurnstile(policy));
+	return response;
 };
 
 /** Cabeceras de seguridad de toda respuesta (la CSP de página la pone SvelteKit en las páginas). */
@@ -251,7 +300,8 @@ export const handle: Handle = sequence(
 	localization,
 	appearance,
 	appStep,
-	sessionStep
+	sessionStep,
+	turnstileCsp
 );
 
 /** Un solo registro para los errores inesperados; al usuario solo le llega un texto genérico. */

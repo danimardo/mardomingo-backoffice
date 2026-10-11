@@ -31,6 +31,8 @@ export interface Composition {
 	readonly db: Db;
 	readonly sqlite: Database.Database;
 	readonly accounts: Accounts;
+	readonly apps: AppsDeps;
+	readonly legal: LegalDeps;
 	close(): void;
 }
 
@@ -102,6 +104,8 @@ export function createComposition(
 		db,
 		sqlite,
 		accounts,
+		apps,
+		legal,
 		close: () => {
 			sqlite.close();
 		}

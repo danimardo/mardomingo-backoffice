@@ -422,6 +422,22 @@ export async function logout(deps: AccountsDeps, headers: Headers): Promise<void
 	deps.logger.emit('accounts.session.revoked', { reason: 'logout' });
 }
 
+/**
+ * Estado de un token de verificación o recuperación, sin consumirlo (W09, W13). Un token inválido o de otra cuenta es
+ * «invalid»; uno de una cuenta ya verificada, «used». La caducidad la decide Better Auth al usarlo.
+ */
+export function tokenStateOf(deps: AccountsBase, token: string): 'valid' | 'used' | 'invalid' {
+	const email = emailOfToken(token);
+	if (email === undefined) return 'invalid';
+	const row = deps.db
+		.select({ emailVerified: user.emailVerified })
+		.from(user)
+		.where(eq(user.email, email))
+		.get();
+	if (row === undefined) return 'invalid';
+	return row.emailVerified ? 'used' : 'valid';
+}
+
 /** Sesión de las cabeceras dadas, o `null` si no hay una válida. */
 export function readSession(deps: AccountsDeps, headers: Headers) {
 	return deps.auth.api.getSession({ headers });
