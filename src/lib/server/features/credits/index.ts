@@ -27,11 +27,14 @@ import {
 import type { AuditDeps } from '$lib/server/features/audit';
 import type { BucketKind } from './domain/ledger';
 import { freeAccountsOpenHoldsMicro, realPurchaseUserIds, type ReleaseReason } from './repository';
+import { movementsPage, type MovementRow, type MovementsPage } from './service';
 import type { EpochMs } from '$lib/shared/time';
 
 export { balanceDto, welcomeDto, type BalanceDto, type WelcomeDto } from './presenters';
 export { CREDITS_LOG_EVENTS, type CreditsLogFields } from './events';
 export type {
+	MovementsPage,
+	MovementRow,
 	BalanceView,
 	AdjustOutcome,
 	ChargeOutcome,
@@ -113,6 +116,14 @@ export interface Credits {
 		readonly userId: string;
 		readonly paymentId: string;
 	}): ChargebackOutcome;
+	/** Movimientos de la cuenta, de 25 en 25, con filtros de día y app (W22, BE-FR-49.3). */
+	movements(input: {
+		readonly userId: string;
+		readonly fromMs: EpochMs | null;
+		readonly toMs: EpochMs | null;
+		readonly appId: string | null;
+		readonly page: number;
+	}): MovementsPage;
 	/** Bolsa de bienvenida de la cuenta, para W19. */
 	welcomeOf(
 		userId: string
@@ -136,6 +147,7 @@ export function createCredits(config: CreditsConfig): Credits {
 		grantPurchase: (input) => grantPurchase(deps, input),
 		withdrawForRefund: (input) => withdrawForRefund(deps, input),
 		applyChargeback: (input) => applyChargeback(deps, input),
+		movements: (input) => movementsPage(deps, input),
 		welcomeOf: (userId) => welcomeOf(deps, userId)
 	};
 }

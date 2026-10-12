@@ -3,6 +3,7 @@ export {
 	createApp,
 	createOperation,
 	appAccessOf,
+	appNamesOf,
 	announcementsFor,
 	appStatusOf,
 	type AnnouncementDto,
