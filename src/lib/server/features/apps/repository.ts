@@ -1,14 +1,15 @@
 // Lectura y escritura de `apps`, `app_operations`, `prompt_templates` y `settings`. Al leer, cada columna JSON se
 // valida con su esquema: si no encaja, se emite `apps.config.corrupt`, se rechaza la lectura con un error
 // controlado y el dato NO se modifica (BE-FR-61 CA5, data-model 3).
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import type { ZodType } from 'zod';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
 import type { EpochMs } from '$lib/shared/time';
-import { apps, appOperations, promptTemplates, settings } from './schema';
+import type { AnnouncementRow } from './domain/announcements';
+import { announcements, apps, appOperations, promptTemplates, settings } from './schema';
 import {
 	AllowedOrigins,
 	AppLinks,
@@ -293,6 +294,32 @@ export function seedInsertSetting(
 }
 
 /** Todas las apps validadas, para los orígenes permitidos de las apps activas (CORS, T131). */
+/** Anuncios activos de una app o de todas, sin filtrar por fechas ni versión (eso lo decide `isVisible`). */
+export function listAnnouncementCandidates(db: Db, appId: string): AnnouncementRow[] {
+	return db
+		.select()
+		.from(announcements)
+		.where(
+			and(
+				eq(announcements.active, true),
+				or(isNull(announcements.appId), eq(announcements.appId, appId))
+			)
+		)
+		.all()
+		.map((row) => ({
+			id: row.id,
+			appId: row.appId,
+			level: row.level,
+			message: row.message,
+			link: row.link,
+			startsAt: row.startsAt,
+			endsAt: row.endsAt,
+			minVersion: row.minVersion,
+			maxVersion: row.maxVersion,
+			active: row.active
+		}));
+}
+
 export function listApps(db: Db, logger: Logger): AppRow[] {
 	return readGuarded(logger, 'apps', () => db.select().from(apps).all()).map((row) =>
 		validatedApp(row, logger)

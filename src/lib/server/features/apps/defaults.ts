@@ -305,7 +305,8 @@ const IMAGE: ApprovedOperation = Object.freeze({
 	model: 'google/gemini-3.1-flash-image',
 	fallbackModels: Object.freeze([]),
 	maxOutputTokens: null,
-	maxCostMicro: 80_000_000,
+	// 200 créditos (decisión del propietario, L08): 80 no cubría la estimación de 0,08 USD por imagen (~155 créditos).
+	maxCostMicro: 200_000_000,
 	estimatedMaxCostMicroUsd: 80_000
 });
 

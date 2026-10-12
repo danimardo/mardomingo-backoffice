@@ -189,3 +189,37 @@ export const settings = sqliteTable(
 	},
 	(table) => [check('settings_value_json', jsonCheck(table.value.name))]
 );
+
+export const ANNOUNCEMENT_LEVELS = Object.freeze(['info', 'warning', 'critical'] as const);
+
+/**
+ * Anuncios para las apps (BE-FR-85; T192). `app_id` nulo = todas las apps. Viven aquí, con `apps`, porque la clave
+ * foránea a `apps` no puede estar en `notifications` (orden de funcionalidades, ARCHITECTURE §3; decisión A del propietario).
+ */
+export const announcements = sqliteTable(
+	'announcements',
+	{
+		id: text('id').primaryKey(),
+		appId: text('app_id').references(() => apps.id, { onDelete: 'restrict' }),
+		level: text('level', { enum: ANNOUNCEMENT_LEVELS }).notNull(),
+		message: text('message').notNull(),
+		link: text('link'),
+		startsAt: epochMs('starts_at').notNull(),
+		endsAt: epochMs('ends_at'),
+		minVersion: text('min_version'),
+		maxVersion: text('max_version'),
+		active: bool('active').notNull().default(true),
+		createdAt: epochMs('created_at').notNull().default(nowMs),
+		updatedAt: epochMs('updated_at').notNull().default(nowMs)
+	},
+	(table) => [
+		check('announcements_level_enum', enumCheck(table.level.name, ANNOUNCEMENT_LEVELS)),
+		check('announcements_active_bool', boolCheck(table.active.name)),
+		check(
+			'announcements_window',
+			sql`${sql.identifier('ends_at')} IS NULL OR ${sql.identifier('ends_at')} > ${sql.identifier('starts_at')}`
+		),
+		check('announcements_message_not_empty', sql`length(${sql.identifier('message')}) > 0`),
+		index('announcements_lookup_idx').on(table.active, table.appId, table.startsAt)
+	]
+);
