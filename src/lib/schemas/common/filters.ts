@@ -63,3 +63,20 @@ function periodOf(text: string | undefined, errors: Record<string, string>): 30 
 	errors.periodo = MESSAGE;
 	return null;
 }
+
+/** `aaaa-mm-dd` → `dd/mm/aaaa`, el formato que escribe la persona en el formulario. */
+function formatEs(day: string): string {
+	const [year = '', month = '', date = ''] = day.split('-');
+	return `${date}/${month}/${year}`;
+}
+
+/** Query de la URL con los filtros y, opcionalmente, otra página. La usan la paginación y la exportación (sin JavaScript). */
+export function queryOfFilters(filters: PanelFilters, page: number | null): string {
+	const params = new URLSearchParams();
+	if (filters.desde !== null) params.set('desde', formatEs(filters.desde));
+	if (filters.hasta !== null) params.set('hasta', formatEs(filters.hasta));
+	if (filters.app !== null) params.set('app', filters.app);
+	if (page !== null && page > 1) params.set('pagina', String(page));
+	const query = params.toString();
+	return query === '' ? '' : `?${query}`;
+}

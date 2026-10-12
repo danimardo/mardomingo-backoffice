@@ -1,7 +1,7 @@
 // Filtros de las listas del panel (UX-09, BE-FR-49.8; T251): fechas en `dd/mm/aaaa` o ISO con `desde ≤ hasta`, página entera
 // ≥ 1 sin coerción implícita, periodo cerrado en 30 o 90 días y app opcional.
 import { describe, expect, it } from 'vitest';
-import { parsePanelFilters } from './filters';
+import { parsePanelFilters, queryOfFilters } from './filters';
 
 describe('parsePanelFilters', () => {
 	it('acepta fechas en dd/mm/aaaa y en ISO y las devuelve como fecha de calendario', () => {
@@ -58,5 +58,18 @@ describe('parsePanelFilters', () => {
 			value: { app: 'secretario' }
 		});
 		expect(parsePanelFilters({ app: '' })).toMatchObject({ ok: true, value: { app: null } });
+	});
+});
+
+describe('queryOfFilters', () => {
+	it('conserva los filtros en la query y la página solo si pasa de la primera', () => {
+		const parsed = parsePanelFilters({ desde: '01/10/2026', app: 'secretario' });
+		if (!parsed.ok) throw new Error('los filtros de prueba deben ser válidos');
+
+		expect(queryOfFilters(parsed.value, 2)).toBe('?desde=01%2F10%2F2026&app=secretario&pagina=2');
+		expect(queryOfFilters(parsed.value, 1)).toBe('?desde=01%2F10%2F2026&app=secretario');
+		const empty = parsePanelFilters({});
+		if (!empty.ok) throw new Error('sin filtros debe ser válido');
+		expect(queryOfFilters(empty.value, null)).toBe('');
 	});
 });
