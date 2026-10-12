@@ -128,7 +128,7 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 
 ## Tus trámites, en orden
 
-1. **Coolify**: añade `BODY_SIZE_LIMIT=10M` a las variables de la app y despliega. Sin ella la aplicación no arranca (a propósito).
+1. **Coolify**: añade `BODY_SIZE_LIMIT=10M`, `ADDRESS_HEADER=x-forwarded-for` y `XFF_DEPTH=1` a las variables de la app, y despliega. Sin ella la aplicación no arranca (a propósito).
 2. **Modelos**: en tu terminal, con tu clave en tu entorno (no en el chat), ejecuta `node scripts/verify-model-caps.mjs`. Debe terminar sin errores y sin imprimir la clave.
 3. **Staging, transcripción (V05)**: sube un WebM real de unos 2 minutos con Voxtral caído. Esperado: respuesta `200` con `providerUsed: "backup"`, sin nombre de modelo. Anota el comando de ffmpeg que funcione en `research.md` (R11).
 4. **Staging, chat (V02 a V04)**: login de app, una operación de chat con cobro, 20 peticiones simultáneas con saldo para 3, y la repetición con la misma clave de idempotencia.
@@ -174,6 +174,10 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 - Umbrales y freno comprobados en tests HTTP sobre el build (T208, parcial): 31.ª petición con 429 y 503 con el freno activo.
 - Tests reorganizados según el plan (T206–T207). Arnés común en `tests/builders/protections.ts`.
 - Validación completa en verde sobre el árbol de trabajo: `check`, `lint`, 750 pruebas, build y 53 E2E (código 0). `test:http`: 14 ficheros y 89 pruebas.
+- Umbrales por IP confirmados por el propietario (2026-10-12). En la suite HTTP ya hay límites por IP de login y reenvío con su `X-Forwarded-For`, y el límite de la app antes que el de la cuenta (V14).
+- **Hallazgo de despliegue**: el adaptador de Node solo usa `X-Forwarded-For` si `ADDRESS_HEADER` está definido en el proceso. Sin él, la IP es la del proxy para todos. Es decir, en producción los límites por IP bloquearían a todos los usuarios a la vez. Hay que poner `ADDRESS_HEADER=x-forwarded-for` y `XFF_DEPTH=1` en Coolify antes de desplegar (T209).
+- Un informe del navegador devolvía 500 sin esa cabecera (`client-errors` llamaba a `getClientAddress()` sin protección). Corregido: usa `clientIpOf` y, sin IP, un cubo propio. La prueba ya cubre esa ruta sin cabecera.
+- Los fallos de saldo del chat que aparecieron en una ejecución completa desaparecieron al corregir la IP de las pruebas. No he podido demostrar la causa exacta; se vuelve a ver en la siguiente ejecución completa.
 - Contención observada: en una ejecución completa, `transcription.int.test.ts` falló una prueba de temporizador; aislada, pasa 2 de 2. No se ha tocado.
 
 **Pendiente (no cerrado)**
