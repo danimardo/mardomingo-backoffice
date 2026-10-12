@@ -224,5 +224,8 @@
 	"empty_no_match_body": "Ningún elemento coincide con el filtro «{filter}». Cambia o quita el filtro para ver más.",
 	"banner_level_info": "Información",
 	"banner_level_warning": "Aviso",
-	"banner_level_critical": "Crítico"
+	"banner_level_critical": "Crítico",
+	"chart_meta": "Periodo: {period} · Unidad: {unit} · Vigencia: {validity}",
+	"chart_day": "Día",
+	"chart_no_data": "Sin datos"
 }
