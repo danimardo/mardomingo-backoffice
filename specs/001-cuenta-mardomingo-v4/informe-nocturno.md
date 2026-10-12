@@ -126,6 +126,15 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
    - V13 (no se guarda contenido): comprobar en staging que ni el audio ni el texto aparecen en la base ni en los logs.
 5. **Dos cosas que siguen abiertas y te afectan**: el CI nunca se ha ejecutado en remoto (la protección de `main` y `staging` depende de eso, T060), y las operaciones de medios se activan por SQL en las pruebas, así que hasta L13 la activación real la haces tú desde la base.
 
+## Tus trámites, en orden
+
+1. **Coolify**: añade `BODY_SIZE_LIMIT=10M` a las variables de la app y despliega. Sin ella la aplicación no arranca (a propósito).
+2. **Modelos**: en tu terminal, con tu clave en tu entorno (no en el chat), ejecuta `node scripts/verify-model-caps.mjs`. Debe terminar sin errores y sin imprimir la clave.
+3. **Staging, transcripción (V05)**: sube un WebM real de unos 2 minutos con Voxtral caído. Esperado: respuesta `200` con `providerUsed: "backup"`, sin nombre de modelo. Anota el comando de ffmpeg que funcione en `research.md` (R11).
+4. **Staging, chat (V02 a V04)**: login de app, una operación de chat con cobro, 20 peticiones simultáneas con saldo para 3, y la repetición con la misma clave de idempotencia.
+5. **Staging, privacidad (V13)**: comprueba que ni el texto ni el audio aparecen en la base ni en los logs.
+6. **Textos legales**: entrega los definitivos revisados por tu abogado (T079 y T092).
+
 ## Lote L09 (parcial): versiones, mantenimiento y protecciones de la API
 
 **Estado (2026-10-12)**: T189 a T203 hechos; **T195 (checkpoint) abierto**. Lo verificado está abajo; lo que falta, al final.
