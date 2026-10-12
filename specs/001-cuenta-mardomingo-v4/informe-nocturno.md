@@ -110,7 +110,9 @@ no se ha ejecutado completo.
 
 ## Lote L09 (parcial): versiones, mantenimiento y protecciones de la API
 
-**Estado**: parcial. Hechos T189 a T191 (versiones, reglas de acceso y servicio de protecciones, compuesto en `ai`). **Bloqueados T192, T193 y T203 por dos decisiones de frontera** que no tomo yo. El resto (T194 a T202, T195 checkpoint) no se ha empezado.
+**Estado**: parcial. Hechos T189 a T194 (versiones, acceso y protecciones en `ai`, anuncios en `apps` y `GET /api/v1/app/status`). Decisiones tomadas por el propietario: anuncios en `apps` (A) y freno con puerto inyectado (A). Pendientes T195 (checkpoint), T196 a T202 y T203 (el freno con puerto).
+
+**Actualización (2026-10-12)**: el propietario ha contestado las decisiones. Anuncios: tabla en `apps` (A). Freno: puerto inyectado (A), pendiente de implementar en T203. Tope de la imagen: 200 créditos, con migración `0006` que solo cambia la fila sembrada con el valor antiguo (probada sobre una tabla de prueba). CI: ffmpeg y ffprobe se instalan explícitamente. E2E: dos tests de `accounts.spec` estabilizados sin tapar errores (esperas y espera explícita de la respuesta); tres ejecuciones seguidas del fichero en verde. Validación completa: 702 pruebas en verde.
 
 **Hecho**: `shared/semver.ts` (x.y.z, comparación por partes, rangos inclusivos con extremos nulos); `protections/domain/access.ts` con la tabla de endpoints de api-v1 1.8 y D-19, la versión mínima (`enforce_version`, 426 si falta o es menor) y el mantenimiento (el global tiene prioridad, con su mensaje); `protections/service.ts` (`guardAccess`) con su catálogo de eventos; `apps/appAccessOf`; el guard en los pasos 6 y 7 de §8 del chat, la transcripción y la imagen (no en las rutas, no en logout ni en `/app/status`). `MAINTENANCE` lleva el texto del administrador como `message` en la respuesta, no en los detalles.
 
