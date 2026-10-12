@@ -13,6 +13,7 @@ import type { IdGenerator, IdKind } from '$lib/server/shared/ids';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import { startOfMadridDay } from '$lib/shared/dates';
 import { dailyCapVerdict } from './domain/daily-cap';
+import { lowBalanceVerdict, type LowBalanceEvent } from './domain/low-balance';
 import {
 	applyCredit,
 	applyExpiry,
@@ -49,7 +50,9 @@ import {
 	bucketOfPayment,
 	movementExistsForPayment,
 	refundedMicroOf,
-	setRealPurchase
+	setRealPurchase,
+	lowBalanceStateOf,
+	setLowBalanceNotified
 } from './repository';
 
 export interface CreditsDeps {
@@ -188,8 +191,34 @@ export function reserve(
 }
 
 export type ChargeOutcome =
-	| { readonly ok: true; readonly chargedMicro: number; readonly absorbedMicro: number }
+	| {
+			readonly ok: true;
+			readonly chargedMicro: number;
+			readonly absorbedMicro: number;
+			/** Evento del aviso de saldo bajo tras el cobro, si lo hubo (BE-FR-49.7). */
+			readonly lowBalance: LowBalanceEvent;
+	  }
 	| { readonly ok: false; readonly reason: 'hold_not_open' };
+
+/**
+ * Aviso de saldo bajo tras un cambio de saldo (BE-FR-49.7): avisa una vez al cruzar hacia abajo y rearma al superar el
+ * umbral. El correo lo envía quien llamó, fuera de la transacción: `credits` no puede leer `accounts` (orden de funcionalidades).
+ */
+function lowBalanceAfter(deps: CreditsDeps, tx: Tx, userId: string, now: EpochMs): LowBalanceEvent {
+	const state = lowBalanceStateOf(tx, userId);
+	const verdict = lowBalanceVerdict({
+		balanceMicro: balanceOf(loadState(tx, userId)),
+		thresholdMicro: state.thresholdMicro,
+		notified: state.notified
+	});
+	if (verdict.notified !== state.notified) setLowBalanceNotified(tx, userId, verdict.notified, now);
+	if (verdict.event !== null) {
+		deps.logger.emit('credits.low_balance.crossed', {
+			status: verdict.event
+		});
+	}
+	return verdict.event;
+}
 
 /**
  * Cobra el coste real y libera la reserva en la misma transacción (BE-FR-71, BE-FR-17). Lo que supera el saldo pasa a
@@ -223,7 +252,8 @@ export function chargeAndRelease(
 		return {
 			ok: true,
 			chargedMicro: input.realCostMicro - result.absorbed,
-			absorbedMicro: result.absorbed
+			absorbedMicro: result.absorbed,
+			lowBalance: lowBalanceAfter(deps, tx, hold.userId, now)
 		};
 	});
 }
@@ -313,6 +343,7 @@ export function adjust(
 				type: 'adjustment'
 			});
 			persistState(tx, input.userId, before, result.state, now);
+			lowBalanceAfter(deps, tx, input.userId, now);
 			insertMovements(
 				tx,
 				movementRows(input.userId, result.lines, {
@@ -352,6 +383,7 @@ export function adjust(
 			return result;
 		}
 		persistState(tx, input.userId, before, result.state, now);
+		lowBalanceAfter(deps, tx, input.userId, now);
 		insertMovements(
 			tx,
 			movementRows(input.userId, result.lines, {
@@ -493,6 +525,7 @@ export function grantPurchase(
 		});
 
 		persistState(tx, input.userId, before, result.state, now);
+		lowBalanceAfter(deps, tx, input.userId, now);
 		insertMovements(
 			tx,
 			movementRows(input.userId, result.lines, { paymentId: input.paymentId }),
