@@ -405,6 +405,7 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
   4. Intentar fijar en la app A un valor de 40 (mayor que el global).
 - **Resultado esperado**: 2. La sexta → `429 RATE_LIMITED` con `Retry-After` (`reason = rate_limited_app`). 3. La app B sigue funcionando hasta que la suma llega a 30; la siguiente → `429` (`reason =
  rate_limited_account`). 4. Rechazado al guardar con el error junto al campo.
+- **Estado (2026-10-12)**: pasos 2 y 3 automatizados. Por app: `tests/http/api-protections.test.ts` (sexta petición con límite de app 3, `429 RATE_LIMITED`). Por cuenta: `protections/limits.int.test.ts` (31.ª petición con reloj falso). Paso 1 parcial: el valor de la app se fija en la base de la prueba, no con la pantalla. **Paso 4 pendiente de L13** (la pantalla W40 que rechaza al guardar). Comprobación del proxy en staging: T209, bloqueo del primer despliegue.
 
 ### V15 · Ajuste del administrador que liquida deuda
 
