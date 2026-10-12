@@ -1762,6 +1762,8 @@ Se aplican los umbrales de la constitución (100 % de líneas, ramas, funciones 
 
 El **test de arquitectura** se ejecuta siempre en el nivel 2: `vitest related` no lo selecciona porque no importa el código que comprueba.
 
+`pnpm verify:batch` automatiza el nivel 2: Prettier de lo modificado, `lint:changed`, `check`, test de arquitectura, tests relacionados (con `pnpm test` completo si el cambio es transversal) y cobertura del dominio tocado. Se detiene en el primer fallo, anota el resultado en `.local/verification/runs.jsonl` y no sustituye a `validate` en PR, release ni cambios transversales.
+
 Los tiempos no se fijan de antemano: se miden (T-TEST-001) y se registran antes y después de cada optimización.
 
 ### 15.25 Estructura y comandos
