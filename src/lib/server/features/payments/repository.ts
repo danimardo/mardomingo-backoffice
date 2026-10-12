@@ -6,7 +6,7 @@ import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toEurCents } from '$lib/shared/money';
 import type { EpochMs } from '$lib/shared/time';
-import { payments } from './schema';
+import { packs, payments } from './schema';
 
 export type PaymentRow = typeof payments.$inferSelect;
 export type PaymentStatus = PaymentRow['status'];
@@ -57,4 +57,9 @@ export function setRefundedEurCents(
 		.set({ refundedEurCents: toEurCents(refundedEurCents), updatedAt: now })
 		.where(eq(payments.id, id))
 		.run();
+}
+
+/** Paquete por id, esté activo o no: el servicio decide si se puede vender (BE-FR-23). */
+export function findPack(db: Db | Tx, id: string): typeof packs.$inferSelect | undefined {
+	return db.select().from(packs).where(eq(packs.id, id)).get();
 }

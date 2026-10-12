@@ -15,6 +15,8 @@ import {
 	type ProtectionsLogFields
 } from '$lib/server/features/protections';
 import { SYNC_LOG_EVENTS, type SyncLogFields } from '$lib/server/features/sync';
+import { INVOICING_LOG_EVENTS, type InvoicingLogFields } from '$lib/server/features/invoicing';
+import { PAYMENTS_LOG_EVENTS, type PaymentsLogFields } from '$lib/server/features/payments';
 import {
 	NOTIFICATIONS_LOG_EVENTS,
 	type NotificationsLogFields
@@ -81,7 +83,9 @@ export type LogEventFieldMap = InfraLogFields &
 	PricingLogFields &
 	AiLogFields &
 	ProtectionsLogFields &
-	SyncLogFields;
+	SyncLogFields &
+	InvoicingLogFields &
+	PaymentsLogFields;
 
 export type LogEventCode = keyof LogEventFieldMap;
 
@@ -106,5 +110,7 @@ export const LOG_EVENTS: Readonly<Record<LogEventCode, LogEventMeta>> = Object.f
 	...PROTECTIONS_LOG_EVENTS,
 	...CREDITS_LOG_EVENTS,
 	...PRICING_LOG_EVENTS,
-	...SYNC_LOG_EVENTS
+	...SYNC_LOG_EVENTS,
+	...INVOICING_LOG_EVENTS,
+	...PAYMENTS_LOG_EVENTS
 });

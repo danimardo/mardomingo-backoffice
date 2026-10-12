@@ -37,7 +37,7 @@ import {
 	type RegisterInput
 } from './service';
 
-export { seedDisposableDomains } from './service';
+export { blockAccount, seedDisposableDomains } from './service';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
 export type { AppLoginInput, AppLoginResult } from './service';
 import { denialOf, type Access, type SessionUser } from './guards';
