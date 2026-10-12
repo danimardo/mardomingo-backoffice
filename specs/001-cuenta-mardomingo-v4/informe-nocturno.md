@@ -141,10 +141,10 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 **Verificación ejecutada**
 
 - `pnpm validate` completo sobre el commit final (`b4151fb`): `check` sin errores ni avisos; `lint` correcto; `test:coverage` con 110 ficheros y 743 pruebas en verde, cobertura de dominios al 100 %; `build` correcto; E2E 53 en verde. Código de salida 0.
-- `pnpm test:http`: 12 ficheros, 84 pruebas en verde, sobre el build.
+- `pnpm test:http`: 13 ficheros, 87 pruebas en verde, sobre el build.
 - `pnpm test:trace`: sale en 0. Lista criterios UX de lotes posteriores (interfaz de L13), no de este tramo.
 - Dos fallos intermedios de `validate` fueron míos y están corregidos: formato de `messages/es.json` y una rama de dominio sin cubrir (`brake.ts`, estado del día que no puede darse con las escrituras actuales; la función se simplificó).
-- E2E intermitente en `e2e/appearance.spec.ts` («con Sistema, cambiar el sistema en /login no borra lo escrito»): fallaba 4 de 20 repeticiones con paralelismo y 0 de 20 tras esperar a la red en reposo antes de escribir (commit `b4151fb`). Causa probable: el texto escrito antes de hidratar la página se pierde. **Observación de UX sobre la aplicación, no corregida**: si alguien escribe en `/login` antes de que cargue el JavaScript, el texto puede perderse.
+- E2E intermitente en `e2e/appearance.spec.ts` («con Sistema, cambiar el sistema en /login no borra lo escrito»): fallaba 4 de 20 repeticiones con paralelismo y 0 de 20 tras esperar a la red en reposo antes de escribir (commit `b4151fb`). Causa probable: el texto escrito antes de hidratar la página se pierde. **Era un fallo de la aplicación y está corregido** (`1bfb792`): `TextField` recibía el valor de un estado vacío y la hidratación borraba lo escrito. Con `bind:value` se conserva. Se quitó la espera del E2E y pasa 20 de 20.
 
 **Decisiones tomadas (conservadoras; revisar)**
 
@@ -161,11 +161,9 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 
 **Pendiente (no cerrado)**
 
-- **T195 (checkpoint L04)**: abierto. Lo cubierto: arquitectura (test de `tests/architecture`, en verde), `check`, `lint:changed`, build y HTTP. Falta V09 (mantenimiento por app):
-  - Paso 1, activar el mantenimiento desde la administración (W40): no tiene E2E en esta suite. Lo que sí hay es la prueba de integración del guard con el mantenimiento global.
-  - Pasos 2 a 4 por HTTP con Bearer y con dos apps: no están en `test:http`. Montarlos requiere activar el mantenimiento por la vía del administrador en el proceso del build, y eso no se ha hecho.
+- **T195 (checkpoint L04)**: abierto solo por V09 paso 1 y paso 3. Cubierto: arquitectura, `check`, `lint`, build y HTTP; `tests/http/api-maintenance.test.ts` (3 pruebas) activa el mantenimiento de `secretario` escribiendo su fila y comprueba `503 MAINTENANCE` con el texto del administrador en `POST /ai/chat` y el informe en `/app/status`. Falta: activar el mantenimiento desde la administración (W40 no existe hasta L13) y repetir con otra app (solo está sembrada `secretario`).
 - Liberación del freno desde la interfaz: `releaseBrake` existe y tiene pruebas; la pantalla es de L13.
-- Auditoría `new_day` (decisión 8).
+- Auditoría `new_day`: resuelto como evento `protections.brake.released` con motivo `new_day`, una sola vez en la primera petición del día nuevo. No va a `admin_audit` porque esa tabla exige un administrador; para auditarlo allí habría que cambiar una tabla inmutable.
 - Commits locales de L06–L09 (y `b4151fb`): no subidos. L06 a L08 siguen parciales, así que no se cumple la condición de subir al cerrar cada lote.
 
 ## Lote L08: transcripción (E08) e imagen (E09)

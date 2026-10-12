@@ -168,6 +168,11 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 		costs = [];
 
 		await expect(guard(deps, requestFor('usr_a'))).resolves.toBeTypeOf('function');
+		await guard(deps, requestFor('usr_a'));
+		expect(eventsNamed(fixture.logger, 'protections.brake.released')).toHaveLength(1);
+		expect(eventsNamed(fixture.logger, 'protections.brake.released')[0]?.fields).toEqual({
+			reason: 'new_day'
+		});
 	});
 
 	it('la liberación manual deja auditoría, no vuelve a saltar ese día y solo se puede liberar una vez', async () => {

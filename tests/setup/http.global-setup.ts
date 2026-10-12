@@ -32,6 +32,8 @@ declare module 'vitest' {
 		openrouterMockUrl: string;
 		/** Simulador de Voxtral que usa el servidor construido (T187). */
 		mistralMockUrl: string;
+		/** Base SQLite del servidor construido, para preparar el estado que aún no tiene pantalla (V09). */
+		httpDatabasePath: string;
 	}
 }
 
@@ -113,6 +115,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	project.provide('httpChatToken', chatToken);
 	project.provide('openrouterMockUrl', openrouter.url);
 	project.provide('mistralMockUrl', mistral.url);
+	project.provide('httpDatabasePath', join(DIR, 'app.db'));
 
 	return async () => {
 		// En Windows la BD sigue abierta hasta que el proceso termina: se espera antes de borrarla.

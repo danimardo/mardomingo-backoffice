@@ -128,6 +128,14 @@ export function guardRequest(deps: ProtectionsDeps, input: RequestGuardInput): (
 function guardBrake(deps: ProtectionsDeps, now: EpochMs): void {
 	const day = civilDateOf(now);
 	const stored = readBrakeState(deps.db);
+	// Rearme por cambio de día: el freno de un día anterior se cierra una sola vez y queda registrado. No va a la auditoría
+	// de administración, que exige un administrador; la marca conserva el día de origen para no frenar el día nuevo.
+	if (stored !== null && stored.active && stored.day !== day) {
+		immediateTransaction(deps.db, (tx) => {
+			writeBrakeState(tx, { ...stored, active: false, releasedAt: now, releasedBy: null }, now);
+		});
+		deps.logger.emit('protections.brake.released', { reason: 'new_day' });
+	}
 	// Mientras el freno esté activo hoy no hace falta volver a sumar el día: la respuesta es la misma.
 	if (stored !== null && stored.day === day && stored.active) rejectBraked(deps);
 
