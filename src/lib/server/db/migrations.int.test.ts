@@ -30,16 +30,18 @@ function namesOf(open: OpenedDatabase, type: 'table' | 'trigger'): string[] {
 }
 
 describe('migraciones sobre una BD vacía', () => {
-	it('crean las 30 tablas de las funcionalidades y los 6 triggers de inmutabilidad', () => {
+	it('crean las 32 tablas de las funcionalidades y los 8 triggers de inmutabilidad', () => {
 		opened = openDatabase(join(dir, 'app.db'));
 		migrate(opened.db, { migrationsFolder: 'drizzle' });
 
-		expect(namesOf(opened, 'table')).toHaveLength(30);
+		expect(namesOf(opened, 'table')).toHaveLength(32);
 		expect(namesOf(opened, 'trigger')).toEqual([
 			'admin_audit_no_delete',
 			'admin_audit_no_update',
 			'credit_movements_no_delete',
 			'credit_movements_no_update',
+			'invoices_no_delete',
+			'invoices_no_update',
 			'prompt_templates_no_delete',
 			'prompt_templates_no_update'
 		]);

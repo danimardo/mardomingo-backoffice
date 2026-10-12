@@ -71,6 +71,20 @@
       "when": 1791802291137,
       "tag": "0009_sync_documentos",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1791812236587,
+      "tag": "0010_facturacion_tablas",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1791812244416,
+      "tag": "0011_invoices_immutable",
+      "breakpoints": true
     }
   ]
 }
