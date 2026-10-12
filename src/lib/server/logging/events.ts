@@ -14,7 +14,7 @@ import {
 	PROTECTIONS_LOG_EVENTS,
 	type ProtectionsLogFields
 } from '$lib/server/features/protections';
-import { SYNC_LOG_EVENTS, type SyncLogFields } from '$lib/server/features/sync/events';
+import { SYNC_LOG_EVENTS, type SyncLogFields } from '$lib/server/features/sync';
 import {
 	NOTIFICATIONS_LOG_EVENTS,
 	type NotificationsLogFields

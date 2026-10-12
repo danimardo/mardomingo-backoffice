@@ -122,3 +122,23 @@ describe('validateDocument: tamaño', () => {
 		expect(validateDocument(SCHEMA, data, bytes)).toEqual({ ok: true });
 	});
 });
+
+describe('validateDocument: formas que no son de su estrategia', () => {
+	it('items sin lista de elementos es malformado', () => {
+		expect(
+			validateDocument(SCHEMA, { customReplacements: { items: 'x', tombstones: [] } }, MAX_BYTES)
+		).toMatchObject({
+			ok: false,
+			reason: 'malformed',
+			field: 'customReplacements'
+		});
+	});
+
+	it('keyed con un valor que no es un objeto es malformado', () => {
+		expect(validateDocument(SCHEMA, { preferences: ['es'] }, MAX_BYTES)).toMatchObject({
+			ok: false,
+			reason: 'malformed',
+			field: 'preferences'
+		});
+	});
+});
