@@ -250,5 +250,20 @@
 	"movement_type_expiry": "Caducidad",
 	"movement_type_refund": "Reembolso",
 	"movement_type_chargeback": "Contracargo",
-	"movement_type_debt_settlement": "Liquidación de deuda"
+	"movement_type_debt_settlement": "Liquidación de deuda",
+	"consumption_title": "Consumo",
+	"consumption_caption": "Consumo de tus operaciones",
+	"consumption_col_date": "Fecha",
+	"consumption_col_app": "App",
+	"consumption_col_operation": "Operación",
+	"consumption_col_status": "Estado",
+	"consumption_col_credits": "Créditos cobrados",
+	"consumption_status_ok": "Completada",
+	"consumption_status_provider_error": "Fallida",
+	"consumption_status_cancelled": "Cancelada",
+	"consumption_status_undelivered": "No entregada (cobrada)",
+	"consumption_status_interrupted": "Interrumpida",
+	"consumption_status_rejected": "Rechazada",
+	"consumption_status_in_progress": "En curso",
+	"consumption_status_unknown": "Desconocido"
 }
