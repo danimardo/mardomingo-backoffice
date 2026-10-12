@@ -1,6 +1,7 @@
 // Servicio de `apps` (BE-FR-61, 62, 31). La configuración se resuelve con la herencia global → app → operación; cada
 // cambio se valida antes de guardarse y se audita en la misma transacción `BEGIN IMMEDIATE` (BE-FR-55). Las lecturas
 // usan `db`: dentro de una transacción de better-sqlite3 (una sola conexión) ya ven los cambios de la transacción.
+import { inArray } from 'drizzle-orm';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction } from '$lib/server/db/tx';
@@ -10,6 +11,7 @@ import { AppError } from '$lib/server/shared/errors';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { toMicro, toMicroUsd, toPpm } from '$lib/shared/money';
 import { cachedSettings, invalidateSettings, storeSettings } from './config.cache';
+import { apps } from './schema';
 import { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
 import { isVisible } from './domain/announcements';
 import {
@@ -849,4 +851,18 @@ export function syncSchemaOf(deps: AppsDeps, appId: string): SyncSchema {
 	const app = readApp(deps.db, deps.logger, appId);
 	if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
 	return app.syncSchema;
+}
+
+/** Nombre visible de cada app de la lista (para el panel: movimientos y consumo). Las ids desconocidas no aparecen. */
+export function appNamesOf(
+	deps: Pick<AppsDeps, 'db'>,
+	ids: readonly string[]
+): Map<string, string> {
+	if (ids.length === 0) return new Map();
+	const rows = deps.db
+		.select({ id: apps.id, name: apps.name })
+		.from(apps)
+		.where(inArray(apps.id, [...ids]))
+		.all();
+	return new Map(rows.map((row) => [row.id, row.name]));
 }
