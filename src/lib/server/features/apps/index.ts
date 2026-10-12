@@ -32,7 +32,9 @@ export {
 } from './service';
 export type { AppSettings } from './config';
 export { DEFAULT_PACKS, DEFAULT_SETTINGS, type DefaultPack } from './defaults';
-export { seedApps } from './seed';
+export { seedApps, SECRETARIO_APP_ID } from './seed';
+export { SECRETARIO_SYNC_SCHEMA } from './defaults';
+export type { SyncSchema } from './json-schemas';
 export { appHeadersOf, type AppHeaders } from './contract';
 export { APPS_LOG_EVENTS, type AppsLogFields } from './events';
 
