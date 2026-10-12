@@ -26,6 +26,10 @@ export interface Bucket {
 	readonly remaining: number;
 	readonly expiresAt: number | null;
 	readonly createdAt: number;
+	/** Compra que originó la bolsa (solo bolsas `purchase`; BE-FR-24). */
+	readonly paymentId?: string | null;
+	/** Compra simulada: no cuenta para `has_real_purchase` ni para ingresos (BE-FR-25 CA3). */
+	readonly simulated?: boolean;
 }
 
 export interface LedgerState {
@@ -176,6 +180,8 @@ export function applyCredit(
 		readonly expiresAt: number | null;
 		readonly createdAt: number;
 		readonly type: 'purchase' | 'adjustment';
+		readonly paymentId?: string | null;
+		readonly simulated?: boolean;
 	}
 ): {
 	readonly state: LedgerState;
@@ -190,7 +196,9 @@ export function applyCredit(
 		initial: input.amount,
 		remaining: input.amount - settled,
 		expiresAt: input.expiresAt,
-		createdAt: input.createdAt
+		createdAt: input.createdAt,
+		paymentId: input.paymentId ?? null,
+		simulated: input.simulated ?? false
 	};
 	const lines: Line[] = [{ type: input.type, amount: input.amount, bucketId: input.id }];
 	if (settled > 0) {
@@ -312,4 +320,59 @@ export function debtFromLines(lines: readonly Line[]): number {
 		.filter((line) => line.bucketId === null)
 		.reduce((sum, line) => sum + line.amount, 0);
 	return total === 0 ? 0 : -total;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Compras: retirada por reembolso y contracargo (BE-FR-27, BE-FR-28, H-12)
+
+/** Reembolso: retira `amount` de la bolsa de la compra. Nunca más que su saldo y nunca crea deuda (BE-FR-27). */
+export function applyRefundWithdrawal(
+	state: LedgerState,
+	input: { readonly bucketId: string; readonly amount: number }
+):
+	| { readonly ok: true; readonly state: LedgerState; readonly lines: readonly Line[] }
+	| { readonly ok: false; readonly reason: 'amount_not_positive' | 'exceeds_bucket' } {
+	if (input.amount <= 0) return { ok: false, reason: 'amount_not_positive' };
+	const available = state.buckets.find((item) => item.id === input.bucketId)?.remaining ?? 0;
+	if (input.amount > available) return { ok: false, reason: 'exceeds_bucket' };
+	return {
+		ok: true,
+		state: {
+			buckets: withRemaining(state.buckets, [{ bucketId: input.bucketId, amount: input.amount }]),
+			debt: state.debt
+		},
+		lines: [{ type: 'refund', amount: -input.amount, bucketId: input.bucketId }]
+	};
+}
+
+/**
+ * Contracargo (H-12): retira de la bolsa de la compra lo que quede de `targetMicro` (compra menos lo ya retirado por
+ * reembolsos). Lo que la bolsa no cubre pasa a deuda SIN el tope `max_debt`. La cuenta se bloquea en `accounts`.
+ */
+export function applyChargeback(
+	state: LedgerState,
+	input: { readonly bucketId: string; readonly targetMicro: number }
+): {
+	readonly state: LedgerState;
+	readonly lines: readonly Line[];
+	readonly withdrawnMicro: number;
+	readonly debtAddedMicro: number;
+} {
+	const available = state.buckets.find((item) => item.id === input.bucketId)?.remaining ?? 0;
+	const withdrawnMicro = Math.min(input.targetMicro, available);
+	const debtAddedMicro = input.targetMicro - withdrawnMicro;
+	const lines: Line[] = [];
+	if (withdrawnMicro > 0)
+		lines.push({ type: 'chargeback', amount: -withdrawnMicro, bucketId: input.bucketId });
+	if (debtAddedMicro > 0)
+		lines.push({ type: 'chargeback', amount: -debtAddedMicro, bucketId: null });
+	return {
+		state: {
+			buckets: withRemaining(state.buckets, [{ bucketId: input.bucketId, amount: withdrawnMicro }]),
+			debt: state.debt + debtAddedMicro
+		},
+		lines,
+		withdrawnMicro,
+		debtAddedMicro
+	};
 }

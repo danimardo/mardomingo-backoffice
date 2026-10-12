@@ -2,13 +2,19 @@
 // `credits` escribe en las tablas de saldo.
 import {
 	adjust,
+	applyChargeback,
 	chargeAndRelease,
 	expireBuckets,
 	expireHolds,
 	getBalance,
+	grantPurchase,
 	grantWelcome,
 	releaseHold,
 	releaseOpenHoldsOnStartup,
+	type ChargebackOutcome,
+	type PurchaseGrantOutcome,
+	type RefundWithdrawOutcome,
+	withdrawForRefund,
 	reserve,
 	welcomeOf,
 	type AdjustOutcome,
@@ -31,7 +37,10 @@ export type {
 	ChargeOutcome,
 	ReserveOutcome,
 	WelcomeOutcome,
-	CreditsDeps
+	CreditsDeps,
+	PurchaseGrantOutcome,
+	RefundWithdrawOutcome,
+	ChargebackOutcome
 };
 
 export interface CreditsConfig extends CreditsDeps {
@@ -84,6 +93,26 @@ export interface Credits {
 	realPurchaseUserIds(userIds: readonly string[]): ReadonlySet<string>;
 	/** Micro-créditos reservados en curso de las cuentas sin compra real (BE-FR-46 CA1). */
 	freeAccountsOpenHoldsMicro(): number;
+	/** Acredita una compra completada: liquida deuda, bolsa paid con su pago y `has_real_purchase` si es real (BE-FR-24). */
+	grantPurchase(input: {
+		readonly userId: string;
+		readonly paymentId: string;
+		readonly amountMicro: number;
+		readonly simulated: boolean;
+	}): PurchaseGrantOutcome;
+	/** Retira de la bolsa de la compra los créditos de un reembolso, con motivo y administrador (BE-FR-27). */
+	withdrawForRefund(input: {
+		readonly adminId: string;
+		readonly userId: string;
+		readonly paymentId: string;
+		readonly amountMicro: number;
+		readonly reason: string;
+	}): RefundWithdrawOutcome;
+	/** Contracargo: retira lo que quede de la compra y pasa el resto a deuda sin tope (BE-FR-28). Una vez por compra. */
+	applyChargeback(input: {
+		readonly userId: string;
+		readonly paymentId: string;
+	}): ChargebackOutcome;
 	/** Bolsa de bienvenida de la cuenta, para W19. */
 	welcomeOf(
 		userId: string
@@ -104,6 +133,9 @@ export function createCredits(config: CreditsConfig): Credits {
 		getBalance: (userId) => getBalance(deps, userId),
 		realPurchaseUserIds: (userIds) => realPurchaseUserIds(deps.db, userIds),
 		freeAccountsOpenHoldsMicro: () => freeAccountsOpenHoldsMicro(deps.db),
+		grantPurchase: (input) => grantPurchase(deps, input),
+		withdrawForRefund: (input) => withdrawForRefund(deps, input),
+		applyChargeback: (input) => applyChargeback(deps, input),
 		welcomeOf: (userId) => welcomeOf(deps, userId)
 	};
 }
