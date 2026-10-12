@@ -23,6 +23,7 @@ import {
 } from '$lib/server/features/pricing';
 import { alertKeys, raiseAlert, type AlertDeps } from '$lib/server/features/notifications';
 import { guardAccess } from '$lib/server/features/protections';
+import { CHAT_RETRY_WAITS_MS } from '$lib/server/features/apps';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError, type ErrorCode } from '$lib/server/shared/errors';
 import type { IdGenerator } from '$lib/server/shared/ids';
@@ -71,7 +72,7 @@ export interface RetryPolicy {
 
 export const DEFAULT_RETRY_POLICY: RetryPolicy = Object.freeze({
 	retries: 1,
-	waitsMs: Object.freeze([2_000])
+	waitsMs: CHAT_RETRY_WAITS_MS
 });
 
 /** Tope de salida cuando la operación no fija `max_output_tokens`. Solo sirve para estimar el coste máximo. */
