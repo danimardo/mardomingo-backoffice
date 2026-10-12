@@ -44,7 +44,9 @@ function toDomainBucket(row: typeof creditBuckets.$inferSelect): Bucket {
 		initial: row.initialMicro,
 		remaining: row.remainingMicro,
 		expiresAt: row.expiresAt,
-		createdAt: row.createdAt
+		createdAt: row.createdAt,
+		paymentId: row.paymentId,
+		simulated: row.simulated
 	};
 }
 
@@ -93,6 +95,8 @@ export function insertBucket(
 		readonly remaining: number;
 		readonly expiresAt: number | null;
 		readonly createdAt: number;
+		readonly paymentId?: string | null;
+		readonly simulated?: boolean;
 	}
 ): void {
 	tx.insert(creditBuckets)
@@ -104,7 +108,9 @@ export function insertBucket(
 			initialMicro: toMicro(row.initial),
 			remainingMicro: toMicro(row.remaining),
 			expiresAt: row.expiresAt === null ? null : toEpochMs(row.expiresAt),
-			createdAt: toEpochMs(row.createdAt)
+			createdAt: toEpochMs(row.createdAt),
+			paymentId: row.paymentId ?? null,
+			simulated: row.simulated ?? false
 		})
 		.run();
 }
@@ -113,6 +119,54 @@ export function setBucketRemaining(tx: Tx, id: string, remaining: number): void 
 	tx.update(creditBuckets)
 		.set({ remainingMicro: toMicro(remaining) })
 		.where(eq(creditBuckets.id, id))
+		.run();
+}
+
+/** Bolsa de la compra `paymentId`, con su importe inicial y su saldo (BE-FR-27, BE-FR-28). */
+export function bucketOfPayment(
+	db: Db | Tx,
+	paymentId: string
+): { readonly id: string; readonly initial: number; readonly remaining: number } | undefined {
+	return db
+		.select({
+			id: creditBuckets.id,
+			initial: creditBuckets.initialMicro,
+			remaining: creditBuckets.remainingMicro
+		})
+		.from(creditBuckets)
+		.where(eq(creditBuckets.paymentId, paymentId))
+		.get();
+}
+
+/** Micro-créditos ya retirados de la compra por reembolsos (positivo). */
+export function refundedMicroOf(db: Db | Tx, paymentId: string): number {
+	const row = db
+		.select({ total: sql<number>`coalesce(sum(${creditMovements.amountMicro}), 0)` })
+		.from(creditMovements)
+		.where(and(eq(creditMovements.paymentId, paymentId), eq(creditMovements.type, 'refund')))
+		.get();
+	return -(row?.total ?? 0);
+}
+
+/** ¿Hay ya un movimiento de este tipo para la compra? Evita repetir el contracargo. */
+export function movementExistsForPayment(db: Db | Tx, paymentId: string, type: LineType): boolean {
+	return (
+		db
+			.select({ id: creditMovements.id })
+			.from(creditMovements)
+			.where(and(eq(creditMovements.paymentId, paymentId), eq(creditMovements.type, type)))
+			.get() !== undefined
+	);
+}
+
+/** Marca la cuenta con compra real, sin tocar su deuda ni sus bolsas (BE-FR-11 CA2). */
+export function setRealPurchase(tx: Tx, userId: string, now: EpochMs): void {
+	tx.insert(userBalances)
+		.values({ userId, hasRealPurchase: true, updatedAt: now })
+		.onConflictDoUpdate({
+			target: userBalances.userId,
+			set: { hasRealPurchase: true, updatedAt: now }
+		})
 		.run();
 }
 

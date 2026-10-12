@@ -18,6 +18,8 @@ import {
 	applyExpiry,
 	applyNegativeAdjustment,
 	applyUsage,
+	applyChargeback as applyChargebackTransition,
+	applyRefundWithdrawal,
 	applyWelcome,
 	balanceOf,
 	canGrantWelcome,
@@ -43,7 +45,11 @@ import {
 	reservedOf,
 	type ReleaseReason,
 	insertMovements,
-	usageSince
+	usageSince,
+	bucketOfPayment,
+	movementExistsForPayment,
+	refundedMicroOf,
+	setRealPurchase
 } from './repository';
 
 export interface CreditsDeps {
@@ -449,4 +455,144 @@ export function welcomeOf(
 		.where(and(eq(creditBuckets.userId, userId), eq(creditBuckets.source, 'welcome')))
 		.get();
 	return row === undefined ? null : { amountMicro: row.initial, expiresAt: row.expiresAt };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Compras, reembolsos y contracargos (BE-FR-24/CA1, BE-FR-25/CA3, BE-FR-27, BE-FR-28; T233)
+
+export type PurchaseGrantOutcome =
+	{ readonly status: 'granted' } | { readonly status: 'already_granted' };
+
+/**
+ * Acredita una compra completada (BE-FR-24): liquida primero la deuda, crea una bolsa `paid` con su pago y fija
+ * `has_real_purchase` solo si la compra es real (BE-FR-25 CA3). Un segundo intento con el mismo pago no acredita.
+ */
+export function grantPurchase(
+	deps: CreditsDeps,
+	input: {
+		readonly userId: string;
+		readonly paymentId: string;
+		readonly amountMicro: number;
+		readonly simulated: boolean;
+	}
+): PurchaseGrantOutcome {
+	return immediateTransaction(deps.db, (tx): PurchaseGrantOutcome => {
+		if (bucketOfPayment(tx, input.paymentId) !== undefined) return { status: 'already_granted' };
+		const now = deps.clock.now();
+		const before = loadState(tx, input.userId);
+		const result = applyCredit(before, {
+			id: deps.ids('bkt'),
+			kind: 'paid',
+			source: 'purchase',
+			amount: input.amountMicro,
+			expiresAt: null,
+			createdAt: now,
+			type: 'purchase',
+			paymentId: input.paymentId,
+			simulated: input.simulated
+		});
+
+		persistState(tx, input.userId, before, result.state, now);
+		insertMovements(
+			tx,
+			movementRows(input.userId, result.lines, { paymentId: input.paymentId }),
+			idsOf(deps, 'mov'),
+			now
+		);
+		if (!input.simulated) setRealPurchase(tx, input.userId, now);
+		if (result.lines.some((line) => line.type === 'debt_settlement'))
+			deps.logger.emit('credits.debt.settled', {});
+		deps.logger.emit('credits.bucket.granted', { kind: 'paid', source: 'purchase' });
+		return { status: 'granted' };
+	});
+}
+
+export type RefundWithdrawOutcome =
+	| { readonly ok: true }
+	| {
+			readonly ok: false;
+			readonly reason: 'no_purchase_bucket' | 'credits_exceed_bucket' | 'amount_not_positive';
+	  };
+
+/**
+ * Retira de la bolsa de la compra los créditos de un reembolso (BE-FR-27). Nunca más que su saldo y nunca crea deuda;
+ * el motivo y el administrador van en el movimiento `refund`. La auditoría la registra `payments` en la misma acción.
+ */
+export function withdrawForRefund(
+	deps: CreditsDeps,
+	input: {
+		readonly adminId: string;
+		readonly userId: string;
+		readonly paymentId: string;
+		readonly amountMicro: number;
+		readonly reason: string;
+	}
+): RefundWithdrawOutcome {
+	return immediateTransaction(deps.db, (tx): RefundWithdrawOutcome => {
+		const bucket = bucketOfPayment(tx, input.paymentId);
+		if (bucket === undefined) return { ok: false, reason: 'no_purchase_bucket' };
+		const before = loadState(tx, input.userId);
+		const result = applyRefundWithdrawal(before, {
+			bucketId: bucket.id,
+			amount: input.amountMicro
+		});
+		if (!result.ok) {
+			return {
+				ok: false,
+				reason: result.reason === 'exceeds_bucket' ? 'credits_exceed_bucket' : 'amount_not_positive'
+			};
+		}
+		const now = deps.clock.now();
+		persistState(tx, input.userId, before, result.state, now);
+		insertMovements(
+			tx,
+			movementRows(input.userId, result.lines, {
+				paymentId: input.paymentId,
+				adminId: input.adminId,
+				adminReason: input.reason
+			}),
+			idsOf(deps, 'mov'),
+			now
+		);
+		deps.logger.emit('credits.refund.applied', {});
+		return { ok: true };
+	});
+}
+
+export type ChargebackOutcome =
+	| { readonly status: 'applied'; readonly withdrawnMicro: number; readonly debtAddedMicro: number }
+	| { readonly status: 'already_applied' }
+	| { readonly status: 'no_purchase_bucket' };
+
+/**
+ * Contracargo (BE-FR-28, H-12): recupera la compra menos lo ya retirado por reembolsos. Lo que la bolsa no cubre pasa a
+ * deuda sin el tope `max_debt`. Una vez por compra: un evento repetido no repite nada.
+ */
+export function applyChargeback(
+	deps: CreditsDeps,
+	input: { readonly userId: string; readonly paymentId: string }
+): ChargebackOutcome {
+	return immediateTransaction(deps.db, (tx): ChargebackOutcome => {
+		const bucket = bucketOfPayment(tx, input.paymentId);
+		if (bucket === undefined) return { status: 'no_purchase_bucket' };
+		if (movementExistsForPayment(tx, input.paymentId, 'chargeback'))
+			return { status: 'already_applied' };
+		const before = loadState(tx, input.userId);
+		const targetMicro = bucket.initial - refundedMicroOf(tx, input.paymentId);
+		const result = applyChargebackTransition(before, { bucketId: bucket.id, targetMicro });
+		const now = deps.clock.now();
+		persistState(tx, input.userId, before, result.state, now);
+		insertMovements(
+			tx,
+			movementRows(input.userId, result.lines, { paymentId: input.paymentId }),
+			idsOf(deps, 'mov'),
+			now
+		);
+		deps.logger.emit('credits.chargeback.applied', {});
+		return {
+			status: 'applied',
+			withdrawnMicro: result.withdrawnMicro,
+			debtAddedMicro: result.debtAddedMicro
+		};
+	});
 }

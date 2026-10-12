@@ -20,6 +20,8 @@ export interface CreditsLogFields {
 	'credits.adjustment.applied': { direction: 'credit' | 'debit'; kind: 'free' | 'paid' };
 	'credits.adjustment.rejected': { reason: 'exceeds_available' };
 	'credits.expiry.applied': { count: number };
+	'credits.refund.applied': Record<string, never>;
+	'credits.chargeback.applied': Record<string, never>;
 }
 
 export const CREDITS_LOG_EVENTS = Object.freeze({
@@ -39,5 +41,13 @@ export const CREDITS_LOG_EVENTS = Object.freeze({
 	'credits.welcome.denied': { level: 'info', msg: 'Bienvenida no concedida' },
 	'credits.adjustment.applied': { level: 'info', msg: 'Ajuste manual aplicado' },
 	'credits.adjustment.rejected': { level: 'info', msg: 'Ajuste manual rechazado' },
-	'credits.expiry.applied': { level: 'info', msg: 'Caducidad de saldo aplicada' }
+	'credits.expiry.applied': { level: 'info', msg: 'Caducidad de saldo aplicada' },
+	'credits.refund.applied': {
+		level: 'info',
+		msg: 'Reembolso aplicado sobre la bolsa de la compra'
+	},
+	'credits.chargeback.applied': {
+		level: 'warn',
+		msg: 'Contracargo aplicado: saldo retirado y deuda sin tope'
+	}
 } as const satisfies Record<keyof CreditsLogFields, LogEventMeta>);
