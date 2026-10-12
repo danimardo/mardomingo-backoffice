@@ -32,9 +32,13 @@ function setMaintenance(active: boolean, message: string): void {
 	}
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
+}
+
 function parse(text: string): Record<string, unknown> {
 	const parsed: unknown = JSON.parse(text);
-	return typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+	return isRecord(parsed) ? parsed : {};
 }
 
 beforeAll(() => {
