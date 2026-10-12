@@ -168,6 +168,14 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 9. En pruebas, los ajustes se cambian por `updateSetting` (valida, audita e invalida la caché). Cambiarlos en SQL directo dejaba la caché vieja y la prueba no medía nada.
 10. Las pruebas de concurrencia de saldo (créditos y chat) marcan su cuenta como compra real para no mezclar el saldo con el tope; el tope tiene sus propias pruebas.
 
+**Ronda de cierre de L09 (2026-10-12)**
+
+- Límites por IP de autenticación (T204–T205): login 30 por 15 min, reenvío y recuperación 5 por hora, `RATE_LIMITED` con `Retry-After` y `fail(429)` en web. **Son valores provisionales**: la especificación no los fijaba. Añadidos a `Historias.md` §9 como tres filas marcadas así, y los tests de conteo de ajustes pasan de 42 a 45. Altas por IP, ya cubiertas por `registrations_per_ip_24h`. El cambio de email queda para L12.
+- Umbrales y freno comprobados en tests HTTP sobre el build (T208, parcial): 31.ª petición con 429 y 503 con el freno activo.
+- Tests reorganizados según el plan (T206–T207). Arnés común en `tests/builders/protections.ts`.
+- Validación completa en verde sobre el árbol de trabajo: `check`, `lint`, 750 pruebas, build y 53 E2E (código 0). `test:http`: 14 ficheros y 89 pruebas.
+- Contención observada: en una ejecución completa, `transcription.int.test.ts` falló una prueba de temporizador; aislada, pasa 2 de 2. No se ha tocado.
+
 **Pendiente (no cerrado)**
 
 - **T195 (checkpoint L04)**: abierto solo por V09 paso 1 y paso 3. Cubierto: arquitectura, `check`, `lint`, build y HTTP; `tests/http/api-maintenance.test.ts` (3 pruebas) activa el mantenimiento de `secretario` escribiendo su fila y comprueba `503 MAINTENANCE` con el texto del administrador en `POST /ai/chat` y el informe en `/app/status`. Falta: activar el mantenimiento desde la administración (W40 no existe hasta L13) y repetir con otra app (solo está sembrada `secretario`).

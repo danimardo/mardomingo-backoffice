@@ -41,14 +41,14 @@ export function isDisposableDomain(db: Db, domain: string): boolean {
 	);
 }
 
-/** Suma una petición a la ventana fija de (ámbito, IP) y devuelve el total de la ventana actual. */
+/** Suma una petición a la ventana fija de (ámbito, IP) y devuelve el total y el inicio de la ventana actual. */
 export function bumpRateCounter(
 	tx: Tx,
 	scope: AuthRateScope,
 	ip: string,
 	now: EpochMs,
 	windowMs: number
-): number {
+): { readonly count: number; readonly windowStart: EpochMs } {
 	const current = tx
 		.select()
 		.from(authRateLimits)
@@ -64,7 +64,7 @@ export function bumpRateCounter(
 			set: { count: next, windowStart }
 		})
 		.run();
-	return next;
+	return { count: next, windowStart };
 }
 
 /** Peticiones de la ventana actual de (ámbito, IP), sin sumar ninguna. */

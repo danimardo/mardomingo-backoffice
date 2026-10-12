@@ -29,6 +29,7 @@ import { safeRedirect } from './domain/redirect';
 import { hashNormalizedEmail } from './email-hash';
 import {
 	bumpRateCounter,
+	type AuthRateScope,
 	clearLoginAttempts,
 	countSignupsFromIp,
 	insertDisposableDomains,
@@ -106,7 +107,13 @@ function headersFor(remoteIp: string | null): Headers {
 }
 
 type NumericSetting =
-	'registrations_per_ip_24h' | 'login_max_failures' | 'login_lock_minutes' | 'min_age';
+	| 'registrations_per_ip_24h'
+	| 'login_max_failures'
+	| 'login_lock_minutes'
+	| 'login_per_ip_15min'
+	| 'resend_verification_per_ip_hour'
+	| 'password_reset_per_ip_hour'
+	| 'min_age';
 
 function numberSetting(deps: AccountsBase, key: NumericSetting): number {
 	const value = getSetting(deps.apps, key);
@@ -234,9 +241,14 @@ export async function resendVerification(
 	const now = deps.clock.now();
 	const ip = input.remoteIp;
 	if (ip !== null) {
-		immediateTransaction(deps.db, (tx) => {
-			bumpRateCounter(tx, 'resend_verification', ip, now, HOUR_MS);
-		});
+		ipRateLimited(
+			deps,
+			'resend_verification',
+			ip,
+			now,
+			HOUR_MS,
+			numberSetting(deps, 'resend_verification_per_ip_hour')
+		);
 	}
 	const email = input.email.toLowerCase();
 	const row = deps.db.select().from(user).where(eq(user.email, email)).get();
@@ -304,8 +316,43 @@ export async function verifyEmail(
  * Autenticación común de la web y de las apps (BE-FR-03, BE-FR-67): bloqueo por intentos por email normalizado, exista o
  * no la cuenta (CA1); luego credenciales, cuenta bloqueada y cuenta sin verificar. Devuelve el token de la sesión nueva.
  */
+const LOGIN_IP_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Límite por IP de una acción (BE-FR-45, D-02): cuenta la petición en su ventana fija y, si supera el máximo, la rechaza
+ * con `RATE_LIMITED` y `Retry-After`. El evento no lleva la IP.
+ */
+function ipRateLimited(
+	deps: AccountsDeps,
+	scope: AuthRateScope,
+	ip: string,
+	now: EpochMs,
+	windowMs: number,
+	limit: number
+): void {
+	const counter = immediateTransaction(deps.db, (tx) =>
+		bumpRateCounter(tx, scope, ip, now, windowMs)
+	);
+	if (counter.count <= limit) return;
+	deps.logger.emit('accounts.rate_limit.exceeded', { reason: scope });
+	const remainingMs = counter.windowStart + windowMs - now;
+	throw new AppError('RATE_LIMITED', {
+		retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000))
+	});
+}
+
 async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<string> {
 	const now = deps.clock.now();
+	if (input.remoteIp !== null) {
+		ipRateLimited(
+			deps,
+			'login',
+			input.remoteIp,
+			now,
+			LOGIN_IP_WINDOW_MS,
+			numberSetting(deps, 'login_per_ip_15min')
+		);
+	}
 	const hash = hashNormalizedEmail(normalizeEmail(input.email), deps.emailHashKey);
 	const state = readLoginAttempt(deps.db, hash);
 	if (state?.lockedUntil !== null && state?.lockedUntil !== undefined && state.lockedUntil > now) {
@@ -511,9 +558,14 @@ export async function requestPasswordReset(
 	const now = deps.clock.now();
 	const ip = input.remoteIp;
 	if (ip !== null) {
-		immediateTransaction(deps.db, (tx) => {
-			bumpRateCounter(tx, 'password_reset', ip, now, HOUR_MS);
-		});
+		ipRateLimited(
+			deps,
+			'password_reset',
+			ip,
+			now,
+			HOUR_MS,
+			numberSetting(deps, 'password_reset_per_ip_hour')
+		);
 	}
 	const email = input.email.toLowerCase();
 	const exists = deps.db.select().from(user).where(eq(user.email, email)).get() !== undefined;
