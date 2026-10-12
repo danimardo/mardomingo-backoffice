@@ -9,6 +9,7 @@ export interface MovementFact {
 	readonly type: string;
 	readonly amountMicro: number;
 	readonly appName: string | null;
+	readonly appId?: string | null;
 }
 
 export function movementRowsOf(movements: readonly MovementFact[]): CsvCell[][] {
