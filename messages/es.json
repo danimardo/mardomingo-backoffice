@@ -169,5 +169,12 @@
 	"accounts_welcome_title": "Bienvenido",
 	"errors_summary_title": "Revisa los datos del formulario:",
 	"panel_signed_as": "Has entrado como {email}.",
-	"panel_title": "Tu cuenta"
+	"panel_title": "Tu cuenta",
+	"invoicing_kind_invalid": "Elige si el perfil es de particular o de empresa.",
+	"invoicing_legal_name_required": "Indica el nombre o la razón social.",
+	"invoicing_tax_id_invalid": "El NIF, NIE, CIF o NIF-IVA no es válido. Revísalo.",
+	"invoicing_address_required": "Indica la dirección.",
+	"invoicing_postal_code_required": "Indica el código postal.",
+	"invoicing_city_required": "Indica la ciudad.",
+	"invoicing_country_invalid": "Indica el país con dos letras (por ejemplo, ES)."
 }
