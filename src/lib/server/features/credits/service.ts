@@ -1,7 +1,7 @@
 // Servicio de `credits` (BE-FR-11.5, 12–18, 71; T123). Cada operación abre su propia transacción `BEGIN IMMEDIATE`, carga el
 // estado de la cuenta, aplica una transición del dominio puro (`domain/ledger.ts`) y persiste lo que devuelve. Como
 // better-sqlite3 es síncrono, dos operaciones no se pueden intercalar dentro de una transacción.
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction, type Tx } from '$lib/server/db/tx';
@@ -26,9 +26,10 @@ import {
 	canGrantWelcome,
 	canReserve,
 	type BucketKind,
-	type LedgerState
+	type LedgerState,
+	type LineType
 } from './domain/ledger';
-import { creditBuckets } from './schema';
+import { creditBuckets, creditMovements } from './schema';
 import {
 	accountHasWelcome,
 	closeHold,
@@ -628,4 +629,66 @@ export function applyChargeback(
 			debtAddedMicro: result.debtAddedMicro
 		};
 	});
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Movimientos del panel (BE-FR-49.3, UX-09; T262)
+
+export const MOVEMENTS_PAGE_SIZE = 25;
+
+export interface MovementRow {
+	readonly createdAt: EpochMs;
+	readonly type: LineType;
+	readonly amountMicro: number;
+	readonly appId: string | null;
+}
+
+export interface MovementsPage {
+	readonly rows: readonly MovementRow[];
+	readonly pagination: {
+		readonly page: number;
+		readonly hasPrevious: boolean;
+		readonly hasNext: boolean;
+	};
+}
+
+/**
+ * Movimientos de una cuenta, más recientes primero, de 25 en 25 (BE-FR-49.3). Sin motivos del administrador ni ids de bolsa:
+ * el panel no los muestra. El rango se da en milisegundos (el llamador lo calcula con el día de Madrid).
+ */
+export function movementsPage(
+	deps: CreditsDeps,
+	input: {
+		readonly userId: string;
+		readonly fromMs: EpochMs | null;
+		readonly toMs: EpochMs | null;
+		readonly appId: string | null;
+		readonly page: number;
+	}
+): MovementsPage {
+	const conditions = [eq(creditMovements.userId, input.userId)];
+	if (input.fromMs !== null) conditions.push(gte(creditMovements.createdAt, input.fromMs));
+	if (input.toMs !== null) conditions.push(lte(creditMovements.createdAt, input.toMs));
+	if (input.appId !== null) conditions.push(eq(creditMovements.appId, input.appId));
+	const found = deps.db
+		.select({
+			createdAt: creditMovements.createdAt,
+			type: creditMovements.type,
+			amountMicro: creditMovements.amountMicro,
+			appId: creditMovements.appId
+		})
+		.from(creditMovements)
+		.where(and(...conditions))
+		.orderBy(desc(creditMovements.createdAt), desc(creditMovements.id))
+		.limit(MOVEMENTS_PAGE_SIZE + 1)
+		.offset((input.page - 1) * MOVEMENTS_PAGE_SIZE)
+		.all();
+	return {
+		rows: found.slice(0, MOVEMENTS_PAGE_SIZE),
+		pagination: {
+			page: input.page,
+			hasPrevious: input.page > 1,
+			hasNext: found.length > MOVEMENTS_PAGE_SIZE
+		}
+	};
 }
