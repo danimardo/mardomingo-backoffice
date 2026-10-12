@@ -34,4 +34,8 @@ describe('splitVat (ES, 21 % incluido)', () => {
 	it('un país distinto de ES no se calcula: no se inventa un tratamiento fiscal', () => {
 		expect(() => splitVat({ totalEurCents: 1000, country: 'FR' })).toThrow(RangeError);
 	});
+
+	it('un total no positivo no se desglosa', () => {
+		expect(() => splitVat({ totalEurCents: 0, country: 'ES' })).toThrow(RangeError);
+	});
 });
