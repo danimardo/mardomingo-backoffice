@@ -6,6 +6,7 @@ import type { Db } from './db/client';
 import { immediateTransaction } from './db/tx';
 import { seedDisposableDomains } from './features/accounts';
 import { seedApps } from './features/apps';
+import { seedSync } from './features/sync';
 import { seedLegalDocuments } from './features/legal';
 import { seedPayments } from './features/payments';
 import type { IdGenerator } from './shared/ids';
@@ -14,6 +15,7 @@ export function seedDefaults(db: Db, clock: Clock, ids: IdGenerator): void {
 	immediateTransaction(db, (tx) => {
 		const now = clock.now();
 		seedApps(tx, now);
+		seedSync(tx, now);
 		seedPayments(tx, now);
 		seedLegalDocuments(tx, () => ids('ldoc'), now);
 		seedDisposableDomains(tx, now);
