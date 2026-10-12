@@ -45,10 +45,14 @@ test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ p
 
 test('@critical el inicio de sesión con datos erróneos da un error genérico', async ({ page }) => {
 	await page.goto('/login');
+	// Esperar a que la página esté lista antes de rellenar: si no, el envío puede ir antes de hidratar y no aparece el error.
+	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill('nadie@ejemplo.es');
 	await page.getByLabel('Contraseña', { exact: true }).fill('mal-escrita');
 
 	await page.getByRole('button', { name: 'Entrar' }).click();
+	// Sacar el ratón del botón: el mismo botón dispara la precarga de __data.json al pasar por encima (trampa de hover).
+	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 
 	await expect(page.getByRole('alert')).toContainText('Email o contraseña incorrectos.');
@@ -59,7 +63,12 @@ test('@critical la recuperación responde lo mismo exista o no el email', async 
 	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill('nadie@ejemplo.es');
 
+	// La respuesta de __data.json del envío debe completarse antes de terminar: si la prueba acaba antes, la petición se aborta.
+	const invalidated = page.waitForResponse((response) => response.url().includes('__data.json'));
 	await page.getByRole('button', { name: 'Enviar el enlace' }).click();
+	await invalidated;
+	// Sacar el ratón del botón antes de esperar (trampa de hover, igual que en el inicio de sesión).
+	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 
 	await expect(page.getByRole('status')).toContainText('Si la cuenta existe');
