@@ -1,5 +1,5 @@
 // E05 · `POST /api/v1/auth/resend-verification` (contracts/api-v1.md E05; BE-FR-02 CA3; T135). Responde siempre `202` sin
-// cuerpo: exista o no la cuenta, esté o no verificada. El límite por IP (`429`) llega con L09 (T205).
+// cuerpo: exista o no la cuenta, esté o no verificada. Al superar el límite por IP responde `429` con `Retry-After` (T205).
 import { apiFallback, apiRoute } from '$lib/server/api/handler';
 import { firstIssuePath, jsonBodyOf } from '$lib/server/api/body';
 import { validationErrorResponse } from '$lib/server/api/errors';

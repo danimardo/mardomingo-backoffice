@@ -30,6 +30,8 @@ declare module 'vitest' {
 		httpChatToken: string;
 		/** Token Bearer de una cuenta dedicada a los límites y al freno, que no comparte estado con la de chat (T208). */
 		httpRateToken: string;
+		/** Token Bearer de una tercera cuenta propia, para el límite de la app (V14). */
+		httpAppLimitToken: string;
 		/** Simulador de OpenRouter que usa el servidor construido (T178). */
 		openrouterMockUrl: string;
 		/** Simulador de Voxtral que usa el servidor construido (T187). */
@@ -105,7 +107,10 @@ export default async function setup(project: TestProject): Promise<() => Promise
 			LOG_LEVEL: 'debug',
 			MOCK_OPENROUTER_URL: openrouter.url,
 			MOCK_MISTRAL_URL: mistral.url,
-			BODY_SIZE_LIMIT: '10M'
+			BODY_SIZE_LIMIT: '10M',
+			// Como detrás del proxy de producción: la IP del cliente es la de X-Forwarded-For, a un salto (T208, T209).
+			ADDRESS_HEADER: 'x-forwarded-for',
+			XFF_DEPTH: '1'
 		},
 		stdio: 'ignore'
 	});
@@ -138,6 +143,14 @@ export default async function setup(project: TestProject): Promise<() => Promise
 		seed: 92
 	});
 	project.provide('httpRateToken', rateToken);
+	const appLimitToken = randomBytes(32).toString('hex');
+	seedChatAccount(join(DIR, 'app.db'), appLimitToken, {
+		id: 'usr_http_applimit',
+		email: 'applimit@ejemplo.es',
+		sessionId: 'ses_http_applimit',
+		seed: 93
+	});
+	project.provide('httpAppLimitToken', appLimitToken);
 	project.provide('openrouterMockUrl', openrouter.url);
 	project.provide('mistralMockUrl', mistral.url);
 	project.provide('httpDatabasePath', join(DIR, 'app.db'));

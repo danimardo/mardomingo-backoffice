@@ -5,6 +5,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { clientErrorReportSchema, CLIENT_ERROR_MAX_BYTES } from '$lib/schemas/client-error-report';
 import { getComposition } from '$lib/server/composition.cache';
 import { admitClientErrorReport } from '$lib/server/logging/client-errors.cache';
+import { clientIpOf } from '$lib/server/web/actions';
 
 const noContent = () => new Response(null, { status: 204 });
 
@@ -18,7 +19,8 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 	if (!report.success) return noContent();
 
 	const now = getComposition().clock.now();
-	if (!admitClientErrorReport(getClientAddress(), now)) return noContent();
+	// Sin IP conocida (falta la cabecera del proxy) los informes comparten un cubo: nunca dan error (T208).
+	if (!admitClientErrorReport(clientIpOf(getClientAddress) ?? 'sin-ip', now)) return noContent();
 
 	const { name, fingerprint, frames, routeId, version, count } = report.data;
 	locals.log.emit('client.error.reported', {
