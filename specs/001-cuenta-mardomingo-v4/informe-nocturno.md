@@ -135,9 +135,9 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 5. **Staging, privacidad (V13)**: comprueba que ni el texto ni el audio aparecen en la base ni en los logs.
 6. **Textos legales**: entrega los definitivos revisados por tu abogado (T079 y T092).
 
-## Lote L09 (parcial): versiones, mantenimiento y protecciones de la API
+## Lote L09 (cerrado el 2026-10-12, con dos huecos y un paso pendiente): versiones, mantenimiento y protecciones de la API
 
-**Estado (2026-10-12)**: T189 a T203 hechos; **T195 (checkpoint) abierto**. Lo verificado está abajo; lo que falta, al final.
+**Estado (2026-10-12)**: T189 a T208 hechos. **Lote cerrado** por decisión del propietario, con dos huecos documentados (402 diario y transcripción simultánea, no verificables en local). **T209 sigue abierto**: comprobación del proxy en staging, bloqueo del primer despliegue. T195 queda absorbido por T210. Lo verificado está abajo; lo que falta, al final.
 
 **Hecho y verificado**
 
