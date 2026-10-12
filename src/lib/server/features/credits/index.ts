@@ -28,6 +28,9 @@ import type { AuditDeps } from '$lib/server/features/audit';
 import type { BucketKind } from './domain/ledger';
 import { freeAccountsOpenHoldsMicro, realPurchaseUserIds, type ReleaseReason } from './repository';
 import { movementsPage, type MovementRow, type MovementsPage } from './service';
+import { movementRowsOf, type MovementFact } from './csv-rows';
+
+export { movementRowsOf, type MovementFact };
 import type { EpochMs } from '$lib/shared/time';
 
 export { balanceDto, welcomeDto, type BalanceDto, type WelcomeDto } from './presenters';

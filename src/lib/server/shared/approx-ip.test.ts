@@ -19,4 +19,23 @@ describe('approximateIp', () => {
 		expect(approximateIp('no-es-una-ip')).toBeNull();
 		expect(approximateIp('300.1.1.1')).toBeNull();
 	});
+
+	it('un octeto fuera de rango no es IPv4', () => {
+		expect(approximateIp('10.0.0.256')).toBeNull();
+	});
+
+	it('IPv6 con el “::” al principio o al final se expande bien', () => {
+		expect(approximateIp('::1')).toBe('0:0:0::/48');
+		expect(approximateIp('2001:db8::')).toBe('2001:db8:0::/48');
+	});
+
+	it('IPv6 sin “::” debe tener ocho grupos', () => {
+		expect(approximateIp('2001:db8:1:2:3:4:5')).toBeNull();
+	});
+
+	it('IPv6 con más de un “::” o con grupos que no son hexadecimales no sirve', () => {
+		expect(approximateIp('2001::db8::1')).toBeNull();
+		expect(approximateIp('2001:db8:zzzz::1')).toBeNull();
+		expect(approximateIp('1:2:3:4:5:6:7:8:9::')).toBeNull();
+	});
 });

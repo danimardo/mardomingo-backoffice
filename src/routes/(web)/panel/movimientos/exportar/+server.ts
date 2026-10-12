@@ -5,14 +5,14 @@ import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import { appNamesOf } from '$lib/server/features/apps';
-import { movementRowsOf, type MovementFact } from '$lib/server/features/credits/csv-rows';
+import { movementRowsOf, type MovementFact } from '$lib/server/features/credits';
 import { parsePanelFilters } from '$lib/schemas/common/filters';
 import { toCsv } from '$lib/server/shared/csv';
 import { addDays, madridMidnight } from '$lib/shared/dates';
 import { toEpochMs, type CivilDate } from '$lib/shared/time';
 import type { RequestHandler } from './$types';
 
-const HEADER = ['fecha', 'tipo', 'creditos', 'app'] as const;
+const HEADER = Object.freeze(['fecha', 'tipo', 'creditos', 'app'] as const);
 
 export const GET: RequestHandler = ({ locals, url }) => {
 	const access = accessFor(locals.user, 'verified');
