@@ -2,7 +2,7 @@
 // versión que se acepta es la vigente en ese momento: si cambió mientras el usuario leía el formulario, se rechaza
 // con LEGAL_VERSION_CHANGED y se le vuelven a mostrar los documentos.
 import { AppError } from '$lib/server/shared/errors';
-import type { Tx } from '$lib/server/db/tx';
+import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import type { Db } from '$lib/server/db/client';
 import type { Logger } from '$lib/server/logging/logger';
 import type { IdGenerator } from '$lib/server/shared/ids';
@@ -80,4 +80,41 @@ export function recordAcceptances(
 	}
 	deps.logger.emit('legal.acceptance.recorded', { count: input.accepted.length });
 	return input.accepted.length;
+}
+
+/**
+ * Registra la renuncia al desistimiento de una compra (BE-FR-26) y devuelve su id, que `payments` guarda en la compra.
+ * La versión debe ser la vigente; si no lo es, se rechaza con LEGAL_VERSION_CHANGED.
+ */
+export function recordWithdrawalWaiver(
+	deps: LegalDeps,
+	input: {
+		readonly userId: string;
+		readonly appId: string | null;
+		readonly ip: string | null;
+		readonly now: EpochMs;
+		readonly version: string;
+	}
+): string {
+	return immediateTransaction(deps.db, (tx) => {
+		const current = readCurrentVersion(deps.db, 'withdrawal_waiver', input.now);
+		if (current === undefined || current.version !== input.version) {
+			deps.logger.emit('legal.acceptance.rejected', {
+				reason: 'version_not_current',
+				errorCode: 'LEGAL_VERSION_CHANGED'
+			});
+			throw new AppError('LEGAL_VERSION_CHANGED');
+		}
+		const id = deps.ids('tac');
+		insertAcceptance(tx, {
+			id,
+			userId: input.userId,
+			document: 'withdrawal_waiver',
+			version: input.version,
+			acceptedAt: input.now,
+			ip: input.ip,
+			appId: input.appId
+		});
+		return id;
+	});
 }

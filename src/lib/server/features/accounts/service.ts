@@ -692,3 +692,22 @@ export function seedDisposableDomains(tx: Tx, now: EpochMs): void {
 export function instantOf(ms: number): EpochMs {
 	return toEpochMs(ms);
 }
+
+/**
+ * Bloquea una cuenta y cierra todas sus sesiones (BE-FR-28: contracargo). Con la cuenta bloqueada, `guardAccess` deniega el
+ * acceso. Idempotente: bloquear otra vez deja el mismo estado.
+ */
+export function blockAccount(
+	deps: { readonly db: Db; readonly logger: Logger },
+	input: { readonly userId: string; readonly reason: 'chargeback' }
+): void {
+	immediateTransaction(deps.db, (tx) => {
+		tx.update(user)
+			.set({ banned: true, banReason: input.reason })
+			.where(eq(user.id, input.userId))
+			.run();
+		tx.delete(session).where(eq(session.userId, input.userId)).run();
+	});
+	deps.logger.emit('accounts.user.blocked', { reason: input.reason });
+	deps.logger.emit('accounts.session.revoked', { reason: 'blocked' });
+}

@@ -1,0 +1,340 @@
+// Servicio de `payments` (BE-FR-23–28; T236). Compra, eventos del proveedor y reembolsos. Cada escritura va en su transacción
+// `BEGIN IMMEDIATE`; el saldo solo lo toca `credits` (una transacción propia por operación). Por eso el orden es el de la
+// idempotencia: primero se acredita (que ya es idempotente por `payment_id`) y después se marca la compra; si algo falla entre
+// medias, el reintento lo cierra sin acreditar dos veces.
+import type { PaymentsProvider, PaymentEvent } from '$lib/server/adapters/payments/provider';
+import type { AppEnv } from '$lib/server/config/env-schema';
+import type { Clock } from '$lib/server/adapters/clock/clock';
+import type { Db } from '$lib/server/db/client';
+import { immediateTransaction, type Tx } from '$lib/server/db/tx';
+import { getSetting, type AppsDeps } from '$lib/server/features/apps';
+import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
+import { blockAccount } from '$lib/server/features/accounts';
+import type { Credits } from '$lib/server/features/credits';
+import type { InvoicingService } from '$lib/server/features/invoicing';
+import { isOwnWithdrawalWaiver, type LegalDeps } from '$lib/server/features/legal';
+import type { Logger } from '$lib/server/logging/logger';
+import { AppError } from '$lib/server/shared/errors';
+import type { IdGenerator } from '$lib/server/shared/ids';
+import { toEpochMs } from '$lib/shared/time';
+import { toEurCents, toMicro, toPpm } from '$lib/shared/money';
+import { packCreditsMicro } from './domain/pack-credits';
+import { planRefund } from './domain/refund';
+import { splitVat } from './domain/vat';
+import {
+	findByAttempt,
+	findById,
+	findByProviderRef,
+	findPack,
+	insertPayment,
+	setRefundedEurCents,
+	setStatus,
+	type PaymentRow
+} from './repository';
+
+/** IVA de España incluido en el precio (BE-FR-25 CA5). */
+const VAT_RATE_PPM = 210_000;
+const COUNTRY = 'ES';
+
+export interface PaymentsDeps {
+	readonly db: Db;
+	readonly logger: Logger;
+	readonly clock: Clock;
+	readonly ids: IdGenerator;
+	readonly appEnv: AppEnv;
+	readonly apps: AppsDeps;
+	readonly provider: PaymentsProvider;
+	readonly credits: Credits;
+	readonly invoicing: InvoicingService;
+	readonly legal: LegalDeps;
+	readonly auditDeps: AuditDeps;
+}
+
+export interface PurchaseInput {
+	readonly userId: string;
+	/** Roles separados por comas, leídos del servidor (`user`, `tester`, `admin`). */
+	readonly role: string;
+	readonly attemptId: string;
+	readonly packId: string;
+	readonly wantsFullInvoice: boolean;
+	/** Id de la renuncia al desistimiento que `legal` acaba de registrar para esta compra (BE-FR-26). */
+	readonly withdrawalAcceptanceId: string;
+}
+
+export type PurchaseOutcome =
+	| { readonly status: 'completed'; readonly paymentId: string; readonly creditsMicro: number }
+	| { readonly status: 'pending'; readonly paymentId: string }
+	| { readonly status: 'repeated'; readonly paymentId: string };
+
+export type RefundOutcome =
+	| { readonly status: 'refunded'; readonly refundedEurCents: number }
+	| { readonly status: 'partially_refunded'; readonly refundedEurCents: number };
+
+function numberSetting(deps: PaymentsDeps, key: Parameters<typeof getSetting>[1]): number {
+	const value = getSetting(deps.apps, key);
+	if (typeof value !== 'number')
+		throw new AppError('INTERNAL_ERROR', { reason: 'setting_missing' });
+	return value;
+}
+
+/** Los testers y los administradores pueden comprar en simulado en producción (BE-FR-25 CA2). */
+function canBuySimulated(role: string): boolean {
+	const roles = role.split(',').map((item) => item.trim());
+	return roles.includes('tester') || roles.includes('admin');
+}
+
+/**
+ * Compra de un paquete (BE-FR-23, BE-FR-25). El cobro se crea antes de guardar la compra: si el proveedor no responde, no
+ * queda nada a medias. Con el proveedor simulado la compra se completa al instante; con uno real queda `pending` hasta su
+ * webhook.
+ */
+export function purchase(deps: PaymentsDeps, input: PurchaseInput): PurchaseOutcome {
+	if (
+		deps.provider.name === 'simulated' &&
+		deps.appEnv === 'production' &&
+		!canBuySimulated(input.role)
+	) {
+		throw new AppError('PURCHASE_NOT_AVAILABLE');
+	}
+	const repeated = findByAttempt(deps.db, input.userId, input.attemptId);
+	if (repeated !== undefined) {
+		deps.logger.emit('payments.purchase.duplicate', {});
+		return { status: 'repeated', paymentId: repeated.id };
+	}
+	const pack = findPack(deps.db, input.packId);
+	if (pack === undefined || !pack.active) throw new AppError('PACK_INACTIVE');
+	if (!isOwnWithdrawalWaiver(deps.db, input.userId, input.withdrawalAcceptanceId)) {
+		throw new AppError('VALIDATION_ERROR', { field: 'withdrawalAcceptanceId' });
+	}
+
+	const vat = splitVat({ totalEurCents: pack.priceEurCents, country: COUNTRY });
+	const creditsMicro = packCreditsMicro({
+		priceEurCents: pack.priceEurCents,
+		creditsPerEur: numberSetting(deps, 'credits_per_eur_purchase'),
+		bonusPpm: pack.bonusPpm
+	});
+	const paymentId = deps.ids('pay');
+	const checkout = deps.provider.createCheckout({ paymentId, amountEurCents: pack.priceEurCents });
+	if (!checkout.ok) {
+		deps.logger.emit('payments.purchase.failed', { reason: 'provider_unavailable' });
+		throw new AppError('PAYMENT_PROVIDER_ERROR');
+	}
+
+	const now = toEpochMs(deps.clock.now());
+	const inserted = immediateTransaction(deps.db, (tx) => {
+		// Dos intentos a la vez con el mismo `attempt_id`: solo uno inserta; el otro recibe la compra existente.
+		if (findByAttempt(tx, input.userId, input.attemptId) !== undefined) return false;
+		insertPayment(tx, {
+			id: paymentId,
+			userId: input.userId,
+			packId: pack.id,
+			attemptId: input.attemptId,
+			provider: deps.provider.name,
+			providerRef: checkout.providerRef,
+			status: 'pending',
+			amountEurCents: toEurCents(pack.priceEurCents),
+			baseEurCents: toEurCents(vat.baseEurCents),
+			vatEurCents: toEurCents(vat.vatEurCents),
+			vatRatePpm: toPpm(VAT_RATE_PPM),
+			country: COUNTRY,
+			creditsMicro: toMicro(creditsMicro),
+			wantsFullInvoice: input.wantsFullInvoice,
+			simulated: deps.provider.name === 'simulated',
+			withdrawalAcceptanceId: input.withdrawalAcceptanceId,
+			refundedEurCents: toEurCents(0),
+			createdAt: now,
+			updatedAt: now
+		});
+		return true;
+	});
+	if (!inserted) {
+		const existing = findByAttempt(deps.db, input.userId, input.attemptId);
+		deps.logger.emit('payments.purchase.duplicate', {});
+		return { status: 'repeated', paymentId: existing?.id ?? paymentId };
+	}
+
+	if (deps.provider.name !== 'simulated') return { status: 'pending', paymentId };
+	const row = findById(deps.db, paymentId);
+	if (row === undefined) throw new AppError('INTERNAL_ERROR', { reason: 'payment_missing' });
+	completePayment(deps, row);
+	return { status: 'completed', paymentId, creditsMicro };
+}
+
+/**
+ * Acredita una compra pendiente y la marca como completada. Si ya está completada, no hace nada: un evento repetido no
+ * acredita dos veces (BE-FR-24 CA1).
+ */
+function completePayment(deps: PaymentsDeps, row: PaymentRow): void {
+	deps.credits.grantPurchase({
+		userId: row.userId,
+		paymentId: row.id,
+		amountMicro: row.creditsMicro,
+		simulated: row.simulated
+	});
+	const now = toEpochMs(deps.clock.now());
+	immediateTransaction(deps.db, (tx) => {
+		setStatus(tx, row.id, 'completed', now, now);
+	});
+	deps.invoicing.issueForPayment({
+		paymentId: row.id,
+		userId: row.userId,
+		simulated: row.simulated,
+		kind: row.wantsFullInvoice ? 'full' : 'simplified',
+		amountEurCents: row.amountEurCents,
+		issueKey: `payment:${row.id}:initial`
+	});
+	deps.logger.emit('payments.purchase.completed', {});
+}
+
+/**
+ * Aplica los eventos de un webhook del proveedor (BE-FR-24). Un evento ya aplicado se registra como repetido y no cambia nada.
+ * Los reembolsos los inicia el administrador (BE-FR-27), así que `payment_refunded` no se aplica desde el proveedor.
+ */
+export function handleProviderEvents(deps: PaymentsDeps, body: unknown): void {
+	for (const event of deps.provider.handleWebhook(body)) {
+		applyEvent(deps, event);
+	}
+}
+
+function applyEvent(deps: PaymentsDeps, event: PaymentEvent): void {
+	const row = findByProviderRef(deps.db, event.providerRef);
+	if (row === undefined) return;
+	if (event.type === 'payment_completed') {
+		if (row.status !== 'pending') {
+			deps.logger.emit('payments.webhook.duplicate', {});
+			return;
+		}
+		completePayment(deps, row);
+		return;
+	}
+	if (event.type === 'chargeback_opened') {
+		if (row.status === 'chargeback') {
+			deps.logger.emit('payments.webhook.duplicate', {});
+			return;
+		}
+		applyChargeback(deps, row);
+	}
+}
+
+/**
+ * Contracargo (BE-FR-28): retira lo que quede de la compra, pasa el resto a deuda sin tope, rectifica la factura, bloquea la
+ * cuenta y marca la compra. `credits` no bloquea: lo hace `accounts` después, y la repetición no vuelve a empezar.
+ */
+function applyChargeback(deps: PaymentsDeps, row: PaymentRow): void {
+	deps.credits.applyChargeback({ userId: row.userId, paymentId: row.id });
+	const remainingEurCents = row.amountEurCents - row.refundedEurCents;
+	if (remainingEurCents > 0) {
+		deps.invoicing.correctPayment({
+			paymentId: row.id,
+			userId: row.userId,
+			simulated: row.simulated,
+			amountEurCents: remainingEurCents,
+			issueKey: `chargeback:${row.id}`
+		});
+	}
+	blockAccount({ db: deps.db, logger: deps.logger }, { userId: row.userId, reason: 'chargeback' });
+	const now = toEpochMs(deps.clock.now());
+	immediateTransaction(deps.db, (tx) => {
+		setStatus(tx, row.id, 'chargeback', now, row.completedAt);
+	});
+	deps.logger.emit('payments.chargeback.applied', {});
+}
+
+/** Créditos a retirar de un reembolso parcial, proporcionales al importe (redondeo hacia abajo). */
+function creditsForRefund(row: PaymentRow, amountEurCents: number): number {
+	return Number((BigInt(row.creditsMicro) * BigInt(amountEurCents)) / BigInt(row.amountEurCents));
+}
+
+/**
+ * Reembolso manual (BE-FR-27): motivo obligatorio, créditos retirados de la bolsa de la compra y rectificativa. La
+ * auditoría registra el cambio en la misma transacción que el importe devuelto.
+ */
+export function refund(
+	deps: PaymentsDeps,
+	input: {
+		readonly adminId: string;
+		readonly paymentId: string;
+		readonly amountEurCents: number;
+		readonly reason: string;
+	}
+): RefundOutcome {
+	const reason = input.reason.trim();
+	if (reason.length === 0) throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const row = findById(deps.db, input.paymentId);
+	if (row === undefined) throw new AppError('NOT_FOUND');
+	const creditsToWithdrawMicro = creditsForRefund(row, input.amountEurCents);
+	const plan = planRefund({
+		paidEurCents: row.amountEurCents,
+		alreadyRefundedEurCents: row.refundedEurCents,
+		amountEurCents: input.amountEurCents,
+		bucketRemainingMicro: row.creditsMicro,
+		creditsToWithdrawMicro
+	});
+	if (!plan.ok) {
+		deps.logger.emit('payments.refund.rejected', { reason: plan.reason });
+		if (plan.reason === 'amount_not_positive')
+			throw new AppError('VALIDATION_ERROR', { field: 'amount' });
+		throw new AppError('PAYMENT_NOT_REFUNDABLE');
+	}
+
+	const withdrawal = deps.credits.withdrawForRefund({
+		adminId: input.adminId,
+		userId: row.userId,
+		paymentId: row.id,
+		amountMicro: creditsToWithdrawMicro,
+		reason
+	});
+	if (!withdrawal.ok) {
+		deps.logger.emit('payments.refund.rejected', { reason: withdrawal.reason });
+		throw new AppError('PAYMENT_NOT_REFUNDABLE');
+	}
+
+	const now = toEpochMs(deps.clock.now());
+	immediateTransaction(deps.db, (tx: Tx) => {
+		setRefundedEurCents(tx, row.id, plan.newRefundedEurCents, now);
+		setStatus(tx, row.id, plan.newStatus, now, row.completedAt);
+		recordEntry(
+			tx,
+			{
+				adminId: input.adminId,
+				action: 'payments.refund',
+				entity: 'payment',
+				entityId: row.id,
+				before: { refundedEurCents: row.refundedEurCents },
+				after: { refundedEurCents: plan.newRefundedEurCents },
+				reason
+			},
+			deps.auditDeps
+		);
+	});
+	deps.invoicing.correctPayment({
+		paymentId: row.id,
+		userId: row.userId,
+		simulated: row.simulated,
+		amountEurCents: input.amountEurCents,
+		issueKey: `refund:${row.id}:${String(plan.newRefundedEurCents)}`
+	});
+	deps.logger.emit('payments.refund.applied', {});
+	return { status: plan.newStatus, refundedEurCents: plan.newRefundedEurCents };
+}
+
+export interface PaymentsService {
+	purchase(input: PurchaseInput): PurchaseOutcome;
+	handleProviderEvents(body: unknown): void;
+	refund(input: {
+		readonly adminId: string;
+		readonly paymentId: string;
+		readonly amountEurCents: number;
+		readonly reason: string;
+	}): RefundOutcome;
+}
+
+export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
+	return {
+		purchase: (input) => purchase(deps, input),
+		handleProviderEvents: (body) => {
+			handleProviderEvents(deps, body);
+		},
+		refund: (input) => refund(deps, input)
+	};
+}

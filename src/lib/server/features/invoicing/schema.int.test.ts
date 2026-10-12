@@ -5,7 +5,6 @@ import { creditsFixture, type CreditsFixture } from '../../../../../tests/builde
 import { acceptCurrentLegal } from '../../../../../tests/builders/chat-account';
 import { createIdGenerator } from '$lib/server/shared/ids';
 import { payments } from '$lib/server/features/payments/schema';
-import { invoices } from './schema';
 import { toEpochMs } from '$lib/shared/time';
 
 let fixture: CreditsFixture;
@@ -81,9 +80,9 @@ describe('invoices: unicidad y claves', () => {
 		insertInvoice({ id: 'inv_1', kind: 'simplified', amount: 500, series: 'A', number: '1' });
 
 		expect(
-			attempt(() =>
-				insertInvoice({ id: 'inv_2', kind: 'simplified', amount: 500, series: 'A', number: '1' })
-			)
+			attempt(() => {
+				insertInvoice({ id: 'inv_2', kind: 'simplified', amount: 500, series: 'A', number: '1' });
+			})
 		).toBe(false);
 	});
 
@@ -91,15 +90,15 @@ describe('invoices: unicidad y claves', () => {
 		insertInvoice({ id: 'inv_1', kind: 'simplified', amount: 500, issueKey: 'payment:x:initial' });
 
 		expect(
-			attempt(() =>
+			attempt(() => {
 				insertInvoice({
 					id: 'inv_2',
 					kind: 'simplified',
 					amount: 500,
 					number: '2',
 					issueKey: 'payment:x:initial'
-				})
-			)
+				});
+			})
 		).toBe(false);
 	});
 });
@@ -109,37 +108,41 @@ describe('invoices: CHECK', () => {
 		insertInvoice({ id: 'inv_1', kind: 'simplified', amount: 500 });
 
 		expect(
-			attempt(() =>
-				insertInvoice({ id: 'inv_c1', kind: 'corrective', amount: -500, corrects: null })
-			)
+			attempt(() => {
+				insertInvoice({ id: 'inv_c1', kind: 'corrective', amount: -500, corrects: null });
+			})
 		).toBe(false);
 		expect(
-			attempt(() =>
-				insertInvoice({ id: 'inv_c2', kind: 'corrective', amount: 500, corrects: 'inv_1' })
-			)
+			attempt(() => {
+				insertInvoice({ id: 'inv_c2', kind: 'corrective', amount: 500, corrects: 'inv_1' });
+			})
 		).toBe(false);
 		expect(
-			attempt(() =>
-				insertInvoice({ id: 'inv_c3', kind: 'corrective', amount: -500, corrects: 'inv_1' })
-			)
+			attempt(() => {
+				insertInvoice({ id: 'inv_c3', kind: 'corrective', amount: -500, corrects: 'inv_1' });
+			})
 		).toBe(true);
 	});
 
 	it('una factura completa exige datos fiscales en el snapshot', () => {
 		expect(
-			attempt(() => insertInvoice({ id: 'inv_f1', kind: 'full', amount: 500, snapshot: null }))
+			attempt(() => {
+				insertInvoice({ id: 'inv_f1', kind: 'full', amount: 500, snapshot: null });
+			})
 		).toBe(false);
 		expect(
-			attempt(() =>
-				insertInvoice({ id: 'inv_f2', kind: 'full', amount: 500, snapshot: '{"legalName":"Ana"}' })
-			)
+			attempt(() => {
+				insertInvoice({ id: 'inv_f2', kind: 'full', amount: 500, snapshot: '{"legalName":"Ana"}' });
+			})
 		).toBe(true);
 	});
 
 	it('el tipo de factura debe ser simplificada, completa o rectificativa', () => {
-		expect(attempt(() => insertInvoice({ id: 'inv_x', kind: 'proforma', amount: 500 }))).toBe(
-			false
-		);
+		expect(
+			attempt(() => {
+				insertInvoice({ id: 'inv_x', kind: 'proforma', amount: 500 });
+			})
+		).toBe(false);
 	});
 });
 

@@ -52,3 +52,20 @@ export function insertDocument(
 export function insertAcceptance(tx: Tx, row: typeof termsAcceptances.$inferInsert): void {
 	tx.insert(termsAcceptances).values(row).onConflictDoNothing().run();
 }
+
+/** ¿La renuncia es una aceptación de desistimiento de esta cuenta? Sin ella, la compra no se puede registrar (BE-FR-26). */
+export function isOwnWithdrawalWaiver(db: Db | Tx, userId: string, acceptanceId: string): boolean {
+	return (
+		db
+			.select({ id: termsAcceptances.id })
+			.from(termsAcceptances)
+			.where(
+				and(
+					eq(termsAcceptances.id, acceptanceId),
+					eq(termsAcceptances.userId, userId),
+					eq(termsAcceptances.document, 'withdrawal_waiver')
+				)
+			)
+			.get() !== undefined
+	);
+}
