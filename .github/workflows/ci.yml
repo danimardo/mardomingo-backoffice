@@ -47,6 +47,10 @@ jobs:
       - name: 1. Instalar dependencias
         run: pnpm install --frozen-lockfile
 
+      # ffmpeg y ffprobe: la transcripción y la suite HTTP de medios los usan (L08). No vienen garantizados en la imagen.
+      - name: 1. Instalar ffmpeg y ffprobe
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg && ffmpeg -version | head -1 && ffprobe -version | head -1
+
       # 2. Lint completo (Prettier y ESLint sin avisos).
       - name: 2. Lint
         run: pnpm lint
