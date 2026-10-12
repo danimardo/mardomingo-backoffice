@@ -61,6 +61,7 @@ Los scripts son los de la constitución («Scripts estándar») y `Historias.md`
 | `pnpm check`                                                               | `svelte-kit sync` + `svelte-check` sin avisos                                                    |
 | `pnpm lint`                                                                | Prettier + ESLint sin avisos (nivel historia, PR y CI)                                           |
 | `pnpm lint:changed`                                                        | ESLint solo sobre lo modificado (nivel lote)                                                     |
+| `pnpm verify:batch`                                                        | Cierre de lote: Prettier, lint:changed, check, arquitectura, tests afectados y dominio           |
 | `pnpm lint:tokens`                                                         | Sin colores literales fuera de los tokens                                                        |
 | `pnpm test` / `pnpm test:coverage`                                         | Vitest: unit, componente e integración (sin `http`)                                              |
 | `pnpm test:related <ficheros>`                                             | Tests afectados por un cambio (nivel edición)                                                    |

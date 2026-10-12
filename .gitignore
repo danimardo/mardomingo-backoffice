@@ -41,3 +41,6 @@ Thumbs.db
 
 # Temporales de las pruebas (HTTP, integración y depuración).
 /tests/.tmp/
+
+# Historial local de verificación (no se versiona)
+.local/

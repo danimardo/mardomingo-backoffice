@@ -14,6 +14,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
 		"lint": "prettier --check . && eslint src tests --no-error-on-unmatched-pattern --max-warnings 0 --concurrency auto && eslint . --ignore-pattern \"src/**\" --ignore-pattern \"tests/**\" --max-warnings 0",
 		"lint:changed": "node scripts/lint-changed.mjs",
+		"verify:batch": "node scripts/verify-batch.mjs",
 		"lint:tokens": "node scripts/lint-tokens.mjs",
 		"format": "prettier --write .",
 		"test": "vitest run --project unit --project component --project integration",
