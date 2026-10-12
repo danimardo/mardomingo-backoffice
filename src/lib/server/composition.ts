@@ -21,6 +21,7 @@ import { createFfprobe } from './adapters/ffprobe/prober';
 import { createFfmpeg } from './adapters/ffmpeg/converter';
 import { tmpdir } from 'node:os';
 import type { AuditDeps } from './features/audit';
+import type { SyncDeps } from './features/sync';
 import { supportEmail, type AppsDeps } from './features/apps';
 import { createCredits, type Credits } from './features/credits';
 import { createProtectionsRuntime } from './features/protections';
@@ -48,6 +49,7 @@ export interface Composition {
 	readonly accounts: Accounts;
 	readonly apps: AppsDeps;
 	readonly legal: LegalDeps;
+	readonly sync: SyncDeps;
 	readonly credits: Credits;
 	readonly pricing: PricingDeps;
 	readonly ai: AiDeps;
@@ -93,6 +95,7 @@ export function createComposition(
 
 	const apps: AppsDeps = { db, logger, clock, ids };
 	const legal: LegalDeps = { db, logger, ids };
+	const sync: SyncDeps = { db, clock, logger, apps, audit: { clock, ids, logger } };
 	const credits = createCredits({
 		db,
 		logger,
@@ -182,6 +185,7 @@ export function createComposition(
 		accounts,
 		apps,
 		legal,
+		sync,
 		credits,
 		pricing,
 		ai,

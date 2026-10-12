@@ -835,3 +835,10 @@ export function appStatusOf(
 		announcements: announcementsFor(deps, input)
 	};
 }
+
+/** Esquema de sincronización de la app: categorías y estrategias que el documento debe respetar (BE-FR-39). */
+export function syncSchemaOf(deps: AppsDeps, appId: string): SyncSchema {
+	const app = readApp(deps.db, deps.logger, appId);
+	if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
+	return app.syncSchema;
+}

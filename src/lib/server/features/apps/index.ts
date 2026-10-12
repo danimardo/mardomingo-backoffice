@@ -40,3 +40,4 @@ export { APPS_LOG_EVENTS, type AppsLogFields } from './events';
 
 export { totalTimeoutMs, fitWithin, type TimedAttempt } from './domain/total-timeout';
 export { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
+export { syncSchemaOf } from './service';

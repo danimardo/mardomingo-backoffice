@@ -3,7 +3,7 @@
 export type SyncCategory =
 	| { readonly strategy: 'items'; readonly key: string; readonly tombstone_ttl_days: number }
 	| { readonly strategy: 'block' }
-	| { readonly strategy: 'keyed'; readonly keys?: readonly string[] };
+	| { readonly strategy: 'keyed'; readonly keys?: readonly string[] | undefined };
 
 export interface SyncSchema {
 	readonly categories: Readonly<Record<string, SyncCategory>>;
