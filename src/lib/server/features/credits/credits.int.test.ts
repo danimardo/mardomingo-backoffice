@@ -156,7 +156,12 @@ describe('cobro con deuda (BE-FR-17, D2, D8)', () => {
 			realCostMicro: 1205 * CREDIT
 		});
 
-		expect(charge).toEqual({ ok: true, chargedMicro: 1200 * CREDIT, absorbedMicro: 5 * CREDIT });
+		expect(charge).toEqual({
+			ok: true,
+			chargedMicro: 1200 * CREDIT,
+			absorbedMicro: 5 * CREDIT,
+			lowBalance: null
+		});
 		expect(balanceRow(userId)?.debtMicro).toBe(200 * CREDIT);
 		expect(fixture.credits.getBalance(userId)).toMatchObject({
 			totalMicro: -200 * CREDIT,

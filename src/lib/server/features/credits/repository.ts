@@ -159,6 +159,34 @@ export function movementExistsForPayment(db: Db | Tx, paymentId: string, type: L
 	);
 }
 
+/** Umbral de saldo bajo de la cuenta (nulo = aviso desactivado) y si ya se avisó (BE-FR-49.7). */
+export function lowBalanceStateOf(
+	db: Db | Tx,
+	userId: string
+): { readonly thresholdMicro: number | null; readonly notified: boolean } {
+	const row = db
+		.select({
+			threshold: userBalances.lowBalanceThresholdMicro,
+			notified: userBalances.lowBalanceNotified
+		})
+		.from(userBalances)
+		.where(eq(userBalances.userId, userId))
+		.get();
+	return { thresholdMicro: row?.threshold ?? null, notified: row?.notified ?? false };
+}
+
+export function setLowBalanceNotified(
+	tx: Tx,
+	userId: string,
+	notified: boolean,
+	now: EpochMs
+): void {
+	tx.update(userBalances)
+		.set({ lowBalanceNotified: notified, updatedAt: now })
+		.where(eq(userBalances.userId, userId))
+		.run();
+}
+
 /** Marca la cuenta con compra real, sin tocar su deuda ni sus bolsas (BE-FR-11 CA2). */
 export function setRealPurchase(tx: Tx, userId: string, now: EpochMs): void {
 	tx.insert(userBalances)

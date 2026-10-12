@@ -21,6 +21,7 @@ export interface CreditsLogFields {
 	'credits.adjustment.rejected': { reason: 'exceeds_available' };
 	'credits.expiry.applied': { count: number };
 	'credits.refund.applied': Record<string, never>;
+	'credits.low_balance.crossed': { status: 'notified' | 'rearmed' };
 	'credits.chargeback.applied': Record<string, never>;
 }
 
@@ -46,6 +47,7 @@ export const CREDITS_LOG_EVENTS = Object.freeze({
 		level: 'info',
 		msg: 'Reembolso aplicado sobre la bolsa de la compra'
 	},
+	'credits.low_balance.crossed': { level: 'info', msg: 'Saldo cruza el umbral de aviso' },
 	'credits.chargeback.applied': {
 		level: 'warn',
 		msg: 'Contracargo aplicado: saldo retirado y deuda sin tope'
