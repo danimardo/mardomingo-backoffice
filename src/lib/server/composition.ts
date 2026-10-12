@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os';
 import type { AuditDeps } from './features/audit';
 import { supportEmail, type AppsDeps } from './features/apps';
 import { createCredits, type Credits } from './features/credits';
+import { createProtectionsRuntime } from './features/protections';
 import { type PricingDeps } from './features/pricing';
 import type { LegalDeps } from './features/legal';
 import type { AlertDeps, NotificationsDeps } from './features/notifications';
@@ -144,6 +145,7 @@ export function createComposition(
 	};
 	const ai: AiDeps = {
 		db,
+		protections: createProtectionsRuntime(),
 		logger,
 		clock,
 		ids,

@@ -20,7 +20,7 @@ import {
 } from './service';
 import type { AuditDeps } from '$lib/server/features/audit';
 import type { BucketKind } from './domain/ledger';
-import type { ReleaseReason } from './repository';
+import { freeAccountsOpenHoldsMicro, realPurchaseUserIds, type ReleaseReason } from './repository';
 import type { EpochMs } from '$lib/shared/time';
 
 export { balanceDto, welcomeDto, type BalanceDto, type WelcomeDto } from './presenters';
@@ -80,6 +80,10 @@ export interface Credits {
 	}): AdjustOutcome;
 	/** Saldo: total, reservado y disponible (BE-FR-71 CA2). */
 	getBalance(userId: string): BalanceView;
+	/** Cuentas de la lista que tienen compra real; el resto son cuentas sin compras reales (BE-FR-11 CA2). */
+	realPurchaseUserIds(userIds: readonly string[]): ReadonlySet<string>;
+	/** Micro-créditos reservados en curso de las cuentas sin compra real (BE-FR-46 CA1). */
+	freeAccountsOpenHoldsMicro(): number;
 	/** Bolsa de bienvenida de la cuenta, para W19. */
 	welcomeOf(
 		userId: string
@@ -98,6 +102,8 @@ export function createCredits(config: CreditsConfig): Credits {
 		expireBuckets: () => expireBuckets(deps),
 		adjust: (input) => adjust(deps, input),
 		getBalance: (userId) => getBalance(deps, userId),
+		realPurchaseUserIds: (userIds) => realPurchaseUserIds(deps.db, userIds),
+		freeAccountsOpenHoldsMicro: () => freeAccountsOpenHoldsMicro(deps.db),
 		welcomeOf: (userId) => welcomeOf(deps, userId)
 	};
 }

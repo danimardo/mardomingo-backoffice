@@ -84,6 +84,13 @@ describe('reservas bajo concurrencia (BE-FR-71 CA1, SC-002)', () => {
 	it('[BE-FR-71/CA1] con saldo para tres operaciones, veinte reservas simultáneas dan exactamente tres', async () => {
 		const userId = fixture.addUser('usr_a');
 		fixture.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-uno' });
+		// Esta prueba mide el saldo bajo concurrencia. El tope diario de cuentas sin compra real tiene sus propias pruebas
+		// (bloque «tope diario»), así que aquí la cuenta tiene compra real y queda exenta del tope.
+		fixture.db
+			.update(userBalances)
+			.set({ hasRealPurchase: true })
+			.where(eq(userBalances.userId, userId))
+			.run();
 		const operations = Array.from({ length: 20 }, () =>
 			insertInFlightOperation(fixture.db, { userId })
 		);
@@ -376,5 +383,84 @@ describe('eventos (Historias 15.19)', () => {
 			}
 		}
 		expect(JSON.stringify(credit)).not.toContain('usr_a@ejemplo.es');
+	});
+});
+
+describe('tope diario de cuentas sin compra real (FR-022, BE-FR-11.6; T201)', () => {
+	function reserveFor(userId: string, amountMicro: number) {
+		return fixture.credits.reserve({
+			userId,
+			appId: SEEDED_APP_ID,
+			operationId: insertInFlightOperation(fixture.db, { userId }),
+			amountMicro
+		});
+	}
+
+	function grantedAccount(id: string): string {
+		const userId = fixture.addUser(id);
+		fixture.credits.grantWelcome({ userId, emailNormalizedHash: `hash-${id}` });
+		return userId;
+	}
+
+	it('cobros del día, reservas activas y la nueva no pueden superar el tope de 400 créditos', () => {
+		const userId = grantedAccount('usr_a');
+		const first = reserveFor(userId, 250 * CREDIT);
+		if (!first.ok) throw new Error('la primera reserva debía caber');
+		fixture.credits.chargeAndRelease({ holdId: first.holdId, realCostMicro: 250 * CREDIT });
+
+		expect(reserveFor(userId, 200 * CREDIT)).toEqual({ ok: false, reason: 'daily_free_limit' });
+		expect(reserveFor(userId, 150 * CREDIT).ok).toBe(true);
+		expect(reserveFor(userId, 1)).toEqual({ ok: false, reason: 'daily_free_limit' });
+	});
+
+	it('el rechazo se registra con su motivo y sin importes', () => {
+		const userId = grantedAccount('usr_a');
+		const first = reserveFor(userId, 250 * CREDIT);
+		if (!first.ok) throw new Error('la primera reserva debía caber');
+		fixture.credits.chargeAndRelease({ holdId: first.holdId, realCostMicro: 250 * CREDIT });
+
+		reserveFor(userId, 200 * CREDIT);
+
+		expect(eventsNamed(fixture.logger, 'credits.hold.rejected').at(-1)?.fields).toEqual({
+			reason: 'daily_free_limit'
+		});
+	});
+
+	it('el corte es el día civil de Madrid: a las 23:59 cuenta el día anterior y a las 00:30 ya no', () => {
+		const userId = grantedAccount('usr_a');
+		const first = reserveFor(userId, 250 * CREDIT);
+		if (!first.ok) throw new Error('la primera reserva debía caber');
+		fixture.credits.chargeAndRelease({ holdId: first.holdId, realCostMicro: 250 * CREDIT });
+
+		// 2026-10-11 21:59 UTC es 23:59 en Madrid (CEST): sigue siendo el mismo día.
+		fixture.clock.set(Date.UTC(2026, 9, 11, 21, 59, 0));
+		expect(reserveFor(userId, 200 * CREDIT)).toEqual({ ok: false, reason: 'daily_free_limit' });
+
+		// 2026-10-11 22:30 UTC es 00:30 del 12 en Madrid: día nuevo, el tope vuelve a estar libre.
+		fixture.clock.set(Date.UTC(2026, 9, 11, 22, 30, 0));
+		expect(reserveFor(userId, 200 * CREDIT).ok).toBe(true);
+	});
+
+	it('una cuenta con compra real queda exenta del tope', () => {
+		const userId = grantedAccount('usr_a');
+		const first = reserveFor(userId, 250 * CREDIT);
+		if (!first.ok) throw new Error('la primera reserva debía caber');
+		fixture.credits.chargeAndRelease({ holdId: first.holdId, realCostMicro: 250 * CREDIT });
+		fixture.db
+			.update(userBalances)
+			.set({ hasRealPurchase: true })
+			.where(eq(userBalances.userId, userId))
+			.run();
+
+		expect(reserveFor(userId, 450 * CREDIT).ok).toBe(true);
+	});
+
+	it('el saldo insuficiente se sigue respondiendo como tal, antes que el tope', () => {
+		const userId = fixture.addUser('usr_sin_saldo');
+
+		expect(reserveFor(userId, 1 * CREDIT)).toMatchObject({
+			ok: false,
+			reason: 'insufficient_balance'
+		});
 	});
 });

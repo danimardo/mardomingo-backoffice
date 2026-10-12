@@ -5,7 +5,8 @@ import type { LogEventMeta } from '$lib/server/logging/events';
 export type EmailReason = 'verification' | 'password_reset' | 'password_changed' | 'admin_alert';
 
 /** Tipo de alerta al administrador, sin la clave (que puede llevar ids de usuario). */
-export type AlertType = 'fx_stale' | 'model_retired' | 'model_price' | 'flagged_threshold';
+export type AlertType =
+	'fx_stale' | 'model_retired' | 'model_price' | 'flagged_threshold' | 'global_brake';
 
 export interface NotificationsLogFields {
 	'notifications.email.sent': { reason: EmailReason };

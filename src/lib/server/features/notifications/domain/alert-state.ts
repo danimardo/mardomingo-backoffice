@@ -4,13 +4,18 @@
 
 /** Claves de alerta: `fx_stale` (L06), `model:<id>:retired` y `model:<id>:price` (L07), `flagged:<usuario>:<día>` (L07). */
 export type AlertKey =
-	'fx_stale' | `model:${string}:retired` | `model:${string}:price` | `flagged:${string}:${string}`;
+	| 'fx_stale'
+	| `model:${string}:retired`
+	| `model:${string}:price`
+	| `flagged:${string}:${string}`
+	| `global_brake:${string}`;
 
 export const alertKeys = Object.freeze({
 	fxStale: (): AlertKey => 'fx_stale',
 	modelRetired: (modelId: string): AlertKey => `model:${modelId}:retired`,
 	modelPrice: (modelId: string): AlertKey => `model:${modelId}:price`,
-	flagged: (userId: string, day: string): AlertKey => `flagged:${userId}:${day}`
+	flagged: (userId: string, day: string): AlertKey => `flagged:${userId}:${day}`,
+	globalBrake: (day: string): AlertKey => `global_brake:${day}`
 });
 
 /** Fila de `alerts_state`: si la alerta está activa y cuándo se envió por última vez. */

@@ -57,6 +57,13 @@
       "when": 1791776600338,
       "tag": "0007_anuncios_apps",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791780399396,
+      "tag": "0008_protection_state",
+      "breakpoints": true
     }
   ]
 }

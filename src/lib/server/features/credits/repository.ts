@@ -1,6 +1,6 @@
 // Acceso a las tablas de `credits` (T123). Solo lee y escribe filas; ninguna regla vive aquí (eso es `domain/ledger.ts`).
 // Las escrituras reciben el `Tx` de la transacción `BEGIN IMMEDIATE` que abre el servicio.
-import { and, eq, gt, isNull, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toMicro } from '$lib/shared/money';
@@ -268,6 +268,52 @@ export function openHolds(
 /** Suma de las reservas abiertas de una cuenta (D5). */
 export function reservedOf(db: Db | Tx, userId: string): number {
 	return openHolds(db, { userId }).reduce((sum, hold) => sum + hold.amountMicro, 0);
+}
+
+/** Cobros de uso desde `sinceMs` en todas las apps. Los movimientos de uso son negativos; aquí se devuelven en positivo. */
+export function usageSince(db: Db | Tx, userId: string, sinceMs: EpochMs): number {
+	const row = db
+		.select({ total: sql<number>`coalesce(sum(${creditMovements.amountMicro}), 0)` })
+		.from(creditMovements)
+		.where(
+			and(
+				eq(creditMovements.userId, userId),
+				eq(creditMovements.type, 'usage'),
+				gte(creditMovements.createdAt, sinceMs)
+			)
+		)
+		.get();
+	return -(row?.total ?? 0);
+}
+
+/** Cuentas de la lista que tienen compra real (BE-FR-11 CA2). Las demás son cuentas sin compras reales. */
+export function realPurchaseUserIds(db: Db | Tx, userIds: readonly string[]): Set<string> {
+	if (userIds.length === 0) return new Set();
+	const rows = db
+		.select({ userId: userBalances.userId })
+		.from(userBalances)
+		.where(and(inArray(userBalances.userId, [...userIds]), eq(userBalances.hasRealPurchase, true)))
+		.all();
+	return new Set(rows.map((row) => row.userId));
+}
+
+/** Micro-créditos reservados en curso de las cuentas sin compra real (BE-FR-46 CA1). */
+export function freeAccountsOpenHoldsMicro(db: Db | Tx): number {
+	const holds = openHolds(db);
+	const paying = realPurchaseUserIds(db, [...new Set(holds.map((hold) => hold.userId))]);
+	return holds
+		.filter((hold) => !paying.has(hold.userId))
+		.reduce((sum, hold) => sum + hold.amountMicro, 0);
+}
+
+/** Si la cuenta tiene una compra real (BE-FR-11 CA2). Sin fila de saldo, no la tiene. */
+export function hasRealPurchaseOf(db: Db | Tx, userId: string): boolean {
+	const row = db
+		.select({ flag: userBalances.hasRealPurchase })
+		.from(userBalances)
+		.where(eq(userBalances.userId, userId))
+		.get();
+	return row?.flag === true;
 }
 
 export function closeHold(tx: Tx, id: string, reason: ReleaseReason, now: EpochMs): void {

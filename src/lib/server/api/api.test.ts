@@ -46,6 +46,14 @@ describe('formato de error 7.1', () => {
 		expect(await response.json()).toMatchObject({ error: { details: { resource: 'app' } } });
 	});
 
+	it('un límite de frecuencia responde 429 con Retry-After en segundos (BE-FR-43)', async () => {
+		const response = appErrorResponse(new AppError('RATE_LIMITED', { retryAfterSeconds: 42 }));
+
+		expect(response.status).toBe(429);
+		expect(response.headers.get('Retry-After')).toBe('42');
+		expect(await response.json()).toMatchObject({ error: { details: { retryAfterSeconds: 42 } } });
+	});
+
 	it('una validación indica solo el campo, nunca el valor recibido', async () => {
 		const response = validationErrorResponse('messages.1.content');
 		const text = await response.text();
