@@ -250,7 +250,7 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 
 **Pendiente**
 
-- **T154 (piloto de mutación, parcial)**: Stryker no produce resultados válidos en este proyecto. Con el runner de Vitest por proyectos, la cobertura por prueba no llega a los mutantes (`covered 0`), y la ejecución completa agota el tiempo inicial. La configuración (`stryker.config.mjs`) carga el plugin explícitamente, pero la integración no está resuelta. Hace falta investigarla antes de dar el piloto por hecho.
+- **T154 (piloto de mutación, parcial)**: Stryker no produce resultados válidos en este proyecto. Con el runner de Vitest por proyectos, la cobertura por prueba no llega a los mutantes (`covered 0`), y la ejecución completa agota el tiempo inicial. La configuración (`stryker.config.mjs`) carga el plugin explícitamente, pero la integración no está resuelta. Hace falta investigarla antes de dar el piloto por hecho. Intento acotado (2026-10-12): con una configuración de Vitest de un solo proyecto (unitarias, 46 pruebas) y con la selección por relación desactivada (426 pruebas), el resultado es el mismo: ningún mutante recibe pruebas (`Ran 0.00 tests per mutant`) y todo queda como vivo. El problema está en el runner de Stryker con este setup, no en el número de proyectos ni en la selección. Queda pendiente una investigación dedicada o una alternativa; no se ha cambiado ninguna configuración.
 - **Composición**: `pricing` y `alerts` todavía no están cableados en `composition.ts`; los necesita L07 (cobro del chat).
 - **Tarea `fx-ecb` (L14)** y **interfaz del valor manual (L13)**: fuera de este lote.
 
