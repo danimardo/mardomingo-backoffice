@@ -54,6 +54,7 @@ import {
 	listAnnouncementCandidates,
 	listOperations,
 	readAppBySlug,
+	readAppUpdatedAt,
 	readOperation,
 	readOperationById,
 	readSettings,
@@ -834,6 +835,13 @@ export function appStatusOf(
 		supportEmail: supportEmail(deps),
 		announcements: announcementsFor(deps, input)
 	};
+}
+
+/** Fecha de última modificación del esquema de la app, para la caché de `sync`. */
+export function syncSchemaStampOf(deps: AppsDeps, appId: string): number {
+	const updatedAt = readAppUpdatedAt(deps.db, appId);
+	if (updatedAt === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
+	return updatedAt;
 }
 
 /** Esquema de sincronización de la app: categorías y estrategias que el documento debe respetar (BE-FR-39). */

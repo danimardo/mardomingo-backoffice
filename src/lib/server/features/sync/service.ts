@@ -6,7 +6,12 @@ import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
-import { getEffectiveConfig, syncSchemaOf, type AppsDeps } from '$lib/server/features/apps';
+import {
+	getEffectiveConfig,
+	syncSchemaOf,
+	syncSchemaStampOf,
+	type AppsDeps
+} from '$lib/server/features/apps';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
@@ -27,6 +32,7 @@ import {
 	replaceIfRevision,
 	writeDefaults
 } from './repository';
+import { cachedSyncSchema, storeSyncSchema } from './document-schema.cache';
 
 export interface SyncDeps {
 	readonly db: Db;
@@ -39,7 +45,13 @@ export interface SyncDeps {
 const KB = 1024;
 
 function schemaAndLimit(deps: SyncDeps, appId: string): { schema: SyncSchema; maxBytes: number } {
-	const schema = syncSchemaOf(deps.apps, appId);
+	// La fecha de la app decide si el esquema cacheado sirve; si no, se relee y se guarda con esa misma fecha.
+	const stamp = syncSchemaStampOf(deps.apps, appId);
+	let schema = cachedSyncSchema(appId, stamp);
+	if (schema === undefined) {
+		schema = syncSchemaOf(deps.apps, appId);
+		storeSyncSchema(appId, stamp, schema);
+	}
 	const maxKb = getEffectiveConfig(deps.apps, { appId }).settings.max_sync_doc_kb;
 	return { schema, maxBytes: maxKb * KB };
 }

@@ -74,6 +74,12 @@ export function readApp(db: Db, logger: Logger, id: string): AppRow | undefined 
 	return validatedApp(row, logger);
 }
 
+/** Fecha de última modificación de la app, sin validar la fila: sirve para saber si un esquema cacheado sigue vigente. */
+export function readAppUpdatedAt(db: Db, id: string): number | undefined {
+	return db.select({ updatedAt: apps.updatedAt }).from(apps).where(eq(apps.id, id)).get()
+		?.updatedAt;
+}
+
 export function readAppBySlug(db: Db, logger: Logger, slug: string): AppRow | undefined {
 	const row = readGuarded(logger, 'apps', () =>
 		db.select().from(apps).where(eq(apps.slug, slug)).get()
