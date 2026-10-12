@@ -22,6 +22,7 @@ import { packCreditsMicro } from './domain/pack-credits';
 import { planRefund } from './domain/refund';
 import { splitVat } from './domain/vat';
 import {
+	activePacks,
 	findByAttempt,
 	findById,
 	findByProviderRef,
@@ -318,6 +319,71 @@ export function refund(
 	return { status: plan.newStatus, refundedEurCents: plan.newRefundedEurCents };
 }
 
+/** Paquete a la venta, con los créditos ya calculados con la tasa vigente (W20, BE-FR-23). */
+export interface SalePack {
+	readonly id: string;
+	readonly name: string;
+	readonly priceCents: number;
+	readonly bonusPct: number;
+	readonly creditsMicro: number;
+}
+
+export function packsForSale(deps: PaymentsDeps): SalePack[] {
+	const creditsPerEur = numberSetting(deps, 'credits_per_eur_purchase');
+	return activePacks(deps.db).map((pack) => ({
+		id: pack.id,
+		name: pack.name,
+		priceCents: pack.priceEurCents,
+		bonusPct: pack.bonusPpm / 10_000,
+		creditsMicro: packCreditsMicro({
+			priceEurCents: pack.priceEurCents,
+			creditsPerEur,
+			bonusPpm: pack.bonusPpm
+		})
+	}));
+}
+
+/** Disponibilidad de la compra para un rol: en producción simulada, solo testers y administradores (BE-FR-25 CA2, UX-06). */
+export function purchaseAvailability(
+	deps: PaymentsDeps,
+	role: string
+): { readonly canPurchase: boolean; readonly reason: 'coming_soon' | null } {
+	const blocked =
+		deps.provider.name === 'simulated' && deps.appEnv === 'production' && !canBuySimulated(role);
+	return blocked
+		? { canPurchase: false, reason: 'coming_soon' }
+		: { canPurchase: true, reason: null };
+}
+
+/** Detalle de una compra del propio usuario (W21). Una compra ajena no existe para él. */
+export interface PurchaseView {
+	readonly packName: string;
+	readonly priceCents: number;
+	readonly vatCents: number;
+	readonly creditsMicro: number;
+	readonly simulated: boolean;
+	readonly status: PaymentRow['status'];
+	readonly completedAt: number | null;
+}
+
+export function purchaseOf(
+	deps: PaymentsDeps,
+	userId: string,
+	paymentId: string
+): PurchaseView | undefined {
+	const row = findById(deps.db, paymentId);
+	if (row === undefined || row.userId !== userId) return undefined;
+	return {
+		packName: findPack(deps.db, row.packId)?.name ?? '',
+		priceCents: row.amountEurCents,
+		vatCents: row.vatEurCents,
+		creditsMicro: row.creditsMicro,
+		simulated: row.simulated,
+		status: row.status,
+		completedAt: row.completedAt
+	};
+}
+
 export interface PaymentsService {
 	purchase(input: PurchaseInput): PurchaseOutcome;
 	handleProviderEvents(body: unknown): void;
@@ -327,6 +393,12 @@ export interface PaymentsService {
 		readonly amountEurCents: number;
 		readonly reason: string;
 	}): RefundOutcome;
+	packsForSale(): SalePack[];
+	availability(role: string): {
+		readonly canPurchase: boolean;
+		readonly reason: 'coming_soon' | null;
+	};
+	purchaseOf(userId: string, paymentId: string): PurchaseView | undefined;
 }
 
 export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
@@ -335,6 +407,9 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 		handleProviderEvents: (body) => {
 			handleProviderEvents(deps, body);
 		},
-		refund: (input) => refund(deps, input)
+		refund: (input) => refund(deps, input),
+		packsForSale: () => packsForSale(deps),
+		availability: (role) => purchaseAvailability(deps, role),
+		purchaseOf: (userId, paymentId) => purchaseOf(deps, userId, paymentId)
 	};
 }

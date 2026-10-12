@@ -13,3 +13,9 @@
 <h1>{m.panel_title()}</h1>
 <p>{m.panel_signed_as({ email: data.email })}</p>
 <p><a href={resolve('/logout')}>{m.accounts_logout_action()}</a></p>
+
+<nav aria-label={m.panel_nav_label()}>
+	<ul>
+		<li><a href={resolve('/panel/comprar')}>{m.payments_title()}</a></li>
+	</ul>
+</nav>

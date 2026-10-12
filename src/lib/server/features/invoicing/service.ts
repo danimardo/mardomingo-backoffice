@@ -8,6 +8,18 @@ import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import type { Logger } from '$lib/server/logging/logger';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { BillingProfile } from '$lib/schemas/invoicing/billing-profile';
+import { toCsv } from '$lib/server/shared/csv';
+import {
+	AI_COSTS_HEADER,
+	MONTHLY_HEADER,
+	SALES_HEADER,
+	aiCostRows,
+	monthlySummaryRows,
+	saleRows,
+	type AiCostFact,
+	type PaymentFact,
+	type SaleFact
+} from './domain/accounting-csv';
 import { toEpochMs } from '$lib/shared/time';
 import {
 	billingProfileOf,
@@ -272,5 +284,43 @@ export function createInvoicingService(deps: InvoicingDeps): InvoicingService {
 		issueForPayment: (input) => issueForPayment(deps, input),
 		issueCorrective: (input) => issueCorrective(deps, input),
 		correctPayment: (input) => correctPayment(deps, input)
+	};
+}
+
+export interface AccountingExportInput {
+	/** Compras del periodo, con los datos que guarda `payments` (llegan por parámetro: no se leen tablas ajenas). */
+	readonly payments: readonly PaymentFact[];
+	/** Coste de IA por proveedor, día y app, recibido de `ai` por parámetro (ARCHITECTURE §3). */
+	readonly aiCosts: readonly AiCostFact[];
+}
+
+export interface AccountingExport {
+	readonly salesCsv: string;
+	readonly monthlyCsv: string;
+	readonly aiCostsCsv: string;
+}
+
+/**
+ * Exportación contable (BE-FR-76): ventas con número de factura y NIF de su cuenta, resumen mensual y coste de IA. Los archivos
+ * llevan BOM y el formato de hoja de cálculo común (`shared/csv`). Las compras simuladas no son ingresos.
+ */
+export function accountingExport(
+	deps: InvoicingDeps,
+	input: AccountingExportInput
+): AccountingExport {
+	const sales: SaleFact[] = input.payments.map((payment) => {
+		const invoice = initialInvoiceOf(deps.db, payment.paymentId);
+		const profile = billingProfileOf(deps.db, payment.userId);
+		return {
+			...payment,
+			invoiceNumber: invoice?.number ?? null,
+			taxId: profile?.taxId ?? null
+		};
+	});
+	deps.logger.emit('invoicing.export.generated', {});
+	return {
+		salesCsv: toCsv(saleRows(sales), { header: SALES_HEADER, bom: true }),
+		monthlyCsv: toCsv(monthlySummaryRows(sales), { header: MONTHLY_HEADER, bom: true }),
+		aiCostsCsv: toCsv(aiCostRows(input.aiCosts), { header: AI_COSTS_HEADER, bom: true })
 	};
 }
