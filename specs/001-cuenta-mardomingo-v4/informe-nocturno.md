@@ -108,6 +108,24 @@ no se ha ejecutado completo.
 
 **Ciclo de cobertura de ramas**: `pnpm validate` falló en el umbral de ramas (73,97 % frente al 80 %). Se han añadido pruebas a los módulos de L03 sin cobertura. Quedan sin cubrir, sobre todo, ramas de `features/accounts/service.ts` (L03) y `features/apps/service.ts` (L02): caminos de error que piden pruebas de integración.
 
+## Puesta en marcha (propuesta, pendiente de ejecutar)
+
+Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
+
+1. **Variables de entorno** (antes de desplegar):
+   - `BODY_SIZE_LIMIT=10M`. Obligatoria: sin ella la aplicación se niega a arrancar (`app.config.body_limit_incoherent`).
+   - `MISTRAL_API_KEY`: clave de Voxtral. Sin ella, el principal figura como no configurado y solo queda el respaldo.
+   - `OPENROUTER_API_KEY`: ya existía. Sirve también al respaldo de la transcripción y a la imagen.
+   - `OPENROUTER_MANAGEMENT_KEY` (opcional): saldo de OpenRouter, para la alerta de L14.
+2. **Imagen**: el `Dockerfile` ya instala ffmpeg 7.1 (apt, trixie) con ffprobe. No hay que cambiarlo.
+3. **Migraciones** (se aplican solas al arrancar): `0005` (caché de modelos), `0006` (tope de imagen a 200 créditos, solo la fila sembrada con el valor antiguo) y `0007` (tabla de anuncios).
+4. **Verificación manual en staging** (no se puede automatizar aquí):
+   - V05, paso 1: un WebM real de 118 s de MediaRecorder con Voxtral caído. Comprobar que la conversión a mp3 con ffmpeg llega al respaldo, que el cobro es solo de lo facturado y que los reintentos son a 2, 4 y 8 s. Anotar el comando de ffmpeg confirmado en `research.md` (R11).
+   - V05, pasos 2 y 3: ambos caídos (502 sin cobro) y un audio de 311 s (413 `AUDIO_TOO_LONG` con `maxSeconds` 300).
+   - V05, paso 4 (fichero ilegible) y paso 5 (tercera transcripción simultánea): el paso 5 depende de la ranura de transcripción (T202), que todavía no está implementada.
+   - V13 (no se guarda contenido): comprobar en staging que ni el audio ni el texto aparecen en la base ni en los logs.
+5. **Dos cosas que siguen abiertas y te afectan**: el CI nunca se ha ejecutado en remoto (la protección de `main` y `staging` depende de eso, T060), y las operaciones de medios se activan por SQL en las pruebas, así que hasta L13 la activación real la haces tú desde la base.
+
 ## Lote L09 (parcial): versiones, mantenimiento y protecciones de la API
 
 **Estado**: parcial. Hechos T189 a T194 (versiones, acceso y protecciones en `ai`, anuncios en `apps` y `GET /api/v1/app/status`). Decisiones tomadas por el propietario: anuncios en `apps` (A) y freno con puerto inyectado (A). Pendientes T195 (checkpoint), T196 a T202 y T203 (el freno con puerto).
