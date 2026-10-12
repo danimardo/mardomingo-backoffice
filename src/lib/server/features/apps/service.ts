@@ -10,6 +10,8 @@ import { AppError } from '$lib/server/shared/errors';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { toMicro, toMicroUsd, toPpm } from '$lib/shared/money';
 import { cachedSettings, invalidateSettings, storeSettings } from './config.cache';
+import { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
+import { isVisible } from './domain/announcements';
 import {
 	operationRuleIssues,
 	overrideCeilingIssues,
@@ -49,6 +51,8 @@ import {
 	readApp,
 	readCurrentTemplate,
 	listApps,
+	listAnnouncementCandidates,
+	listOperations,
 	readAppBySlug,
 	readOperation,
 	readOperationById,
@@ -706,4 +710,128 @@ export function activeAppOrigins(deps: AppsDeps): readonly string[] {
 export function supportEmail(deps: AppsDeps): string {
 	const value = getSetting(deps, 'support_email');
 	return typeof value === 'string' ? value : 'soporte@mardomingo.com';
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Estado de la app para `/app/status` (E01; BE-FR-48 CA2, BE-FR-77 CA4, BE-FR-84, BE-FR-85; T193)
+
+export interface AnnouncementDto {
+	readonly id: string;
+	readonly level: 'info' | 'warning' | 'critical';
+	readonly message: string;
+	readonly link: string | null;
+	readonly endsAt: string | null;
+}
+
+/** Anuncios visibles para una app y versión en un instante (api-v1 E01). */
+export function announcementsFor(
+	deps: AppsDeps,
+	input: { readonly appId: string; readonly version: string | null; readonly now: number }
+): AnnouncementDto[] {
+	return listAnnouncementCandidates(deps.db, input.appId)
+		.filter((row) => isVisible(row, input))
+		.map((row) => ({
+			id: row.id,
+			level: row.level,
+			message: row.message,
+			link: row.link,
+			endsAt: row.endsAt === null ? null : new Date(row.endsAt).toISOString()
+		}));
+}
+
+/** Tiempo máximo total de cada operación activa, con la política de intentos de `ai` (T193). */
+function operationTimeouts(
+	deps: AppsDeps,
+	appId: string
+): Record<string, { readonly timeoutMs: number }> {
+	const entries = listOperations(deps.db, deps.logger, appId)
+		.filter((operation) => operation.active)
+		.map((operation) => {
+			const transcription = operation.transcriptionConfig;
+			const timeoutMs =
+				operation.kind === 'transcription' && transcription !== null
+					? operationTotalMs({
+							primaryTimeoutMs: transcription.primary.timeout_ms,
+							retryWaitsMs: transcription.primary.enabled
+								? transcription.primary.retry_delays_ms
+								: [],
+							fallbackTimeoutsMs:
+								transcription.backup === null ? [] : [transcription.backup.timeout_ms]
+						})
+					: operationTotalMs({
+							primaryTimeoutMs: operation.timeoutMs,
+							retryWaitsMs: CHAT_RETRY_WAITS_MS,
+							fallbackTimeoutsMs: operation.fallbackModels.map(() => operation.timeoutMs)
+						});
+			return [operation.key, { timeoutMs }] as const;
+		});
+	return Object.fromEntries(entries);
+}
+
+export interface AppStatusDto {
+	readonly app: { readonly id: string; readonly name: string };
+	readonly minAppVersion: string | null;
+	readonly recommendedAppVersion: string | null;
+	readonly maintenance: { readonly active: boolean; readonly message: string };
+	readonly limits: { readonly maxAudioSeconds: number };
+	readonly operations: Readonly<Record<string, { readonly timeoutMs: number }>>;
+	readonly links: Readonly<
+		Record<
+			| 'register'
+			| 'forgotPassword'
+			| 'panel'
+			| 'buyCredits'
+			| 'prices'
+			| 'terms'
+			| 'privacy'
+			| 'acceptableUse',
+			string
+		>
+	>;
+	readonly supportEmail: string;
+	readonly announcements: readonly AnnouncementDto[];
+}
+
+/**
+ * Estado público de una app. Nunca bloquea: informa del mantenimiento y de la versión, y no exige versión ni sesión. Los
+ * enlaces salen de la URL pública de la web (`webBaseUrl`).
+ */
+export function appStatusOf(
+	deps: AppsDeps,
+	input: {
+		readonly appId: string;
+		readonly version: string | null;
+		readonly now: number;
+		readonly webBaseUrl: string;
+	}
+): AppStatusDto | undefined {
+	const app = readApp(deps.db, deps.logger, input.appId);
+	const access = appAccessOf(deps, input.appId);
+	if (app === undefined || access === undefined) return undefined;
+	const web = input.webBaseUrl.replace(/\/$/, '');
+	const maintenance = access.globalMaintenance.active
+		? access.globalMaintenance
+		: { active: access.maintenance.active, message: access.maintenance.message };
+	return {
+		app: { id: app.slug, name: app.name },
+		minAppVersion: access.minAppVersion,
+		recommendedAppVersion: access.recommendedAppVersion,
+		maintenance: { active: maintenance.active, message: maintenance.message },
+		limits: {
+			maxAudioSeconds: getEffectiveConfig(deps, { appId: input.appId }).settings.max_audio_seconds
+		},
+		operations: operationTimeouts(deps, input.appId),
+		links: {
+			register: `${web}/registro?app=${encodeURIComponent(app.slug)}`,
+			forgotPassword: `${web}/recuperar`,
+			panel: `${web}/panel`,
+			buyCredits: `${web}/panel/comprar`,
+			prices: `${web}/precios`,
+			terms: `${web}/terminos`,
+			privacy: `${web}/privacidad`,
+			acceptableUse: `${web}/uso-aceptable`
+		},
+		supportEmail: supportEmail(deps),
+		announcements: announcementsFor(deps, input)
+	};
 }

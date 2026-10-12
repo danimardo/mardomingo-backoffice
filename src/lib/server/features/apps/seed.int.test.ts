@@ -90,7 +90,7 @@ describe('datos iniciales', () => {
 		expect(byKey('image-generation')).toMatchObject({
 			model: 'google/gemini-3.1-flash-image',
 			estimatedMaxCostMicroUsd: 80_000,
-			maxCostMicro: 80_000_000
+			maxCostMicro: 200_000_000
 		});
 	});
 

@@ -54,7 +54,7 @@ describe('approvedOperationOf', () => {
 			model: 'google/gemini-3.1-flash-image',
 			fallbackModels: [],
 			maxOutputTokens: null,
-			maxCostMicro: 80_000_000,
+			maxCostMicro: 200_000_000,
 			estimatedMaxCostMicroUsd: 80_000
 		});
 	});
