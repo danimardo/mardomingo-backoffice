@@ -16,7 +16,7 @@ export interface ProtectionsLogFields {
 	};
 	'protections.brake.activated': Record<string, never>;
 	'protections.brake.alert_failed': Record<string, never>;
-	'protections.brake.released': { reason: 'manual' };
+	'protections.brake.released': { reason: 'manual' | 'new_day' };
 }
 
 export const PROTECTIONS_LOG_EVENTS = Object.freeze({
