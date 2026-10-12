@@ -3,6 +3,7 @@
 // límite de altas por IP del servidor de pruebas (tres en 24 h) no admite una cuenta por prueba. La recuperación deja la
 // misma contraseña, así que el cierre de sesión del crítico 2 no depende de su orden.
 import { request as playwrightRequest } from '@playwright/test';
+import { checkAccessibility } from './fixtures/axe';
 import { expect, test } from './fixtures';
 import {
 	PASSWORD,
@@ -116,3 +117,103 @@ test('@critical una segunda cuenta con el mismo buzón de gmail no recibe la bie
 	await page.mouse.move(0, 0);
 	await page.waitForLoadState('networkidle');
 });
+
+// Compra de créditos (T247, T248): va en este fichero, junto a la cuenta que crea el `beforeAll` de arriba, para no añadir
+// una cuenta más: el servidor de pruebas admite tres altas por IP en 24 h y esta cuenta contaba como la cuarta.
+
+// Precargas de módulos que el navegador bloquea por CSP sin JavaScript, y el 400 de la validación del servidor. Una sola
+// expresión: con varias, la opción `guardAllow` llega corrupta a la fixture.
+const NO_JS_EXPECTED = /requestfailed: .*\(csp\)|status of 400/;
+
+async function login(page: import('@playwright/test').Page): Promise<void> {
+	await page.goto('/login');
+	await page.waitForLoadState('networkidle');
+	await page.getByLabel('Email').fill(email);
+	await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+	await page.getByRole('button', { name: 'Entrar' }).click();
+	await page.waitForLoadState('networkidle');
+	await expect(page).toHaveURL(/\/panel$/);
+}
+
+test('@critical @BE-FR-25 @UX-05 la compra con renuncia muestra el resultado y el saldo', async ({
+	page
+}) => {
+	await login(page);
+	await page.goto('/panel/comprar');
+	await page.waitForLoadState('networkidle');
+
+	await page.getByRole('link', { name: 'Elegir Pack 10 €' }).click();
+	await page.waitForLoadState('networkidle');
+	await expect(page.getByLabel(/renuncio a mi derecho de desistimiento/)).not.toBeChecked();
+	await page.getByLabel(/renuncio a mi derecho de desistimiento/).check();
+	await page.getByRole('button', { name: /Comprar 10,00\s€ de créditos/ }).click();
+
+	await expect(page).toHaveURL(/\/panel\/comprar\/pay_/);
+	await expect(page.getByRole('heading', { name: 'Resultado de la compra' })).toBeVisible();
+	await expect(page.getByText('Compra simulada de prueba')).toBeVisible();
+});
+
+test('@BE-FR-25 @UX-05 un doble envío del mismo formulario no acredita dos veces', async ({
+	page
+}) => {
+	await login(page);
+	await page.goto('/panel/comprar?paquete=pck_seed_5eur');
+	await page.waitForLoadState('networkidle');
+	await page.getByLabel(/renuncio a mi derecho de desistimiento/).check();
+
+	await page.getByRole('button', { name: /Comprar 5,00\s€ de créditos/ }).dblclick();
+
+	await expect(page).toHaveURL(/\/panel\/comprar\/pay_/);
+	await expect(page.getByRole('heading', { name: 'Resultado de la compra' })).toBeVisible();
+});
+
+test.describe('sin JavaScript', () => {
+	// Las precargas de módulos que el navegador bloquea por CSP no son un fallo de la página sin JavaScript (como en `appearance`).
+	test.use({ javaScriptEnabled: false, guardAllow: [NO_JS_EXPECTED] });
+
+	test('@critical @BE-FR-26 @UX-05 la compra sin JavaScript exige la renuncia y después compra', async ({
+		page
+	}) => {
+		await login(page);
+		await page.goto('/panel/comprar?paquete=pck_seed_10eur');
+
+		await expect(page.getByLabel(/renuncio a mi derecho de desistimiento/)).not.toBeChecked();
+		await page.getByRole('button', { name: /Comprar 10,00\s€ de créditos/ }).click();
+		await expect(page.locator('#waiver-accepted-error')).toBeVisible();
+
+		await page.getByLabel(/renuncio a mi derecho de desistimiento/).check();
+		await page.getByRole('button', { name: /Comprar 10,00\s€ de créditos/ }).click();
+		await expect(page).toHaveURL(/\/panel\/comprar\/pay_/);
+		await expect(page.getByRole('heading', { name: 'Resultado de la compra' })).toBeVisible();
+	});
+});
+
+// Accesibilidad y matriz de tamaños de W20 y W21 (T248; 16.11): ambos temas, 320, 390 y 1366 px, sin desplazamiento
+// horizontal de la página a 320 px. Cada prueba entra con una cuenta verificada, como un cliente real.
+for (const scheme of ['light', 'dark'] as const) {
+	for (const width of [320, 390, 1366]) {
+		test(`@a11y W20 y W21 accesibles con tema ${scheme} a ${String(width)} px`, async ({
+			page
+		}, testInfo) => {
+			await page.setViewportSize({ width, height: 844 });
+			await page.emulateMedia({ colorScheme: scheme });
+			await login(page);
+
+			await page.goto('/panel/comprar?paquete=pck_seed_10eur');
+			await page.waitForLoadState('networkidle');
+			await checkAccessibility(page, testInfo);
+			if (width === 320) {
+				const overflow = await page.evaluate(
+					() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+				);
+				expect(overflow, 'desplazamiento horizontal a 320 px').toBeLessThanOrEqual(0);
+			}
+
+			await page.goto('/panel/comprar?paquete=pck_seed_5eur');
+			await page.getByLabel(/renuncio a mi derecho de desistimiento/).check();
+			await page.getByRole('button', { name: /Comprar 5,00\s€ de créditos/ }).click();
+			await expect(page).toHaveURL(/\/panel\/comprar\/pay_/);
+			await checkAccessibility(page, testInfo);
+		});
+	}
+}

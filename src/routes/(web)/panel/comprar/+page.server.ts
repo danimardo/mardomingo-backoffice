@@ -3,21 +3,15 @@
 // acción registra la renuncia, guarda el perfil si se pide factura completa y compra. Una repetición del mismo intento
 // lleva a la compra existente sin acreditar otra vez.
 import { randomUUID } from 'node:crypto';
-import { fail, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor, reportDenial } from '$lib/server/features/accounts';
 import { billingProfileOf } from '$lib/server/features/invoicing';
-import type { PurchaseOutcome } from '$lib/server/features/payments';
-import { currentVersions, recordWithdrawalWaiver } from '$lib/server/features/legal';
-import { parseForm } from '$lib/server/forms';
-import { AppError } from '$lib/server/shared/errors';
-import { failureOf } from '$lib/server/web/actions';
-import { PurchaseForm, billingOf } from '$lib/schemas/payments/purchase';
+import { currentVersions } from '$lib/server/features/legal';
 import { toEpochMs } from '$lib/shared/time';
+import { submitPurchase } from '$lib/server/web/purchase';
 import type { Actions, PageServerLoad } from './$types';
-
-const BOOLEANS = Object.freeze(['waiverAccepted', 'wantsFullInvoice']);
 
 export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	const access = accessFor(locals.user, 'verified');
@@ -76,46 +70,13 @@ export const actions: Actions = {
 			const login = resolve('/login');
 			redirect(303, login);
 		}
-
-		const parsed = parseForm(PurchaseForm, await request.formData(), { booleans: BOOLEANS });
-		if (!parsed.ok) return parsed.failure;
-		const { data } = parsed;
-		const composition = getComposition();
-		const userId = access.user.id;
-
-		let outcome: PurchaseOutcome;
-		try {
-			const waiverId = recordWithdrawalWaiver(composition.legal, {
-				userId,
-				appId: null,
-				ip: null,
-				now: toEpochMs(composition.clock.now()),
-				version: data.waiverVersion
-			});
-			if (data.wantsFullInvoice) {
-				const saved = composition.invoicing.saveBillingProfile({
-					userId,
-					profile: billingOf(data)
-				});
-				if (saved.status === 'rejected') {
-					return fail(400, { values: { packId: data.packId }, errors: { taxId: saved.reason } });
-				}
-			}
-			outcome = composition.payments.purchase({
-				userId,
-				role: access.user.role,
-				attemptId: data.intentId,
-				packId: data.packId,
-				wantsFullInvoice: data.wantsFullInvoice,
-				withdrawalAcceptanceId: waiverId
-			});
-		} catch (caught) {
-			if (caught instanceof AppError) return failureOf(caught, { packId: data.packId });
-			throw caught;
-		}
-
-		const path = `${resolve('/panel/comprar')}/${outcome.paymentId}`;
-		const target = outcome.status === 'repeated' ? `${path}?estado=repetida` : path;
-		redirect(303, target);
+		const result = submitPurchase(
+			getComposition(),
+			access.user,
+			await request.formData(),
+			resolve('/panel/comprar')
+		);
+		if (result.kind === 'failure') return result.failure;
+		redirect(303, result.location);
 	}
 };
