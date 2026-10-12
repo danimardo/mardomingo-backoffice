@@ -4,7 +4,7 @@ import type { LogEventMeta } from '$lib/server/logging/events';
 
 export interface CreditsLogFields {
 	'credits.hold.created': Record<string, never>;
-	'credits.hold.rejected': { reason: 'debt_open' | 'insufficient_balance' };
+	'credits.hold.rejected': { reason: 'debt_open' | 'insufficient_balance' | 'daily_free_limit' };
 	'credits.hold.released': { reason: 'released' | 'consumed' | 'interrupted' | 'expired' };
 	'credits.hold.released_on_startup': { count: number };
 	'credits.hold.expired': Record<string, never>;

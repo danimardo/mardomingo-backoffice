@@ -1,6 +1,6 @@
 // Repositorio de `ai` (BE-FR-81, D-12, principio I; T165). Solo toca `ai_operations` y `model_cache`, y filtra por usuario
 // y app. Las escrituras de cobro van dentro de las transacciones que abre el servicio (`BEGIN IMMEDIATE`, sin `await`).
-import { and, count, desc, eq, gte, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import type { EpochMs } from '$lib/shared/time';
@@ -154,4 +154,31 @@ export function countInProgress(db: Db): number {
 			.where(eq(aiOperations.status, 'in_progress'))
 			.get()?.total ?? 0
 	);
+}
+
+/**
+ * Coste real en USD micro por cuenta de las operaciones completadas en [desde, hasta) (BE-FR-46): es la parte del
+ * agregado diario que consume el freno global. El filtro por cuenta (compras reales) lo aplica `protections` con `credits`.
+ */
+export function realCostByUserOfDay(
+	db: Db,
+	from: EpochMs,
+	until: EpochMs
+): { readonly userId: string; readonly costMicroUsd: number }[] {
+	return db
+		.select({
+			userId: aiOperations.userId,
+			costMicroUsd: sql<number>`sum(${aiOperations.costMicroUsd})`
+		})
+		.from(aiOperations)
+		.where(
+			and(
+				isNotNull(aiOperations.userId),
+				gte(aiOperations.completedAt, from),
+				lt(aiOperations.completedAt, until)
+			)
+		)
+		.groupBy(aiOperations.userId)
+		.all()
+		.filter((row): row is { userId: string; costMicroUsd: number } => row.userId !== null);
 }

@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FAKE_OK } from '$lib/server/adapters/openrouter/fake';
 import { FAKE_TRANSCRIPTION } from '$lib/server/adapters/mistral/fake';
+import { updateSetting } from '$lib/server/features/apps';
 import { appOperations } from '$lib/server/features/apps/schema';
 import { chargeFor } from '$lib/server/features/pricing';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
@@ -247,5 +248,25 @@ describe('transcripción (E08)', () => {
 			.join('\n');
 		expect(everything).not.toContain(marker);
 		expect(JSON.stringify(f.chat.base.logger.events)).not.toContain(marker);
+	});
+});
+
+describe('transcripción con el tope diario agotado (FR-022, BE-FR-11.6)', () => {
+	it('responde 402 DAILY_FREE_LIMIT_REACHED sin reservar ni llamar a Voxtral', async () => {
+		const adminId = f.chat.base.addUser('adm_tope', 'admin');
+		updateSetting(f.chat.deps.apps, {
+			actorId: adminId,
+			key: 'daily_cap_no_purchase',
+			value: 1,
+			reason: 'prueba del tope diario'
+		});
+
+		await expect(
+			runTranscription(f.chat.deps, f.media, f.chat.context(), {
+				operation: TRANSCRIPTION_KEY,
+				audio: await f.audio('corto.webm')
+			})
+		).rejects.toMatchObject({ code: 'DAILY_FREE_LIMIT_REACHED', status: 402 });
+		expect(f.chat.base.credits.getBalance(f.chat.userId).reservedMicro).toBe(0);
 	});
 });

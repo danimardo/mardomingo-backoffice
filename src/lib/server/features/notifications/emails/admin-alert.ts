@@ -3,7 +3,8 @@
 import * as m from '$lib/paraglide/messages.js';
 import { renderLayout, type EmailContent } from './layout';
 
-export type AdminAlertKind = 'fx_stale' | 'model_retired' | 'model_price' | 'flagged_threshold';
+export type AdminAlertKind =
+	'fx_stale' | 'model_retired' | 'model_price' | 'flagged_threshold' | 'global_brake';
 
 export interface AdminAlertInput {
 	readonly kind: AdminAlertKind;
@@ -46,6 +47,11 @@ function textOf(
 			return {
 				subject: m.notifications_alert_flagged_subject(),
 				body: m.notifications_alert_flagged_body({ detail })
+			};
+		case 'global_brake':
+			return {
+				subject: m.notifications_alert_global_brake_subject(),
+				body: m.notifications_alert_global_brake_body({ detail })
 			};
 	}
 }

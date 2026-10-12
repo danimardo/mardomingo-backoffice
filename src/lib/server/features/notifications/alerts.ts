@@ -26,6 +26,7 @@ export interface AlertDeps {
 export function alertTypeOf(key: AlertKey): AlertType {
 	if (key === 'fx_stale') return 'fx_stale';
 	if (key.startsWith('flagged:')) return 'flagged_threshold';
+	if (key.startsWith('global_brake:')) return 'global_brake';
 	return key.endsWith(':retired') ? 'model_retired' : 'model_price';
 }
 

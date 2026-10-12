@@ -42,6 +42,12 @@ export function appErrorResponse(error: AppError): Response {
 	if (error.code === 'MAINTENANCE' && typeof error.details.message === 'string') {
 		return apiErrorResponse(error.code, { message: error.details.message });
 	}
+	if (error.code === 'RATE_LIMITED' && typeof error.details.retryAfterSeconds === 'number') {
+		return apiErrorResponse(error.code, {
+			details: { retryAfterSeconds: error.details.retryAfterSeconds },
+			headers: { 'Retry-After': String(error.details.retryAfterSeconds) }
+		});
+	}
 	return apiErrorResponse(error.code, { details: error.details });
 }
 

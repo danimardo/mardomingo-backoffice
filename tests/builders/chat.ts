@@ -3,6 +3,7 @@
 // conocido, sin red ni proveedor real.
 import { and, eq } from 'drizzle-orm';
 import type { ChatContext, AiDeps, RetryPolicy } from '$lib/server/features/ai';
+import { createProtectionsRuntime } from '$lib/server/features/protections';
 import { createFakeAiGateway, type FakeAiGateway } from '$lib/server/adapters/openrouter/fake';
 import { createFakeFxSource, type FakeFxSource } from '$lib/server/adapters/ecb/fake';
 import {
@@ -90,6 +91,7 @@ export function chatFixture(options: ChatFixtureOptions = {}): ChatFixture {
 	};
 	const deps: AiDeps = {
 		db: base.db,
+		protections: createProtectionsRuntime(),
 		logger: base.logger,
 		clock: base.clock,
 		ids,

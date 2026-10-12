@@ -42,10 +42,11 @@ import {
 	toDefs,
 	waitAbortable,
 	type AiDeps,
-	type ChatContext
+	type ChatContext,
+	protectionsOf
 } from './service';
 import { insertOperation, updateOperation } from './repository';
-import { guardAccess } from '$lib/server/features/protections';
+import { guardRequest } from '$lib/server/features/protections';
 
 /** Adaptadores de audio y de Voxtral. `transcriber` es `null` si no hay clave: el principal figura como no configurado. */
 export interface MediaDeps {
@@ -91,11 +92,27 @@ export async function runTranscription(
 	ctx: ChatContext,
 	input: { readonly operation: string; readonly audio: AudioUpload }
 ): Promise<TranscriptionResponseBody | null> {
-	// Pasos 6 y 7 de §8: versión mínima y mantenimiento (FR-073, FR-074).
-	guardAccess(
-		{ apps: deps.apps, logger: deps.logger },
-		{ endpoint: 'ai', appId: ctx.appId, appVersion: ctx.appVersion }
-	);
+	// Pasos 6 a 8 de §8, y la ranura de concurrencia hasta que termina la transcripción (BE-FR-43).
+	const release = guardRequest(protectionsOf(deps), {
+		endpoint: 'ai',
+		appId: ctx.appId,
+		appVersion: ctx.appVersion,
+		userId: ctx.userId,
+		transcription: true
+	});
+	try {
+		return await transcriptionFlow(deps, media, ctx, input);
+	} finally {
+		release();
+	}
+}
+
+async function transcriptionFlow(
+	deps: AiDeps,
+	media: MediaDeps,
+	ctx: ChatContext,
+	input: { readonly operation: string; readonly audio: AudioUpload }
+): Promise<TranscriptionResponseBody | null> {
 	const now = toEpochMs(deps.clock.now());
 	const { replay } = admissionOf(deps, ctx, input.operation, now);
 
@@ -207,7 +224,7 @@ export async function runTranscription(
 		if (!reserved.ok) {
 			const failure = reserved.outcome;
 			throw new AppError(
-				'INSUFFICIENT_BALANCE',
+				failure.reason === 'daily_free_limit' ? 'DAILY_FREE_LIMIT_REACHED' : 'INSUFFICIENT_BALANCE',
 				failure.reason === 'insufficient_balance'
 					? { requiredMicro: failure.requiredMicro, availableMicro: failure.availableMicro }
 					: {}
@@ -442,11 +459,14 @@ export async function runImage(
 	ctx: ChatContext,
 	input: ImageInput
 ): Promise<ImageResponseBody | null> {
-	// Pasos 6 y 7 de §8: versión mínima y mantenimiento (FR-073, FR-074).
-	guardAccess(
-		{ apps: deps.apps, logger: deps.logger },
-		{ endpoint: 'ai', appId: ctx.appId, appVersion: ctx.appVersion }
-	);
+	// Pasos 6 a 8 de §8: versión, mantenimiento, freno global y frecuencia (FR-069, FR-072, FR-073, FR-074, BE-FR-43).
+	guardRequest(protectionsOf(deps), {
+		endpoint: 'ai',
+		appId: ctx.appId,
+		appVersion: ctx.appVersion,
+		userId: ctx.userId,
+		transcription: false
+	});
 	const now = toEpochMs(deps.clock.now());
 	const { replay } = admissionOf(deps, ctx, input.operation, now);
 
@@ -537,7 +557,7 @@ export async function runImage(
 	if (!reserved.ok) {
 		const failure = reserved.outcome;
 		throw new AppError(
-			'INSUFFICIENT_BALANCE',
+			failure.reason === 'daily_free_limit' ? 'DAILY_FREE_LIMIT_REACHED' : 'INSUFFICIENT_BALANCE',
 			failure.reason === 'insufficient_balance'
 				? { requiredMicro: failure.requiredMicro, availableMicro: failure.availableMicro }
 				: {}

@@ -22,7 +22,11 @@ import {
 	type PricingDeps
 } from '$lib/server/features/pricing';
 import { alertKeys, raiseAlert, type AlertDeps } from '$lib/server/features/notifications';
-import { guardAccess } from '$lib/server/features/protections';
+import {
+	guardRequest,
+	type ProtectionsDeps,
+	type ProtectionsRuntime
+} from '$lib/server/features/protections';
 import { CHAT_RETRY_WAITS_MS } from '$lib/server/features/apps';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError, type ErrorCode } from '$lib/server/shared/errors';
@@ -57,7 +61,8 @@ import {
 	replaceModelCache,
 	updateOperation,
 	type OperationInsert,
-	type OperationPatch
+	type OperationPatch,
+	realCostByUserOfDay
 } from './repository';
 
 /**
@@ -89,6 +94,24 @@ export interface AiDeps {
 	readonly gateway: AiGateway;
 	readonly alerts: AlertDeps;
 	readonly retry?: RetryPolicy;
+	/** Estado en memoria de frecuencia y concurrencia (T200), uno por proceso. */
+	readonly protections: ProtectionsRuntime;
+}
+
+/** Dependencias de `protections` a partir de las de `ai`: el coste diario sale de la tabla de operaciones de `ai`. */
+export function protectionsOf(deps: AiDeps): ProtectionsDeps {
+	return {
+		db: deps.db,
+		clock: deps.clock,
+		logger: deps.logger,
+		apps: deps.apps,
+		credits: deps.credits,
+		alerts: deps.alerts,
+		dailyCosts: {
+			costByUserOfDay: (from, until) => realCostByUserOfDay(deps.db, from, until)
+		},
+		runtime: deps.protections
+	};
 }
 
 /** Contexto de la petición: quién llama, desde qué app, la señal de desconexión y la clave de idempotencia. */
@@ -343,11 +366,14 @@ export async function runChat(
 	ctx: ChatContext,
 	body: ChatRequestBody
 ): Promise<ChatResponseBody | null> {
-	// Pasos 6 y 7 de §8: versión mínima y mantenimiento (FR-073, FR-074).
-	guardAccess(
-		{ apps: deps.apps, logger: deps.logger },
-		{ endpoint: 'ai', appId: ctx.appId, appVersion: ctx.appVersion }
-	);
+	// Pasos 6 a 8 de §8: versión, mantenimiento, freno global y frecuencia (FR-069, FR-072, FR-073, FR-074, BE-FR-43).
+	guardRequest(protectionsOf(deps), {
+		endpoint: 'ai',
+		appId: ctx.appId,
+		appVersion: ctx.appVersion,
+		userId: ctx.userId,
+		transcription: false
+	});
 	const now = toEpochMs(deps.clock.now());
 	const key = ctx.idempotencyKey;
 
@@ -478,7 +504,10 @@ export async function runChat(
 			failure.reason === 'insufficient_balance'
 				? { requiredMicro: failure.requiredMicro, availableMicro: failure.availableMicro }
 				: {};
-		throw new AppError('INSUFFICIENT_BALANCE', details);
+		throw new AppError(
+			failure.reason === 'daily_free_limit' ? 'DAILY_FREE_LIMIT_REACHED' : 'INSUFFICIENT_BALANCE',
+			details
+		);
 	}
 	deps.logger.emit('ai.operation.started', { operationId, operation: body.operation });
 

@@ -11,6 +11,8 @@ import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
 import type { IdGenerator, IdKind } from '$lib/server/shared/ids';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
+import { startOfMadridDay } from '$lib/shared/dates';
+import { dailyCapVerdict } from './domain/daily-cap';
 import {
 	applyCredit,
 	applyExpiry,
@@ -28,6 +30,7 @@ import {
 	accountHasWelcome,
 	closeHold,
 	expiredFreeBucketUsers,
+	hasRealPurchaseOf,
 	hasWelcomeGrant,
 	insertHold,
 	insertWelcomeGrant,
@@ -39,7 +42,8 @@ import {
 	persistState,
 	reservedOf,
 	type ReleaseReason,
-	insertMovements
+	insertMovements,
+	usageSince
 } from './repository';
 
 export interface CreditsDeps {
@@ -110,7 +114,7 @@ export type ReserveOutcome =
 	| { readonly ok: true; readonly holdId: string }
 	| {
 			readonly ok: false;
-			readonly reason: 'debt_open' | 'insufficient_balance';
+			readonly reason: 'debt_open' | 'insufficient_balance' | 'daily_free_limit';
 			readonly requiredMicro?: number;
 			readonly availableMicro?: number;
 	  };
@@ -150,6 +154,18 @@ export function reserve(
 					};
 		}
 		const now = deps.clock.now();
+		// Tope diario de cuentas sin compra real (FR-022, BE-FR-11.6): cobros del día de Madrid + reservas activas + la nueva.
+		const dailyCap = dailyCapVerdict({
+			costsTodayMicro: usageSince(tx, input.userId, startOfMadridDay(now)),
+			activeHoldsMicro: reservedOf(tx, input.userId),
+			newHoldMicro: input.amountMicro,
+			capMicro: numberSetting(deps, 'daily_cap_no_purchase'),
+			hasRealPurchase: hasRealPurchaseOf(tx, input.userId)
+		});
+		if (!dailyCap.ok) {
+			deps.logger.emit('credits.hold.rejected', { reason: dailyCap.reason });
+			return { ok: false, reason: 'daily_free_limit' };
+		}
 		const id = deps.ids('hld');
 		insertHold(tx, {
 			id,

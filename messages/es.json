@@ -95,6 +95,8 @@
 	"notifications_alert_model_price_body": "El precio del modelo {detail} ha subido más del umbral configurado. Revisa el tope de coste de sus operaciones.",
 	"notifications_alert_flagged_subject": "Operaciones marcadas por moderación",
 	"notifications_alert_flagged_body": "Una cuenta ha superado el umbral de operaciones marcadas por moderación el día {detail}.",
+	"notifications_alert_global_brake_subject": "Freno global de gasto activado",
+	"notifications_alert_global_brake_body": "El coste real de las cuentas sin compras reales del día {detail} ha superado el límite. Las peticiones de IA quedan limitadas hasta la liberación manual o el cambio de día.",
 	"accounts_accept_aup": "Acepto la política de uso aceptable (versión {version}).",
 	"accounts_accept_privacy": "Acepto la política de privacidad (versión {version}).",
 	"accounts_accept_terms": "Acepto los términos de uso (versión {version}).",

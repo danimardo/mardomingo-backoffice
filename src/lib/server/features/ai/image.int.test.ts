@@ -2,6 +2,7 @@
 // _data URL_ y no se guarda: ni la URL ni los bytes aparecen en ninguna tabla. Mismas reglas de cobro y cancelación que el
 // chat.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { updateSetting } from '$lib/server/features/apps';
 import { FAKE_OK } from '$lib/server/adapters/openrouter/fake';
 import { chargeFor } from '$lib/server/features/pricing';
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
@@ -119,5 +120,23 @@ describe('imagen (E09)', () => {
 		expect(f.chat.base.db.select().from(aiOperations).all()).toEqual([
 			expect.objectContaining({ status: 'cancelled', chargedMicro: 0 })
 		]);
+	});
+});
+
+describe('imagen con el tope diario agotado (FR-022, BE-FR-11.6)', () => {
+	it('responde 402 DAILY_FREE_LIMIT_REACHED y no llama al modelo ni deja reserva', async () => {
+		const adminId = f.chat.base.addUser('adm_tope', 'admin');
+		updateSetting(f.chat.deps.apps, {
+			actorId: adminId,
+			key: 'daily_cap_no_purchase',
+			value: 1,
+			reason: 'prueba del tope diario'
+		});
+
+		await expect(
+			runImage(f.chat.deps, f.chat.context(), { operation: IMAGE_KEY, prompt: 'Un gato' })
+		).rejects.toMatchObject({ code: 'DAILY_FREE_LIMIT_REACHED', status: 402 });
+		expect(f.chat.gateway.chatCalls).toHaveLength(0);
+		expect(f.chat.base.credits.getBalance(f.chat.userId).reservedMicro).toBe(0);
 	});
 });

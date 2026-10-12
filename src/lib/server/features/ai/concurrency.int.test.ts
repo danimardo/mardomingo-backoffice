@@ -2,6 +2,7 @@
 // `BEGIN IMMEDIATE`, así que varias peticiones simultáneas no reservan más saldo del que hay: las que no caben se rechazan
 // sin llamar al proveedor.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { userBalances } from '$lib/server/features/credits/schema';
 import { FAKE_OK } from '$lib/server/adapters/openrouter/fake';
 import { aiOperations } from './schema';
 import { runChat } from './service';
@@ -40,6 +41,13 @@ afterEach(() => {
 
 describe('concurrencia de reservas (BE-FR-71)', () => {
 	it('con saldo para dos reservas, de cinco peticiones simultáneas solo dos llegan al proveedor', async () => {
+		// Cada reserva ocupa 500 créditos, más que el tope diario de una cuenta sin compra real. Esta prueba mide el saldo bajo
+		// concurrencia: la cuenta tiene compra real y queda exenta del tope (el tope tiene sus propias pruebas en credits).
+		f.base.db
+			.update(userBalances)
+			.set({ hasRealPurchase: true })
+			.where(eq(userBalances.userId, f.userId))
+			.run();
 		f.gateway.holdNext();
 		f.gateway.holdNext();
 
