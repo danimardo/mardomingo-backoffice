@@ -2,7 +2,7 @@
 // desde un esquema arbitrario y rechaza cualquier categoría que el esquema no declara.
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import type { SyncSchema } from './schema-types';
+import type { SyncCategory, SyncSchema } from './schema-types';
 import { validateDocument } from './document-schema';
 
 const NAME = fc.stringMatching(/^[a-z][a-zA-Z0-9]{0,8}$/);
@@ -12,7 +12,7 @@ const schemaArb: fc.Arbitrary<{ schema: SyncSchema; names: string[] }> = fc
 	.uniqueArray(NAME, { minLength: 1, maxLength: 4 })
 	.chain((names) =>
 		fc.tuple(...names.map(() => fc.constantFrom('items', 'block', 'keyed'))).map((strategies) => {
-			const categories: SyncSchema['categories'] = {};
+			const categories: Record<string, SyncCategory> = {};
 			names.forEach((name, index) => {
 				const strategy = strategies[index];
 				categories[name] =

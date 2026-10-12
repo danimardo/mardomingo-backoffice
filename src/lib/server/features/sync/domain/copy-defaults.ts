@@ -21,9 +21,11 @@ const isPlain = (value: unknown): value is Plain =>
 /** Elementos seleccionables de una categoría: claves de `items`, la categoría entera en `block`, claves en `keyed`. */
 function elementsOf(category: SyncSchema['categories'][string], value: unknown): string[] {
 	if (category.strategy === 'items' && isPlain(value) && Array.isArray(value.items)) {
-		return value.items.flatMap((item) =>
-			isPlain(item) && typeof item[category.key] === 'string' ? [item[category.key]] : []
-		);
+		return value.items.flatMap((item) => {
+			if (!isPlain(item)) return [];
+			const id = item[category.key];
+			return typeof id === 'string' ? [id] : [];
+		});
 	}
 	if (category.strategy === 'keyed' && isPlain(value)) return Object.keys(value);
 	return [];

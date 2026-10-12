@@ -2,3 +2,20 @@
 export { seedSync } from './seed';
 export { syncDocuments, appDefaults } from './schema';
 export type { SyncData } from './domain/document-types';
+export {
+	parseIfMatch,
+	PutSyncBody,
+	GetSyncResponse,
+	PutSyncResponse,
+	DefaultsResponse
+} from './contract';
+export {
+	applyCopyAsDefaults,
+	getDefaults,
+	getSyncDocument,
+	previewCopyAsDefaults,
+	putSyncDocument,
+	updateDefaults,
+	type SyncDeps
+} from './service';
+export { SYNC_LOG_EVENTS, type SyncLogFields } from './events';
