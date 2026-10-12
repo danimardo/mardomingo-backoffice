@@ -128,40 +128,44 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 
 ## Lote L09 (parcial): versiones, mantenimiento y protecciones de la API
 
-**Estado**: parcial. Hechos T189 a T194 (versiones, acceso y protecciones en `ai`, anuncios en `apps` y `GET /api/v1/app/status`). Decisiones tomadas por el propietario: anuncios en `apps` (A) y freno con puerto inyectado (A). Pendientes T195 (checkpoint), T196 a T202 y T203 (el freno con puerto).
+**Estado (2026-10-12)**: T189 a T203 hechos; **T195 (checkpoint) abierto**. Lo verificado está abajo; lo que falta, al final.
 
-**Actualización (2026-10-12)**: el propietario ha contestado las decisiones. Anuncios: tabla en `apps` (A). Freno: puerto inyectado (A), pendiente de implementar en T203. Tope de la imagen: 200 créditos, con migración `0006` que solo cambia la fila sembrada con el valor antiguo (probada sobre una tabla de prueba). CI: ffmpeg y ffprobe se instalan explícitamente. E2E: dos tests de `accounts.spec` estabilizados sin tapar errores (esperas y espera explícita de la respuesta); tres ejecuciones seguidas del fichero en verde. Validación completa: 702 pruebas en verde.
+**Hecho y verificado**
 
-**Hecho**: `shared/semver.ts` (x.y.z, comparación por partes, rangos inclusivos con extremos nulos); `protections/domain/access.ts` con la tabla de endpoints de api-v1 1.8 y D-19, la versión mínima (`enforce_version`, 426 si falta o es menor) y el mantenimiento (el global tiene prioridad, con su mensaje); `protections/service.ts` (`guardAccess`) con su catálogo de eventos; `apps/appAccessOf`; el guard en los pasos 6 y 7 de §8 del chat, la transcripción y la imagen (no en las rutas, no en logout ni en `/app/status`). `MAINTENANCE` lleva el texto del administrador como `message` en la respuesta, no en los detalles.
+- Versiones, mantenimiento y acceso (T189–T191): `shared/semver.ts`, `protections/domain/access.ts`, `guardAccess`.
+- Anuncios y estado de app (T192–T194): tabla `announcements` en `apps` (decisión A del propietario), `GET /api/v1/app/status`, pruebas de integración (8) y HTTP (5).
+- Límites (T196–T202): `protection_state` (migración `0008`), límite por minuto de la cuenta (suma de sus apps) y de la app (nunca mayor que el global), ranuras de transcripción liberadas en `finally`, `429 RATE_LIMITED` con `Retry-After` (cabecera y `details.retryAfterSeconds`).
+- Tope diario de cuentas sin compra real (T201): en la transacción de `reserve`, con los cobros de uso del día de Madrid, las reservas activas y la nueva. `402 DAILY_FREE_LIMIT_REACHED` en chat, imagen y transcripción. Las cuentas con compra real quedan exentas.
+- Freno global (T199, T202, T203): coste real del día de las cuentas sin compra real (conversión con `fx_usd_eur`, redondeo hacia arriba) más sus reservas en curso. Al cruzar 500 céntimos se activa, se guarda, avisa una vez al administrador y responde `503 SERVICE_LIMITED`. Liberación manual con auditoría (`protections.brake.released`).
 
-**Decisiones tomadas (a confirmar)**
+**Verificación ejecutada**
 
-1. La versión mínima solo se exige cuando `enforce_version` está activo. Una versión mínima mal formada también bloquea (es un dato de configuración roto, no un acceso permitido).
-2. La app sembrada `secretario` exige 4.0.0 con enforcement activo. Los constructores de prueba y las cabeceras HTTP pasan ya `X-App-Version: 4.0.0`, como harían los clientes reales. Antes de este cambio, una petición sin versión habría sido aceptada.
-3. El guard vive en `ai` (no en las rutas), porque el plan lo sitúa en pasos concretos de §8. Las rutas `sync` y `/me` usarán su propio guard cuando lleguen sus lotes.
+- `pnpm validate` completo, en la última ejecución: `check` sin errores ni avisos; `lint` correcto; `test:coverage` con 110 ficheros y 742 pruebas en verde, cobertura de dominios al 100 %; `build` correcto; E2E 53 en verde. Código de salida 0.
+- `pnpm test:http`: 12 ficheros, 84 pruebas en verde, sobre el build.
+- `pnpm test:trace`: sale en 0. Lista criterios UX de lotes posteriores (interfaz de L13), no de este tramo.
+- Dos fallos intermedios de `validate` fueron míos y están corregidos: formato de `messages/es.json` y una rama de dominio sin cubrir (`brake.ts`, estado del día que no puede darse con las escrituras actuales; la función se simplificó).
 
-**Decisiones de frontera que necesito que tomes**
+**Decisiones tomadas (conservadoras; revisar)**
 
-- **T192 y T193 (anuncios)**: el plan pone la tabla `announcements` en `notifications/schema.ts` con clave foránea a `apps`. Pero en ARQUITECTURA §3, `notifications` (orden 2) va antes que `apps` (orden 3), así que esa clave foránea rompe la regla de que cada funcionalidad solo importa de las anteriores. Opciones:
-  - **A (recomendada)**: la tabla y su lectura viven en `apps` (el dueño de `app_id`), y `/app/status` la lee desde `apps` sin cruzar fronteras. Ningún cambio en el orden.
-  - **B**: mantener la tabla en `notifications` sin clave foránea (`app_id` como texto validado en el servicio). Pierde integridad referencial.
-  - **C**: un ADR que admita la arista `notifications` → `apps`. Es la decisión más costosa.
-- **T203 (freno global)**: el freno de `protections` necesita el coste diario de `ai`, y `ai` ya depende de `protections` (guard). Es un ciclo. Opciones:
-  - **A (recomendada)**: `protections` recibe el coste diario por parámetro (un puerto que compone la composición), así no importa de `ai`. La agregación sigue en `ai/repository.ts`.
-  - **B**: mover el freno a `ai`, con el guard en `protections` solo para la frecuencia.
-
-**Hallazgo de pruebas (contención, no defecto)**
-
-- En la validación completa han fallado, en dos ejecuciones distintas, dos E2E diferentes de `accounts.spec.ts` (inicio de sesión con datos erróneos, y recuperación de contraseña, con `__data.json` abortado). **Ambos pasan aislados, y el fichero completo de cuentas pasa (10/10)**. Según las reglas del proyecto, no los he tocado. Queda pendiente decidir si se estabilizan con las esperas de `networkidle` documentadas en `e2e-playwright-trampas`.
+1. Límite de cuenta: `ai_requests_per_minute` global, sobre la suma de todas las apps. Límite de app: el valor efectivo de la app (override ≤ global). Gana el primero alcanzado; la cuenta se comprueba antes.
+2. `Retry-After` de la frecuencia: segundos hasta que sale de la ventana la petición más antigua. Para la concurrencia, 5 s fijos (no hay un plazo que calcular).
+3. El freno se evalúa en cada petición de IA, con la agregación del día, salvo que ya esté activo hoy. Puede ser caro con mucho tráfico; a revisar con datos reales.
+4. El aviso del freno sale en segundo plano, sin retrasar el rechazo. Si el envío falla, queda registrado como `protections.brake.alert_failed`.
+5. El guard sigue siendo síncrono: la reserva ocurre en el mismo turno que antes, y las pruebas de cancelación (D-05) dependen de ese orden.
+6. `global_daily_free_cost_brake_eur` está en céntimos (500 = 5 €, como indica `Historias.md`). El nombre con `_eur` es engañoso; no lo renombro porque el spec lo usa así.
+7. Las cachés de frecuencia y concurrencia son de una instancia y se pierden al reiniciar (T200, aceptado). Con varias instancias, los límites se multiplicarían.
+8. Al cambiar de día el freno se rearma solo (el estado va por día). No se escribe auditoría `new_day`: no hay tarea programada que lo haga. Queda pendiente de decidir.
+9. En pruebas, los ajustes se cambian por `updateSetting` (valida, audita e invalida la caché). Cambiarlos en SQL directo dejaba la caché vieja y la prueba no medía nada.
+10. Las pruebas de concurrencia de saldo (créditos y chat) marcan su cuenta como compra real para no mezclar el saldo con el tope; el tope tiene sus propias pruebas.
 
 **Pendiente (no cerrado)**
 
-- T192, T193 y T203 (bloqueados, ver arriba).
-- T194 (integración y HTTP de anuncios) y T195 (checkpoint L04): dependen de T192.
-- T196 a T202 (estado de protecciones, límites por minuto con `Retry-After`, tope diario en la reserva, freno global y ranura de transcripción): no empezados. T197 a T199 son TDD y se pueden hacer sin decisiones pendientes, salvo el puerto del freno.
-- La decisión de T060 (protección de `main` y `staging`) no se ha aplicado: su condición previa ("ci.yml pase en el remoto") no se cumple, porque CI nunca se ha ejecutado en remoto. Las comprobaciones obligatorias serían nombres de trabajos que nunca han corrido.
-
-**Verificación**: `pnpm validate`: 684 pruebas en verde en las tres ejecuciones; un E2E de contención en cada una de dos de ellas (ver arriba). Cobertura del dominio al 100 % (tras eliminar una rama defensiva). `pnpm test:http`: 79 pruebas en verde, con la cabecera de versión.
+- **T195 (checkpoint L04)**: abierto. Lo cubierto: arquitectura (test de `tests/architecture`, en verde), `check`, `lint:changed`, build y HTTP. Falta V09 (mantenimiento por app):
+  - Paso 1, activar el mantenimiento desde la administración (W40): no tiene E2E en esta suite. Lo que sí hay es la prueba de integración del guard con el mantenimiento global.
+  - Pasos 2 a 4 por HTTP con Bearer y con dos apps: no están en `test:http`. Montarlos requiere activar el mantenimiento por la vía del administrador en el proceso del build, y eso no se ha hecho.
+- Liberación del freno desde la interfaz: `releaseBrake` existe y tiene pruebas; la pantalla es de L13.
+- Auditoría `new_day` (decisión 8).
+- Commits locales de L06–L09: no subidos. L06 a L08 siguen parciales, así que no se cumple la condición de subir al cerrar cada lote.
 
 ## Lote L08: transcripción (E08) e imagen (E09)
 
