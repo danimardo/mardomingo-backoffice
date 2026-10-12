@@ -73,6 +73,8 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 	test('con «Sistema», cambiar el sistema en /login no borra lo escrito', async ({ page }) => {
 		await emulate(page, { colorScheme: 'light' });
 		await page.goto('/login');
+		// Esperar a la hidratación: escribir antes la deja vacía al terminar de cargar la página (carrera con JavaScript).
+		await page.waitForLoadState('networkidle');
 		await page.getByLabel('Email').fill('texto que no se pierde');
 		await page.evaluate(() => {
 			window.__sinRecarga = true;
