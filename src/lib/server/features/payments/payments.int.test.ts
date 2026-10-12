@@ -213,3 +213,58 @@ describe('paquetes, proveedor y renuncia (BE-FR-23, BE-FR-26)', () => {
 		expect(paymentRowsOf(userId)).toEqual([]);
 	});
 });
+
+describe('vistas de compra (W20, W21)', () => {
+	it('los paquetes a la venta salen con sus créditos calculados y el orden de presentación', () => {
+		const packs = f.payments.packsForSale();
+
+		expect(packs.map((pack) => pack.id)).toEqual([
+			'pck_seed_5eur',
+			'pck_seed_10eur',
+			'pck_seed_25eur'
+		]);
+		expect(packs.find((pack) => pack.id === PACK_10)).toMatchObject({
+			priceCents: 1000,
+			bonusPct: 5,
+			creditsMicro: 10_500 * CREDIT
+		});
+	});
+
+	it('un paquete inactivo no aparece en la venta', () => {
+		f.base.db.update(packs).set({ active: false }).where(eq(packs.id, PACK_10)).run();
+
+		expect(f.payments.packsForSale().map((pack) => pack.id)).not.toContain(PACK_10);
+	});
+
+	it('en producción, un usuario normal ve «Próximamente» y un tester no', () => {
+		const prod = paymentsFixture('production');
+		try {
+			expect(prod.payments.availability('user')).toEqual({
+				canPurchase: false,
+				reason: 'coming_soon'
+			});
+			expect(prod.payments.availability('user,tester')).toEqual({
+				canPurchase: true,
+				reason: null
+			});
+		} finally {
+			prod.close();
+		}
+	});
+
+	it('la compra de otra cuenta no existe para el usuario que la pide', () => {
+		const { userId, waiverId } = f.addAccount('usr_vista_dueno');
+		const otro = f.addAccount('usr_vista_otro');
+		const outcome = purchase(userId, waiverId, 'att_vista');
+		if (outcome.status !== 'completed') throw new Error('la compra debía completarse');
+
+		expect(f.payments.purchaseOf(userId, outcome.paymentId)).toMatchObject({
+			packName: 'Pack 10 €',
+			priceCents: 1000,
+			vatCents: 174,
+			simulated: true,
+			status: 'completed'
+		});
+		expect(f.payments.purchaseOf(otro.userId, outcome.paymentId)).toBeUndefined();
+	});
+});

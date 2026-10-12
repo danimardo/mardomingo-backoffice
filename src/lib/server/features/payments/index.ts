@@ -7,6 +7,8 @@ export {
 	type PaymentsService,
 	type PurchaseInput,
 	type PurchaseOutcome,
-	type RefundOutcome
+	type PurchaseView,
+	type RefundOutcome,
+	type SalePack
 } from './service';
 export { PAYMENTS_LOG_EVENTS, type PaymentsLogFields } from './events';

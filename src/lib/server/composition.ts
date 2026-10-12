@@ -14,6 +14,8 @@ import { createEcbFxSource } from './adapters/ecb/ecb-fx-source';
 import { createFakeInvoicing } from './adapters/invoicing/fake';
 import { createNoneInvoicing } from './adapters/invoicing/none';
 import type { InvoicingProvider } from './adapters/invoicing/provider';
+import { createInvoicingService, type InvoicingService } from './features/invoicing';
+import { createPaymentsService, type PaymentsService } from './features/payments';
 import { createFakePaymentsProvider } from './adapters/payments/fake';
 import { createSimulatedProvider } from './adapters/payments/simulated';
 import type { PaymentsProvider } from './adapters/payments/provider';
@@ -60,6 +62,8 @@ export interface Composition {
 	readonly pricing: PricingDeps;
 	readonly paymentsProvider: PaymentsProvider;
 	readonly invoicingProvider: InvoicingProvider;
+	readonly invoicing: InvoicingService;
+	readonly payments: PaymentsService;
 	readonly ai: AiDeps;
 	readonly media: MediaDeps;
 	close(): void;
@@ -181,6 +185,21 @@ export function createComposition(
 		})
 	};
 
+	const invoicing = createInvoicingService({ db, logger, clock, ids, provider: invoicingProvider });
+	const payments = createPaymentsService({
+		db,
+		logger,
+		clock,
+		ids,
+		appEnv: config.APP_ENV,
+		apps,
+		provider: paymentsProvider,
+		credits,
+		invoicing,
+		legal,
+		auditDeps
+	});
+
 	const media: MediaDeps = {
 		transcriber:
 			config.MISTRAL_API_KEY === '' && config.MOCK_MISTRAL_URL === undefined
@@ -209,6 +228,8 @@ export function createComposition(
 		pricing,
 		paymentsProvider,
 		invoicingProvider,
+		invoicing,
+		payments,
 		ai,
 		media,
 		close: () => {

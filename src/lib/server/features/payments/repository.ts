@@ -1,7 +1,7 @@
 // Repositorio de pagos (BE-FR-23, BE-FR-25 CA4, BE-FR-27; data-model 2.9; T223). La tabla `payments` la crea L02; aquí solo
 // se lee y se escribe. Las transiciones de estado válidas las comprueba el servicio con el dominio; el repositorio no decide
 // negocio. Toda búsqueda filtra por `user_id` cuando la compra es de un usuario concreto.
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toEurCents } from '$lib/shared/money';
@@ -62,4 +62,9 @@ export function setRefundedEurCents(
 /** Paquete por id, esté activo o no: el servicio decide si se puede vender (BE-FR-23). */
 export function findPack(db: Db | Tx, id: string): typeof packs.$inferSelect | undefined {
 	return db.select().from(packs).where(eq(packs.id, id)).get();
+}
+
+/** Paquetes a la venta, por orden de presentación (BE-FR-23). */
+export function activePacks(db: Db | Tx): (typeof packs.$inferSelect)[] {
+	return db.select().from(packs).where(eq(packs.active, true)).orderBy(asc(packs.sortOrder)).all();
 }
