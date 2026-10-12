@@ -34,7 +34,7 @@ describe('datos iniciales', () => {
 		seedDefaults(database.db, fixedClock(), createIdGenerator(seededRandomBytes(5)));
 
 		expect(counts(database.db)).toEqual(first);
-		expect(first).toEqual({ settings: 42, apps: 1, operations: 11, packs: 3 });
+		expect(first).toEqual({ settings: 45, apps: 1, operations: 11, packs: 3 });
 	});
 
 	it('no sobrescribe un parámetro que el administrador ya cambió', () => {

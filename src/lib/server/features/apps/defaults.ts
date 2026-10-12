@@ -37,6 +37,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
 	registrations_per_ip_24h: 3,
 	login_max_failures: 10,
 	login_lock_minutes: 15,
+	// Límites por IP (BE-FR-45). Valores provisionales: la especificación no los fija; pendientes de revisión del propietario.
+	login_per_ip_15min: 30,
+	resend_verification_per_ip_hour: 5,
+	password_reset_per_ip_hour: 5,
 	unverified_account_ttl_days: 7,
 	min_age: 18,
 	inactive_account_years: 3,

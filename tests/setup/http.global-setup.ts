@@ -28,6 +28,8 @@ declare module 'vitest' {
 		httpBaseUrl: string;
 		/** Token Bearer de la cuenta de chat sembrada (T178). */
 		httpChatToken: string;
+		/** Token Bearer de una cuenta dedicada a los límites y al freno, que no comparte estado con la de chat (T208). */
+		httpRateToken: string;
 		/** Simulador de OpenRouter que usa el servidor construido (T178). */
 		openrouterMockUrl: string;
 		/** Simulador de Voxtral que usa el servidor construido (T187). */
@@ -39,6 +41,7 @@ declare module 'vitest' {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CHAT_USER_ID = 'usr_http_chat';
+const RATE_USER_ID = 'usr_http_rate';
 
 const DIR = join('tests', '.tmp', 'http');
 
@@ -111,8 +114,30 @@ export default async function setup(project: TestProject): Promise<() => Promise
 	project.provide('httpBaseUrl', baseUrl);
 	// La base la migra y la siembra el propio servidor al arrancar; la cuenta de chat se escribe después, en la misma base.
 	const chatToken = randomBytes(32).toString('hex');
-	seedChatAccount(join(DIR, 'app.db'), chatToken);
+	{
+		const { sqlite, db } = openDatabase(join(DIR, 'app.db'));
+		try {
+			activateChatOperation(db);
+			prepareMediaOperations(db);
+		} finally {
+			sqlite.close();
+		}
+	}
+	seedChatAccount(join(DIR, 'app.db'), chatToken, {
+		id: CHAT_USER_ID,
+		email: 'chat@ejemplo.es',
+		sessionId: 'ses_http_chat',
+		seed: 91
+	});
 	project.provide('httpChatToken', chatToken);
+	const rateToken = randomBytes(32).toString('hex');
+	seedChatAccount(join(DIR, 'app.db'), rateToken, {
+		id: RATE_USER_ID,
+		email: 'rate@ejemplo.es',
+		sessionId: 'ses_http_rate',
+		seed: 92
+	});
+	project.provide('httpRateToken', rateToken);
 	project.provide('openrouterMockUrl', openrouter.url);
 	project.provide('mistralMockUrl', mistral.url);
 	project.provide('httpDatabasePath', join(DIR, 'app.db'));
@@ -135,16 +160,25 @@ export default async function setup(project: TestProject): Promise<() => Promise
  * Cuenta verificada con una sesión de la app `secretario`, la operación de chat activa, la aceptación vigente de los
  * documentos legales y la bienvenida. El token Bearer es la propia `session.token`: el servidor lo firma al leerlo.
  */
-function seedChatAccount(file: string, token: string): void {
+function seedChatAccount(
+	file: string,
+	token: string,
+	account: {
+		readonly id: string;
+		readonly email: string;
+		readonly sessionId: string;
+		readonly seed: number;
+	}
+): void {
 	const { sqlite, db } = openDatabase(file);
 	try {
 		const clock = createSystemClock();
 		const now = new Date(clock.now());
 		db.insert(user)
 			.values({
-				id: CHAT_USER_ID,
-				email: 'chat@ejemplo.es',
-				emailNormalized: 'chat@ejemplo.es',
+				id: account.id,
+				email: account.email,
+				emailNormalized: account.email,
 				emailVerified: true,
 				createdAt: now,
 				updatedAt: now
@@ -152,8 +186,8 @@ function seedChatAccount(file: string, token: string): void {
 			.run();
 		db.insert(session)
 			.values({
-				id: 'ses_http_chat',
-				userId: CHAT_USER_ID,
+				id: account.sessionId,
+				userId: account.id,
 				token,
 				expiresAt: new Date(now.getTime() + 30 * DAY_MS),
 				appId: SEEDED_APP_ID,
@@ -167,12 +201,10 @@ function seedChatAccount(file: string, token: string): void {
 			db,
 			logger: createFakeLogger(),
 			clock,
-			ids: createIdGenerator(seededRandomBytes(91))
+			ids: createIdGenerator(seededRandomBytes(account.seed))
 		};
-		activateChatOperation(db);
-		grantChatWelcome(deps, CHAT_USER_ID);
-		acceptCurrentLegal(deps, CHAT_USER_ID);
-		prepareMediaOperations(db);
+		grantChatWelcome(deps, account.id);
+		acceptCurrentLegal(deps, account.id);
 	} finally {
 		sqlite.close();
 	}
