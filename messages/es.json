@@ -213,5 +213,16 @@
 	"payments_result_mode": "Modo",
 	"payments_result_simulated": "Compra simulada de prueba: no es un ingreso real.",
 	"payments_back_to_account": "Volver a tu cuenta",
-	"panel_nav_label": "Navegación del panel"
+	"panel_nav_label": "Navegación del panel",
+	"pagination_label": "Paginación",
+	"pagination_previous": "Anterior",
+	"pagination_next": "Siguiente",
+	"pagination_page": "Página {page}",
+	"empty_title": "Todavía no hay datos",
+	"empty_body": "Cuando haya movimientos o consumo, aparecerán aquí.",
+	"empty_no_match_title": "Ningún resultado",
+	"empty_no_match_body": "Ningún elemento coincide con el filtro «{filter}». Cambia o quita el filtro para ver más.",
+	"banner_level_info": "Información",
+	"banner_level_warning": "Aviso",
+	"banner_level_critical": "Crítico"
 }
