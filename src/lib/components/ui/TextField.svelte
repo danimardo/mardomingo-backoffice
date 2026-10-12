@@ -50,10 +50,7 @@
 		{autocomplete}
 		{required}
 		{disabled}
-		{value}
-		oninput={(event) => {
-			value = event.currentTarget.value;
-		}}
+		bind:value
 		aria-invalid={error !== '' ? 'true' : undefined}
 		aria-describedby={describedBy}
 	/>
