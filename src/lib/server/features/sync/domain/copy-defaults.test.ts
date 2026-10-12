@@ -80,3 +80,63 @@ describe('applyCopy', () => {
 		expect(SOURCE.customReplacements.items).toHaveLength(2);
 	});
 });
+
+describe('casos de borde de la copia', () => {
+	it('la vista previa ignora entradas que no son objetos o no tienen clave de texto', () => {
+		const messy = {
+			customReplacements: {
+				items: ['texto suelto', { from: 5 }, { from: 'a', updatedAt: 1 }],
+				tombstones: []
+			}
+		};
+
+		expect(previewCopy(SCHEMA, messy)).toEqual([
+			{ category: 'customReplacements', elements: ['a'] }
+		]);
+	});
+
+	it('una categoría items con valor que no es un objeto no ofrece elementos', () => {
+		expect(previewCopy(SCHEMA, { customReplacements: [1, 2] })).toEqual([
+			{ category: 'customReplacements', elements: [] }
+		]);
+	});
+
+	it('un bloque no se copia si la selección no lo incluye', () => {
+		expect(
+			applyCopy(SCHEMA, SOURCE, [{ category: 'coreReplacements', elements: ['otro'] }])
+		).toEqual({});
+	});
+
+	it('una selección de elementos inexistentes no copia nada de items', () => {
+		expect(
+			applyCopy(SCHEMA, SOURCE, [{ category: 'customReplacements', elements: ['nadie'] }])
+		).toEqual({});
+	});
+
+	it('una categoría items cuyo valor no tiene la forma de items no se copia', () => {
+		expect(
+			applyCopy(SCHEMA, { customReplacements: [1] }, [
+				{ category: 'customReplacements', elements: ['hola'] }
+			])
+		).toEqual({});
+		expect(
+			applyCopy(SCHEMA, { customReplacements: { items: 'x' } }, [
+				{ category: 'customReplacements', elements: ['hola'] }
+			])
+		).toEqual({});
+	});
+
+	it('una categoría keyed cuyo valor no es un objeto no se copia', () => {
+		expect(
+			applyCopy(SCHEMA, { preferences: ['es'] }, [
+				{ category: 'preferences', elements: ['language'] }
+			])
+		).toEqual({});
+	});
+
+	it('una selección de claves keyed inexistentes no copia nada', () => {
+		expect(applyCopy(SCHEMA, SOURCE, [{ category: 'preferences', elements: ['otra'] }])).toEqual(
+			{}
+		);
+	});
+});

@@ -8,6 +8,12 @@ import {
 	ResendVerificationBody
 } from '$lib/server/features/accounts';
 import { ChatRequestBody, ImageRequestBody } from '$lib/server/features/ai';
+import {
+	DefaultsResponse,
+	GetSyncResponse,
+	PutSyncBody,
+	PutSyncResponse
+} from '$lib/server/features/sync';
 
 export const apiErrorSchema = z
 	.object({
@@ -138,6 +144,52 @@ export function buildOpenApiDocument(publicApiUrl: string) {
 						'502': { description: 'Error del proveedor o moderación' },
 						'503': { description: 'Mantenimiento o app desactivada' },
 						'504': { description: 'Tiempo agotado con el proveedor' }
+					}
+				}
+			},
+			'/sync': {
+				get: {
+					summary: 'Documento sincronizado de la app (Bearer; siembra la primera vez)',
+					responses: {
+						'200': {
+							description: 'Revisión y documento',
+							content: { 'application/json': { schema: GetSyncResponse } }
+						},
+						'401': { description: 'Sin sesión válida para la app' },
+						'403': { description: 'Documentos legales pendientes' },
+						'426': { description: 'Versión de la app inferior a la mínima' },
+						'503': { description: 'Mantenimiento' }
+					}
+				},
+				put: {
+					summary: 'Sustituye el documento; If-Match obligatorio con la revisión leída',
+					requestBody: { content: { 'application/json': { schema: PutSyncBody } } },
+					responses: {
+						'200': {
+							description: 'Nueva revisión',
+							content: { 'application/json': { schema: PutSyncResponse } }
+						},
+						'400': {
+							description: 'If-Match ausente o mal formado, o documento no válido para el esquema'
+						},
+						'401': { description: 'Sin sesión válida para la app' },
+						'403': { description: 'Documentos legales pendientes' },
+						'412': { description: 'SYNC_CONFLICT: la revisión no coincide; relee y reintenta' },
+						'413': { description: 'El documento supera max_sync_doc_kb' },
+						'426': { description: 'Versión de la app inferior a la mínima' },
+						'503': { description: 'Mantenimiento' }
+					}
+				}
+			},
+			'/defaults': {
+				get: {
+					summary: 'Predeterminados vigentes de la app (solo exige versión)',
+					responses: {
+						'200': {
+							description: 'Predeterminados',
+							content: { 'application/json': { schema: DefaultsResponse } }
+						},
+						'426': { description: 'Versión de la app inferior a la mínima' }
 					}
 				}
 			},

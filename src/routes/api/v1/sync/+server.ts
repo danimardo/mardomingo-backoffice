@@ -14,7 +14,7 @@ import {
 	PutSyncBody
 } from '$lib/server/features/sync';
 
-const NO_STORE = { 'cache-control': 'private, no-store' };
+const NO_STORE = Object.freeze({ 'cache-control': 'private, no-store' });
 
 export const GET = apiRoute((event) => {
 	const app = requireApp(event);

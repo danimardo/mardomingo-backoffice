@@ -135,6 +135,16 @@ Orden recomendado. Nada de esto se ha desplegado; lo ejecutas tú en Coolify.
 5. **Staging, privacidad (V13)**: comprueba que ni el texto ni el audio aparecen en la base ni en los logs.
 6. **Textos legales**: entrega los definitivos revisados por tu abogado (T079 y T092).
 
+## Lote L11: sincronización y predeterminados (T211–T222)
+
+**Estado (2026-10-12)**: cerrado en local, con una deuda explícita (caché del esquema de T215, no implementada: el esquema se lee de la fila de la app en cada petición, y se medirá antes de añadir la caché).
+
+- Hecho: tablas `sync_documents` y `app_defaults` (migración `0009`); siembra de predeterminados de `secretario` vacía e idempotente; validación del documento por estrategia; siembra con fechas a cero y revisión 1; copia de predeterminados con vista previa y selección por elemento.
+- Hecho: `GET`/`PUT /api/v1/sync` con `If-Match` (412 `SYNC_CONFLICT`, 400 si falta o es inválido, 413, 403 de documentos legales, 503 de mantenimiento) y `GET /api/v1/defaults` (solo versión). Registrado en OpenAPI.
+- Decisiones: las marcas de borrado no se copian a predeterminados; el dominio de `sync` no importa `apps` ni `legal` (el esquema se declara con su misma forma, y las comprobaciones de legales y mantenimiento van en la capa de API).
+- Verificación: `validate` en verde (797 pruebas, 53 E2E); test de arquitectura en verde; dominio de `sync` al 100 % de líneas, ramas y funciones; HTTP sobre el build con 11 pruebas de sincronización.
+- Fuera de L11, como dice el plan: la pantalla de predeterminados y el E2E de la copia (L13).
+
 ## Lote L09 (cerrado el 2026-10-12, con dos huecos y un paso pendiente): versiones, mantenimiento y protecciones de la API
 
 **Estado (2026-10-12)**: T189 a T208 hechos. **Lote cerrado** por decisión del propietario, con dos huecos documentados (402 diario y transcripción simultánea, no verificables en local). **T209 sigue abierto**: comprobación del proxy en staging, bloqueo del primer despliegue. T195 queda absorbido por T210. Lo verificado está abajo; lo que falta, al final.
