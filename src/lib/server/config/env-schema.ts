@@ -72,7 +72,7 @@ const baseSchema = z.object({
 	RESEND_API_KEY: z.string().default(''),
 	TURNSTILE_SECRET: z.string().default(''),
 	PAYMENTS_PROVIDER: z.enum(['simulated', 'stripe']).default('simulated'),
-	INVOICING_PROVIDER: z.enum(['none', 'stripe', 'verifactu']).default('none'),
+	INVOICING_PROVIDER: z.enum(['none', 'fake', 'stripe', 'verifactu']).default('none'),
 	LOG_LEVEL: logLevel.optional(),
 	CLIENT_LOG_LEVEL: logLevel.optional(),
 	PORT: intFromEnv(1, 65535).default(3000),
@@ -114,7 +114,9 @@ const envSchema = baseSchema
 			});
 		}
 
-		if (env.INVOICING_PROVIDER !== 'none') {
+		// `fake` es el doble de pruebas: solo con APP_ENV=test. En la v4 la facturación real es `none` (BE-FR-75).
+		const fakeAllowed = env.INVOICING_PROVIDER === 'fake' && env.APP_ENV === 'test';
+		if (env.INVOICING_PROVIDER !== 'none' && !fakeAllowed) {
 			ctx.addIssue({
 				code: 'custom',
 				path: ['INVOICING_PROVIDER'],

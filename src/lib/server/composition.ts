@@ -11,6 +11,12 @@ import { createResendSender } from './adapters/resend/resend-sender';
 import { withOutbox } from './adapters/resend/outbox';
 import { createTurnstileVerifier } from './adapters/turnstile/turnstile-verifier';
 import { createEcbFxSource } from './adapters/ecb/ecb-fx-source';
+import { createFakeInvoicing } from './adapters/invoicing/fake';
+import { createNoneInvoicing } from './adapters/invoicing/none';
+import type { InvoicingProvider } from './adapters/invoicing/provider';
+import { createFakePaymentsProvider } from './adapters/payments/fake';
+import { createSimulatedProvider } from './adapters/payments/simulated';
+import type { PaymentsProvider } from './adapters/payments/provider';
 import { createOpenRouterGateway } from './adapters/openrouter/openrouter';
 import type { CaptchaVerifier } from './adapters/turnstile/captcha-verifier';
 import { createAccounts, type Accounts } from './features/accounts';
@@ -52,6 +58,8 @@ export interface Composition {
 	readonly sync: SyncDeps;
 	readonly credits: Credits;
 	readonly pricing: PricingDeps;
+	readonly paymentsProvider: PaymentsProvider;
+	readonly invoicingProvider: InvoicingProvider;
 	readonly ai: AiDeps;
 	readonly media: MediaDeps;
 	close(): void;
@@ -136,6 +144,17 @@ export function createComposition(
 		adminEmail: () => config.ADMIN_EMAIL ?? null,
 		supportEmail: () => supportEmail(apps)
 	};
+	// Proveedores de pagos y de facturación (BE-FR-24, BE-FR-75; T230, T231). Lo que no existe en la v4 falla al arrancar.
+	if (config.PAYMENTS_PROVIDER !== 'simulated') {
+		throw new Error('PAYMENTS_PROVIDER=stripe no está implementado en la v4 (BE-FR-29)');
+	}
+	if (config.INVOICING_PROVIDER === 'fake' && config.APP_ENV !== 'test') {
+		throw new Error('INVOICING_PROVIDER=fake solo se admite con APP_ENV=test');
+	}
+	const paymentsProvider: PaymentsProvider =
+		config.APP_ENV === 'test' ? createFakePaymentsProvider() : createSimulatedProvider();
+	const invoicingProvider: InvoicingProvider =
+		config.INVOICING_PROVIDER === 'fake' ? createFakeInvoicing() : createNoneInvoicing();
 	const pricing: PricingDeps = {
 		db,
 		logger,
@@ -188,6 +207,8 @@ export function createComposition(
 		sync,
 		credits,
 		pricing,
+		paymentsProvider,
+		invoicingProvider,
 		ai,
 		media,
 		close: () => {
