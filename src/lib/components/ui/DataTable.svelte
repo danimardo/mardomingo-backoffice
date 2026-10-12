@@ -20,6 +20,8 @@
 	} = $props();
 </script>
 
+<!-- Un contenedor desplazable debe poder enfocarse para recorrerlo con teclado (WCAG 2.1.1). -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div class="scroll" role="region" aria-label={caption} tabindex="0">
 	<table>
 		<caption>{caption}</caption>
