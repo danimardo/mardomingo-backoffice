@@ -16,12 +16,14 @@
 		<ul class="pages">
 			{#if current > 1}
 				{@const previous = hrefFor(current - 1)}
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- la ruta la compone el llamador con resolve(), como Button -->
-				<li><a href={previous}>{m.pagination_previous()}</a></li>
+				<li>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- la ruta la compone el llamador con resolve(), como Button -->
+					<a href={previous}>{m.pagination_previous()}</a>
+				</li>
 			{/if}
 			{#each pages as page (page)}
+				{@const href = hrefFor(page)}
 				<li>
-					{@const href = hrefFor(page)}
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- la ruta la compone el llamador con resolve(), como Button -->
 					<a {href} aria-current={page === current ? 'page' : undefined}>
 						{m.pagination_page({ page: String(page) })}
@@ -30,8 +32,10 @@
 			{/each}
 			{#if current < total}
 				{@const next = hrefFor(current + 1)}
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- la ruta la compone el llamador con resolve(), como Button -->
-				<li><a href={next}>{m.pagination_next()}</a></li>
+				<li>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- la ruta la compone el llamador con resolve(), como Button -->
+					<a href={next}>{m.pagination_next()}</a>
+				</li>
 			{/if}
 		</ul>
 	</nav>
