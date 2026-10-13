@@ -1,6 +1,6 @@
 // Sesiones de la cuenta para el panel (BE-FR-49.2; T264). Solo lee la tabla `session` de `accounts`: sin token, sin IP completa
 // (se muestra la aproximada de `shared/approx-ip`) y solo las vigentes.
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import { approximateIp } from '$lib/server/shared/approx-ip';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
@@ -37,4 +37,35 @@ export function sessionsOf(db: Db, userId: string, now: EpochMs): SessionView[] 
 			approxIp: row.ipAddress === null ? null : approximateIp(row.ipAddress),
 			userAgent: row.userAgent
 		}));
+}
+
+/**
+ * Cierra una sesión de la cuenta desde W26. Nunca cierra la sesión que está usando la persona () ni una de otra cuenta
+ * ().
+ */
+export function closeOtherSession(
+	db: Db,
+	input: {
+		readonly userId: string;
+		readonly sessionId: string;
+		readonly currentSessionId: string | null;
+	}
+): 'closed' | 'current' | 'not_found' {
+	if (input.sessionId === input.currentSessionId) return 'current';
+	const owned = db
+		.select({ id: session.id })
+		.from(session)
+		.where(and(eq(session.id, input.sessionId), eq(session.userId, input.userId)))
+		.get();
+	if (owned === undefined) return 'not_found';
+	db.delete(session)
+		.where(
+			and(
+				eq(session.id, input.sessionId),
+				eq(session.userId, input.userId),
+				ne(session.id, input.currentSessionId ?? '')
+			)
+		)
+		.run();
+	return 'closed';
 }

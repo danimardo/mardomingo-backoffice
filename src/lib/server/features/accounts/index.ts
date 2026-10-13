@@ -40,6 +40,7 @@ import {
 export { blockAccount, seedDisposableDomains } from './service';
 import { changePassword } from './password-change';
 export { sessionsOf, type SessionView } from './sessions';
+export { closeOtherSession } from './close-session';
 export { appsUsedBy } from './apps-used';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
 export type { AppLoginInput, AppLoginResult } from './service';
