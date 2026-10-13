@@ -293,5 +293,15 @@
 	"invoices_col_amount": "Importe",
 	"invoices_kind_simplified": "Simplificada",
 	"invoices_kind_full": "Completa",
-	"invoices_kind_corrective": "Rectificativa"
+	"invoices_kind_corrective": "Rectificativa",
+	"sessions_title": "Sesiones",
+	"sessions_hint": "Sesiones abiertas en tu cuenta. La IP se muestra aproximada.",
+	"sessions_caption": "Sesiones abiertas",
+	"sessions_col_created": "Abierta",
+	"sessions_col_used": "Último uso",
+	"sessions_col_device": "Dispositivo",
+	"sessions_col_ip": "IP aproximada",
+	"sessions_never_used": "Sin uso registrado",
+	"sessions_device_unknown": "Navegador",
+	"sessions_ip_unknown": "No disponible"
 }

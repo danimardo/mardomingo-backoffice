@@ -38,6 +38,7 @@ import {
 } from './service';
 
 export { blockAccount, seedDisposableDomains } from './service';
+export { sessionsOf, type SessionView } from './sessions';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
 export type { AppLoginInput, AppLoginResult } from './service';
 import { denialOf, type Access, type SessionUser } from './guards';
