@@ -303,5 +303,11 @@
 	"sessions_col_ip": "IP aproximada",
 	"sessions_never_used": "Sin uso registrado",
 	"sessions_device_unknown": "Navegador",
-	"sessions_ip_unknown": "No disponible"
+	"sessions_ip_unknown": "No disponible",
+	"apps_title": "Mis apps",
+	"apps_used": "Ya la has usado.",
+	"apps_not_used": "Todavía no la has usado.",
+	"apps_download": "Descargar {name}",
+	"apps_download_unavailable": "La descarga no está disponible todavía.",
+	"apps_access": "Abrir {name}"
 }
