@@ -309,5 +309,6 @@
 	"apps_not_used": "Todavía no la has usado.",
 	"apps_download": "Descargar {name}",
 	"apps_download_unavailable": "La descarga no está disponible todavía.",
-	"apps_access": "Abrir {name}"
+	"apps_access": "Abrir {name}",
+	"panel_nav_home": "Resumen"
 }
