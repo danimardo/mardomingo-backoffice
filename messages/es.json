@@ -284,5 +284,14 @@
 	"panel_bucket_col_expires": "Caduca",
 	"panel_bucket_col_mode": "Modo",
 	"panel_pending_documents": "Hay documentos legales pendientes de aceptar.",
-	"panel_support": "¿Necesitas ayuda? Escribe a {email}."
+	"panel_support": "¿Necesitas ayuda? Escribe a {email}.",
+	"invoices_title": "Facturas",
+	"invoices_caption": "Facturas de tu cuenta",
+	"invoices_col_date": "Fecha",
+	"invoices_col_kind": "Tipo",
+	"invoices_col_number": "Número",
+	"invoices_col_amount": "Importe",
+	"invoices_kind_simplified": "Simplificada",
+	"invoices_kind_full": "Completa",
+	"invoices_kind_corrective": "Rectificativa"
 }

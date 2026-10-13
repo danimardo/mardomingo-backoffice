@@ -4,6 +4,8 @@ export {
 	accountingExport,
 	correctPayment,
 	createInvoicingService,
+	invoicesFor,
+	type InvoiceView,
 	issueCorrective,
 	issueForPayment,
 	saveBillingProfile,

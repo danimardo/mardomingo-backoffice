@@ -20,13 +20,14 @@ import {
 	type PaymentFact,
 	type SaleFact
 } from './domain/accounting-csv';
-import { toEpochMs } from '$lib/shared/time';
+import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import {
 	billingProfileOf,
 	insertInvoice,
 	initialInvoiceOf,
 	invoiceByIssueKey,
 	invoiceById,
+	invoicesOfPayments,
 	upsertBillingProfile
 } from './repository';
 
@@ -276,6 +277,7 @@ export interface InvoicingService {
 	issueForPayment(input: IssueForPaymentInput): IssueOutcome;
 	issueCorrective(input: IssueCorrectiveInput): IssueOutcome;
 	correctPayment(input: CorrectPaymentInput): IssueOutcome;
+	invoicesFor(paymentIds: readonly string[]): InvoiceView[];
 }
 
 export function createInvoicingService(deps: InvoicingDeps): InvoicingService {
@@ -283,7 +285,8 @@ export function createInvoicingService(deps: InvoicingDeps): InvoicingService {
 		saveBillingProfile: (input) => saveBillingProfile(deps, input),
 		issueForPayment: (input) => issueForPayment(deps, input),
 		issueCorrective: (input) => issueCorrective(deps, input),
-		correctPayment: (input) => correctPayment(deps, input)
+		correctPayment: (input) => correctPayment(deps, input),
+		invoicesFor: (paymentIds) => invoicesFor(deps, paymentIds)
 	};
 }
 
@@ -323,4 +326,32 @@ export function accountingExport(
 		monthlyCsv: toCsv(monthlySummaryRows(sales), { header: MONTHLY_HEADER, bom: true }),
 		aiCostsCsv: toCsv(aiCostRows(input.aiCosts), { header: AI_COSTS_HEADER, bom: true })
 	};
+}
+
+/** Vista de una factura para el panel (W30): sin id de proveedor ni clave de emisión. */
+export interface InvoiceView {
+	readonly id: string;
+	readonly kind: 'simplified' | 'full' | 'corrective';
+	readonly series: string;
+	readonly number: string;
+	readonly amountEurCents: number;
+	readonly issuedAt: EpochMs;
+}
+
+/**
+ * Facturas de las compras que indica `payments` (W30, BE-FR-75). `invoicing` no conoce qué compras son de quién: el llamador
+ * le pasa los ids de pago de la cuenta, así que no lee la tabla de compras.
+ */
+export function invoicesFor(
+	deps: Pick<InvoicingDeps, 'db'>,
+	paymentIds: readonly string[]
+): InvoiceView[] {
+	return invoicesOfPayments(deps.db, paymentIds).map((row) => ({
+		id: row.id,
+		kind: row.kind,
+		series: row.series,
+		number: row.number,
+		amountEurCents: row.amountEurCents,
+		issuedAt: row.issuedAt
+	}));
 }

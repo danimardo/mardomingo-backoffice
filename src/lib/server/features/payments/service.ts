@@ -28,6 +28,7 @@ import {
 	findByProviderRef,
 	findPack,
 	insertPayment,
+	paymentIdsOfUser,
 	setRefundedEurCents,
 	setStatus,
 	type PaymentRow
@@ -384,6 +385,10 @@ export function purchaseOf(
 	};
 }
 
+export function paymentIdsOf(deps: PaymentsDeps, userId: string): string[] {
+	return paymentIdsOfUser(deps.db, userId);
+}
+
 export interface PaymentsService {
 	purchase(input: PurchaseInput): PurchaseOutcome;
 	handleProviderEvents(body: unknown): void;
@@ -399,6 +404,7 @@ export interface PaymentsService {
 		readonly reason: 'coming_soon' | null;
 	};
 	purchaseOf(userId: string, paymentId: string): PurchaseView | undefined;
+	paymentIdsOf(userId: string): string[];
 }
 
 export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
@@ -410,6 +416,7 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 		refund: (input) => refund(deps, input),
 		packsForSale: () => packsForSale(deps),
 		availability: (role) => purchaseAvailability(deps, role),
-		purchaseOf: (userId, paymentId) => purchaseOf(deps, userId, paymentId)
+		purchaseOf: (userId, paymentId) => purchaseOf(deps, userId, paymentId),
+		paymentIdsOf: (userId) => paymentIdsOf(deps, userId)
 	};
 }
