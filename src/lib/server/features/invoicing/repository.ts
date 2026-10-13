@@ -1,6 +1,6 @@
 // Acceso a las tablas de `invoicing` (T238). Solo lee y escribe filas; las reglas viven en `service.ts`. Las facturas son
 // inmutables en base de datos (triggers de la migración 0011): aquí solo hay inserciones y lecturas.
-import { and, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import type { EpochMs } from '$lib/shared/time';
@@ -51,6 +51,17 @@ export function initialInvoiceOf(db: Db | Tx, paymentId: string): InvoiceRow | u
 		.from(invoices)
 		.where(and(eq(invoices.paymentId, paymentId), ne(invoices.kind, 'corrective')))
 		.get();
+}
+
+/** Facturas de las compras indicadas, de la más reciente a la más antigua (W30). */
+export function invoicesOfPayments(db: Db | Tx, paymentIds: readonly string[]): InvoiceRow[] {
+	if (paymentIds.length === 0) return [];
+	return db
+		.select()
+		.from(invoices)
+		.where(inArray(invoices.paymentId, [...paymentIds]))
+		.orderBy(desc(invoices.issuedAt), desc(invoices.id))
+		.all();
 }
 
 export function insertInvoice(tx: Tx, row: typeof invoices.$inferInsert): void {

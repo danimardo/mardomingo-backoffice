@@ -68,3 +68,13 @@ export function findPack(db: Db | Tx, id: string): typeof packs.$inferSelect | u
 export function activePacks(db: Db | Tx): (typeof packs.$inferSelect)[] {
 	return db.select().from(packs).where(eq(packs.active, true)).orderBy(asc(packs.sortOrder)).all();
 }
+
+/** Ids de las compras de una cuenta, para que `invoicing` liste sus facturas sin leer esta tabla (W30). */
+export function paymentIdsOfUser(db: Db | Tx, userId: string): string[] {
+	return db
+		.select({ id: payments.id })
+		.from(payments)
+		.where(eq(payments.userId, userId))
+		.all()
+		.map((row) => row.id);
+}
