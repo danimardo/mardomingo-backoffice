@@ -66,14 +66,6 @@
 
 <p>{m.panel_support({ email: data.supportEmail })}</p>
 
-<nav aria-label={m.panel_nav_label()}>
-	<ul>
-		<li><a href={resolve('/panel/comprar')}>{m.payments_title()}</a></li>
-		<li><a href={resolve('/panel/movimientos')}>{m.movements_title()}</a></li>
-		<li><a href={resolve('/panel/consumo')}>{m.consumption_title()}</a></li>
-	</ul>
-</nav>
-
 <style>
 	.balance {
 		display: grid;
