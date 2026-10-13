@@ -27,7 +27,14 @@ import {
 import type { AuditDeps } from '$lib/server/features/audit';
 import type { BucketKind } from './domain/ledger';
 import { freeAccountsOpenHoldsMicro, realPurchaseUserIds, type ReleaseReason } from './repository';
-import { movementsPage, type MovementRow, type MovementsPage } from './service';
+import {
+	bucketsOf,
+	lowBalanceView,
+	movementsPage,
+	type BucketView,
+	type MovementRow,
+	type MovementsPage
+} from './service';
 import { movementRowsOf, type MovementFact } from './csv-rows';
 
 export { movementRowsOf, type MovementFact };
@@ -36,6 +43,7 @@ import type { EpochMs } from '$lib/shared/time';
 export { balanceDto, welcomeDto, type BalanceDto, type WelcomeDto } from './presenters';
 export { CREDITS_LOG_EVENTS, type CreditsLogFields } from './events';
 export type {
+	BucketView,
 	MovementsPage,
 	MovementRow,
 	BalanceView,
@@ -119,6 +127,10 @@ export interface Credits {
 		readonly userId: string;
 		readonly paymentId: string;
 	}): ChargebackOutcome;
+	/** Umbral de saldo bajo y si el saldo está por debajo (W18, BE-FR-49.7). */
+	lowBalance(userId: string): { readonly thresholdMicro: number | null; readonly isBelow: boolean };
+	/** Bolsas con saldo para el resumen del panel (W18, BE-FR-49.1). */
+	buckets(userId: string): BucketView[];
 	/** Movimientos de la cuenta, de 25 en 25, con filtros de día y app (W22, BE-FR-49.3). */
 	movements(input: {
 		readonly userId: string;
@@ -151,6 +163,8 @@ export function createCredits(config: CreditsConfig): Credits {
 		withdrawForRefund: (input) => withdrawForRefund(deps, input),
 		applyChargeback: (input) => applyChargeback(deps, input),
 		movements: (input) => movementsPage(deps, input),
+		buckets: (userId) => bucketsOf(deps, userId),
+		lowBalance: (userId) => lowBalanceView(deps, userId),
 		welcomeOf: (userId) => welcomeOf(deps, userId)
 	};
 }

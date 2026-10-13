@@ -1,7 +1,7 @@
 // Servicio de `credits` (BE-FR-11.5, 12–18, 71; T123). Cada operación abre su propia transacción `BEGIN IMMEDIATE`, carga el
 // estado de la cuenta, aplica una transición del dominio puro (`domain/ledger.ts`) y persiste lo que devuelve. Como
 // better-sqlite3 es síncrono, dos operaciones no se pueden intercalar dentro de una transacción.
-import { and, desc, eq, gte, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, lte } from 'drizzle-orm';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction, type Tx } from '$lib/server/db/tx';
@@ -10,8 +10,9 @@ import { getSetting, type AppsDeps } from '$lib/server/features/apps';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
 import type { IdGenerator, IdKind } from '$lib/server/shared/ids';
-import { toEpochMs, type EpochMs } from '$lib/shared/time';
-import { startOfMadridDay } from '$lib/shared/dates';
+import { toEpochMs, type CivilDate, type EpochMs } from '$lib/shared/time';
+import { civilDateOf, startOfMadridDay } from '$lib/shared/dates';
+import { toMicro } from '$lib/shared/money';
 import { dailyCapVerdict } from './domain/daily-cap';
 import { lowBalanceVerdict, type LowBalanceEvent } from './domain/low-balance';
 import {
@@ -26,6 +27,7 @@ import {
 	canGrantWelcome,
 	canReserve,
 	type BucketKind,
+	type BucketSource,
 	type LedgerState,
 	type LineType
 } from './domain/ledger';
@@ -690,5 +692,50 @@ export function movementsPage(
 			hasPrevious: input.page > 1,
 			hasNext: found.length > MOVEMENTS_PAGE_SIZE
 		}
+	};
+}
+
+export interface BucketView {
+	readonly kind: BucketKind;
+	readonly source: BucketSource;
+	readonly remainingMicro: number;
+	/** Día de Madrid en que caduca la bolsa gratuita; nulo en las de pago (BE-FR-16). */
+	readonly expiresOn: CivilDate | null;
+	readonly simulated: boolean;
+}
+
+/** Bolsas con saldo de la cuenta, para el resumen del panel (BE-FR-49.1). Sin ids internos. */
+export function bucketsOf(deps: CreditsDeps, userId: string): BucketView[] {
+	return deps.db
+		.select({
+			kind: creditBuckets.kind,
+			source: creditBuckets.source,
+			remainingMicro: creditBuckets.remainingMicro,
+			expiresAt: creditBuckets.expiresAt,
+			simulated: creditBuckets.simulated
+		})
+		.from(creditBuckets)
+		.where(and(eq(creditBuckets.userId, userId), gt(creditBuckets.remainingMicro, toMicro(0))))
+		.orderBy(asc(creditBuckets.createdAt), asc(creditBuckets.id))
+		.all()
+		.map((row) => ({
+			kind: row.kind,
+			source: row.source,
+			remainingMicro: row.remainingMicro,
+			expiresOn: row.expiresAt === null ? null : civilDateOf(row.expiresAt),
+			simulated: row.simulated
+		}));
+}
+
+/** Umbral de saldo bajo de la cuenta y si el saldo total está por debajo (W18, BE-FR-49.7). Sin umbral, nunca está por debajo. */
+export function lowBalanceView(
+	deps: CreditsDeps,
+	userId: string
+): { readonly thresholdMicro: number | null; readonly isBelow: boolean } {
+	const state = lowBalanceStateOf(deps.db, userId);
+	const total = getBalance(deps, userId).totalMicro;
+	return {
+		thresholdMicro: state.thresholdMicro,
+		isBelow: state.thresholdMicro !== null && total < state.thresholdMicro
 	};
 }
