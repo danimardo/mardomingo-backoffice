@@ -4,6 +4,8 @@ export {
 	createOperation,
 	appAccessOf,
 	appNamesOf,
+	activeAppsForPanel,
+	type PanelApp,
 	announcementsFor,
 	appStatusOf,
 	type AnnouncementDto,

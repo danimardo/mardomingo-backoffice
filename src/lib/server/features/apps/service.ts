@@ -1,7 +1,7 @@
 // Servicio de `apps` (BE-FR-61, 62, 31). La configuración se resuelve con la herencia global → app → operación; cada
 // cambio se valida antes de guardarse y se audita en la misma transacción `BEGIN IMMEDIATE` (BE-FR-55). Las lecturas
 // usan `db`: dentro de una transacción de better-sqlite3 (una sola conexión) ya ven los cambios de la transacción.
-import { inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction } from '$lib/server/db/tx';
@@ -865,4 +865,30 @@ export function appNamesOf(
 		.where(inArray(apps.id, [...ids]))
 		.all();
 	return new Map(rows.map((row) => [row.id, row.name]));
+}
+
+/** App activa para el panel (W32, BE-FR-49.11): nombre, descripción y enlaces de descarga y de acceso cuando existen. */
+export interface PanelApp {
+	readonly id: string;
+	readonly name: string;
+	readonly description: string;
+	readonly downloadUrl: string | null;
+	readonly accessUrl: string | null;
+}
+
+/** Apps activas, por nombre. El enlace de descarga sale de `links.download_url`; el de acceso, de un `landing` externo. */
+export function activeAppsForPanel(deps: Pick<AppsDeps, 'db'>): PanelApp[] {
+	return deps.db
+		.select()
+		.from(apps)
+		.where(eq(apps.status, 'active'))
+		.orderBy(asc(apps.name))
+		.all()
+		.map((row) => ({
+			id: row.id,
+			name: row.name,
+			description: row.description,
+			downloadUrl: row.links.download_url ?? null,
+			accessUrl: row.links.landing.type === 'external' ? row.links.landing.url : null
+		}));
 }
