@@ -320,5 +320,9 @@
 	"profile_current_password": "Contraseña actual",
 	"profile_new_password": "Contraseña nueva",
 	"profile_repeat_password": "Repite la contraseña nueva",
-	"profile_password_submit": "Cambiar contraseña"
+	"profile_password_submit": "Cambiar contraseña",
+	"sessions_this_one": "(esta sesión)",
+	"sessions_close": "Cerrar la sesión de {device}",
+	"sessions_closed_notice": "Sesión cerrada.",
+	"sessions_close_error": "No se ha podido cerrar esa sesión. Recarga la página y vuelve a intentarlo."
 }

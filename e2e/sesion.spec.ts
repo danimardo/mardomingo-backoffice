@@ -241,3 +241,27 @@ test('@critical el perfil cambia la contraseña y la devuelve a la original', as
 	await page.getByRole('button', { name: 'Cambiar contraseña' }).click();
 	await expect(page).toHaveURL(/\/panel\/perfil\?aviso=password_changed$/);
 });
+
+// Cierre de otra sesión desde el panel (T264): una segunda sesión abierta en otro navegador se cierra desde W26.
+test('@critical cierra desde el panel otra sesión abierta de la misma cuenta', async ({
+	page,
+	browser
+}) => {
+	const otra = await browser.newContext();
+	try {
+		const segunda = await otra.newPage();
+		await login(segunda);
+		await login(page);
+		await page.goto('/panel/sesiones');
+		await page.waitForLoadState('networkidle');
+		await page
+			.getByRole('button', { name: /Cerrar la sesión de/ })
+			.first()
+			.click();
+
+		await expect(page).toHaveURL(/\/panel\/sesiones\?aviso=session_closed$/);
+		await expect(page.getByText('Sesión cerrada.')).toBeVisible();
+	} finally {
+		await otra.close();
+	}
+});
