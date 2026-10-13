@@ -38,6 +38,7 @@ import {
 } from './service';
 
 export { blockAccount, seedDisposableDomains } from './service';
+import { changePassword } from './password-change';
 export { sessionsOf, type SessionView } from './sessions';
 export { appsUsedBy } from './apps-used';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
@@ -77,6 +78,11 @@ export interface AccountsConfig {
 export type TokenKind = 'verification' | 'reset';
 
 export interface Accounts {
+	/** Cambio de contraseña con la actual; cierra las demás sesiones (W27, T266). */
+	changePassword(
+		headers: Headers,
+		input: { readonly currentPassword: string; readonly newPassword: string }
+	): Promise<'changed' | 'wrong_password'>;
 	register(input: RegisterInput): Promise<{ readonly sentTo: string }>;
 	resendVerification(input: {
 		readonly email: string;
@@ -160,6 +166,7 @@ export function createAccounts(config: AccountsConfig): Accounts {
 	const deps: AccountsDeps = { ...base, auth };
 	return {
 		auth,
+		changePassword: (headers, input) => changePassword(deps, headers, input),
 		register: (input) => register(deps, input),
 		resendVerification: (input) => resendVerification(deps, input),
 		verifyEmail: (token) => verifyEmail(deps, token),

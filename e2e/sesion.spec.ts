@@ -217,3 +217,27 @@ for (const scheme of ['light', 'dark'] as const) {
 		});
 	}
 }
+
+// Cambio de contraseña desde el perfil (T266): cambia y la devuelve a la original para no alterar
+// a las demás pruebas que usan la misma cuenta.
+test('@critical el perfil cambia la contraseña y la devuelve a la original', async ({ page }) => {
+	const NUEVA = 'contraseña-nueva-456';
+	await login(page);
+	await page.goto('/panel/perfil');
+	await page.waitForLoadState('networkidle');
+	await page.getByLabel('Contraseña actual').fill(PASSWORD);
+	await page.getByLabel('Contraseña nueva', { exact: true }).fill(NUEVA);
+	await page.getByLabel('Repite la contraseña nueva').fill(NUEVA);
+	await page.getByRole('button', { name: 'Cambiar contraseña' }).click();
+
+	await expect(page).toHaveURL(/\/panel\/perfil\?aviso=password_changed$/);
+	await expect(page.getByText('Tu contraseña se ha cambiado')).toBeVisible();
+
+	await page.goto('/panel/perfil');
+	await page.waitForLoadState('networkidle');
+	await page.getByLabel('Contraseña actual').fill(NUEVA);
+	await page.getByLabel('Contraseña nueva', { exact: true }).fill(PASSWORD);
+	await page.getByLabel('Repite la contraseña nueva').fill(PASSWORD);
+	await page.getByRole('button', { name: 'Cambiar contraseña' }).click();
+	await expect(page).toHaveURL(/\/panel\/perfil\?aviso=password_changed$/);
+});
