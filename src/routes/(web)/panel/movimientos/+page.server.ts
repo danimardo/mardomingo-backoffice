@@ -5,6 +5,7 @@ import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor, reportDenial } from '$lib/server/features/accounts';
 import { appNamesOf } from '$lib/server/features/apps';
+import { usedAppOptionsOf } from '$lib/server/web/used-apps';
 import { civilDateOf, madridMidnight, addDays } from '$lib/shared/dates';
 import { parsePanelFilters, queryOfFilters, type PanelFilters } from '$lib/schemas/common/filters';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
@@ -50,7 +51,8 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 			rows: [],
 			pagination: null,
 			exportHref: null,
-			applied: false
+			applied: false,
+			appOptions: []
 		};
 	}
 	const composition = getComposition();
@@ -69,6 +71,7 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 
 	return {
 		echo,
+		appOptions: usedAppOptionsOf(composition, access.user.id),
 		filters: parsed.value,
 		errors: NO_ERRORS,
 		rows: page.rows.map((row) => ({

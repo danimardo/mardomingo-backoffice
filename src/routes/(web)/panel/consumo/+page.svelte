@@ -84,6 +84,19 @@
 			value={data.echo.hasta}
 			error={data.errors.hasta ?? ''}
 		/>
+		<div class="field">
+			<label for="consumo-app">{m.movements_app_label()}</label>
+			<select id="consumo-app" name="app">
+				<option value="" selected={data.filters?.app === null || data.filters === null}>
+					{m.movements_app_all()}
+				</option>
+				{#each data.appOptions as option (option.value)}
+					<option value={option.value} selected={data.filters?.app === option.value}>
+						{option.label}
+					</option>
+				{/each}
+			</select>
+		</div>
 		<Button type="submit" variant="primary">{m.movements_apply()}</Button>
 	</fieldset>
 </form>

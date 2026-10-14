@@ -6,6 +6,7 @@ import { getComposition } from '$lib/server/composition.cache';
 import { consumptionPage } from '$lib/server/features/ai';
 import { accessFor, reportDenial } from '$lib/server/features/accounts';
 import { appNamesOf } from '$lib/server/features/apps';
+import { usedAppOptionsOf } from '$lib/server/web/used-apps';
 import { parsePanelFilters, queryOfFilters } from '$lib/schemas/common/filters';
 import { civilDateOf, madridMidnight, addDays } from '$lib/shared/dates';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
@@ -65,6 +66,7 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 
 	return {
 		echo,
+		appOptions: usedAppOptionsOf(composition, access.user.id),
 		filters,
 		errors: NO_ERRORS,
 		rows: page.rows.map((row) => ({
