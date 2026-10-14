@@ -118,6 +118,52 @@ test('@critical una segunda cuenta con el mismo buzón de gmail no recibe la bie
 	await page.waitForLoadState('networkidle');
 });
 
+// Panel de la cuenta (T272): va en este fichero para reutilizar la cuenta de arriba (límite de altas por IP).
+const PANEL_PAGES = [
+	'/panel',
+	'/panel/comprar',
+	'/panel/movimientos',
+	'/panel/consumo',
+	'/panel/sesiones',
+	'/panel/perfil',
+	'/panel/apps',
+	'/panel/facturas'
+] as const;
+
+test('cada página del panel carga con su título y sin error de servidor', async ({ page }) => {
+	await login(page);
+	for (const path of PANEL_PAGES) {
+		const response = await page.goto(path);
+		await page.waitForLoadState('networkidle');
+
+		expect(response?.status(), path).toBeLessThan(500);
+		await expect(page.locator('h1').first(), path).toBeVisible();
+	}
+});
+
+test('el perfil pide el cambio de email con la contraseña y confirma el envío', async ({
+	page
+}) => {
+	await page.goto('/panel/perfil');
+	await page.waitForLoadState('networkidle');
+
+	await page.getByLabel('Nuevo email').fill(uniqueGmail('nuevo'));
+	await page.locator('#perfil-email-contrasena').fill(PASSWORD);
+	await page.getByRole('button', { name: 'Enviar enlace de confirmación' }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByText('Te hemos enviado un enlace a la nueva dirección.')).toBeVisible();
+});
+
+test('las páginas del panel no tienen fallos de accesibilidad', async ({ page }, testInfo) => {
+	await login(page);
+	for (const path of PANEL_PAGES) {
+		await page.goto(path);
+		await page.waitForLoadState('networkidle');
+		await checkAccessibility(page, testInfo);
+	}
+});
+
 // Compra de créditos (T247, T248): va en este fichero, junto a la cuenta que crea el `beforeAll` de arriba, para no añadir
 // una cuenta más: el servidor de pruebas admite tres altas por IP en 24 h y esta cuenta contaba como la cuarta.
 
