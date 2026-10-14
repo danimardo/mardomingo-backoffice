@@ -26,4 +26,6 @@ export interface InvoicingProvider {
 	):
 		| { readonly ok: true; readonly pdfRef: string }
 		| { readonly ok: false; readonly reason: 'not_available' };
+	/** Bytes del PDF de una referencia obtenida con `getPdf`; `undefined` si no hay. */
+	readPdf(pdfRef: string): Uint8Array<ArrayBuffer> | undefined;
 }

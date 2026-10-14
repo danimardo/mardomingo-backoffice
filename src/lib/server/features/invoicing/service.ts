@@ -278,6 +278,8 @@ export interface InvoicingService {
 	issueCorrective(input: IssueCorrectiveInput): IssueOutcome;
 	correctPayment(input: CorrectPaymentInput): IssueOutcome;
 	invoicesFor(paymentIds: readonly string[]): InvoiceView[];
+	/** PDF de una factura propia (W31); `undefined` si no es de la cuenta o el proveedor no lo tiene. */
+	pdfOf(paymentIds: readonly string[], invoiceId: string): Uint8Array<ArrayBuffer> | undefined;
 }
 
 export function createInvoicingService(deps: InvoicingDeps): InvoicingService {
@@ -286,7 +288,8 @@ export function createInvoicingService(deps: InvoicingDeps): InvoicingService {
 		issueForPayment: (input) => issueForPayment(deps, input),
 		issueCorrective: (input) => issueCorrective(deps, input),
 		correctPayment: (input) => correctPayment(deps, input),
-		invoicesFor: (paymentIds) => invoicesFor(deps, paymentIds)
+		invoicesFor: (paymentIds) => invoicesFor(deps, paymentIds),
+		pdfOf: (paymentIds, invoiceId) => pdfOf(deps, paymentIds, invoiceId)
 	};
 }
 
@@ -354,4 +357,17 @@ export function invoicesFor(
 		amountEurCents: row.amountEurCents,
 		issuedAt: row.issuedAt
 	}));
+}
+
+/** PDF de una factura propia: la referencia del proveedor no sale del servicio (W31, BE-FR-75). */
+export function pdfOf(
+	deps: InvoicingDeps,
+	paymentIds: readonly string[],
+	invoiceId: string
+): Uint8Array<ArrayBuffer> | undefined {
+	const row = invoicesOfPayments(deps.db, paymentIds).find((item) => item.id === invoiceId);
+	if (row === undefined || row.providerRef === null) return undefined;
+	const pdf = deps.provider.getPdf(row.providerRef);
+	if (!pdf.ok) return undefined;
+	return deps.provider.readPdf(pdf.pdfRef);
 }
