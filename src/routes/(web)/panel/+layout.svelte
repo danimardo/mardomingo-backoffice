@@ -2,11 +2,12 @@
 	// Layout del panel (T259). No es barrera: el `load` de cada página y cada acción comprueban la sesión (contracts/web-routes.md).
 	// Aquí solo va la navegación común, con las mismas etiquetas que los títulos de cada página.
 	import type { Snippet } from 'svelte';
+	import type { LayoutData } from './$types';
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import PanelNav from '$lib/components/layout/PanelNav.svelte';
 
-	let { children }: { children: Snippet } = $props();
+	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
 	const links = $derived([
 		{ href: resolve('/panel'), label: m.panel_nav_home() },
@@ -20,5 +21,9 @@
 </script>
 
 <PanelNav {links} label={m.panel_nav_label()} />
+
+{#if data.pendingAcceptancesCount > 0}
+	<p role="status">{m.panel_nav_pending({ count: String(data.pendingAcceptancesCount) })}</p>
+{/if}
 
 {@render children()}
