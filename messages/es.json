@@ -330,5 +330,12 @@
 	"movements_app_label": "App",
 	"movements_app_all": "Todas las apps",
 	"panel_balance_eur": "Equivalente en euros",
-	"panel_balance_eur_unavailable": "No disponible sin paquetes a la venta"
+	"panel_balance_eur_unavailable": "No disponible sin paquetes a la venta",
+	"panel_pending_effect": "Hasta que los aceptes, las apps no atenderán nuevas peticiones que usen tus créditos ni tu documento.",
+	"panel_pending_error": "No se han podido registrar tus aceptaciones. Revisa la versión de cada documento y vuelve a intentarlo.",
+	"panel_pending_choose": "Marca los documentos que aceptas",
+	"panel_pending_accept": "Aceptar documentos",
+	"panel_doc_terms": "Términos de uso",
+	"panel_doc_privacy": "Política de privacidad",
+	"panel_doc_aup": "Política de uso aceptable"
 }

@@ -8,6 +8,7 @@ export {
 } from './service';
 export { pendingAcceptancesOf, type PendingAcceptance } from './pending';
 export { isOwnWithdrawalWaiver } from './repository';
+export { acceptDocuments } from './accept-documents';
 export { seedLegalDocuments, PROVISIONAL_VERSION } from './seed';
 export type { AcceptableDocument, CurrentVersion } from './repository';
 export { LEGAL_LOG_EVENTS, type LegalLogFields } from './events';

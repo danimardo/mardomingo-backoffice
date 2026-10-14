@@ -2,16 +2,18 @@
 // caducidad, estado de la bienvenida, aviso de saldo bajo, documentos legales pendientes y el correo de soporte. Requiere cuenta
 // verificada: sin sesión, al inicio de sesión; sin verificar, a reenviar la verificación. No se guarda en caché.
 // Los anuncios (BE-FR-85) y el equivalente en euros llegan con sus lecturas de otras funcionalidades (T260, T261).
-import { redirect } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor, appsUsedBy, reportDenial } from '$lib/server/features/accounts';
 import { announcementsForPanel, supportEmail } from '$lib/server/features/apps';
-import { pendingAcceptancesOf } from '$lib/server/features/legal';
+import { acceptDocuments, pendingAcceptancesOf } from '$lib/server/features/legal';
+import { AppError } from '$lib/server/shared/errors';
+import { clientIpOf } from '$lib/server/web/actions';
 import { syncedAppIds } from '$lib/server/features/sync';
 import { toEpochMs } from '$lib/shared/time';
 import { balanceEurCentsOf } from '$lib/server/web/balance-eur';
-import type { PageServerLoad } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	const access = accessFor(locals.user, 'verified');
@@ -76,4 +78,41 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 		})),
 		supportEmail: supportEmail(composition.apps)
 	};
+};
+
+const DOCUMENTS = ['terms', 'privacy', 'aup'] as const;
+
+export const actions: Actions = {
+	aceptarDocumentos: async ({ request, locals, getClientAddress }) => {
+		const access = accessFor(locals.user, 'verified');
+		if (access.kind !== 'allow') {
+			const login = resolve('/login');
+			redirect(303, login);
+		}
+		const form = await request.formData();
+		const accepted = form.getAll('documents').flatMap((value) => {
+			if (typeof value !== 'string') return [];
+			const [kind, version] = value.split(':');
+			const document = DOCUMENTS.find((item) => item === kind);
+			return document === undefined || version === undefined || version === ''
+				? []
+				: [{ document, version }];
+		});
+		if (accepted.length === 0) return fail(400, { errors: { documents: 'validation_invalid' } });
+
+		const composition = getComposition();
+		try {
+			acceptDocuments(composition.legal, {
+				userId: access.user.id,
+				ip: clientIpOf(getClientAddress),
+				now: toEpochMs(composition.clock.now()),
+				accepted
+			});
+		} catch (error) {
+			if (error instanceof AppError) return fail(409, { errors: { documents: error.code } });
+			throw error;
+		}
+		const done = `${resolve('/panel')}?aviso=terms_accepted`;
+		redirect(303, done);
+	}
 };
