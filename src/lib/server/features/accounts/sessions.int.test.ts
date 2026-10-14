@@ -35,6 +35,21 @@ function addSession(id: string, owner: string, expiresAt: number, ip: string | n
 }
 
 describe('sessionsOf (BE-FR-49.2)', () => {
+	it('la forma es exacta: solo los campos de la vista, sin token ni IP completa (T258)', () => {
+		addSession('ses_exacta', userId, NOW + 86_400_000, '203.0.113.42');
+
+		expect(sessionsOf(f.db, userId, toEpochMs(NOW))).toStrictEqual([
+			{
+				id: 'ses_exacta',
+				createdAt: toEpochMs(NOW),
+				lastUsedAt: null,
+				deviceName: null,
+				approxIp: '203.0.113.x',
+				userAgent: 'Mozilla/5.0'
+			}
+		]);
+	});
+
 	it('lista las sesiones vigentes con la IP aproximada y sin token', () => {
 		addSession('ses_1', userId, NOW + 86_400_000, '203.0.113.42');
 
