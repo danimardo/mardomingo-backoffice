@@ -98,12 +98,20 @@ jobs:
       - name: 6. E2E smoke, crítico y accesibilidad (Chromium)
         run: pnpm exec playwright test --project=chromium --grep "@smoke|@critical|@a11y|accesible|apariencia"
 
-      - name: 6. E2E en el resto de navegadores
+      - name: 6. E2E en Firefox
         if: steps.sensible.outputs.navegadores == 'todos'
-        run: pnpm exec playwright test --project=firefox --project=webkit --project=mobile-webkit
+        run: pnpm exec playwright test --project=firefox
+
+      # WebKit se ejecuta y se informa, pero no bloquea (decisión del propietario, 2026-10-14): sus fallos en Linux (login,
+      # teclado, contraste en oscuro) están pendientes de investigar; el resultado queda en los artefactos.
+      - name: 6. E2E en WebKit (informativo, no bloquea)
+        id: webkit
+        if: steps.sensible.outputs.navegadores == 'todos'
+        continue-on-error: true
+        run: pnpm exec playwright test --project=webkit --project=mobile-webkit
 
       - name: 6. Artefactos de fallo
-        if: failure()
+        if: failure() || steps.webkit.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-fallos
