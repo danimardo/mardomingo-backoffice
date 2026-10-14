@@ -1,5 +1,6 @@
 // Acceso a las tablas de `credits` (T123). Solo lee y escribe filas; ninguna regla vive aquí (eso es `domain/ledger.ts`).
 // Las escrituras reciben el `Tx` de la transacción `BEGIN IMMEDIATE` que abre el servicio.
+import type { Micro } from '$lib/shared/money';
 import { and, eq, gt, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
@@ -435,4 +436,17 @@ export function nextFreeExpiry(db: Db | Tx, userId: string): number | null {
 		)
 		.get();
 	return row?.at ?? null;
+}
+
+/** Umbral de saldo bajo (W27, BE-FR-49.7). Cambiarlo vuelve a armar el aviso: el nuevo umbral puede volver a cruzarse. */
+export function setLowBalanceThreshold(
+	tx: Tx,
+	userId: string,
+	thresholdMicro: Micro | null,
+	now: EpochMs
+): void {
+	tx.update(userBalances)
+		.set({ lowBalanceThresholdMicro: thresholdMicro, lowBalanceNotified: false, updatedAt: now })
+		.where(eq(userBalances.userId, userId))
+		.run();
 }

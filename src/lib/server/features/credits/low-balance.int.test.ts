@@ -88,6 +88,17 @@ describe('aviso de saldo bajo (BE-FR-49.7)', () => {
 		).toBe(false);
 	});
 
+	it('el umbral se guarda desde el perfil y cambiarlo vuelve a armar el aviso (W27, T267)', () => {
+		f.credits.setLowBalanceThreshold({ userId, thresholdMicro: 5 * CREDIT });
+		expect(f.credits.lowBalance(userId)).toStrictEqual({
+			thresholdMicro: 5 * CREDIT,
+			isBelow: false
+		});
+
+		f.credits.setLowBalanceThreshold({ userId, thresholdMicro: null });
+		expect(f.credits.lowBalance(userId)).toStrictEqual({ thresholdMicro: null, isBelow: false });
+	});
+
 	it('con el umbral desactivado, no hay aviso', () => {
 		expect(charge(200)).toMatchObject({ lowBalance: null });
 		expect(eventsNamed(f.logger, 'credits.low_balance.crossed')).toEqual([]);

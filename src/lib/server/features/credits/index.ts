@@ -30,6 +30,7 @@ import { freeAccountsOpenHoldsMicro, realPurchaseUserIds, type ReleaseReason } f
 import {
 	bucketsOf,
 	lowBalanceView,
+	setLowBalanceThreshold,
 	movementsPage,
 	type BucketView,
 	type MovementRow,
@@ -129,6 +130,11 @@ export interface Credits {
 	}): ChargebackOutcome;
 	/** Umbral de saldo bajo y si el saldo está por debajo (W18, BE-FR-49.7). */
 	lowBalance(userId: string): { readonly thresholdMicro: number | null; readonly isBelow: boolean };
+	/** Guarda el umbral de saldo bajo (W27); `null` lo desactiva. */
+	setLowBalanceThreshold(input: {
+		readonly userId: string;
+		readonly thresholdMicro: number | null;
+	}): void;
 	/** Bolsas con saldo para el resumen del panel (W18, BE-FR-49.1). */
 	buckets(userId: string): BucketView[];
 	/** Movimientos de la cuenta, de 25 en 25, con filtros de día y app (W22, BE-FR-49.3). */
@@ -165,6 +171,9 @@ export function createCredits(config: CreditsConfig): Credits {
 		movements: (input) => movementsPage(deps, input),
 		buckets: (userId) => bucketsOf(deps, userId),
 		lowBalance: (userId) => lowBalanceView(deps, userId),
+		setLowBalanceThreshold: (input) => {
+			setLowBalanceThreshold(deps, input);
+		},
 		welcomeOf: (userId) => welcomeOf(deps, userId)
 	};
 }

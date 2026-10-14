@@ -9,6 +9,31 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+	const billingErrorText = $derived(billingMessageOf(form?.billingError ?? null));
+	const thresholdText = $derived(
+		data.threshold === null ? '' : String(data.threshold / 1_000_000).replace('.', ',')
+	);
+
+	function billingMessageOf(key: string | null) {
+		switch (key) {
+			case 'invoicing_kind_invalid':
+				return m.invoicing_kind_invalid();
+			case 'invoicing_legal_name_required':
+				return m.invoicing_legal_name_required();
+			case 'invoicing_tax_id_invalid':
+				return m.invoicing_tax_id_invalid();
+			case 'invoicing_address_required':
+				return m.invoicing_address_required();
+			case 'invoicing_postal_code_required':
+				return m.invoicing_postal_code_required();
+			case 'invoicing_city_required':
+				return m.invoicing_city_required();
+			case 'invoicing_country_invalid':
+				return m.invoicing_country_invalid();
+			default:
+				return key === null ? '' : m.profile_billing_error();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -22,6 +47,12 @@
 {/if}
 {#if data.emailSent}
 	<Banner level="info">{m.profile_email_sent()}</Banner>
+{/if}
+{#if data.saved === 'threshold_saved'}
+	<Banner level="info">{m.profile_threshold_saved()}</Banner>
+{/if}
+{#if data.saved === 'billing_saved'}
+	<Banner level="info">{m.profile_billing_saved()}</Banner>
 {/if}
 
 <section aria-labelledby="perfil-cuenta">
@@ -56,6 +87,83 @@
 			error={errors.currentPassword ?? ''}
 		/>
 		<p><Button type="submit" variant="primary">{m.profile_email_change_submit()}</Button></p>
+	</form>
+</section>
+
+<section aria-labelledby="perfil-aviso-saldo">
+	<h2 id="perfil-aviso-saldo">{m.profile_alert_heading()}</h2>
+	<form method="POST" action="?/guardarAvisoSaldo">
+		<TextField
+			id="perfil-umbral"
+			name="threshold"
+			label={m.profile_alert_label()}
+			value={thresholdText}
+			hint={m.profile_alert_hint()}
+			error={errors.threshold ?? ''}
+		/>
+		<p><Button type="submit" variant="secondary">{m.profile_alert_submit()}</Button></p>
+	</form>
+</section>
+
+<section aria-labelledby="perfil-datos-fiscales">
+	<h2 id="perfil-datos-fiscales">{m.profile_billing_heading()}</h2>
+	<p>{m.profile_billing_intro()}</p>
+	{#if billingErrorText !== ''}
+		<Banner level="critical">{billingErrorText}</Banner>
+	{/if}
+	<form method="POST" action="?/guardarDatosFiscales">
+		<div class="campo">
+			<label for="fiscal-tipo">{m.profile_billing_kind()}</label>
+			<select id="fiscal-tipo" name="kind">
+				<option
+					value="individual"
+					selected={(form?.billingValues?.kind ?? data.billing.kind) !== 'business'}
+					>{m.profile_billing_individual()}</option
+				>
+				<option
+					value="business"
+					selected={(form?.billingValues?.kind ?? data.billing.kind) === 'business'}
+					>{m.profile_billing_business()}</option
+				>
+			</select>
+		</div>
+		<TextField
+			id="fiscal-nombre"
+			name="legalName"
+			label={m.profile_billing_legal_name()}
+			value={form?.billingValues?.legalName ?? data.billing.legalName ?? ''}
+		/>
+		<TextField
+			id="fiscal-nif"
+			name="taxId"
+			label={m.profile_billing_tax_id()}
+			value={form?.billingValues?.taxId ?? data.billing.taxId ?? ''}
+		/>
+		<TextField
+			id="fiscal-direccion"
+			name="address"
+			label={m.profile_billing_address()}
+			value={form?.billingValues?.address ?? data.billing.address ?? ''}
+		/>
+		<TextField
+			id="fiscal-cp"
+			name="postalCode"
+			label={m.profile_billing_postal_code()}
+			value={form?.billingValues?.postalCode ?? data.billing.postalCode ?? ''}
+		/>
+		<TextField
+			id="fiscal-ciudad"
+			name="city"
+			label={m.profile_billing_city()}
+			value={form?.billingValues?.city ?? data.billing.city ?? ''}
+		/>
+		<TextField
+			id="fiscal-pais"
+			name="country"
+			label={m.profile_billing_country()}
+			value={form?.billingValues?.country ?? data.billing.country ?? 'ES'}
+		/>
+		<p><Button type="submit" variant="primary">{m.profile_billing_submit()}</Button></p>
 	</form>
 </section>
 

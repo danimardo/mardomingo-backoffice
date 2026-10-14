@@ -55,7 +55,8 @@ import {
 	refundedMicroOf,
 	setRealPurchase,
 	lowBalanceStateOf,
-	setLowBalanceNotified
+	setLowBalanceNotified,
+	setLowBalanceThreshold as writeLowBalanceThreshold
 } from './repository';
 
 export interface CreditsDeps {
@@ -728,6 +729,21 @@ export function bucketsOf(deps: CreditsDeps, userId: string): BucketView[] {
 }
 
 /** Umbral de saldo bajo de la cuenta y si el saldo total está por debajo (W18, BE-FR-49.7). Sin umbral, nunca está por debajo. */
+/** Guarda el umbral de saldo bajo de la cuenta; `null` lo desactiva (W27, BE-FR-49.7). */
+export function setLowBalanceThreshold(
+	deps: CreditsDeps,
+	input: { readonly userId: string; readonly thresholdMicro: number | null }
+): void {
+	immediateTransaction(deps.db, (tx) => {
+		writeLowBalanceThreshold(
+			tx,
+			input.userId,
+			input.thresholdMicro === null ? null : toMicro(input.thresholdMicro),
+			toEpochMs(deps.clock.now())
+		);
+	});
+}
+
 export function lowBalanceView(
 	deps: CreditsDeps,
 	userId: string

@@ -28,6 +28,7 @@ import {
 	findByProviderRef,
 	findPack,
 	insertPayment,
+	markWantsFullInvoice,
 	paymentIdsOfUser,
 	setRefundedEurCents,
 	setStatus,
@@ -385,11 +386,25 @@ export function purchaseOf(
 	};
 }
 
+/** Pide factura completa de una compra propia (W30). `false` si la compra no es de la cuenta. */
+export function requestFullInvoice(
+	deps: PaymentsDeps,
+	input: { readonly userId: string; readonly paymentId: string }
+): boolean {
+	const row = findById(deps.db, input.paymentId);
+	if (row === undefined || row.userId !== input.userId) return false;
+	immediateTransaction(deps.db, (tx) => {
+		markWantsFullInvoice(tx, input.paymentId);
+	});
+	return true;
+}
+
 export function paymentIdsOf(deps: PaymentsDeps, userId: string): string[] {
 	return paymentIdsOfUser(deps.db, userId);
 }
 
 export interface PaymentsService {
+	requestFullInvoice(input: { readonly userId: string; readonly paymentId: string }): boolean;
 	purchase(input: PurchaseInput): PurchaseOutcome;
 	handleProviderEvents(body: unknown): void;
 	refund(input: {
@@ -417,6 +432,7 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 		packsForSale: () => packsForSale(deps),
 		availability: (role) => purchaseAvailability(deps, role),
 		purchaseOf: (userId, paymentId) => purchaseOf(deps, userId, paymentId),
-		paymentIdsOf: (userId) => paymentIdsOf(deps, userId)
+		paymentIdsOf: (userId) => paymentIdsOf(deps, userId),
+		requestFullInvoice: (input) => requestFullInvoice(deps, input)
 	};
 }
