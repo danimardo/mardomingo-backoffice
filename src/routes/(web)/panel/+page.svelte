@@ -4,7 +4,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
-	import { formatCredits } from '$lib/components/payments/format';
+	import { formatCredits, formatEuros } from '$lib/components/payments/format';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -40,6 +40,12 @@
 		<dd>{formatCredits(data.balance.totalMicro)}</dd>
 		<dt>{m.panel_balance_reserved()}</dt>
 		<dd>{formatCredits(data.balance.reservedMicro)}</dd>
+		<dt>{m.panel_balance_eur()}</dt>
+		<dd>
+			{data.balance.eurCents === null
+				? m.panel_balance_eur_unavailable()
+				: formatEuros(data.balance.eurCents)}
+		</dd>
 		<dt>{m.panel_balance_available()}</dt>
 		<dd>{formatCredits(data.balance.availableMicro)}</dd>
 		{#if data.balance.debtMicro > 0}

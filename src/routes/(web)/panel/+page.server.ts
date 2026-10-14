@@ -10,6 +10,7 @@ import { announcementsForPanel, supportEmail } from '$lib/server/features/apps';
 import { pendingAcceptancesOf } from '$lib/server/features/legal';
 import { syncedAppIds } from '$lib/server/features/sync';
 import { toEpochMs } from '$lib/shared/time';
+import { balanceEurCentsOf } from '$lib/server/web/balance-eur';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
@@ -37,6 +38,7 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	return {
 		email: access.user.email,
 		balance: {
+			eurCents: balanceEurCentsOf(balance.totalMicro, composition.payments.packsForSale()),
 			totalMicro: balance.totalMicro,
 			reservedMicro: balance.reservedMicro,
 			availableMicro: balance.availableMicro,
