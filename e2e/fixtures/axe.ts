@@ -32,7 +32,13 @@ export async function checkAccessibility(page: Page, testInfo: TestInfo): Promis
 		...insideGlass.violations
 	].filter((v) => BLOCKING.has(v.impact ?? ''));
 	expect(
-		blocking.map((v) => `${v.id} (${v.impact ?? '?'}): ${v.help}`),
+		blocking.map(
+			(v) =>
+				`${v.id} (${v.impact ?? '?'}): ${v.help} [${v.nodes
+					.slice(0, 3)
+					.map((node) => node.target.join(' '))
+					.join('; ')}] en ${page.url()}`
+		),
 		'violaciones serious o critical'
 	).toEqual([]);
 
