@@ -315,7 +315,7 @@
 	"profile_password_changed": "Tu contraseña se ha cambiado. Hemos cerrado tus otras sesiones abiertas.",
 	"profile_account_heading": "Cuenta",
 	"profile_email_label": "Email",
-	"profile_email_hint": "Cambiar el email llegará en una versión posterior.",
+	"profile_email_hint": "Para cambiarlo, usa el formulario de abajo: te enviamos un enlace a la nueva dirección.",
 	"profile_password_heading": "Cambiar contraseña",
 	"profile_current_password": "Contraseña actual",
 	"profile_new_password": "Contraseña nueva",
