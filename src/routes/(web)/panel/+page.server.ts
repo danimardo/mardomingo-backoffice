@@ -5,9 +5,10 @@
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
-import { accessFor, reportDenial } from '$lib/server/features/accounts';
-import { supportEmail } from '$lib/server/features/apps';
+import { accessFor, appsUsedBy, reportDenial } from '$lib/server/features/accounts';
+import { announcementsForPanel, supportEmail } from '$lib/server/features/apps';
 import { pendingAcceptancesOf } from '$lib/server/features/legal';
+import { syncedAppIds } from '$lib/server/features/sync';
 import { toEpochMs } from '$lib/shared/time';
 import type { PageServerLoad } from './$types';
 
@@ -58,6 +59,19 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 			userId,
 			toEpochMs(composition.clock.now())
 		).map((item) => ({ document: item.document, version: item.version })),
+		announcements: announcementsForPanel(
+			composition.apps,
+			[
+				...new Set([...appsUsedBy(composition.db, userId), ...syncedAppIds(composition.db, userId)])
+			],
+			toEpochMs(composition.clock.now())
+		).map((item) => ({
+			id: item.id,
+			level: item.level,
+			message: item.message,
+			link: item.link,
+			appName: item.appName
+		})),
 		supportEmail: supportEmail(composition.apps)
 	};
 };
