@@ -337,5 +337,6 @@
 	"panel_pending_accept": "Aceptar documentos",
 	"panel_doc_terms": "Términos de uso",
 	"panel_doc_privacy": "Política de privacidad",
-	"panel_doc_aup": "Política de uso aceptable"
+	"panel_doc_aup": "Política de uso aceptable",
+	"panel_nav_pending": "Tienes {count} documento(s) pendiente(s) de aceptar."
 }

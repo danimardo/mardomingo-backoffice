@@ -43,6 +43,7 @@ export { sessionsOf, type SessionView } from './sessions';
 export { closeOtherSession } from './close-session';
 export { emailOfUser } from './user-email';
 export { appsUsedBy } from './apps-used';
+export { touchActivity } from './activity';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
 export type { AppLoginInput, AppLoginResult } from './service';
 import { denialOf, type Access, type SessionUser } from './guards';
