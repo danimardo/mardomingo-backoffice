@@ -60,6 +60,13 @@
 	{/if}
 </section>
 
+{#each data.announcements as item (item.id)}
+	<Banner level={item.level}>
+		{#if item.appName !== null}{item.appName}:
+		{/if}{item.message}
+	</Banner>
+{/each}
+
 {#if data.pendingAcceptances.length > 0}
 	<Banner level="info">{m.panel_pending_documents()}</Banner>
 {/if}
