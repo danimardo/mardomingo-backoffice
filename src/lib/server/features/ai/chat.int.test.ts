@@ -20,6 +20,9 @@ import {
 } from '../../../../../tests/builders/chat';
 import { insertInFlightOperation } from '../../../../../tests/builders/ai-operations';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
+import { acceptCurrentLegal } from '../../../../../tests/builders/chat-account';
+import { createIdGenerator } from '$lib/server/shared/ids';
+import { seededRandomBytes } from '../../../../../tests/builders/ids';
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
 import { and } from 'drizzle-orm';
 import type { ChatResponseBody } from './contract';
@@ -138,6 +141,30 @@ describe('flujo de chat (§8)', () => {
 			expect(unaccepted.base.db.select().from(aiOperations).all()).toHaveLength(0);
 		} finally {
 			unaccepted.close();
+		}
+	});
+
+	it('tras aceptar la versión vigente, el mismo chat deja de bloquearse (BE-FR-70/CA2)', async () => {
+		const pending = chatFixture({ ready: false, welcome: true });
+		try {
+			await expect(runChat(pending.deps, pending.context(), chatBody())).rejects.toMatchObject({
+				code: 'TERMS_ACCEPTANCE_REQUIRED'
+			});
+
+			acceptCurrentLegal(
+				{
+					db: pending.base.db,
+					logger: pending.base.logger,
+					clock: pending.base.clock,
+					ids: createIdGenerator(seededRandomBytes(7))
+				},
+				pending.userId
+			);
+
+			const response = completed(await runChat(pending.deps, pending.context(), chatBody()));
+			expect(response).toMatchObject({ text: 'Respuesta simulada' });
+		} finally {
+			pending.close();
 		}
 	});
 
