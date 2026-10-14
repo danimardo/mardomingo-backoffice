@@ -2,7 +2,8 @@
 // Los campos nunca llevan el destinatario, el asunto ni el enlace; solo el motivo y el código del proveedor.
 import type { LogEventMeta } from '$lib/server/logging/events';
 
-export type EmailReason = 'verification' | 'password_reset' | 'password_changed' | 'admin_alert';
+export type EmailReason =
+	'verification' | 'password_reset' | 'password_changed' | 'admin_alert' | 'low_balance';
 
 /** Tipo de alerta al administrador, sin la clave (que puede llevar ids de usuario). */
 export type AlertType =

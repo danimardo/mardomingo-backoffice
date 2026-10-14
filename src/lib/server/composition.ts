@@ -171,6 +171,7 @@ export function createComposition(
 	};
 	const ai: AiDeps = {
 		db,
+		notifications,
 		protections: createProtectionsRuntime(),
 		logger,
 		clock,
