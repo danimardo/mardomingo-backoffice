@@ -25,3 +25,4 @@ export {
 	type ImageResponseBody,
 	type TranscriptionResponseBody
 } from './contract';
+export { consumptionRowDto, type ConsumptionRowDto } from './presenters';
