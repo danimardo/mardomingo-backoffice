@@ -144,6 +144,7 @@ test('cada página del panel carga con su título y sin error de servidor', asyn
 test('el perfil pide el cambio de email con la contraseña y confirma el envío', async ({
 	page
 }) => {
+	await login(page);
 	await page.goto('/panel/perfil');
 	await page.waitForLoadState('networkidle');
 
