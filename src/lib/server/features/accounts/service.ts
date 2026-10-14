@@ -322,7 +322,7 @@ const LOGIN_IP_WINDOW_MS = 15 * 60 * 1000;
  * Límite por IP de una acción (BE-FR-45, D-02): cuenta la petición en su ventana fija y, si supera el máximo, la rechaza
  * con `RATE_LIMITED` y `Retry-After`. El evento no lleva la IP.
  */
-function ipRateLimited(
+export function ipRateLimited(
 	deps: AccountsDeps,
 	scope: AuthRateScope,
 	ip: string,
