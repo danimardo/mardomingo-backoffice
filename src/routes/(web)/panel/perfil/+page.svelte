@@ -82,7 +82,7 @@
 		<PasswordField
 			id="perfil-email-contrasena"
 			name="currentPassword"
-			label={m.profile_current_password()}
+			label={m.profile_email_change_password()}
 			autocomplete="current-password"
 			error={errors.currentPassword ?? ''}
 		/>

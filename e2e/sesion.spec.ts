@@ -225,7 +225,7 @@ test('@critical el perfil cambia la contraseña y la devuelve a la original', as
 	await login(page);
 	await page.goto('/panel/perfil');
 	await page.waitForLoadState('networkidle');
-	await page.getByLabel('Contraseña actual').fill(PASSWORD);
+	await page.getByLabel('Contraseña actual', { exact: true }).fill(PASSWORD);
 	await page.getByLabel('Contraseña nueva', { exact: true }).fill(NUEVA);
 	await page.getByLabel('Repite la contraseña nueva').fill(NUEVA);
 	await page.getByRole('button', { name: 'Cambiar contraseña' }).click();
@@ -235,7 +235,7 @@ test('@critical el perfil cambia la contraseña y la devuelve a la original', as
 
 	await page.goto('/panel/perfil');
 	await page.waitForLoadState('networkidle');
-	await page.getByLabel('Contraseña actual').fill(NUEVA);
+	await page.getByLabel('Contraseña actual', { exact: true }).fill(NUEVA);
 	await page.getByLabel('Contraseña nueva', { exact: true }).fill(PASSWORD);
 	await page.getByLabel('Repite la contraseña nueva').fill(PASSWORD);
 	await page.getByRole('button', { name: 'Cambiar contraseña' }).click();

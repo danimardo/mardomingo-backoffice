@@ -384,5 +384,6 @@
 	"invoices_full_heading": "Pedir factura completa",
 	"invoices_full_intro": "Elige una compra para pedir factura completa en lugar de la simplificada.",
 	"invoices_full_purchase": "Compra",
-	"invoices_full_submit": "Pedir factura completa"
+	"invoices_full_submit": "Pedir factura completa",
+	"profile_email_change_password": "Contraseña actual para confirmar el cambio"
 }
