@@ -156,14 +156,20 @@ test('el perfil pide el cambio de email con la contraseña y confirma el envío'
 	await expect(page.getByText('Te hemos enviado un enlace a la nueva dirección.')).toBeVisible();
 });
 
-test('las páginas del panel no tienen fallos de accesibilidad', async ({ page }, testInfo) => {
-	await login(page);
-	for (const path of PANEL_PAGES) {
-		await page.goto(path);
-		await page.waitForLoadState('networkidle');
-		await checkAccessibility(page, testInfo);
-	}
-});
+for (const scheme of ['light', 'dark'] as const) {
+	test(`las páginas del panel no tienen fallos de accesibilidad con tema ${scheme}`, async ({
+		page
+	}, testInfo) => {
+		test.setTimeout(180_000);
+		await page.emulateMedia({ colorScheme: scheme });
+		await login(page);
+		for (const path of PANEL_PAGES) {
+			await page.goto(path);
+			await page.waitForLoadState('networkidle');
+			await checkAccessibility(page, testInfo);
+		}
+	});
+}
 
 // Compra de créditos (T247, T248): va en este fichero, junto a la cuenta que crea el `beforeAll` de arriba, para no añadir
 // una cuenta más: el servidor de pruebas admite tres altas por IP en 24 h y esta cuenta contaba como la cuarta.

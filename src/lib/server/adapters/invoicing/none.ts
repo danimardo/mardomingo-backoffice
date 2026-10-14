@@ -8,6 +8,7 @@ export function createNoneInvoicing(): InvoicingProvider {
 		name: 'none',
 		issueInvoice: () => notIssued,
 		issueCorrective: () => notIssued,
-		getPdf: () => ({ ok: false, reason: 'not_available' })
+		getPdf: () => ({ ok: false, reason: 'not_available' }),
+		readPdf: () => undefined
 	};
 }

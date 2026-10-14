@@ -7,6 +7,15 @@ export interface FakeInvoicingProvider extends InvoicingProvider {
 	issuedCount(): number;
 }
 
+/** PDF mínimo de prueba: no es una factura válida; solo sirve para probar la descarga (solo con `INVOICING_PROVIDER=fake`). */
+const FAKE_PDF = [
+	'%PDF-1.4',
+	'1 0 obj << /Type /Catalog >> endobj',
+	'% PDF de prueba {ref}',
+	'%%EOF',
+	''
+].join('\n');
+
 export function createFakeInvoicing(series = 'A'): FakeInvoicingProvider {
 	let counter = 0;
 	const issue = (input: IssueInput): IssueOutcome => {
@@ -22,6 +31,7 @@ export function createFakeInvoicing(series = 'A'): FakeInvoicingProvider {
 		issuedCount: () => counter,
 		issueInvoice: issue,
 		issueCorrective: (input) => issue(input),
-		getPdf: (providerRef) => ({ ok: true, pdfRef: `pdf/${providerRef}.pdf` })
+		getPdf: (providerRef) => ({ ok: true, pdfRef: `pdf/${providerRef}.pdf` }),
+		readPdf: (pdfRef) => new TextEncoder().encode(FAKE_PDF.replace('{ref}', pdfRef))
 	};
 }
