@@ -215,6 +215,17 @@ export function buildOpenApiDocument(publicApiUrl: string) {
 					}
 				}
 			},
+			'/me': {
+				get: {
+					summary:
+						'Datos de la cuenta: email, roles, saldo, umbral de saldo bajo y documentos pendientes',
+					responses: {
+						'200': { description: 'Cuenta de la sesión' },
+						'401': { description: 'Sin sesión válida' },
+						'426': { description: 'Versión de la app por debajo de la mínima' }
+					}
+				}
+			},
 			'/me/accept-terms': {
 				post: {
 					summary: 'Aceptación de documentos legales pendientes (idempotente)',
