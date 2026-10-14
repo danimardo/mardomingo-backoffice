@@ -926,3 +926,5 @@ Cada fase cierra con su checkpoint y deja algo demostrable: protecciones (US8) �
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 
 <!-- Pendiente de CI (WebKit): la CSP bloquea una hoja de estilos sin nonce (`style-src 'self'`) durante la carga de /panel/perfil; en local aparece de forma intermitente y no se ha localizado el origen (no hay `<style>` en el HTML ni inserciones por JavaScript). Pendiente de investigar con la hidratación de Svelte; no se ha relajado la CSP. -->
+
+<!-- Deuda de CI (decisión del propietario, 2026-10-14): WebKit y mobile-WebKit corren en el CI pero no bloquean. Fallos abiertos en Linux: login y teclado, accesibilidad de compra a 320 px y contraste en oscuro (intermitente según el fondo animado). Chromium y Firefox sí bloquean. -->
