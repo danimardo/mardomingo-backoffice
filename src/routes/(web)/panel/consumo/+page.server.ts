@@ -6,7 +6,7 @@ import { getComposition } from '$lib/server/composition.cache';
 import { consumptionPage } from '$lib/server/features/ai';
 import { accessFor, reportDenial } from '$lib/server/features/accounts';
 import { appNamesOf, operationNamesOf } from '$lib/server/features/apps';
-import { consumptionRowDto } from '$lib/server/features/ai/presenters';
+import { consumptionRowDto } from '$lib/server/features/ai';
 import { usedAppOptionsOf } from '$lib/server/web/used-apps';
 import { parsePanelFilters, queryOfFilters } from '$lib/schemas/common/filters';
 import { madridMidnight, addDays } from '$lib/shared/dates';
