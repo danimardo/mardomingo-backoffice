@@ -83,7 +83,8 @@
 		font-weight: var(--font-weight-control);
 		line-height: 1.2;
 		text-decoration: none;
-		white-space: nowrap;
+		/* El texto puede partirse en varias líneas: en 320 px un enlace largo no debe desbordar la página (UX, E2E de 320 px). */
+		max-width: 100%;
 		transition:
 			background var(--duration-base) var(--ease-standard),
 			box-shadow var(--duration-base) var(--ease-standard),
