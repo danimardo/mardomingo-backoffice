@@ -12,7 +12,10 @@ export function formMessage(issue: FormIssueLike): string {
 	return issue.code === 'invalid_type' ? m.validation_required() : m.validation_invalid();
 }
 
-/** Aplica los mensajes en español a todos los esquemas. Idempotente. */
+/**
+ * Aplica los mensajes en español a todos los esquemas. Idempotente. `jitless` evita `new Function` en la validación:
+ * sin él, Firefox bloquea el `eval` por la CSP (`script-src` sin `unsafe-eval`) en el navegador.
+ */
 export function applyZodMessages(): void {
-	z.config({ customError: (issue) => formMessage(issue) });
+	z.config({ customError: (issue) => formMessage(issue), jitless: true });
 }
