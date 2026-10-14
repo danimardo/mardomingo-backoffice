@@ -3,11 +3,23 @@
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import Banner from '$lib/components/ui/Banner.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import { formatCredits, formatEuros } from '$lib/components/payments/format';
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	function documentLabel(document: string): string {
+		switch (document) {
+			case 'terms':
+				return m.panel_doc_terms();
+			case 'privacy':
+				return m.panel_doc_privacy();
+			default:
+				return m.panel_doc_aup();
+		}
+	}
 
 	const bucketRows = $derived(
 		data.buckets.map((bucket) => [
@@ -74,7 +86,25 @@
 {/each}
 
 {#if data.pendingAcceptances.length > 0}
-	<Banner level="info">{m.panel_pending_documents()}</Banner>
+	<section aria-labelledby="pendientes-titulo">
+		<h2 id="pendientes-titulo">{m.panel_pending_documents()}</h2>
+		<p>{m.panel_pending_effect()}</p>
+		{#if form?.errors.documents}
+			<Banner level="critical">{m.panel_pending_error()}</Banner>
+		{/if}
+		<form method="POST" action="?/aceptarDocumentos">
+			<fieldset>
+				<legend>{m.panel_pending_choose()}</legend>
+				{#each data.pendingAcceptances as item (item.document)}
+					<label class="casilla">
+						<input type="checkbox" name="documents" value={`${item.document}:${item.version}`} />
+						<span>{documentLabel(item.document)}</span>
+					</label>
+				{/each}
+			</fieldset>
+			<p><Button type="submit" variant="primary">{m.panel_pending_accept()}</Button></p>
+		</form>
+	</section>
 {/if}
 
 <p>{m.panel_support({ email: data.supportEmail })}</p>
