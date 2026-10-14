@@ -5,7 +5,9 @@
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
-	import { formatCredits, formatEuros } from '$lib/components/payments/format';
+	import BalanceCard from '$lib/components/credits/BalanceCard.svelte';
+	import AnnouncementsBanner from '$lib/components/notifications/AnnouncementsBanner.svelte';
+	import { formatCredits } from '$lib/components/payments/format';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -45,26 +47,14 @@
 <p>{m.panel_signed_as({ email: data.email })}</p>
 <p><a href={resolve('/logout')}>{m.accounts_logout_action()}</a></p>
 
-<section aria-labelledby="saldo-titulo">
-	<h2 id="saldo-titulo">{m.panel_balance_heading()}</h2>
-	<dl class="balance">
-		<dt>{m.panel_balance_total()}</dt>
-		<dd>{formatCredits(data.balance.totalMicro)}</dd>
-		<dt>{m.panel_balance_reserved()}</dt>
-		<dd>{formatCredits(data.balance.reservedMicro)}</dd>
-		<dt>{m.panel_balance_eur()}</dt>
-		<dd>
-			{data.balance.eurCents === null
-				? m.panel_balance_eur_unavailable()
-				: formatEuros(data.balance.eurCents)}
-		</dd>
-		<dt>{m.panel_balance_available()}</dt>
-		<dd>{formatCredits(data.balance.availableMicro)}</dd>
-		{#if data.balance.debtMicro > 0}
-			<dt>{m.panel_balance_debt()}</dt>
-			<dd>{formatCredits(data.balance.debtMicro)}</dd>
-		{/if}
-	</dl>
+<section>
+	<BalanceCard
+		totalMicro={data.balance.totalMicro}
+		reservedMicro={data.balance.reservedMicro}
+		availableMicro={data.balance.availableMicro}
+		debtMicro={data.balance.debtMicro}
+		eurCents={data.balance.eurCents}
+	/>
 	{#if data.welcome.status === 'none'}
 		<p>{m.panel_welcome_none()}</p>
 	{/if}
@@ -78,12 +68,7 @@
 	{/if}
 </section>
 
-{#each data.announcements as item (item.id)}
-	<Banner level={item.level}>
-		{#if item.appName !== null}{item.appName}:
-		{/if}{item.message}
-	</Banner>
-{/each}
+<AnnouncementsBanner items={data.announcements} />
 
 {#if data.pendingAcceptances.length > 0}
 	<section aria-labelledby="pendientes-titulo">
@@ -110,13 +95,4 @@
 <p>{m.panel_support({ email: data.supportEmail })}</p>
 
 <style>
-	.balance {
-		display: grid;
-		grid-template-columns: max-content 1fr;
-		gap: 0.4rem 1rem;
-		font-variant-numeric: tabular-nums;
-	}
-	.balance dd {
-		margin: 0;
-	}
 </style>

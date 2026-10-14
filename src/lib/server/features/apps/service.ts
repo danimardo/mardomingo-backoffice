@@ -11,7 +11,7 @@ import { AppError } from '$lib/server/shared/errors';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { toMicro, toMicroUsd, toPpm } from '$lib/shared/money';
 import { cachedSettings, invalidateSettings, storeSettings } from './config.cache';
-import { apps } from './schema';
+import { appOperations, apps } from './schema';
 import { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
 import { isVisible } from './domain/announcements';
 import {
@@ -854,6 +854,20 @@ export function syncSchemaOf(deps: AppsDeps, appId: string): SyncSchema {
 }
 
 /** Nombre visible de cada app de la lista (para el panel: movimientos y consumo). Las ids desconocidas no aparecen. */
+/** Nombres legibles de las operaciones del catálogo (W24, T263): nunca el id interno ni el modelo. */
+export function operationNamesOf(
+	deps: Pick<AppsDeps, 'db'>,
+	ids: readonly string[]
+): Map<string, string> {
+	if (ids.length === 0) return new Map();
+	const rows = deps.db
+		.select({ id: appOperations.id, name: appOperations.name })
+		.from(appOperations)
+		.where(inArray(appOperations.id, [...ids]))
+		.all();
+	return new Map(rows.map((row) => [row.id, row.name]));
+}
+
 export function appNamesOf(
 	deps: Pick<AppsDeps, 'db'>,
 	ids: readonly string[]

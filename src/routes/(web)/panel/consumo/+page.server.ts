@@ -5,10 +5,11 @@ import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { consumptionPage } from '$lib/server/features/ai';
 import { accessFor, reportDenial } from '$lib/server/features/accounts';
-import { appNamesOf } from '$lib/server/features/apps';
+import { appNamesOf, operationNamesOf } from '$lib/server/features/apps';
+import { consumptionRowDto } from '$lib/server/features/ai/presenters';
 import { usedAppOptionsOf } from '$lib/server/web/used-apps';
 import { parsePanelFilters, queryOfFilters } from '$lib/schemas/common/filters';
-import { civilDateOf, madridMidnight, addDays } from '$lib/shared/dates';
+import { madridMidnight, addDays } from '$lib/shared/dates';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import type { PageServerLoad } from './$types';
 
@@ -59,9 +60,13 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 		appId: filters.app,
 		page: filters.pagina
 	});
-	const names = appNamesOf(
+	const appNames = appNamesOf(
 		composition.apps,
 		page.rows.map((row) => row.appId)
+	);
+	const operationNames = operationNamesOf(
+		composition.apps,
+		page.rows.map((row) => row.operation)
 	);
 
 	return {
@@ -69,13 +74,12 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 		appOptions: usedAppOptionsOf(composition, access.user.id),
 		filters,
 		errors: NO_ERRORS,
-		rows: page.rows.map((row) => ({
-			date: civilDateOf(row.createdAt),
-			appName: names.get(row.appId) ?? '',
-			operation: row.operation,
-			status: row.status,
-			credits: row.chargedMicro / 1_000_000
-		})),
+		rows: page.rows.map((row) =>
+			consumptionRowDto(row, {
+				appName: appNames.get(row.appId),
+				operationName: operationNames.get(row.operation)
+			})
+		),
 		pagination: {
 			...page.pagination,
 			previousHref: `${resolve('/panel/consumo')}${queryOfFilters(filters, page.pagination.page - 1)}`,
