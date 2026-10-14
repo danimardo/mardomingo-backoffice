@@ -21,7 +21,14 @@ import {
 	estimateChatMicroUsd,
 	type PricingDeps
 } from '$lib/server/features/pricing';
-import { alertKeys, raiseAlert, type AlertDeps } from '$lib/server/features/notifications';
+import {
+	alertKeys,
+	raiseAlert,
+	sendAccountEmail,
+	type AlertDeps,
+	type NotificationsDeps
+} from '$lib/server/features/notifications';
+import { emailOfUser } from '$lib/server/features/accounts';
 import {
 	guardRequest,
 	type ProtectionsDeps,
@@ -85,6 +92,8 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 4_096;
 
 export interface AiDeps {
 	readonly db: Db;
+	/** Avisos por email (saldo bajo, BE-FR-49.7). Opcional solo en los montajes de prueba; la composición siempre lo da. */
+	readonly notifications?: NotificationsDeps;
 	readonly logger: Logger;
 	readonly clock: Clock;
 	readonly ids: IdGenerator;
@@ -679,7 +688,11 @@ export async function billAndClose(
 	deps: AiDeps,
 	ctx: ChatContext,
 	input: BillingInput
-): Promise<{ readonly delivered: boolean; readonly charged: number }> {
+): Promise<{
+	readonly delivered: boolean;
+	readonly charged: number;
+	readonly lowBalance: 'notified' | 'rearmed' | null;
+}> {
 	const delivered = !ctx.signal.aborted;
 	const status: OperationStatus = delivered ? 'ok' : 'undelivered';
 
@@ -726,6 +739,7 @@ export async function billAndClose(
 
 	// Transacción 2: cobro y liberación de la reserva, y cierre de la fila. Una repetición tras `undelivered` absorbe.
 	const settled = immediateTransaction(deps.db, (tx: Tx) => {
+		let lowBalance: 'notified' | 'rearmed' | null = null;
 		let charged = 0;
 		let absorbed = 0;
 		let absorbedReason: 'undelivered_replay' | null = null;
@@ -738,6 +752,7 @@ export async function billAndClose(
 				realCostMicro: chargeMicro
 			});
 			if (!charge.ok) throw new AppError('INTERNAL_ERROR', { reason: 'hold_not_open' });
+			lowBalance = charge.lowBalance;
 			charged = charge.chargedMicro;
 			absorbed = charge.absorbedMicro;
 		}
@@ -761,9 +776,29 @@ export async function billAndClose(
 			errorCode: null
 		};
 		updateOperation(tx, input.operationId, patch);
-		return { charged };
+		return { charged, lowBalance };
 	});
-	return { delivered, charged: settled.charged };
+	if (settled.lowBalance === 'notified') await notifyLowBalance(deps, ctx.userId, input.now);
+	return { delivered, charged: settled.charged, lowBalance: settled.lowBalance };
+}
+
+/**
+ * Aviso de saldo bajo por email (BE-FR-49.7). Se envía después de confirmar el cobro: nunca dentro de su transacción. Un fallo del
+ * proveedor no revierte nada (el estado ya quedó guardado); el aviso se registra como no enviado.
+ */
+export async function notifyLowBalance(
+	deps: Pick<AiDeps, 'db' | 'notifications'>,
+	userId: string,
+	now: EpochMs
+): Promise<void> {
+	if (deps.notifications === undefined) return;
+	const to = emailOfUser(deps.db, userId);
+	if (to === null) return;
+	await sendAccountEmail(deps.notifications, {
+		reason: 'low_balance',
+		to,
+		idempotencyKey: `low-balance:${userId}:${String(now)}`
+	});
 }
 
 /**
