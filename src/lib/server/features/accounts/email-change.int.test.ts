@@ -108,7 +108,7 @@ describe('cambio de email (T265)', () => {
 		const token = changeTokenFrom(NEW_EMAIL);
 		f.database.db
 			.update(verification)
-			.set({ expiresAt: new Date(Date.now() - 1000) })
+			.set({ expiresAt: new Date(0) })
 			.run();
 
 		expect(await f.accounts.confirmEmailChange(token)).toMatchObject({ outcome: 'expired' });
