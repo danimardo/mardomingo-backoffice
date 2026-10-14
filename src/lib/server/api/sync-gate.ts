@@ -7,7 +7,7 @@ import { AppError } from '$lib/server/shared/errors';
 
 /** Versión mínima y mantenimiento del endpoint, como en el resto de la API (api-v1 1.8). */
 export function guardEndpoint(
-	endpoint: 'sync' | 'defaults',
+	endpoint: 'sync' | 'defaults' | 'me.accept_terms',
 	app: { readonly id: string; readonly version: string | null }
 ): void {
 	const composition = getComposition();

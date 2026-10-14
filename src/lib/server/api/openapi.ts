@@ -8,6 +8,7 @@ import {
 	ResendVerificationBody
 } from '$lib/server/features/accounts';
 import { ChatRequestBody, ImageRequestBody } from '$lib/server/features/ai';
+import { AcceptTermsBody } from '$lib/server/features/legal';
 import {
 	DefaultsResponse,
 	GetSyncResponse,
@@ -211,6 +212,17 @@ export function buildOpenApiDocument(publicApiUrl: string) {
 					responses: {
 						'202': { description: 'Recibido, exista o no la cuenta' },
 						'400': { description: 'Validación' }
+					}
+				}
+			},
+			'/me/accept-terms': {
+				post: {
+					summary: 'Aceptación de documentos legales pendientes (idempotente)',
+					requestBody: { content: { 'application/json': { schema: AcceptTermsBody } } },
+					responses: {
+						'204': { description: 'Aceptadas' },
+						'401': { description: 'Sin sesión válida' },
+						'400': { description: 'Validación o versión no vigente' }
 					}
 				}
 			}
