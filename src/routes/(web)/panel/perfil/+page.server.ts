@@ -5,6 +5,9 @@ import { fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor, reportDenial } from '$lib/server/features/accounts';
+import { ChangeEmailSchema } from '$lib/schemas/accounts/change-email';
+import { AppError } from '$lib/server/shared/errors';
+import { clientIpOf, failureOf } from '$lib/server/web/actions';
 import { parseForm } from '$lib/server/forms';
 import { ChangePasswordSchema } from '$lib/schemas/accounts/change-password';
 import type { Actions, PageServerLoad } from './$types';
@@ -27,11 +30,39 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	}
 	return {
 		email: access.user.email,
-		passwordChanged: url.searchParams.get('aviso') === 'password_changed'
+		passwordChanged: url.searchParams.get('aviso') === 'password_changed',
+		emailSent: url.searchParams.get('aviso') === 'email_sent'
 	};
 };
 
 export const actions: Actions = {
+	cambiarEmail: async ({ request, locals, getClientAddress }) => {
+		const access = accessFor(locals.user, 'verified');
+		if (access.kind !== 'allow') {
+			const login = resolve('/login');
+			redirect(303, login);
+		}
+		const parsed = parseForm(ChangeEmailSchema, await request.formData());
+		if (!parsed.ok) return parsed.failure;
+
+		let outcome;
+		try {
+			outcome = await getComposition().accounts.requestEmailChange({
+				userId: access.user.id,
+				currentPassword: parsed.data.currentPassword,
+				newEmail: parsed.data.newEmail,
+				remoteIp: clientIpOf(getClientAddress)
+			});
+		} catch (error) {
+			if (error instanceof AppError) return failureOf(error);
+			throw error;
+		}
+		if (outcome === 'wrong_password') {
+			return fail(400, { errors: { currentPassword: 'validation_invalid' }, values: {} });
+		}
+		const done = `${resolve('/panel/perfil')}?aviso=email_sent`;
+		redirect(303, done);
+	},
 	cambiarContrasena: async ({ request, locals }) => {
 		const access = accessFor(locals.user, 'verified');
 		if (access.kind !== 'allow') {

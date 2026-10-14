@@ -3,7 +3,13 @@
 import type { LogEventMeta } from '$lib/server/logging/events';
 
 export type EmailReason =
-	'verification' | 'password_reset' | 'password_changed' | 'admin_alert' | 'low_balance';
+	| 'verification'
+	| 'password_reset'
+	| 'password_changed'
+	| 'admin_alert'
+	| 'low_balance'
+	| 'email_change_verify'
+	| 'email_changed_notice';
 
 /** Tipo de alerta al administrador, sin la clave (que puede llevar ids de usuario). */
 export type AlertType =

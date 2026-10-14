@@ -20,6 +20,9 @@
 {#if data.passwordChanged}
 	<Banner level="info">{m.profile_password_changed()}</Banner>
 {/if}
+{#if data.emailSent}
+	<Banner level="info">{m.profile_email_sent()}</Banner>
+{/if}
 
 <section aria-labelledby="perfil-cuenta">
 	<h2 id="perfil-cuenta">{m.profile_account_heading()}</h2>
@@ -32,6 +35,28 @@
 		hint={m.profile_email_hint()}
 		disabled
 	/>
+</section>
+
+<section aria-labelledby="perfil-cambio-email">
+	<h2 id="perfil-cambio-email">{m.profile_email_change_heading()}</h2>
+	<p>{m.profile_email_change_intro()}</p>
+	<form method="POST" action="?/cambiarEmail">
+		<TextField
+			id="perfil-nuevo-email"
+			name="newEmail"
+			label={m.profile_new_email()}
+			autocomplete="email"
+			error={errors.newEmail ?? ''}
+		/>
+		<PasswordField
+			id="perfil-email-contrasena"
+			name="currentPassword"
+			label={m.profile_current_password()}
+			autocomplete="current-password"
+			error={errors.currentPassword ?? ''}
+		/>
+		<p><Button type="submit" variant="primary">{m.profile_email_change_submit()}</Button></p>
+	</form>
 </section>
 
 <section aria-labelledby="perfil-contrasena">

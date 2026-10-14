@@ -5,6 +5,8 @@ import type { EmailSender } from '$lib/server/adapters/resend/email-sender';
 import type { Logger } from '$lib/server/logging/logger';
 import { passwordChangedEmail } from './emails/password-changed';
 import { lowBalanceEmail } from './emails/low-balance';
+import { emailChangeVerifyEmail } from './emails/email-change-verify';
+import { emailChangedNoticeEmail } from './emails/email-changed-notice';
 import { passwordResetEmail } from './emails/password-reset';
 import { verificationEmail } from './emails/verification';
 import type { EmailReason } from './events';
@@ -42,6 +44,10 @@ function contentOf(deps: NotificationsDeps, email: AccountEmail) {
 		return passwordResetEmail({ link: email.link ?? '', supportEmail });
 	}
 	if (email.reason === 'low_balance') return lowBalanceEmail({ supportEmail });
+	if (email.reason === 'email_change_verify') {
+		return emailChangeVerifyEmail({ link: email.link ?? '', supportEmail });
+	}
+	if (email.reason === 'email_changed_notice') return emailChangedNoticeEmail({ supportEmail });
 	return passwordChangedEmail({ supportEmail });
 }
 

@@ -49,8 +49,10 @@ export interface AccountsLogFields {
 	'accounts.password.changed': { count: number };
 	'accounts.password.change_rejected': { reason: 'wrong_password' | 'validation' };
 	'accounts.email_change.requested': { status: 'sent' | 'suppressed' };
-	'accounts.email_change.applied': { count: number };
-	'accounts.email_change.rejected': { reason: 'wrong_password' | 'expired' | 'used' | 'invalid' };
+	'accounts.email_change.applied': { sessionsClosed: number };
+	'accounts.email_change.rejected': {
+		reason: 'wrong_password' | 'expired' | 'used' | 'invalid' | 'taken';
+	};
 	'accounts.user.blocked': { reason: 'admin' | 'chargeback' };
 	'accounts.user.unblocked': Record<string, never>;
 	'accounts.role.changed': { status: 'tester_on' | 'tester_off' | 'admin_on' };

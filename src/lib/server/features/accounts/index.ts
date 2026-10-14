@@ -39,11 +39,18 @@ import {
 
 export { blockAccount, seedDisposableDomains } from './service';
 import { changePassword } from './password-change';
+import {
+	confirmEmailChange,
+	requestEmailChange,
+	type EmailChangeConfirmOutcome,
+	type EmailChangeRequestOutcome
+} from './email-change';
 export { sessionsOf, type SessionView } from './sessions';
 export { closeOtherSession } from './close-session';
 export { emailOfUser } from './user-email';
 export { appsUsedBy } from './apps-used';
 export { touchActivity } from './activity';
+export type { EmailChangeConfirmOutcome, EmailChangeRequestOutcome } from './email-change';
 export { accessFor, denialOf, type Access, type Requirement, type SessionUser } from './guards';
 export type { AppLoginInput, AppLoginResult } from './service';
 import { denialOf, type Access, type SessionUser } from './guards';
@@ -81,6 +88,15 @@ export interface AccountsConfig {
 export type TokenKind = 'verification' | 'reset';
 
 export interface Accounts {
+	/** Pide el cambio de email: contraseña actual, enlace de 24 h a la dirección nueva (W27, T266). */
+	requestEmailChange(input: {
+		readonly userId: string;
+		readonly currentPassword: string;
+		readonly newEmail: string;
+		readonly remoteIp: string | null;
+	}): Promise<EmailChangeRequestOutcome>;
+	/** Aplica el cambio desde el enlace de W14: cierra todas las sesiones y avisa a la dirección anterior (T266). */
+	confirmEmailChange(token: string): Promise<EmailChangeConfirmOutcome>;
 	/** Cambio de contraseña con la actual; cierra las demás sesiones (W27, T266). */
 	changePassword(
 		headers: Headers,
@@ -170,6 +186,9 @@ export function createAccounts(config: AccountsConfig): Accounts {
 	return {
 		auth,
 		changePassword: (headers, input) => changePassword(deps, headers, input),
+		requestEmailChange: (input) =>
+			requestEmailChange(deps, { ...input, publicWebUrl: config.publicWebUrl }),
+		confirmEmailChange: (token) => confirmEmailChange(deps, token),
 		register: (input) => register(deps, input),
 		resendVerification: (input) => resendVerification(deps, input),
 		verifyEmail: (token) => verifyEmail(deps, token),
