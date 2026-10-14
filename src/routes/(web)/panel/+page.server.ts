@@ -80,7 +80,7 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	};
 };
 
-const DOCUMENTS = ['terms', 'privacy', 'aup'] as const;
+const DOCUMENTS = Object.freeze(['terms', 'privacy', 'aup'] as const);
 
 export const actions: Actions = {
 	aceptarDocumentos: async ({ request, locals, getClientAddress }) => {
