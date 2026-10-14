@@ -22,8 +22,8 @@
 	--color-bg-elevated: light-dark(#ffffff, #142538);
 	--color-text-primary: light-dark(#1e2533, #f2f3fd);
 	--color-text-secondary: light-dark(#565c70, #bac1d8);
-	--color-text-tertiary: light-dark(#6b7186, #97a1bd);
-	--color-text-muted: light-dark(#61677c, #848ea6);
+	--color-text-tertiary: light-dark(#6b7186, #b0b8d0);
+	--color-text-muted: light-dark(#61677c, #a8b1c9);
 	--color-text-disabled: light-dark(#a2a5b5, #5f687c);
 	--color-accent: light-dark(#11813f, #6bb287);
 	--color-accent-hover: light-dark(#067a34, #87c19e);

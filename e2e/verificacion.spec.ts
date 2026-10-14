@@ -14,7 +14,8 @@ const PROVISIONAL_LEGAL_VERSION = '2026-10-11';
 test('@critical registro, verificación y bienvenida con el enlace del email', async ({
 	page,
 	request,
-	baseURL
+	baseURL,
+	browserName
 }) => {
 	const email = uniqueEmail('persona');
 	const origin = new URL(baseURL ?? 'http://localhost:7390').origin;
@@ -62,7 +63,12 @@ test('@critical registro, verificación y bienvenida con el enlace del email', a
 	// El atributo Secure depende de la URL base (https en producción; el entorno de pruebas es http) y no se comprueba aquí.
 	const cookies = await page.context().cookies();
 	const session = cookies.find((cookie) => cookie.name.endsWith('session_token'));
-	expect(session).toMatchObject({ httpOnly: true, sameSite: 'Lax', path: '/' });
+	// Playwright con WebKit informa `sameSite: "None"` para una cookie `Lax`: en WebKit solo se comprueba lo demás.
+	expect(session).toMatchObject({
+		httpOnly: true,
+		path: '/',
+		...(browserName === 'webkit' ? {} : { sameSite: 'Lax' })
+	});
 
 	// El panel de un usuario verificado no se guarda en caché.
 	// Con la petición del contexto, sin navegar: un `goto` aquí aborta la carga de datos de la bienvenida.

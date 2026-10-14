@@ -18,10 +18,17 @@ interface GuardOptions {
 export const test = base.extend<GuardOptions & { guard: undefined }>({
 	guardAllow: [[], { option: true }],
 	guard: [
-		async ({ page, baseURL, guardAllow }, use) => {
+		async ({ page, baseURL, guardAllow, browserName }, use) => {
 			const origin = new URL(baseURL ?? 'http://localhost:7390').origin;
 			const problems: string[] = [];
-			const allowed = (text: string): boolean => guardAllow.some((pattern) => pattern.test(text));
+			// WebKit inyecta por su cuenta una hoja de estilos en las páginas con un campo de contraseña (autorrelleno)
+			// y nuestra CSP (`style-src 'self'`) la bloquea. No viene de la aplicación ni tiene efecto visible: se admite
+			// solo en WebKit; la CSP no se relaja.
+			const webkitNoise =
+				/Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'/;
+			const allowed = (text: string): boolean =>
+				guardAllow.some((pattern) => pattern.test(text)) ||
+				(browserName === 'webkit' && webkitNoise.test(text));
 			const report = (text: string): void => {
 				if (!allowed(text)) problems.push(text);
 			};
