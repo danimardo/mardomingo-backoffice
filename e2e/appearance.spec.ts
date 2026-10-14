@@ -138,7 +138,15 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 test.describe('formularios sin JavaScript (UX-TEMA CA y mejora progresiva)', () => {
 	test.use({ javaScriptEnabled: false, guardAllow: [PRELOAD_CSP] });
 
-	test('«Claro» sin JavaScript guarda la cookie y vuelve a la página', async ({ page }) => {
+	// WebKit no acepta una cookie `Secure` en http://localhost (la app va por https en producción): la prueba queda fuera de WebKit.
+	test('«Claro» sin JavaScript guarda la cookie y vuelve a la página', async ({
+		page,
+		browserName
+	}) => {
+		test.skip(
+			browserName === 'webkit',
+			'WebKit no guarda cookies Secure en http://localhost (ver comentario)'
+		);
 		await page.goto('/preferencias');
 
 		await page.locator('#contenido').getByRole('button', { name: 'Claro' }).click();

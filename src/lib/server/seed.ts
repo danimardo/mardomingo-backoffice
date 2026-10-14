@@ -11,10 +11,21 @@ import { seedLegalDocuments } from './features/legal';
 import { seedPayments } from './features/payments';
 import type { IdGenerator } from './shared/ids';
 
-export function seedDefaults(db: Db, clock: Clock, ids: IdGenerator): void {
+export function seedDefaults(
+	db: Db,
+	clock: Clock,
+	ids: IdGenerator,
+	options: { readonly registrationsPerIp24h?: number | undefined } = {}
+): void {
 	immediateTransaction(db, (tx) => {
 		const now = clock.now();
-		seedApps(tx, now);
+		seedApps(
+			tx,
+			now,
+			options.registrationsPerIp24h === undefined
+				? {}
+				: { registrations_per_ip_24h: options.registrationsPerIp24h }
+		);
 		seedSync(tx, now);
 		seedPayments(tx, now);
 		seedLegalDocuments(tx, () => ids('ldoc'), now);

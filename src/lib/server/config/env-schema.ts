@@ -29,6 +29,7 @@ const TEST_ONLY_KEYS = Object.freeze([
 	'MOCK_RESEND_URL',
 	'MOCK_BCE_URL',
 	'MOCK_TURNSTILE_URL',
+	'E2E_REGISTRATIONS_PER_IP_24H',
 	'MOCK_GITHUB_URL',
 	'EMAIL_OUTBOX_DIR',
 	'CAPTCHA_FAKE'
@@ -87,6 +88,8 @@ const baseSchema = z.object({
 	MOCK_RESEND_URL: z.url().optional(),
 	MOCK_BCE_URL: z.url().optional(),
 	MOCK_TURNSTILE_URL: z.url().optional(),
+	/** Altas por IP y día del servidor de E2E: los tres navegadores comparten servidor (solo APP_ENV=test). */
+	E2E_REGISTRATIONS_PER_IP_24H: z.coerce.number().int().positive().max(1000).optional(),
 	MOCK_GITHUB_URL: z.url().optional(),
 	EMAIL_OUTBOX_DIR: z.string().min(1).optional(),
 	CAPTCHA_FAKE: booleanFromEnv.optional()

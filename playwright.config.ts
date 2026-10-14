@@ -82,7 +82,9 @@ export default defineConfig({
 			EMAIL_HASH_KEY: randomBytes(32).toString('hex'),
 			LOG_LEVEL: 'debug',
 			// Captcha de pruebas: el simulador que arranca el global setup en este mismo puerto.
-			MOCK_TURNSTILE_URL: TURNSTILE_MOCK_URL
+			MOCK_TURNSTILE_URL: TURNSTILE_MOCK_URL,
+			// Un solo servidor para los tres navegadores: el límite de altas por IP (3/24 h) no admite el total de las pruebas.
+			E2E_REGISTRATIONS_PER_IP_24H: '100'
 		}
 	}
 });

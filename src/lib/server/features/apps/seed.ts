@@ -73,8 +73,12 @@ function operationRow(operation: DefaultOperation, now: EpochMs): OperationInser
 }
 
 /** Siembra los parámetros, la app `secretario` con sus operaciones y su configuración (dentro de `tx`). */
-export function seedApps(tx: Tx, now: EpochMs): void {
-	for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+export function seedApps(
+	tx: Tx,
+	now: EpochMs,
+	overrides: Readonly<Partial<Record<'registrations_per_ip_24h', number>>> = {}
+): void {
+	for (const [key, value] of Object.entries({ ...DEFAULT_SETTINGS, ...overrides })) {
 		if (isSettingKey(key)) seedInsertSetting(tx, key, value, now);
 	}
 	seedInsertApp(tx, {
