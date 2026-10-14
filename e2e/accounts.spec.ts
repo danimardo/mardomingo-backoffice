@@ -104,7 +104,18 @@ test.describe('320 px sin desplazamiento horizontal', () => {
 			const overflow = await page.evaluate(
 				() => document.documentElement.scrollWidth - document.documentElement.clientWidth
 			);
-			expect(overflow).toBeLessThanOrEqual(0);
+			// Si falla, el mensaje dice qué elementos sobresalen (diagnóstico para entornos con otras fuentes, como el CI).
+			const offenders = await page.evaluate(() =>
+				Array.from(document.querySelectorAll('body *'))
+					.map((el) => ({ el, right: el.getBoundingClientRect().right }))
+					.filter(({ right }) => right > document.documentElement.clientWidth + 0.5)
+					.slice(0, 8)
+					.map(
+						({ el, right }) =>
+							`${el.tagName.toLowerCase()} ${el.className.slice(0, 40)} right=${Math.round(right).toString()}`
+					)
+			);
+			expect(overflow, offenders.join(' | ')).toBeLessThanOrEqual(0);
 		});
 	}
 });
