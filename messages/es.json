@@ -328,5 +328,7 @@
 	"notifications_low_balance_subject": "Tu saldo está bajo",
 	"notifications_low_balance_body": "Tu saldo de créditos ha bajado del umbral que elegiste. Puedes revisarlo en tu panel.",
 	"movements_app_label": "App",
-	"movements_app_all": "Todas las apps"
+	"movements_app_all": "Todas las apps",
+	"panel_balance_eur": "Equivalente en euros",
+	"panel_balance_eur_unavailable": "No disponible sin paquetes a la venta"
 }
