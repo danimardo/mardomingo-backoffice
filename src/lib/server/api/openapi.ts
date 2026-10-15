@@ -26,6 +26,37 @@ export const apiErrorSchema = z
 	})
 	.meta({ id: 'ApiError' });
 
+/** Estado público de la app (E01; BE-FR-48 CA2, BE-FR-77 CA4): la forma de `AppStatusDto`. */
+export const AppStatusSchema = z
+	.object({
+		app: z.object({ id: z.string(), name: z.string() }),
+		minAppVersion: z.string().nullable(),
+		recommendedAppVersion: z.string().nullable(),
+		maintenance: z.object({ active: z.boolean(), message: z.string() }),
+		limits: z.object({ maxAudioSeconds: z.number().int() }),
+		operations: z.record(z.string(), z.object({ timeoutMs: z.number().int() })),
+		links: z.object({
+			register: z.url(),
+			forgotPassword: z.url(),
+			panel: z.url(),
+			buyCredits: z.url(),
+			prices: z.url(),
+			terms: z.url(),
+			privacy: z.url(),
+			acceptableUse: z.url()
+		}),
+		supportEmail: z.string(),
+		announcements: z.array(
+			z.object({
+				id: z.string(),
+				level: z.enum(['info', 'warning', 'critical']),
+				message: z.string(),
+				link: z.url().nullable()
+			})
+		)
+	})
+	.meta({ id: 'AppStatus' });
+
 export const healthSchema = z.object({ status: z.enum(['ok', 'unavailable']) }).meta({
 	id: 'Health'
 });
@@ -52,6 +83,25 @@ export function buildOpenApiDocument(publicApiUrl: string) {
 							description: 'Base de datos no disponible',
 							content: { 'application/json': { schema: healthSchema } }
 						}
+					}
+				}
+			},
+			'/app/status': {
+				get: {
+					summary:
+						'Estado público de la app: mantenimiento, versiones, enlaces y anuncios (X-App-Id obligatorio)',
+					parameters: [
+						{ name: 'X-App-Id', in: 'header', required: true, schema: { type: 'string' } },
+						{ name: 'X-App-Version', in: 'header', required: false, schema: { type: 'string' } }
+					],
+					responses: {
+						'200': {
+							description: 'Estado de la app',
+							content: { 'application/json': { schema: AppStatusSchema } }
+						},
+						'400': { description: 'VALIDATION_ERROR (query desconocida)' },
+						'404': { description: 'UNKNOWN_APP' },
+						'403': { description: 'APP_DISABLED' }
 					}
 				}
 			},
