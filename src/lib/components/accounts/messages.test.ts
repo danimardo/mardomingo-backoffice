@@ -29,6 +29,12 @@ describe('formErrorText', () => {
 		);
 	});
 
+	it('el límite de peticiones tiene su propio texto y no cae en el genérico', () => {
+		expect(formErrorText('RATE_LIMITED')).toBe(
+			'Has hecho demasiadas peticiones. Espera un momento.'
+		);
+	});
+
 	it('da el texto de los enlaces de verificación', () => {
 		expect(formErrorText('TOKEN_EXPIRED')).toBe('Este enlace ha caducado. Pide uno nuevo.');
 		expect(formErrorText('TOKEN_USED')).toBe(

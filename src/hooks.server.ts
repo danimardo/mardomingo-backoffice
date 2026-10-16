@@ -97,7 +97,8 @@ export const init: ServerInit = async () => {
 	}
 	try {
 		seedDefaults(composition.db, composition.clock, composition.ids, {
-			registrationsPerIp24h: composition.config.E2E_REGISTRATIONS_PER_IP_24H
+			registrationsPerIp24h: composition.config.E2E_REGISTRATIONS_PER_IP_24H,
+			loginsPerIp15min: composition.config.E2E_LOGINS_PER_IP_15MIN
 		});
 	} catch (cause) {
 		logger.emit('app.db.seed_failed', { err: cause });

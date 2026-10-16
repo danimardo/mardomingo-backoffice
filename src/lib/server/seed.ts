@@ -15,17 +15,21 @@ export function seedDefaults(
 	db: Db,
 	clock: Clock,
 	ids: IdGenerator,
-	options: { readonly registrationsPerIp24h?: number | undefined } = {}
+	options: {
+		readonly registrationsPerIp24h?: number | undefined;
+		readonly loginsPerIp15min?: number | undefined;
+	} = {}
 ): void {
 	immediateTransaction(db, (tx) => {
 		const now = clock.now();
-		seedApps(
-			tx,
-			now,
-			options.registrationsPerIp24h === undefined
+		seedApps(tx, now, {
+			...(options.registrationsPerIp24h === undefined
 				? {}
-				: { registrations_per_ip_24h: options.registrationsPerIp24h }
-		);
+				: { registrations_per_ip_24h: options.registrationsPerIp24h }),
+			...(options.loginsPerIp15min === undefined
+				? {}
+				: { login_per_ip_15min: options.loginsPerIp15min })
+		});
 		seedSync(tx, now);
 		seedPayments(tx, now);
 		seedLegalDocuments(tx, () => ids('ldoc'), now);

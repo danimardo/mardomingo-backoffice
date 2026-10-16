@@ -30,6 +30,7 @@ const TEST_ONLY_KEYS = Object.freeze([
 	'MOCK_BCE_URL',
 	'MOCK_TURNSTILE_URL',
 	'E2E_REGISTRATIONS_PER_IP_24H',
+	'E2E_LOGINS_PER_IP_15MIN',
 	'MOCK_GITHUB_URL',
 	'EMAIL_OUTBOX_DIR',
 	'CAPTCHA_FAKE'
@@ -90,6 +91,8 @@ const baseSchema = z.object({
 	MOCK_TURNSTILE_URL: z.url().optional(),
 	/** Altas por IP y día del servidor de E2E: los tres navegadores comparten servidor (solo APP_ENV=test). */
 	E2E_REGISTRATIONS_PER_IP_24H: z.coerce.number().int().positive().max(1000).optional(),
+	/** Inicios de sesión por IP cada 15 min del servidor de E2E: toda la suite entra desde 127.0.0.1 (solo APP_ENV=test). */
+	E2E_LOGINS_PER_IP_15MIN: z.coerce.number().int().positive().max(1000).optional(),
 	MOCK_GITHUB_URL: z.url().optional(),
 	EMAIL_OUTBOX_DIR: z.string().min(1).optional(),
 	CAPTCHA_FAKE: booleanFromEnv.optional()
