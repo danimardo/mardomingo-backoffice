@@ -10,7 +10,28 @@ const GLASS = '[data-surface="glass"]';
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'];
 const BLOCKING = new Set(['serious', 'critical']);
 
+/**
+ * Axe mide el contraste con `elementsFromPoint`, y WebKit solo devuelve `html` (fondo blanco por defecto) para lo que
+ * queda fuera de la ventana. Se agranda la ventana hasta la altura de la página mientras dura la auditoría y se
+ * restaura después, para que todo el contenido se mida con su fondo real.
+ */
+async function withFullHeightViewport(page: Page, audit: () => Promise<void>): Promise<void> {
+	const original = page.viewportSize();
+	if (original === null) return audit();
+	const height = await page.evaluate(() => document.documentElement.scrollHeight);
+	await page.setViewportSize({ width: original.width, height: Math.max(original.height, height) });
+	try {
+		await audit();
+	} finally {
+		await page.setViewportSize(original);
+	}
+}
+
 export async function checkAccessibility(page: Page, testInfo: TestInfo): Promise<void> {
+	await withFullHeightViewport(page, () => audit(page, testInfo));
+}
+
+async function audit(page: Page, testInfo: TestInfo): Promise<void> {
 	const main = await new AxeBuilder({ page })
 		.withTags(WCAG_TAGS)
 		.disableRules(['color-contrast'])
@@ -36,7 +57,7 @@ export async function checkAccessibility(page: Page, testInfo: TestInfo): Promis
 			(v) =>
 				`${v.id} (${v.impact ?? '?'}): ${v.help} [${v.nodes
 					.slice(0, 3)
-					.map((node) => node.target.join(' '))
+					.map((node) => `${node.target.join(' ')} → ${node.any[0]?.message ?? 'sin detalle'}`)
 					.join('; ')}] en ${page.url()}`
 		),
 		'violaciones serious o critical'

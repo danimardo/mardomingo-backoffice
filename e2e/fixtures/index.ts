@@ -23,9 +23,10 @@ export const test = base.extend<GuardOptions & { guard: undefined }>({
 			const problems: string[] = [];
 			// WebKit inyecta por su cuenta una hoja de estilos en las páginas con un campo de contraseña (autorrelleno)
 			// y nuestra CSP (`style-src 'self'`) la bloquea. No viene de la aplicación ni tiene efecto visible: se admite
-			// solo en WebKit; la CSP no se relaja.
+			// solo en WebKit; la CSP no se relaja. Con JavaScript desactivado, WebKit además cancela la precarga de los módulos
+			// de la aplicación (`requestfailed ... Load request cancelled`): es lo esperado y no afecta a la página.
 			const webkitNoise =
-				/Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'/;
+				/Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'|requestfailed: \S+\/_app\/immutable\/\S+\.js \(Load request cancelled\)/;
 			const allowed = (text: string): boolean =>
 				guardAllow.some((pattern) => pattern.test(text)) ||
 				(browserName === 'webkit' && webkitNoise.test(text));
