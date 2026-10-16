@@ -185,3 +185,36 @@ test('@critical @BE-FR-07 @UX-07 borrar la cuenta pierde el saldo, cierra la ses
 	await expect(page.getByText(/no tiene bolsa de bienvenida/)).toBeVisible();
 	await page.waitForLoadState('networkidle');
 });
+
+// Crítico 10 (sin JavaScript): el login, la página de borrado y el enlace de la exportación funcionan solo con formularios y
+// enlaces. Las precargas de módulos que el navegador bloquea sin JS no afectan a la página (ver `sesion.spec.ts`).
+test.describe('sin JavaScript', () => {
+	test.use({
+		javaScriptEnabled: false,
+		guardAllow: [
+			/__data\.json.*ERR_ABORTED|requestfailed: .*\(csp\)|status of 400|Load request cancelled/
+		]
+	});
+
+	test('@critical el borrado y la exportación se piden sin JavaScript', async ({ page }) => {
+		await page.goto('/login');
+		await page.getByLabel('Email').fill(email);
+		await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+		await page.getByRole('button', { name: 'Entrar' }).click();
+		await expect(page).toHaveURL(/\/panel$/);
+
+		await page.goto('/panel/perfil');
+		const exportLink = page.getByRole('link', { name: 'Descargar mis datos (JSON)' });
+		// `resolve` deja una ruta relativa: lo que importa es a dónde lleva.
+		const href = await exportLink.getAttribute('href');
+		expect(new URL(href ?? '', page.url()).pathname).toBe('/panel/perfil/exportar');
+
+		await page.goto('/panel/perfil/borrar');
+		await page.getByLabel('Tu contraseña, para confirmar').fill('otra-contraseña-distinta');
+		await page.getByLabel(/Entiendo que pierdo mi saldo/).check();
+		await page.getByRole('button', { name: 'Borrar mi cuenta' }).click();
+		await expect(page.getByRole('alert')).toContainText('La contraseña no es correcta.');
+		// Sin JavaScript la acción es un POST: la página vuelve con la URL de la acción.
+		await expect(page).toHaveURL(/\/panel\/perfil\/borrar(\?\/borrarCuenta)?$/);
+	});
+});
