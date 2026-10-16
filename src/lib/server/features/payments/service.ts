@@ -30,6 +30,7 @@ import {
 	insertPayment,
 	markWantsFullInvoice,
 	paymentIdsOfUser,
+	paymentsOfUser,
 	setRefundedEurCents,
 	setStatus,
 	type PaymentRow
@@ -403,7 +404,43 @@ export function paymentIdsOf(deps: PaymentsDeps, userId: string): string[] {
 	return paymentIdsOfUser(deps.db, userId);
 }
 
+export interface PaymentExport {
+	readonly id: string;
+	readonly packName: string;
+	readonly status: PaymentRow['status'];
+	readonly amountEurCents: number;
+	readonly baseEurCents: number;
+	readonly vatEurCents: number;
+	readonly country: string;
+	readonly creditsMicro: number;
+	readonly simulated: boolean;
+	readonly wantsFullInvoice: boolean;
+	readonly refundedEurCents: number;
+	readonly createdAt: string;
+	readonly completedAt: string | null;
+}
+
+/** Pagos de la cuenta para la exportación RGPD (BE-FR-08). Sin referencias del proveedor. */
+export function exportPayments(deps: PaymentsDeps, userId: string): PaymentExport[] {
+	return paymentsOfUser(deps.db, userId).map((row) => ({
+		id: row.id,
+		packName: findPack(deps.db, row.packId)?.name ?? '',
+		status: row.status,
+		amountEurCents: row.amountEurCents,
+		baseEurCents: row.baseEurCents,
+		vatEurCents: row.vatEurCents,
+		country: row.country,
+		creditsMicro: row.creditsMicro,
+		simulated: row.simulated,
+		wantsFullInvoice: row.wantsFullInvoice,
+		refundedEurCents: row.refundedEurCents,
+		createdAt: new Date(row.createdAt).toISOString(),
+		completedAt: row.completedAt === null ? null : new Date(row.completedAt).toISOString()
+	}));
+}
+
 export interface PaymentsService {
+	exportPayments(userId: string): PaymentExport[];
 	requestFullInvoice(input: { readonly userId: string; readonly paymentId: string }): boolean;
 	purchase(input: PurchaseInput): PurchaseOutcome;
 	handleProviderEvents(body: unknown): void;
@@ -424,6 +461,7 @@ export interface PaymentsService {
 
 export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 	return {
+		exportPayments: (userId) => exportPayments(deps, userId),
 		purchase: (input) => purchase(deps, input),
 		handleProviderEvents: (body) => {
 			handleProviderEvents(deps, body);

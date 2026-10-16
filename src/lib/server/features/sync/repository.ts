@@ -24,6 +24,21 @@ export function findDocument(
 		.get();
 }
 
+/** Todos los documentos de la cuenta, de cualquier app, por app (BE-FR-08). */
+export function documentsOfUser(db: Db | Tx, userId: string) {
+	return db
+		.select()
+		.from(syncDocuments)
+		.where(eq(syncDocuments.userId, userId))
+		.orderBy(syncDocuments.appId)
+		.all();
+}
+
+/** Borra los documentos de la cuenta en todas las apps (BE-FR-07 CA1). Devuelve cuántos había. */
+export function deleteDocumentsOfUser(tx: Tx, userId: string): number {
+	return tx.delete(syncDocuments).where(eq(syncDocuments.userId, userId)).run().changes;
+}
+
 export function insertDocument(
 	tx: Tx,
 	row: {

@@ -30,6 +30,8 @@ export function formErrorText(code: string, retryAfterMinutes?: number): string 
 		case 'UNAUTHENTICATED':
 		case 'SESSION_EXPIRED':
 			return m.accounts_login_notice_session_expired();
+		case 'WRONG_PASSWORD':
+			return m.errors_wrong_password();
 		case 'RATE_LIMITED':
 			return m.errors_rate_limited();
 		case 'VALIDATION_ERROR':

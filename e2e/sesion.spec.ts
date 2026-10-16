@@ -126,6 +126,7 @@ const PANEL_PAGES = [
 	'/panel/consumo',
 	'/panel/sesiones',
 	'/panel/perfil',
+	'/panel/perfil/borrar',
 	'/panel/apps',
 	'/panel/facturas'
 ] as const;

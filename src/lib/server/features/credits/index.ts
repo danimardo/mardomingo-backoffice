@@ -6,7 +6,10 @@ import {
 	chargeAndRelease,
 	expireBuckets,
 	expireHolds,
+	forfeitAll,
 	getBalance,
+	movementsForExport,
+	releaseOpenHolds,
 	grantPurchase,
 	grantWelcome,
 	releaseHold,
@@ -18,6 +21,7 @@ import {
 	reserve,
 	welcomeOf,
 	type AdjustOutcome,
+	type MovementExportRow,
 	type BalanceView,
 	type ChargeOutcome,
 	type CreditsDeps,
@@ -45,6 +49,7 @@ export { balanceDto, welcomeDto, type BalanceDto, type WelcomeDto } from './pres
 export { CREDITS_LOG_EVENTS, type CreditsLogFields } from './events';
 export type {
 	BucketView,
+	MovementExportRow,
 	MovementsPage,
 	MovementRow,
 	BalanceView,
@@ -92,6 +97,12 @@ export interface Credits {
 	expireHolds(): number;
 	/** Caducidad de bolsas gratuitas (BE-FR-16). */
 	expireBuckets(): number;
+	/** Borrado de la cuenta: bolsas a cero con `forfeit`, umbral borrado y deuda intacta (BE-FR-07 CA4). Solo `privacy`. */
+	forfeitAll(userId: string): { readonly forfeitedMicro: number; readonly buckets: number };
+	/** Borrado de la cuenta: libera sin cobro las reservas abiertas (BE-FR-07). Solo `privacy`. */
+	releaseOpenHolds(userId: string): number;
+	/** Todos los movimientos de la cuenta, para la exportación RGPD (BE-FR-08). */
+	exportMovements(userId: string): MovementExportRow[];
 	/** Ajuste del administrador con motivo y auditoría (BE-FR-18). */
 	adjust(input: {
 		readonly adminId: string;
@@ -161,6 +172,9 @@ export function createCredits(config: CreditsConfig): Credits {
 		releaseOpenHoldsOnStartup: () => releaseOpenHoldsOnStartup(deps),
 		expireHolds: () => expireHolds(deps),
 		expireBuckets: () => expireBuckets(deps),
+		forfeitAll: (userId) => forfeitAll(deps, userId),
+		releaseOpenHolds: (userId) => releaseOpenHolds(deps, userId),
+		exportMovements: (userId) => movementsForExport(deps, userId),
 		adjust: (input) => adjust(deps, input),
 		getBalance: (userId) => getBalance(deps, userId),
 		realPurchaseUserIds: (userIds) => realPurchaseUserIds(deps.db, userIds),

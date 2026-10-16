@@ -29,6 +29,10 @@ describe('formErrorText', () => {
 		);
 	});
 
+	it('la contraseña errónea del borrado de cuenta tiene su texto', () => {
+		expect(formErrorText('WRONG_PASSWORD')).toBe('La contraseña no es correcta.');
+	});
+
 	it('el límite de peticiones tiene su propio texto y no cae en el genérico', () => {
 		expect(formErrorText('RATE_LIMITED')).toBe(
 			'Has hecho demasiadas peticiones. Espera un momento.'

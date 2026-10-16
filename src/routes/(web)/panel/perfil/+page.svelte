@@ -1,5 +1,6 @@
 <script lang="ts">
 	// W27 · `/panel/perfil`: email de la cuenta y cambio de contraseña con la actual (T266). Sin JavaScript funciona igual.
+	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -193,4 +194,24 @@
 		/>
 		<p><Button type="submit" variant="primary">{m.profile_password_submit()}</Button></p>
 	</form>
+</section>
+
+<section aria-labelledby="perfil-exportar">
+	<h2 id="perfil-exportar">{m.profile_export_heading()}</h2>
+	<p>{m.profile_export_intro()}</p>
+	<p>
+		<!-- Descarga de un fichero: se pide con un enlace normal y el servidor responde con `attachment`. -->
+		<Button href={resolve('/panel/perfil/exportar')} variant="secondary"
+			>{m.profile_export_link()}</Button
+		>
+	</p>
+</section>
+
+<section aria-labelledby="perfil-borrar">
+	<h2 id="perfil-borrar">{m.profile_delete_heading()}</h2>
+	<p>{m.profile_delete_intro()}</p>
+	<p>
+		<Button href={resolve('/panel/perfil/borrar')} variant="ghost">{m.profile_delete_link()}</Button
+		>
+	</p>
 </section>

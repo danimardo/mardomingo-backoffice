@@ -49,6 +49,16 @@ export function insertDocument(
 	else insert.run();
 }
 
+/** Aceptaciones de la cuenta, de la más antigua a la más reciente (BE-FR-08). */
+export function acceptancesOfUser(db: Db | Tx, userId: string) {
+	return db
+		.select()
+		.from(termsAcceptances)
+		.where(eq(termsAcceptances.userId, userId))
+		.orderBy(termsAcceptances.acceptedAt, termsAcceptances.id)
+		.all();
+}
+
 export function insertAcceptance(tx: Tx, row: typeof termsAcceptances.$inferInsert): void {
 	tx.insert(termsAcceptances).values(row).onConflictDoNothing().run();
 }

@@ -40,6 +40,15 @@ import {
 export { blockAccount, seedDisposableDomains } from './service';
 import { changePassword } from './password-change';
 import {
+	anonymizeUser,
+	clearSessionCookie,
+	exportProfile,
+	passwordMatches,
+	revokeAllSessions,
+	type ProfileExport
+} from './erasure';
+export type { ProfileExport } from './erasure';
+import {
 	confirmEmailChange,
 	requestEmailChange,
 	type EmailChangeConfirmOutcome,
@@ -88,6 +97,16 @@ export interface AccountsConfig {
 export type TokenKind = 'verification' | 'reset';
 
 export interface Accounts {
+	/** ¿Es la contraseña la de la cuenta? Para confirmar acciones destructivas (BE-FR-07). */
+	passwordMatches(userId: string, password: string): Promise<boolean>;
+	/** Borrado de la cuenta: cierra todas las sesiones de todas las apps. Solo `privacy`. */
+	revokeAllSessions(userId: string): number;
+	/** Borrado de la cuenta: anonimiza `user` y borra credenciales, tokens y actividad. Solo `privacy`. */
+	anonymizeUser(userId: string): boolean;
+	/** Borra la cookie de sesión de la petición tras borrar la cuenta (W29). */
+	clearSessionCookie(headers: Headers): Promise<void>;
+	/** Perfil y dispositivos para la exportación RGPD (BE-FR-08). */
+	exportProfile(userId: string): ProfileExport | null;
 	/** Pide el cambio de email: contraseña actual, enlace de 24 h a la dirección nueva (W27, T266). */
 	requestEmailChange(input: {
 		readonly userId: string;
@@ -186,6 +205,11 @@ export function createAccounts(config: AccountsConfig): Accounts {
 	return {
 		auth,
 		changePassword: (headers, input) => changePassword(deps, headers, input),
+		passwordMatches: (userId, password) => passwordMatches(deps, userId, password),
+		revokeAllSessions: (userId) => revokeAllSessions(deps, userId),
+		anonymizeUser: (userId) => anonymizeUser(deps, userId),
+		clearSessionCookie: (headers) => clearSessionCookie(deps, headers),
+		exportProfile: (userId) => exportProfile(deps, userId),
 		requestEmailChange: (input) =>
 			requestEmailChange(deps, { ...input, publicWebUrl: config.publicWebUrl }),
 		confirmEmailChange: (token) => confirmEmailChange(deps, token),

@@ -3,6 +3,7 @@
 export { seedPayments } from './seed';
 export {
 	createPaymentsService,
+	type PaymentExport,
 	type PaymentsDeps,
 	type PaymentsService,
 	type PurchaseInput,

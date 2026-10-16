@@ -11,6 +11,7 @@ import { markRealPurchase } from './purchases';
 import { paymentsFixture, type PaymentsFixture } from './payments';
 
 export const PANEL_USER = {
+	kind: 'individual',
 	taxId: '12345678Z',
 	legalName: 'Ana Pérez',
 	address: 'Calle Mayor 1',
@@ -88,7 +89,9 @@ export function panelAccountFixture(): PanelAccount {
 	credits.chargeAndRelease({ holdId: charged.holdId, realCostMicro: total + 50 * CREDIT });
 
 	// Perfil fiscal para la factura completa del panel.
-	fixture.deps.invoicing.saveBillingProfile({ userId, profile: PANEL_USER });
+	const saved = fixture.deps.invoicing.saveBillingProfile({ userId, profile: PANEL_USER });
+	if (saved.status !== 'saved')
+		throw new Error(`el perfil fiscal debía guardarse: ${saved.reason}`);
 
 	return { fixture, userId, paymentId: real.paymentId, simulatedPaymentId: simulated.paymentId };
 }
