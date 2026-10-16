@@ -1,0 +1,1038 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Cuenta Mardomingo — API v1",
+		"version": "1.0.0",
+		"description": "API de Cuenta Mardomingo para las apps cliente."
+	},
+	"servers": [
+		{
+			"url": "https://api.mardomingo.com/api/v1"
+		}
+	],
+	"paths": {
+		"/health": {
+			"get": {
+				"summary": "Estado de la aplicación",
+				"responses": {
+					"200": {
+						"description": "Aplicación operativa",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Health"
+								}
+							}
+						}
+					},
+					"503": {
+						"description": "Base de datos no disponible",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Health"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/app/status": {
+			"get": {
+				"summary": "Estado público de la app: mantenimiento, versiones, enlaces y anuncios (X-App-Id obligatorio)",
+				"parameters": [
+					{
+						"name": "X-App-Id",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "X-App-Version",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Estado de la app",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AppStatus"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "VALIDATION_ERROR (query desconocida)"
+					},
+					"403": {
+						"description": "APP_DISABLED"
+					},
+					"404": {
+						"description": "UNKNOWN_APP"
+					}
+				}
+			}
+		},
+		"/auth/login": {
+			"post": {
+				"summary": "Inicio de sesión de una app (X-App-Id obligatorio)",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AccountsLoginBody"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Sesión abierta, ligada a la app, el equipo y la versión",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/AccountsAppLoginResponse"
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "Validación o cabecera X-App-Id"
+					},
+					"401": {
+						"description": "Credenciales erróneas o cuenta sin verificar"
+					},
+					"503": {
+						"description": "App desactivada"
+					}
+				}
+			}
+		},
+		"/ai/transcribe": {
+			"post": {
+				"summary": "Transcripción de un audio (multipart; Bearer; Idempotency-Key opcional)",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"multipart/form-data": {
+							"schema": {
+								"type": "object",
+								"required": ["operation", "file"],
+								"properties": {
+									"operation": {
+										"type": "string"
+									},
+									"file": {
+										"type": "string",
+										"format": "binary",
+										"description": "Audio, acotado por max_audio_mb de la app"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Texto, proveedor usado (primary o backup), segundos, saldo; nunca el modelo"
+					},
+					"400": {
+						"description": "Operación, fichero o Idempotency-Key no válidos, o audio ilegible"
+					},
+					"401": {
+						"description": "Sin sesión válida para la app"
+					},
+					"402": {
+						"description": "Saldo insuficiente"
+					},
+					"413": {
+						"description": "Audio demasiado largo (AUDIO_TOO_LONG) o fichero demasiado grande"
+					},
+					"502": {
+						"description": "Fallaron Voxtral y el respaldo (TRANSCRIPTION_FAILED, con motivos saneados)"
+					}
+				}
+			}
+		},
+		"/ai/image": {
+			"post": {
+				"summary": "Imagen generada por el modelo, como data URL (no se guarda)",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"operation": {
+										"type": "string",
+										"maxLength": 64,
+										"pattern": "^[a-z][a-z0-9_-]*$"
+									},
+									"prompt": {
+										"type": "string",
+										"minLength": 1,
+										"maxLength": 2000000
+									},
+									"variables": {
+										"type": "object",
+										"propertyNames": {
+											"type": "string",
+											"maxLength": 64,
+											"pattern": "^[a-z][a-z0-9_]*$"
+										},
+										"additionalProperties": {
+											"type": "string",
+											"maxLength": 2000000
+										}
+									}
+								},
+								"required": ["operation"],
+								"additionalProperties": false
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Imagen como data URL, saldo y créditos cobrados"
+					},
+					"400": {
+						"description": "Validación de la operación o de los campos"
+					},
+					"402": {
+						"description": "Saldo insuficiente"
+					},
+					"502": {
+						"description": "El modelo no devolvió imagen o falló"
+					}
+				}
+			}
+		},
+		"/ai/chat": {
+			"post": {
+				"summary": "Chat de una operación de IA (Bearer; Idempotency-Key opcional, UUID)",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"operation": {
+										"type": "string",
+										"maxLength": 64,
+										"pattern": "^[a-z][a-z0-9_-]*$"
+									},
+									"messages": {
+										"minItems": 1,
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"role": {
+													"type": "string",
+													"enum": ["system", "user", "assistant", "tool"]
+												},
+												"content": {
+													"anyOf": [
+														{
+															"type": "string",
+															"maxLength": 2000000
+														},
+														{
+															"minItems": 1,
+															"type": "array",
+															"items": {
+																"anyOf": [
+																	{
+																		"type": "object",
+																		"properties": {
+																			"type": {
+																				"type": "string",
+																				"const": "text"
+																			},
+																			"text": {
+																				"type": "string",
+																				"maxLength": 2000000
+																			}
+																		},
+																		"required": ["type", "text"],
+																		"additionalProperties": false
+																	},
+																	{
+																		"type": "object",
+																		"properties": {
+																			"type": {
+																				"type": "string",
+																				"const": "image_url"
+																			},
+																			"image_url": {
+																				"type": "object",
+																				"properties": {
+																					"url": {
+																						"type": "string",
+																						"maxLength": 8000000,
+																						"pattern": "^data:image\\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$"
+																					}
+																				},
+																				"required": ["url"],
+																				"additionalProperties": false
+																			}
+																		},
+																		"required": ["type", "image_url"],
+																		"additionalProperties": false
+																	}
+																]
+															}
+														}
+													]
+												},
+												"tool_calls": {
+													"minItems": 1,
+													"type": "array",
+													"items": {
+														"type": "object",
+														"properties": {
+															"id": {
+																"type": "string",
+																"minLength": 1,
+																"maxLength": 128
+															},
+															"type": {
+																"type": "string",
+																"const": "function"
+															},
+															"function": {
+																"type": "object",
+																"properties": {
+																	"name": {
+																		"type": "string",
+																		"minLength": 1,
+																		"maxLength": 128
+																	},
+																	"arguments": {
+																		"type": "string",
+																		"maxLength": 200000
+																	}
+																},
+																"required": ["name", "arguments"],
+																"additionalProperties": false
+															}
+														},
+														"required": ["id", "type", "function"],
+														"additionalProperties": false
+													}
+												},
+												"tool_call_id": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 128
+												}
+											},
+											"required": ["role"],
+											"additionalProperties": false
+										}
+									},
+									"variables": {
+										"type": "object",
+										"propertyNames": {
+											"type": "string",
+											"maxLength": 64,
+											"pattern": "^[a-z][a-z0-9_]*$"
+										},
+										"additionalProperties": {
+											"type": "string",
+											"maxLength": 2000000
+										}
+									},
+									"response_format": {
+										"type": "object",
+										"properties": {
+											"type": {
+												"type": "string",
+												"const": "json_schema"
+											},
+											"json_schema": {
+												"type": "object",
+												"properties": {
+													"name": {
+														"type": "string",
+														"minLength": 1,
+														"maxLength": 64
+													},
+													"strict": {
+														"type": "boolean"
+													},
+													"schema": {
+														"type": "object",
+														"propertyNames": {
+															"type": "string"
+														},
+														"additionalProperties": {}
+													}
+												},
+												"required": ["name", "schema"],
+												"additionalProperties": false
+											}
+										},
+										"required": ["type", "json_schema"],
+										"additionalProperties": false
+									},
+									"tools": {
+										"minItems": 1,
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"type": {
+													"type": "string",
+													"const": "function"
+												},
+												"function": {
+													"type": "object",
+													"properties": {
+														"name": {
+															"type": "string",
+															"minLength": 1,
+															"maxLength": 64
+														},
+														"description": {
+															"type": "string",
+															"maxLength": 1000
+														},
+														"parameters": {
+															"type": "object",
+															"propertyNames": {
+																"type": "string"
+															},
+															"additionalProperties": {}
+														}
+													},
+													"required": ["name", "parameters"],
+													"additionalProperties": false
+												}
+											},
+											"required": ["type", "function"],
+											"additionalProperties": false
+										}
+									},
+									"tool_choice": {
+										"anyOf": [
+											{
+												"type": "string",
+												"enum": ["auto", "none", "required"]
+											},
+											{
+												"type": "object",
+												"properties": {
+													"type": {
+														"type": "string",
+														"const": "function"
+													},
+													"function": {
+														"type": "object",
+														"properties": {
+															"name": {
+																"type": "string",
+																"minLength": 1,
+																"maxLength": 64
+															}
+														},
+														"required": ["name"],
+														"additionalProperties": false
+													}
+												},
+												"required": ["type", "function"],
+												"additionalProperties": false
+											}
+										]
+									}
+								},
+								"required": ["operation"],
+								"additionalProperties": false
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Texto o JSON, saldo resumido y créditos cobrados; nunca modelo ni proveedor"
+					},
+					"400": {
+						"description": "Validación de la operación, la forma o la cabecera Idempotency-Key"
+					},
+					"401": {
+						"description": "Sin sesión válida para la app"
+					},
+					"402": {
+						"description": "Saldo insuficiente"
+					},
+					"403": {
+						"description": "Documentos legales pendientes"
+					},
+					"409": {
+						"description": "Petición en curso o ya entregada con esa clave"
+					},
+					"413": {
+						"description": "Operación demasiado cara o contenido demasiado grande"
+					},
+					"429": {
+						"description": "Límite de frecuencia"
+					},
+					"502": {
+						"description": "Error del proveedor o moderación"
+					},
+					"503": {
+						"description": "Mantenimiento o app desactivada"
+					},
+					"504": {
+						"description": "Tiempo agotado con el proveedor"
+					}
+				}
+			}
+		},
+		"/sync": {
+			"get": {
+				"summary": "Documento sincronizado de la app (Bearer; siembra la primera vez)",
+				"responses": {
+					"200": {
+						"description": "Revisión y documento",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"revision": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 9007199254740991
+										},
+										"data": {
+											"type": "object",
+											"propertyNames": {
+												"type": "string"
+											},
+											"additionalProperties": {}
+										}
+									},
+									"required": ["revision", "data"],
+									"additionalProperties": false
+								}
+							}
+						}
+					},
+					"401": {
+						"description": "Sin sesión válida para la app"
+					},
+					"403": {
+						"description": "Documentos legales pendientes"
+					},
+					"426": {
+						"description": "Versión de la app inferior a la mínima"
+					},
+					"503": {
+						"description": "Mantenimiento"
+					}
+				}
+			},
+			"put": {
+				"summary": "Sustituye el documento; If-Match obligatorio con la revisión leída",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"data": {
+										"type": "object",
+										"propertyNames": {
+											"type": "string"
+										},
+										"additionalProperties": {}
+									}
+								},
+								"required": ["data"],
+								"additionalProperties": false
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Nueva revisión",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"revision": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 9007199254740991
+										}
+									},
+									"required": ["revision"],
+									"additionalProperties": false
+								}
+							}
+						}
+					},
+					"400": {
+						"description": "If-Match ausente o mal formado, o documento no válido para el esquema"
+					},
+					"401": {
+						"description": "Sin sesión válida para la app"
+					},
+					"403": {
+						"description": "Documentos legales pendientes"
+					},
+					"412": {
+						"description": "SYNC_CONFLICT: la revisión no coincide; relee y reintenta"
+					},
+					"413": {
+						"description": "El documento supera max_sync_doc_kb"
+					},
+					"426": {
+						"description": "Versión de la app inferior a la mínima"
+					},
+					"503": {
+						"description": "Mantenimiento"
+					}
+				}
+			}
+		},
+		"/defaults": {
+			"get": {
+				"summary": "Predeterminados vigentes de la app (solo exige versión)",
+				"responses": {
+					"200": {
+						"description": "Predeterminados",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"data": {
+											"type": "object",
+											"propertyNames": {
+												"type": "string"
+											},
+											"additionalProperties": {}
+										}
+									},
+									"required": ["data"],
+									"additionalProperties": false
+								}
+							}
+						}
+					},
+					"426": {
+						"description": "Versión de la app inferior a la mínima"
+					}
+				}
+			}
+		},
+		"/auth/logout": {
+			"post": {
+				"summary": "Cierre de la sesión del token (sin cuerpo)",
+				"responses": {
+					"204": {
+						"description": "Sesión revocada"
+					},
+					"401": {
+						"description": "Sin sesión válida"
+					}
+				}
+			}
+		},
+		"/auth/resend-verification": {
+			"post": {
+				"summary": "Reenvío del email de verificación (siempre 202)",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AccountsResendVerificationBody"
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Recibido, exista o no la cuenta"
+					},
+					"400": {
+						"description": "Validación"
+					}
+				}
+			}
+		},
+		"/me": {
+			"get": {
+				"summary": "Datos de la cuenta: email, roles, saldo, umbral de saldo bajo y documentos pendientes",
+				"responses": {
+					"200": {
+						"description": "Cuenta de la sesión"
+					},
+					"401": {
+						"description": "Sin sesión válida"
+					},
+					"426": {
+						"description": "Versión de la app por debajo de la mínima"
+					}
+				}
+			}
+		},
+		"/me/accept-terms": {
+			"post": {
+				"summary": "Aceptación de documentos legales pendientes (idempotente)",
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"documents": {
+										"minItems": 1,
+										"maxItems": 4,
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"document": {
+													"type": "string",
+													"enum": [
+														"terms",
+														"privacy",
+														"cookies",
+														"aup",
+														"withdrawal_waiver",
+														"age_declaration"
+													]
+												},
+												"version": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 32
+												}
+											},
+											"required": ["document", "version"],
+											"additionalProperties": false
+										}
+									}
+								},
+								"required": ["documents"],
+								"additionalProperties": false
+							}
+						}
+					}
+				},
+				"responses": {
+					"204": {
+						"description": "Aceptadas"
+					},
+					"400": {
+						"description": "Validación o versión no vigente"
+					},
+					"401": {
+						"description": "Sin sesión válida"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"AccountsLoginBody": {
+				"type": "object",
+				"properties": {
+					"email": {
+						"type": "string",
+						"maxLength": 254,
+						"format": "email",
+						"pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+					},
+					"password": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 128
+					}
+				},
+				"required": ["email", "password"],
+				"additionalProperties": false
+			},
+			"AccountsResendVerificationBody": {
+				"type": "object",
+				"properties": {
+					"email": {
+						"type": "string",
+						"maxLength": 254,
+						"format": "email",
+						"pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+					}
+				},
+				"required": ["email"],
+				"additionalProperties": false
+			},
+			"Health": {
+				"type": "object",
+				"properties": {
+					"status": {
+						"type": "string",
+						"enum": ["ok", "unavailable"]
+					}
+				},
+				"required": ["status"],
+				"additionalProperties": false
+			},
+			"AppStatus": {
+				"type": "object",
+				"properties": {
+					"app": {
+						"type": "object",
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"name": {
+								"type": "string"
+							}
+						},
+						"required": ["id", "name"],
+						"additionalProperties": false
+					},
+					"minAppVersion": {
+						"type": ["string", "null"]
+					},
+					"recommendedAppVersion": {
+						"type": ["string", "null"]
+					},
+					"maintenance": {
+						"type": "object",
+						"properties": {
+							"active": {
+								"type": "boolean"
+							},
+							"message": {
+								"type": "string"
+							}
+						},
+						"required": ["active", "message"],
+						"additionalProperties": false
+					},
+					"limits": {
+						"type": "object",
+						"properties": {
+							"maxAudioSeconds": {
+								"type": "integer",
+								"minimum": -9007199254740991,
+								"maximum": 9007199254740991
+							}
+						},
+						"required": ["maxAudioSeconds"],
+						"additionalProperties": false
+					},
+					"operations": {
+						"type": "object",
+						"propertyNames": {
+							"type": "string"
+						},
+						"additionalProperties": {
+							"type": "object",
+							"properties": {
+								"timeoutMs": {
+									"type": "integer",
+									"minimum": -9007199254740991,
+									"maximum": 9007199254740991
+								}
+							},
+							"required": ["timeoutMs"],
+							"additionalProperties": false
+						}
+					},
+					"links": {
+						"type": "object",
+						"properties": {
+							"register": {
+								"type": "string",
+								"format": "uri"
+							},
+							"forgotPassword": {
+								"type": "string",
+								"format": "uri"
+							},
+							"panel": {
+								"type": "string",
+								"format": "uri"
+							},
+							"buyCredits": {
+								"type": "string",
+								"format": "uri"
+							},
+							"prices": {
+								"type": "string",
+								"format": "uri"
+							},
+							"terms": {
+								"type": "string",
+								"format": "uri"
+							},
+							"privacy": {
+								"type": "string",
+								"format": "uri"
+							},
+							"acceptableUse": {
+								"type": "string",
+								"format": "uri"
+							}
+						},
+						"required": [
+							"register",
+							"forgotPassword",
+							"panel",
+							"buyCredits",
+							"prices",
+							"terms",
+							"privacy",
+							"acceptableUse"
+						],
+						"additionalProperties": false
+					},
+					"supportEmail": {
+						"type": "string"
+					},
+					"announcements": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"level": {
+									"type": "string",
+									"enum": ["info", "warning", "critical"]
+								},
+								"message": {
+									"type": "string"
+								},
+								"link": {
+									"anyOf": [
+										{
+											"type": "string",
+											"format": "uri"
+										},
+										{
+											"type": "null"
+										}
+									]
+								}
+							},
+							"required": ["id", "level", "message", "link"],
+							"additionalProperties": false
+						}
+					}
+				},
+				"required": [
+					"app",
+					"minAppVersion",
+					"recommendedAppVersion",
+					"maintenance",
+					"limits",
+					"operations",
+					"links",
+					"supportEmail",
+					"announcements"
+				],
+				"additionalProperties": false
+			},
+			"AccountsAppLoginResponse": {
+				"type": "object",
+				"properties": {
+					"token": {
+						"type": "string"
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time",
+						"pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+					},
+					"user": {
+						"type": "object",
+						"properties": {
+							"email": {
+								"type": "string"
+							},
+							"roles": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"required": ["email", "roles"],
+						"additionalProperties": false
+					},
+					"pendingAcceptances": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/AccountsPendingAcceptance"
+						}
+					}
+				},
+				"required": ["token", "expiresAt", "user", "pendingAcceptances"],
+				"additionalProperties": false
+			},
+			"AccountsPendingAcceptance": {
+				"type": "object",
+				"properties": {
+					"document": {
+						"type": "string",
+						"enum": ["terms", "privacy", "aup"]
+					},
+					"version": {
+						"type": "string"
+					}
+				},
+				"required": ["document", "version"],
+				"additionalProperties": false
+			},
+			"ApiError": {
+				"type": "object",
+				"properties": {
+					"error": {
+						"type": "object",
+						"properties": {
+							"code": {
+								"type": "string",
+								"description": "Código de la tabla 2 de api-v1.md"
+							},
+							"message": {
+								"type": "string"
+							},
+							"details": {
+								"type": "object",
+								"propertyNames": {
+									"type": "string"
+								},
+								"additionalProperties": {}
+							}
+						},
+						"required": ["code", "message", "details"],
+						"additionalProperties": false
+					}
+				},
+				"required": ["error"],
+				"additionalProperties": false
+			}
+		}
+	}
+}
