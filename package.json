@@ -37,6 +37,7 @@
 		"test:mutation": "stryker run",
 		"validate": "pnpm check && pnpm lint && pnpm test:coverage && pnpm build && pnpm test:e2e",
 		"db:generate": "drizzle-kit generate",
+		"docs:api": "node scripts/docs-api.mjs",
 		"db:check": "drizzle-kit check"
 	},
 	"dependencies": {
