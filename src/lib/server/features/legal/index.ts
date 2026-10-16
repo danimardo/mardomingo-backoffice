@@ -9,6 +9,7 @@ export {
 export { pendingAcceptancesOf, type PendingAcceptance } from './pending';
 export { isOwnWithdrawalWaiver } from './repository';
 export { acceptDocuments } from './accept-documents';
+export { exportAcceptances, type AcceptanceExport } from './export';
 export { AcceptTermsBody } from './contract';
 export { seedLegalDocuments, PROVISIONAL_VERSION } from './seed';
 export type { AcceptableDocument, CurrentVersion } from './repository';

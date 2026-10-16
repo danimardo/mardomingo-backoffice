@@ -14,6 +14,7 @@ import { toEpochMs, type CivilDate, type EpochMs } from '$lib/shared/time';
 import { civilDateOf, startOfMadridDay } from '$lib/shared/dates';
 import { toMicro } from '$lib/shared/money';
 import { dailyCapVerdict } from './domain/daily-cap';
+import { applyForfeit } from './domain/forfeit';
 import { lowBalanceVerdict, type LowBalanceEvent } from './domain/low-balance';
 import {
 	applyCredit,
@@ -438,6 +439,45 @@ export function expireBuckets(deps: CreditsDeps): number {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Borrado de la cuenta (BE-FR-07 CA4, D-15)
+
+/**
+ * Pone a cero las bolsas con saldo con un movimiento `forfeit` por bolsa y borra el umbral de saldo bajo (dato personal
+ * de preferencia). La deuda no se anula. Solo la llama `privacy`, dentro de la transacción del borrado: abrir una
+ * transacción aquí la convierte en un punto de guardado de esa.
+ */
+export function forfeitAll(
+	deps: CreditsDeps,
+	userId: string
+): { readonly forfeitedMicro: number; readonly buckets: number } {
+	return immediateTransaction(deps.db, (tx) => {
+		const now = deps.clock.now();
+		const before = loadState(tx, userId);
+		const result = applyForfeit(before);
+		if (result.lines.length > 0) {
+			persistState(tx, userId, before, result.state, now);
+			insertMovements(tx, movementRows(userId, result.lines), idsOf(deps, 'mov'), now);
+			deps.logger.emit('credits.balance.forfeited', { count: result.lines.length });
+		}
+		writeLowBalanceThreshold(tx, userId, null, now);
+		return {
+			forfeitedMicro: result.lines.reduce((sum, line) => sum - line.amount, 0),
+			buckets: result.lines.length
+		};
+	});
+}
+
+/** Libera las reservas abiertas de la cuenta, sin cobro (BE-FR-07 CA1; data-model §6). Solo la llama `privacy`. */
+export function releaseOpenHolds(deps: CreditsDeps, userId: string): number {
+	return immediateTransaction(deps.db, (tx) => {
+		const now = deps.clock.now();
+		const open = openHolds(tx, { userId });
+		for (const hold of open) closeHold(tx, hold.id, 'released', now);
+		return open.length;
+	});
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // Saldo (CA2 de BE-FR-71)
 
 export interface BalanceView {
@@ -694,6 +734,26 @@ export function movementsPage(
 			hasNext: found.length > MOVEMENTS_PAGE_SIZE
 		}
 	};
+}
+
+export interface MovementExportRow extends MovementRow {
+	readonly paymentId: string | null;
+}
+
+/** Todos los movimientos de la cuenta, del más antiguo al más reciente, para la exportación RGPD (BE-FR-08). */
+export function movementsForExport(deps: CreditsDeps, userId: string): MovementExportRow[] {
+	return deps.db
+		.select({
+			createdAt: creditMovements.createdAt,
+			type: creditMovements.type,
+			amountMicro: creditMovements.amountMicro,
+			appId: creditMovements.appId,
+			paymentId: creditMovements.paymentId
+		})
+		.from(creditMovements)
+		.where(eq(creditMovements.userId, userId))
+		.orderBy(asc(creditMovements.createdAt), asc(creditMovements.id))
+		.all();
 }
 
 export interface BucketView {

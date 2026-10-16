@@ -80,6 +80,16 @@ export function paymentIdsOfUser(db: Db | Tx, userId: string): string[] {
 }
 
 /** Marca la compra para factura completa (W30, BE-FR-75): la solicitud queda guardada hasta que se emita. */
+/** Todos los pagos de la cuenta, del más antiguo al más reciente (BE-FR-08). */
+export function paymentsOfUser(db: Db | Tx, userId: string): PaymentRow[] {
+	return db
+		.select()
+		.from(payments)
+		.where(eq(payments.userId, userId))
+		.orderBy(payments.createdAt, payments.id)
+		.all();
+}
+
 export function markWantsFullInvoice(tx: Tx, paymentId: string): void {
 	tx.update(payments).set({ wantsFullInvoice: true }).where(eq(payments.id, paymentId)).run();
 }

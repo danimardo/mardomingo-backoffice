@@ -13,6 +13,11 @@ export function billingProfileOf(db: Db | Tx, userId: string): BillingProfileRow
 	return db.select().from(billingProfiles).where(eq(billingProfiles.userId, userId)).get();
 }
 
+/** Borra el perfil fiscal de la cuenta (BE-FR-07 CA1). Devuelve si existía. */
+export function deleteBillingProfileRow(tx: Tx, userId: string): boolean {
+	return tx.delete(billingProfiles).where(eq(billingProfiles.userId, userId)).run().changes > 0;
+}
+
 export function upsertBillingProfile(
 	tx: Tx,
 	row: Omit<BillingProfileRow, 'createdAt' | 'updatedAt'>,

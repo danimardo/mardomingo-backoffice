@@ -23,6 +23,7 @@ import {
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import {
 	billingProfileOf,
+	deleteBillingProfileRow,
 	insertInvoice,
 	initialInvoiceOf,
 	invoiceByIssueKey,
@@ -269,7 +270,44 @@ export function correctPayment(deps: InvoicingDeps, input: CorrectPaymentInput):
 	});
 }
 
+export interface BillingProfileExport {
+	readonly kind: string;
+	readonly legalName: string;
+	readonly taxId: string;
+	readonly address: string;
+	readonly postalCode: string;
+	readonly city: string;
+	readonly country: string;
+	readonly updatedAt: number;
+}
+
+/** Perfil fiscal para la exportación RGPD (BE-FR-08); `null` si la cuenta no lo ha rellenado. */
+export function exportBillingProfile(
+	deps: Pick<InvoicingDeps, 'db'>,
+	userId: string
+): BillingProfileExport | null {
+	const row = billingProfileOf(deps.db, userId);
+	if (row === undefined) return null;
+	return {
+		kind: row.kind,
+		legalName: row.legalName,
+		taxId: row.taxId,
+		address: row.address,
+		postalCode: row.postalCode,
+		city: row.city,
+		country: row.country,
+		updatedAt: row.updatedAt
+	};
+}
+
+/** Borra el perfil fiscal al borrar la cuenta (BE-FR-07 CA1). Las facturas emitidas se conservan íntegras. Solo `privacy`. */
+export function deleteBillingProfile(deps: InvoicingDeps, userId: string): boolean {
+	return immediateTransaction(deps.db, (tx) => deleteBillingProfileRow(tx, userId));
+}
+
 export interface InvoicingService {
+	exportBillingProfile(userId: string): BillingProfileExport | null;
+	deleteBillingProfile(userId: string): boolean;
 	saveBillingProfile(input: {
 		readonly userId: string;
 		readonly profile: unknown;
@@ -284,6 +322,8 @@ export interface InvoicingService {
 
 export function createInvoicingService(deps: InvoicingDeps): InvoicingService {
 	return {
+		exportBillingProfile: (userId) => exportBillingProfile(deps, userId),
+		deleteBillingProfile: (userId) => deleteBillingProfile(deps, userId),
 		saveBillingProfile: (input) => saveBillingProfile(deps, input),
 		issueForPayment: (input) => issueForPayment(deps, input),
 		issueCorrective: (input) => issueCorrective(deps, input),

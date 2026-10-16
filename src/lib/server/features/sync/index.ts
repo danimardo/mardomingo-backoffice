@@ -2,6 +2,7 @@
 export { seedSync } from './seed';
 export { syncDocuments, appDefaults } from './schema';
 export { syncedAppIds } from './synced-apps';
+export { deleteAllForUser, exportDocuments, type SyncDocumentExport } from './erasure';
 export type { SyncData } from './domain/document-types';
 export {
 	parseIfMatch,
