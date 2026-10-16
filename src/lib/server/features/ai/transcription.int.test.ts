@@ -55,9 +55,14 @@ function setRetryDelays(delays: number[]): void {
 		.run();
 }
 
-/** Espera a que una condición se cumpla, con sondeo real (el temporizador puede estar falso). */
+/**
+ * Espera a que una condición se cumpla, con sondeo real (el temporizador puede estar falso). El plazo es de tiempo
+ * y no de vueltas: antes de llegar al transcriptor el flujo lanza ffprobe/ffmpeg, que es E/S real y tarda lo que
+ * tarde la máquina.
+ */
 async function until(condition: () => boolean): Promise<void> {
-	for (let i = 0; i < 500 && !condition(); i += 1) {
+	const deadline = performance.now() + 15_000;
+	while (!condition() && performance.now() < deadline) {
 		await new Promise((resolve) => setImmediate(resolve));
 	}
 	expect(condition()).toBe(true);
