@@ -63,6 +63,17 @@ jobs:
       - name: 3. Check
         run: pnpm check
 
+      # La documentación de la API (docs/api, la usa Secretario) debe coincidir con el código. Si cambió una ruta y no se
+      # regeneró, el paso falla y dice qué ejecutar.
+      - name: 3. Documentación de la API al día
+        run: |
+          pnpm docs:api
+          if ! git diff --quiet -- docs/api; then
+            echo "docs/api no coincide con el código. Ejecuta 'pnpm docs:api' y commitea docs/api."
+            git diff -- docs/api | head -60
+            exit 1
+          fi
+
       # 4. Pruebas unitarias, de componente e integración con cobertura y umbrales.
       - name: 4. Cobertura
         run: pnpm test:coverage
