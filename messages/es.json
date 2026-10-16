@@ -404,5 +404,6 @@
 	"profile_export_link": "Descargar mis datos (JSON)",
 	"profile_delete_heading": "Borrar mi cuenta",
 	"profile_delete_intro": "Borra tu cuenta en todas las aplicaciones. No se puede deshacer.",
-	"profile_delete_link": "Ir a borrar mi cuenta"
+	"profile_delete_link": "Ir a borrar mi cuenta",
+	"profile_export_failed": "No hemos podido preparar tu descarga. Inténtalo de nuevo más tarde."
 }

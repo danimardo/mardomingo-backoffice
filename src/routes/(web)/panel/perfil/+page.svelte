@@ -49,6 +49,9 @@
 {#if data.emailSent}
 	<Banner level="info">{m.profile_email_sent()}</Banner>
 {/if}
+{#if data.exportFailed}
+	<Banner level="critical">{m.profile_export_failed()}</Banner>
+{/if}
 {#if data.saved === 'threshold_saved'}
 	<Banner level="info">{m.profile_threshold_saved()}</Banner>
 {/if}

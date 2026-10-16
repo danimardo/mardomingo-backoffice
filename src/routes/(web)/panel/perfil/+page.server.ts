@@ -49,6 +49,7 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 		email: access.user.email,
 		passwordChanged: url.searchParams.get('aviso') === 'password_changed',
 		emailSent: url.searchParams.get('aviso') === 'email_sent',
+		exportFailed: url.searchParams.get('aviso') === 'export_failed',
 		saved: url.searchParams.get('aviso') ?? null,
 		threshold: getComposition().credits.lowBalance(access.user.id).thresholdMicro,
 		billing: billingFormOf(access.user.id)
