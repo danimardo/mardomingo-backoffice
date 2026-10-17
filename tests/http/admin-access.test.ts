@@ -18,6 +18,8 @@ describe('acceso a la administración (W46–W47) en el host web', () => {
 		'/admin/facturacion/exportar?archivo=ventas&desde=2026-10-01&hasta=2026-10-31',
 		'/admin/anuncios',
 		'/admin/protecciones',
+		'/admin/apps',
+		'/admin/apps/secretario',
 		'/admin/apps/secretario/predeterminados',
 		'/admin/apps/secretario/predeterminados/copiar'
 	]) {

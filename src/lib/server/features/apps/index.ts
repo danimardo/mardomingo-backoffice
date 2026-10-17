@@ -58,3 +58,5 @@ export {
 	type AnnouncementRow,
 	type AnnouncementsAdminDeps
 } from './announcements-admin';
+
+export { appForAdmin, listAppsForAdmin, type AdminAppRow } from './admin-apps';
