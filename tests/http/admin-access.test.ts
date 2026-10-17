@@ -12,7 +12,14 @@ describe('acceso a la administración (W46–W47) en el host web', () => {
 		'/admin/auditoria',
 		'/admin/auditoria/aud_inexistente',
 		'/admin/usuarios',
-		'/admin/usuarios/usr_inexistente'
+		'/admin/usuarios/usr_inexistente',
+		'/admin/usuarios/usr_inexistente/ajuste',
+		'/admin/facturacion',
+		'/admin/facturacion/exportar?archivo=ventas&desde=2026-10-01&hasta=2026-10-31',
+		'/admin/anuncios',
+		'/admin/protecciones',
+		'/admin/apps/secretario/predeterminados',
+		'/admin/apps/secretario/predeterminados/copiar'
 	]) {
 		it(`${path} sin sesión manda al login y no entrega nada`, async () => {
 			const result = await send(baseUrl, path, { host: webHost, headers: { accept: 'text/html' } });

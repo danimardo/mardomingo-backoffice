@@ -533,5 +533,20 @@
 	"admin_protections_current": "actual",
 	"admin_protections_reason": "Motivo (obligatorio)",
 	"admin_protections_confirm": "Confirmo este cambio",
-	"admin_protections_save": "Guardar"
+	"admin_protections_save": "Guardar",
+	"admin_defaults_title": "Predeterminados",
+	"admin_defaults_intro": "Documento que reciben las cuentas nuevas de esta app. Se valida con el esquema de sincronización. No cambia ninguna cuenta existente.",
+	"admin_defaults_error": "No se ha guardado nada. Revisa los datos y la confirmación.",
+	"admin_defaults_json": "Predeterminados (JSON)",
+	"admin_defaults_json_invalid": "El JSON no es válido o no cumple el esquema de la app.",
+	"admin_defaults_confirm": "Confirmo este cambio",
+	"admin_defaults_save": "Guardar predeterminados",
+	"admin_defaults_copy_link": "Copiar elementos de una cuenta a los predeterminados",
+	"admin_defaults_copy_title": "Copiar a predeterminados",
+	"admin_defaults_copy_intro": "Elige los elementos que quieres copiar. Solo se sustituyen las categorías con algún elemento marcado.",
+	"admin_defaults_nothing_selected": "No has marcado ningún elemento.",
+	"admin_defaults_source_user": "Identificador de la cuenta de origen",
+	"admin_defaults_preview": "Ver elementos",
+	"admin_defaults_no_data": "La cuenta no tiene datos sincronizados para esta app.",
+	"admin_defaults_copy_submit": "Copiar los elementos marcados"
 }
