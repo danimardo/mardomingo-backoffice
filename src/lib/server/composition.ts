@@ -26,6 +26,7 @@ import { manualPriceFor, savePriceReference } from './features/pricing';
 import { RELEASE_SOURCES } from './features/stats/config';
 import { fetchPublicReleases } from './adapters/github/releases';
 import type { DailyJobDeps } from './features/stats/job';
+import type { PublishDeps as LegalPublishDeps } from './features/legal';
 import { createFakePaymentsProvider } from './adapters/payments/fake';
 import { createSimulatedProvider } from './adapters/payments/simulated';
 import type { PaymentsProvider } from './adapters/payments/provider';
@@ -79,6 +80,8 @@ export interface Composition {
 	readonly adminAnnouncements: AnnouncementsAdminDeps;
 	readonly brake: BrakeReleaseDeps;
 	readonly dailyJob: DailyJobDeps;
+	readonly legalPublish: LegalPublishDeps;
+	readonly notifications: NotificationsDeps;
 	readonly ai: AiDeps;
 	readonly media: MediaDeps;
 	close(): void;
@@ -247,6 +250,8 @@ export function createComposition(
 
 	const brake: BrakeReleaseDeps = { db, clock, logger, audit: auditDeps };
 
+	const legalPublish: LegalPublishDeps = { db, logger, clock, ids, audit: auditDeps };
+
 	const dailyJob: DailyJobDeps = {
 		db,
 		logger,
@@ -300,6 +305,8 @@ export function createComposition(
 		adminAnnouncements,
 		brake,
 		dailyJob,
+		legalPublish,
+		notifications,
 		ai,
 		media,
 		close: () => {

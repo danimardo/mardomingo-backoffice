@@ -4,6 +4,7 @@
 import type { EmailSender } from '$lib/server/adapters/resend/email-sender';
 import type { Logger } from '$lib/server/logging/logger';
 import { passwordChangedEmail } from './emails/password-changed';
+import { legalUpdateEmail } from './emails/legal-update';
 import { lowBalanceEmail } from './emails/low-balance';
 import { emailChangeVerifyEmail } from './emails/email-change-verify';
 import { emailChangedNoticeEmail } from './emails/email-changed-notice';
@@ -48,6 +49,7 @@ function contentOf(deps: NotificationsDeps, email: AccountEmail) {
 		return emailChangeVerifyEmail({ link: email.link ?? '', supportEmail });
 	}
 	if (email.reason === 'email_changed_notice') return emailChangedNoticeEmail({ supportEmail });
+	if (email.reason === 'legal_update') return legalUpdateEmail({ supportEmail });
 	return passwordChangedEmail({ supportEmail });
 }
 

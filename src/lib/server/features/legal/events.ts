@@ -3,6 +3,7 @@ import type { LogEventMeta } from '$lib/server/logging/events';
 
 export interface LegalLogFields {
 	'legal.acceptance.recorded': { count: number };
+	'legal.document.published': { requiresReacceptance: boolean };
 	'legal.acceptance.required': { count: number };
 	'legal.acceptance.rejected': {
 		reason: 'version_not_current';
@@ -12,6 +13,7 @@ export interface LegalLogFields {
 
 export const LEGAL_LOG_EVENTS = Object.freeze({
 	'legal.acceptance.recorded': { level: 'info', msg: 'Aceptación legal registrada' },
+	'legal.document.published': { level: 'info', msg: 'Versión legal publicada' },
 	'legal.acceptance.required': {
 		level: 'info',
 		msg: 'Hay documentos legales pendientes de aceptar'

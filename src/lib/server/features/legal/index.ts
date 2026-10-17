@@ -14,3 +14,7 @@ export { AcceptTermsBody } from './contract';
 export { seedLegalDocuments, PROVISIONAL_VERSION } from './seed';
 export type { AcceptableDocument, CurrentVersion } from './repository';
 export { LEGAL_LOG_EVENTS, type LegalLogFields } from './events';
+
+// Publicación de versiones legales (T314). Las llama solo la composición y la ruta de administración (W48).
+export { publishVersion, type PublishDeps, type PublishInput } from './publish';
+export { LEGAL_DOCUMENTS } from './schema';
