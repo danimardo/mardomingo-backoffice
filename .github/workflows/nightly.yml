@@ -1,0 +1,45 @@
+# Nocturna (Historias.md 15.26): matriz de tres navegadores y mobile-webkit, con vídeo de los fallos.
+# La matriz completa de UX (16.11) y el trabajo visual se activan con sus líneas base (L10 y L16).
+name: nocturna
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.21.0
+  PNPM_VERSION: 12.8.1
+  E2E_NIGHTLY: '1'
+
+jobs:
+  matriz:
+    name: E2E ${{ matrix.project }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit, mobile-webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps ${{ matrix.project == 'mobile-webkit' && 'webkit' || matrix.project }}
+      - run: pnpm build
+      - run: pnpm exec playwright test --project=${{ matrix.project }}
+      - name: Artefactos (vídeo y trazas)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nocturna-${{ matrix.project }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14

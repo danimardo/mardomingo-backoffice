@@ -63,28 +63,67 @@ El saldo de los usuarios es dinero real. Ningún atajo justifica ponerlo en ries
   secretos. Cada entorno usa claves distintas.
 - Respuestas anti-enumeración en registro, login, recuperación y cambio de email (BE-FR-01, 03 y
   66).
-- La web aplica CSP estricta (`kit.csp`), HSTS, cookies `Secure`/`HttpOnly`/`SameSite=Lax` y la
-  protección CSRF de SvelteKit. La API aplica CORS por app (BE-FR-65).
+- La web aplica CSP estricta (`kit.csp`), HSTS y cookies `Secure`/`HttpOnly`/`SameSite=Lax`.
+- **CSRF**: la comprobación de origen de SvelteKit se desactiva, porque rechaza los POST
+  `multipart/form-data` sin `Origin` que envían las apps de escritorio a la API. En su lugar,
+  `handle` aplica una comprobación equivalente **solo en el host web**: todo POST, PUT, PATCH o
+  DELETE con tipo de contenido de formulario debe traer un `Origin` igual al de `PUBLIC_WEB_URL`;
+  si no, `403`. El host de la API usa solo el token Bearer y no lee cookies, así que no es
+  vulnerable a CSRF; aplica CORS por app (BE-FR-65). Ambas reglas tienen tests HTTP.
 - La autorización se comprueba en el servidor y en cada endpoint o acción: rol, propiedad del
   recurso y pertenencia de la sesión a la app de `X-App-Id`. La interfaz no es una barrera de
   seguridad.
 - El CI falla si `pnpm audit --prod` detecta vulnerabilidades de severidad alta o crítica.
 
-### IV. Arquitectura por capas y separación de responsabilidades
+### IV. Monolito modular por funcionalidades
 
-El código de servidor se organiza en capas con dependencias en una sola dirección
-(presentación → aplicación → dominio; la infraestructura implementa los puertos del dominio):
+El código de servidor se organiza **por funcionalidad**, con capas dentro de cada una y
+dependencias en una sola dirección (presentación → servicio → dominio; los repositorios y los
+adaptadores son infraestructura). El mapa operativo (dónde va cada cosa, flujos y ejemplos) está
+en `ARCHITECTURE.md`, y la decisión, en `docs/adr/0005`.
 
-| Capa | Ubicación | Reglas |
-|---|---|---|
-| Dominio | `src/lib/server/domain/` | Funciones puras: tarificación, consumo de bolsas, reservas, deuda, estimación de coste, validación del documento de sincronización y reglas de idempotencia. **Sin I/O**: no importa SvelteKit, Drizzle, `fetch`, `Date.now()` ni `process.env`. El tiempo y la configuración entran como parámetros. |
-| Aplicación (servicios) | `src/lib/server/services/` | Casos de uso: orquestan dominio, repositorios y adaptadores, y definen los límites de transacción. Sin conocimiento de HTTP. |
-| Infraestructura | `src/lib/server/db/`, `src/lib/server/adapters/` | Esquema Drizzle, repositorios y adaptadores de proveedores (IA, pagos, facturación, email, tipo de cambio, captcha, reloj). Cada proveedor externo se usa **solo** a través de una interfaz (`PaymentsProvider`, `InvoicingProvider`, `EmailSender`, `AiGateway`, `FxSource`, `Clock`…) con una implementación real y una falsa para tests. |
-| Presentación | `src/routes/`, `src/lib/components/` | `+server.ts`, `+page.server.ts` y componentes. Solo analizan la entrada (Zod), llaman a un servicio y serializan la salida. PROHIBIDA la lógica de negocio en rutas y componentes. |
+| Ubicación | Contenido y reglas |
+|---|---|
+| `src/lib/server/features/<funcionalidad>/domain/` | Funciones puras: tarificación, consumo de bolsas, reservas, deuda, estimación de coste, validación del documento de sincronización, reglas de idempotencia… **Sin I/O**: no importa SvelteKit, Drizzle, `better-sqlite3`, `fetch`, `node:*`, `Date.now()`, `new Date()` ni `process.env`. El tiempo y la configuración entran como parámetros. Solo importa `zod`, `$lib/shared/`, `$lib/server/shared/` y su propio `domain/`; nunca otras funcionalidades. |
+| `…/<funcionalidad>/service.ts` | Casos de uso: orquestan dominio, repositorios, adaptadores y las API públicas de otras funcionalidades. Sin conocimiento de HTTP. |
+| `…/<funcionalidad>/repository.ts` y `schema.ts` | `schema.ts` contiene **solo** las tablas Drizzle de las que la funcionalidad es **dueña**; solo puede importar el `schema.ts` de otra funcionalidad para declarar una clave foránea (`references()`); esas importaciones son declaraciones de la BD y quedan fuera del orden de funcionalidades y del cálculo de ciclos. `repository.ts` es el único código que lee o escribe esas tablas, y valida sus columnas JSON. |
+| `…/<funcionalidad>/contract.ts` | Esquemas Zod del contrato de la API de la funcionalidad (entrada, salida y OpenAPI). |
+| `…/<funcionalidad>/events.ts` | Catálogo de eventos de log de la funcionalidad (principio XI). |
+| `…/<funcionalidad>/presenters.ts` | Modelos de vista con mapeo explícito (sin filas de la BD ni objetos de Better Auth). |
+| `…/<funcionalidad>/index.ts` | **API pública**: lo único que pueden importar otras funcionalidades, las rutas, los *hooks* y las tareas. Es el único fichero obligatorio; los demás se crean cuando hacen falta. |
+| `src/lib/shared/` | Núcleo **puro** compartido por cliente y servidor: tipos *branded* de dinero y de fecha (`Micro`, `EpochMs`, `CivilDate`) y sus constructores. No importa nada de `$lib/server`. |
+| `src/lib/server/shared/` | Núcleo **puro** del servidor: ids y errores tipados. No importa funcionalidades ni infraestructura. |
+| `src/lib/server/{db,adapters,config,logging,forms,api,jobs}/` | Infraestructura común: cliente y transacciones de SQLite y migraciones; proveedores externos, cada uno tras una interfaz (`PaymentsProvider`, `InvoicingProvider`, `EmailSender`, `AiGateway`, `FxSource`, `Clock`…) con su implementación real y su implementación falsa (`adapters/<proveedor>/fake.ts`); entorno; logging; helper de formularios; utilidades de la API (formateador de errores de 7.1, esquemas de cabeceras comunes y montaje del OpenAPI); y tareas programadas finas que solo llaman a API públicas. |
+| `src/lib/server/composition.ts` | **Punto de composición**: construye una vez (desde `init`) la BD, los adaptadores, el `Clock` y el `Logger`, y los pasa a los servicios por parámetro. En los tests se sustituyen por los falsos. |
+| `src/routes/`, `src/lib/components/` | Presentación: analizan la entrada (Zod), comprueban la autorización y serializan la salida. Las actions y los endpoints que escriben llaman a **un** servicio; un `load` puede componer varias API públicas en paralelo. PROHIBIDA la lógica de negocio en rutas y componentes. |
 
-- Todo el código de servidor vive bajo `$lib/server` (SvelteKit impide importarlo desde el cliente).
-- Los componentes `.svelte` no acceden a la BD ni calculan importes; reciben datos ya calculados.
-- Las tareas programadas son finas: invocan servicios y no contienen lógica propia.
+- Funcionalidades de la v4: `audit`, `notifications`, `apps`, `legal`, `pricing`, `credits`,
+  `invoicing`, `accounts`, `payments`, `sync`, `protections`, `ai`, `privacy` y `stats`. Su orden,
+  sus tablas y sus dependencias permitidas están en `ARCHITECTURE.md` (sección 3). Crear, fusionar
+  o dividir una funcionalidad se decide en el plan y se refleja allí.
+- **Fronteras**:
+  - Una funcionalidad solo importa de otra su `index.ts`. PROHIBIDOS los imports profundos.
+  - El grafo de dependencias entre funcionalidades es **acíclico**. `audit` es una hoja (no
+    importa ninguna funcionalidad) y `notifications` solo importa `audit`.
+  - Cuando una funcionalidad necesita un agregado de otra que está por encima en el orden (p. ej.
+    el coste del día de `ai` para el freno global de `protections`), lo recibe **como parámetro**
+    del servicio o la tarea que orquesta; nunca lo importa.
+  - **Cada tabla tiene un único dueño.** Ningún repositorio lee ni escribe tablas de otra
+    funcionalidad: los datos ajenos se piden por su API pública. `credits` es la **única**
+    funcionalidad que escribe en las tablas de saldo (`credit_buckets`, `user_balances`,
+    `credit_holds`, `credit_movements`), por el principio I.
+  - Los *guards* de autorización (`requireUser`, `requireVerifiedUser`, `requireAdmin`) los
+    exporta `accounts` en su `index.ts`.
+- **Transacciones**: las abre el servicio que orquesta el caso de uso (`BEGIN IMMEDIATE`, sin
+  `await` dentro). Las funciones públicas que escriben reciben esa transacción como parámetro y
+  nunca abren otra.
+- Todo el código de servidor vive bajo `$lib/server` (SvelteKit impide importarlo desde el
+  cliente). PROHIBIDAS las carpetas globales por capa (`src/lib/server/domain`,
+  `src/lib/server/services`) y `src/lib/services`.
+- Los componentes `.svelte` no acceden a la BD ni calculan importes: reciben datos ya calculados.
+- **La complejidad se justifica**: una capa, abstracción general, caché, sistema de eventos o
+  dependencia transversal nueva solo se introduce explicando en el plan qué problema concreto
+  resuelve. Se prefiere una implementación local sencilla hasta que haya reutilización real.
 
 ### V. Test-first y cobertura mínima (NO NEGOCIABLE)
 
@@ -93,14 +132,20 @@ El código de servidor se organiza en capas con dependencias en una sola direcci
   validación de sincronización. El test que falla se escribe y se ve fallar **antes** de la
   implementación.
 - **Cobertura mínima**, comprobada por Vitest en el CI (el CI falla si no se alcanza):
-  - **100 %** de líneas, ramas, funciones y sentencias en `src/lib/server/domain/**`.
-  - **80 %** de líneas, ramas, funciones y sentencias en el conjunto del proyecto.
+  - **100 %** de líneas, ramas, funciones y sentencias en
+    `src/lib/server/features/*/domain/**`, `src/lib/shared/**` y `src/lib/server/shared/**`.
+  - **80 %** de líneas, ramas, funciones y sentencias en `src/lib/**`. Las rutas, los *hooks* y
+    los `+server.ts` se ejecutan en el proceso del build, que v8 no mide: los cubren los tests
+    HTTP, los E2E y `test:trace` (cada `CA` con su test).
   - Las exclusiones (`/* v8 ignore */`) solo se permiten con un comentario que las justifique.
 - Los tests de integración usan **SQLite real** (fichero temporal con WAL) y migraciones reales.
-  PROHIBIDO simular la BD con mocks.
+  PROHIBIDO simular la BD con mocks. Viven junto a su funcionalidad
+  (`features/<f>/*.int.test.ts`) y solo importan el interior de esa funcionalidad; las demás, por
+  su `index.ts` o con *builders*. Los tests HTTP, de arquitectura y E2E viven aparte
+  (`Historias.md` 15.25).
 - Los tests NUNCA llaman a proveedores reales (IA, pagos, email, BCE o Turnstile): usan las
   implementaciones falsas de los adaptadores.
-- Son obligatorios todos los tests de la sección 10.4 de `Historias.md`, incluidos los de
+- Son obligatorios todos los tests de la sección 10, punto 4, de `Historias.md`, incluidos los de
   **concurrencia** (N peticiones simultáneas sobre el mismo saldo), los de **aislamiento entre
   apps** y la validación de respuestas contra el **OpenAPI**.
 - Todos los códigos de error documentados (sección 7.2) están cubiertos por tests de la API,
@@ -126,8 +171,9 @@ El código de servidor se organiza en capas con dependencias en una sola direcci
   de cada release. Las capturas de regresión visual solo se generan en el contenedor oficial de
   Playwright y solo se actualizan con un cambio intencionado y revisado.
 - **Property-based** (fast-check) donde haya invariantes del dominio y **mutation testing**
-  (Stryker) sobre `src/lib/server/domain/**`, con línea base y ejecución programada; nunca en el
-  bucle de desarrollo.
+  (Stryker) sobre `src/lib/server/features/*/domain/**` y los módulos de dinero y fecha de
+  `src/lib/shared/**`, con línea base y ejecución programada;
+  nunca en el bucle de desarrollo.
 - La estrategia detallada (niveles, lotes, suites, comandos, CI y criterios de cierre) está en
   `Historias.md`, sección 15, y es de obligado seguimiento en el plan y las tareas.
 
@@ -160,14 +206,16 @@ El código de servidor se organiza en capas con dependencias en una sola direcci
 
 - Ningún parámetro de la sección 9 de `Historias.md` se escribe en el código. Se leen de `settings`
   (o del registro de apps y del catálogo de operaciones) a través de un único servicio de
-  configuración tipado y validado con Zod, que resuelve la herencia global → app → operación.
+  configuración tipado y validado con Zod (la API pública de `apps`; no confundir con
+  `$lib/server/config/`, que solo lee el entorno), que resuelve la herencia global → app →
+  operación.
 - Los valores por defecto viven en un único módulo de *seed* y se muestran en el panel
   (BE-FR-61 CA4).
 - Cada cambio se valida (tipos, rangos y coherencia) y queda en `admin_audit` con el valor anterior
   y el nuevo.
 - Solo son variables de entorno los secretos y la infraestructura que enumera la sección 9.
 
-### IX. Accesibilidad y usabilidad (WCAG 2.2 AA)
+### IX. Accesibilidad, usabilidad y experiencia de uso (WCAG 2.2 AA)
 
 Accesibilidad:
 
@@ -177,41 +225,76 @@ Accesibilidad:
   *landmarks* y tablas con `th`/`scope`/`caption`. ARIA solo cuando el HTML no basta.
 - Todo es usable **solo con teclado**: foco visible (contraste ≥ 3:1), orden lógico, enlace
   «Saltar al contenido», sin trampas de foco, y los diálogos gestionan y devuelven el foco.
+- Al cambiar de ruta, al fallar un envío o al desaparecer el elemento con el foco, se decide
+  dónde va el foco y qué se anuncia. Se conserva el anuncio de ruta de SvelteKit; si se
+  personaliza, se comprueba que no empeora.
 - Contraste ≥ 4,5:1 en texto y ≥ 3:1 en componentes y gráficos, **en ambos temas**.
 - Los formularios tienen `label` visible y asociado, errores en texto junto al campo, enlazados con
   `aria-describedby` y anunciados (`aria-live`), y `autocomplete` correcto. El color nunca es el
   único indicador.
 - Las gráficas (LayerChart) tienen un título descriptivo y una **tabla de datos equivalente**
   accesible.
-- Se respeta `prefers-reduced-motion`. La interfaz funciona con zoom al 200 % y con una anchura de
-  320 px sin desplazamiento horizontal.
+- Se respeta `prefers-reduced-motion`. La interfaz funciona con zoom al 200 %, con el espaciado
+  de texto de WCAG y con una anchura de 320 px sin desplazamiento horizontal de la página (las
+  tablas pueden desplazarse dentro de su contenedor).
+- Los tamaños de letra usan unidades relativas (`rem`), para respetar la ampliación del navegador.
+- Objetivos táctiles de **al menos 44 × 44 px CSS** en toda la web, incluido el panel de
+  administración (política propia, por encima del mínimo de 24 × 24 de WCAG).
 - Los componentes interactivos complejos (diálogos, menús, pestañas, combobox) siguen los patrones
   de la WAI-ARIA Authoring Practices Guide; como no hay librería de componentes, cada uno lleva sus
   tests de teclado.
 - Verificación: `eslint-plugin-svelte` (reglas a11y) sin avisos y `@axe-core/playwright` con
-  **cero violaciones** `serious` o `critical` en cada página y en cada tema.
+  **cero violaciones** `serious` o `critical` en cada página y en cada tema. Lo automático no
+  sustituye a la auditoría manual previa al lanzamiento (`Historias.md` 15.18).
 
 Usabilidad:
 
-- Diseño *mobile-first* y adaptable. Tema claro y oscuro: por defecto sigue
-  `prefers-color-scheme`, con selector manual guardado en una cookie técnica.
+- Cada historia con interfaz se especifica con **criterios observables** (qué ve el usuario, qué
+  puede hacer, qué ocurre si falla). PROHIBIDOS los requisitos del tipo «será intuitiva» o «tendrá
+  buena UX». Los patrones de interfaz se eligen por las tareas aprobadas; no justifican
+  funcionalidades nuevas.
+- **Estados**: cada pantalla con datos define los estados que le apliquen (primer uso, vacío,
+  sin coincidencias, carga, éxito, error recuperable, resultado incierto, sin permiso, sesión
+  caducada) según el catálogo de `Historias.md` 16.6. Toda acción significativa da una
+  respuesta perceptible. Un indicador de carga representa una espera real y nunca oculta un fallo.
+- **Lo escrito no se pierde**: ante un error se conservan los datos válidos (salvo contraseñas y
+  secretos), y tras iniciar sesión se vuelve a la página pedida. Nunca se presenta como confirmado
+  un resultado con consecuencias (compra, ajuste, borrado) antes de que lo confirme el servidor.
+- Diseño *mobile-first* y adaptable en **toda** la web, panel de administración incluido.
+- **Tema**: claro y oscuro, con selector **Sistema / Claro / Oscuro** disponible en todas las
+  páginas. Sistema es la elección inicial, funciona sin JavaScript y sin destello del otro tema, y
+  sigue los cambios del sistema durante la sesión sin perder estado. Claro u Oscuro se guardan en
+  una cookie técnica y el servidor pinta la página ya con el tema elegido (principio XIII).
 - **Mejora progresiva**: todos los formularios funcionan sin JavaScript (form actions de SvelteKit
-  con `use:enhance`). Solo las gráficas pueden requerir JavaScript, y su tabla equivalente no.
+  con `use:enhance`). Solo las gráficas y el captcha del registro pueden requerir JavaScript
+  (sección «Mejora progresiva»).
 - Todo el texto visible está en español y sale de los mensajes de **Paraglide**. PROHIBIDO el texto
   visible *hardcodeado* en componentes, servidores o emails.
-- Los mensajes de error explican qué ha pasado y qué puede hacer el usuario, sin jerga técnica.
+- Los mensajes de error explican qué ha pasado, dónde, qué puede hacer el usuario y qué se ha
+  conservado, sin jerga técnica. Los botones nombran su resultado concreto.
 - Las acciones destructivas o irreversibles (borrar la cuenta, reembolsos, ajustes de saldo,
-  bloqueos) piden confirmación explícita y, cuando la especificación lo indica, la contraseña.
+  bloqueos) piden confirmación explícita mostrando el objeto y el alcance y, cuando la
+  especificación lo indica, la contraseña. El foco inicial de la confirmación no está en la acción
+  destructiva.
+- **PROHIBIDOS los patrones manipulativos**: urgencia falsa, opciones preseleccionadas que
+  favorecen al negocio, casillas legales marcadas de antemano, bajas o borrados más difíciles que
+  las altas y textos que culpabilizan.
 - Los importes se muestran siempre con las reglas de redondeo de BE-FR-22 y el formato español
   (coma decimal, punto de miles). Al usuario nunca se le muestran modelos ni costes reales.
+- Las personas y tareas de `Historias.md` 16.1 son hipótesis. Antes del lanzamiento público con
+  cobros reales se hace la prueba de usabilidad de 16.10 y se corrigen sus hallazgos.
 
 ### X. Simplicidad operativa
 
 - **Una sola instancia** por entorno, **SQLite** como única BD y tareas programadas **dentro del
   proceso**. PROHIBIDO añadir Redis, colas, otra BD, microservicios o *workers* externos sin
   enmendar esta constitución.
-- Dependencias mínimas: cada dependencia de producción nueva se justifica en el plan (para qué
-  sirve, por qué no basta la plataforma y cuál es su mantenimiento). Se prefieren las APIs nativas
+- Dependencias mínimas: cada dependencia nueva (de producción o de desarrollo significativa) se
+  justifica en el plan: para qué sirve, por qué no basta la plataforma ni una dependencia ya
+  presente, mantenimiento, licencia, seguridad y tamaño o impacto cuando sea relevante. Una
+  dependencia transversal **nueva** (la usarán varias funcionalidades o sustituye a otra) exige
+  además un ADR.
+  No se introducen dos librerías para resolver el mismo problema. Se prefieren las APIs nativas
   de Node 24 y de la plataforma web.
 - YAGNI: no se construye nada que no exija `Historias.md`. Lo «preparado para el futuro» (Stripe,
   OAuth y apps móviles) se limita a interfaces y modelo de datos, sin implementaciones
@@ -222,8 +305,7 @@ Usabilidad:
 **Propósito.** Los logs sirven para diagnosticar fallos y reconstruir el recorrido de una petición.
 **No** son el registro de auditoría: el dinero, las operaciones y las acciones del administrador se
 reconstruyen desde la BD (`credit_movements`, `ai_operations`, `payments`, `admin_audit`). Nadie
-debe dar por hecho que un log existe para siempre: se pueden perder eventos si el Gateway cae y
-Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
+debe dar por hecho que un log existe para siempre: Docker rota sus ficheros y, en la v4, no hay copia remota; se pueden perder eventos si el proceso se cae antes de vaciar su búfer de salida.
 
 **Una API de registro por capa**
 
@@ -238,7 +320,7 @@ Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
 
 **Eventos**
 
-- Cada línea tiene un `event` con código estable `dominio.objeto.resultado` (p. ej.
+- Cada línea tiene un `event` con código estable `funcionalidad.objeto.resultado` (p. ej.
   `credits.hold.rejected`) y un `msg` fijo tomado del catálogo. PROHIBIDO construir mensajes con
   datos.
 - La firma del logger está tipada por evento: cada código solo admite sus campos (lista permitida
@@ -263,7 +345,7 @@ Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
   caídos, discrepancia del ledger, tarea fallida, JSON corrupto en la BD).
 - `warn`: modo degradado o *fallback* (modelo de respaldo, backup de transcripción, coste
   estimado, tipo de cambio antiguo, email no enviado, freno global, eventos descartados por el
-  Gateway) y señales de abuso.
+  Log Gateway, cuando exista, en la fase posterior) y señales de abuso.
 - `info`: ciclo de vida, una línea por petición terminada (`http.request.completed`),
   operaciones completadas y **rechazos de negocio esperados** (saldo, límites, conflicto de
   sincronización, validación), siempre con `reason`.
@@ -299,15 +381,20 @@ Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
 
 **Destinos**
 
-- Siempre: JSON por stdout. Es la copia que conserva Docker con rotación.
-- Staging y producción: además, un *transport* de Pino en un *worker thread* envía lotes al **Log
-  Gateway** (delante de OpenObserve) como servicio `mardomingo_backoffice`, con `env` =
-  `APP_ENV`. Usa una clave propia de **solo escritura**, limitada a ese servicio.
-- El búfer está acotado. Si el Gateway falla, el envío no bloquea las peticiones: descarta los
-  eventos más antiguos y registra en stdout `log.gateway.dropped` con el recuento.
+- Siempre: JSON por stdout. Es la única salida de la v4 en todos los entornos y la copia que conserva
+  Docker con rotación.
 - Desarrollo: JSON en `.logs/app.log` (ignorado por Git y vaciado en cada arranque) y consola
   legible con `pino-pretty` (solo dependencia de desarrollo), con la hora en `Europe/Madrid`. El
   formato legible nunca sustituye al JSON.
+- Fase posterior (aplazada por la enmienda 2.2.0; no se implementa en la v4): al activar el Log
+  Gateway, staging y producción enviarán además lotes, mediante un *transport* de Pino en un
+  *worker thread*, al servicio `mardomingo_backoffice` (delante de OpenObserve), con `env` =
+  `APP_ENV` y una clave propia de **solo escritura**. Ese envío tendrá un búfer acotado: si el
+  Gateway falla, no bloqueará las peticiones, descartará los eventos más antiguos y registrará en
+  stdout `log.gateway.dropped` con el recuento. Activarlo exige enmendar esta sección.
+- Test (`APP_ENV=test`): solo stdout, sin `.logs/` y sin envío remoto, con `LOG_LEVEL=debug` para que el
+  marcador de privacidad vea todos los niveles. Los tests unitarios y de integración usan el
+  registrador falso.
 
 **Cliente (navegador)**
 
@@ -328,16 +415,20 @@ Docker rota sus ficheros, o si el proceso se cae antes de vaciar el búfer.
 
 **Retención y acceso**
 
-- OpenObserve conserva los logs 30 días (BE-FR-83) y los consulta solo el propietario, a través
-  del Gateway.
-- La retención se configura en OpenObserve o en el Gateway, no en la app. Se verifica, igual que
-  la rotación de los logs de Docker en el host, en cada cambio de infraestructura.
+- En la v4, la retención de los logs la fija la rotación de Docker en el host. Se verifica en cada
+  cambio de infraestructura, igual que su tamaño y número de ficheros.
+- Fase posterior (aplazada por la enmienda 2.2.0): OpenObserve conservará los logs 30 días
+  (BE-FR-83) y los consultará solo el propietario, a través del Log Gateway. La retención se
+  configurará en OpenObserve o en el Gateway, no en la app.
 
 **Catálogo y alertas**
 
 - Cada plan (`/speckit-plan`) incluye un **catálogo de eventos** de la funcionalidad: código,
-  nivel, campos y cuándo se emite. Los catálogos se reúnen en `$lib/logging/events.ts`, que es
-  la fuente única.
+  nivel, campos y cuándo se emite. Vive en `features/<f>/events.ts`, y el prefijo de cada código
+  es el nombre de la funcionalidad. Los eventos de infraestructura (`app.*`, `http.*`, `log.*`)
+  están en `$lib/server/logging/events.ts`, que reúne todos los catálogos con una línea por
+  funcionalidad; los del navegador (`client.*`), en `$lib/logging/`. Un test comprueba que los
+  códigos son únicos y llevan el prefijo correcto.
 - `/health` comprueba la BD. Las alertas al administrador son las de la sección 5.13 y no se
   repiten por el mismo cruce de umbral (`alerts_state`).
 
@@ -348,14 +439,14 @@ Todo dato no confiable se valida con **Zod** al cruzar una frontera, y solo ahí
 - **Fronteras de este proyecto**: cuerpos JSON de `/api/v1/*`; multipart de `/ai/transcribe`;
   cabeceras (`X-App-Id`, `X-App-Version`, `X-Device-Name`, `Idempotency-Key`, `If-Match`); query
   y parámetros de ruta; form actions de la web; webhooks de pagos; respuestas de OpenRouter,
-  Mistral, BCE, Turnstile, Resend y GitHub; columnas JSON de la BD; cookies (tema); variables de
+  Mistral, BCE, Turnstile, Resend y GitHub; columnas JSON de la BD; cookies (tema y efectos); variables de
   entorno.
 - **Tipos inferidos del esquema**: `z.input` para lo que llega y `z.output` para lo ya
   normalizado. Los servicios que reciben datos de consulta aceptan `z.input` y normalizan dentro
   con `Esquema.parse`. PROHIBIDO usar aserciones de tipo (`as`, `!`, `as unknown as`) en lugar de
   validar: ESLint aplica `strictTypeChecked` y `consistent-type-assertions`
-  (`assertionStyle: "never"`). La única excepción es el módulo de constructores de tipos
-  *branded*.
+  (`assertionStyle: "never"`), también en los tests. La única excepción es el módulo de
+  constructores de tipos *branded* (`$lib/shared/`).
 - **Tres responsabilidades separadas**:
   - El esquema valida **forma** y es puro: sin I/O ni `refine` asíncronos.
   - Las **reglas de negocio** (operación activa, saldo, revisión de sincronización, unicidad)
@@ -400,8 +491,58 @@ Todo dato no confiable se valida con **Zod** al cruzar una frontera, y solo ahí
   declarado no es una prueba: la verificación real la hace ffprobe (BE-FR-44).
 - **Fechas**: los esquemas de entrada aceptan el formato visible (`dd/mm/aaaa`) y el ISO, y
   devuelven los tipos de fecha del proyecto (sección «Datos y almacenamiento»), nunca `Date`.
-- Los esquemas compartidos entre servidor y cliente viven en `$lib/schemas` y no importan código
-  de servidor. El servidor valida siempre, aunque el cliente también valide.
+- **Dónde vive cada esquema**:
+  - contrato de la API de una funcionalidad: `features/<f>/contract.ts`;
+  - columnas JSON: junto al `repository.ts` de su dueña;
+  - respuestas de proveedores: en su `adapters/<proveedor>/`;
+  - cabeceras comunes de la API: `$lib/server/api/`;
+  - formularios compartidos con el cliente: `$lib/schemas/<funcionalidad>/`;
+  - primitivas reutilizables (lista repetida, decimal español, fecha `dd/mm/aaaa`):
+    `$lib/schemas/common/`.
+  Los esquemas de `$lib/schemas` no importan código de servidor. El servidor valida siempre,
+  aunque el cliente también valide.
+
+### XIII. Sistema de diseño, apariencia y rendimiento percibido
+
+- **Fuente canónica**: hasta L01, la carpeta `Design/` define la identidad, los tokens, los
+  materiales y los componentes base. **Desde L01** mandan el código de la app:
+  `src/lib/design-system/` (tokens y tema) y `src/lib/components/ui/` y `layout/`; `Design/`
+  queda como documentación de la identidad y de sus reglas, y apunta a ellos (`docs/adr/0007`).
+  Nunca hay dos ficheros de tokens. PROHIBIDO imponer la identidad de otro producto. Las
+  adaptaciones pendientes (`Historias.md` 16.2, DS-xx) se resuelven en el sistema de diseño, de
+  forma centralizada, nunca con estilos locales repetidos.
+- **Estilos**: las primitivas de `ui/` y `layout/` tienen su `<style>` con tokens; Tailwind se usa
+  para componer en rutas y en `components/<f>/`, **solo con tokens**: la paleta por defecto de
+  Tailwind está desactivada y se rechazan los colores arbitrarios (`bg-[#fff]`).
+- **Sin valores literales**: ningún componente ni ruta escribe colores, gradientes ni sombras de
+  color literales; usa siempre los tokens (con pareja clara y oscura). Lo comprueba un script en
+  el CI. Si falta un token, se añade al sistema antes de usarlo.
+- **Cristal selectivo** (lenguaje inspirado en Liquid Glass):
+  - Solo en navegación (cabecera, pie, lateral), superposiciones (diálogos, *toasts*, menús) y
+    tarjetas de resumen destacadas. Tablas, formularios, listas, gráficas, paso de compra, textos
+    legales y pantallas de datos de la administración son **siempre opacos**. Los emails, sin
+    cristal.
+  - Cada uso tiene una función concreta. PROHIBIDO anidar superficies de cristal o aplicarlo por
+    fila o por icono.
+  - Toda superficie de cristal tiene una **alternativa opaca** con las mismas acciones,
+    información, jerarquía y foco. El material nunca sustituye a la semántica, al nombre
+    accesible, al foco ni a los estados.
+- **Preferencias**: se respetan `prefers-reduced-transparency`, `prefers-reduced-motion`,
+  `prefers-contrast` y `forced-colors`. Además hay un ajuste propio **«Reducir transparencia y
+  movimiento»**, junto al selector de tema y guardado en una cookie técnica, que pasa todo a opaco
+  y retira el movimiento no esencial. El ajuste propio solo puede reducir efectos, nunca reactivar
+  lo que el sistema pide reducir. Tema y efectos son decisiones independientes.
+- **Temas**: el oscuro se diseña expresamente (no es una inversión del claro), con sus estados,
+  foco, gráficas e imágenes. El contraste se mide sobre la **composición real** (cristal sobre el
+  fondo, en ambos temas y con efectos reducidos), no solo entre pares de tokens.
+- **Movimiento**: cada animación tiene una función (confirmar, orientar, mostrar progreso), se
+  puede interrumpir sin perder foco ni estado y nunca retrasa la respuesta. Duraciones y curvas
+  son tokens.
+- **Rendimiento percibido**: objetivos **LCP ≤ 2,5 s, INP ≤ 200 ms y CLS ≤ 0,1**, medidos en
+  laboratorio sobre el build de producción con perfil móvil limitado, en las páginas de
+  `Historias.md` 16.8. No hay datos de campo (sin analítica de terceros) y los resultados se
+  presentan como medidas de laboratorio. El cristal se compara con la versión de efectos
+  reducidos; si supera los objetivos o perjudica la lectura, se simplifica o se retira.
 
 ## Orden de prioridades
 
@@ -412,7 +553,7 @@ justificación se anotan en el plan.
 2. **Privacidad**: no guardar contenido y minimizar los datos.
 3. **Seguridad**.
 4. **Simplicidad operativa**: una instancia, SQLite y pocas dependencias.
-5. **Accesibilidad y usabilidad**.
+5. **Accesibilidad, usabilidad y experiencia de uso**.
 6. **Rendimiento**.
 7. **Velocidad de entrega** de funcionalidades.
 
@@ -445,19 +586,20 @@ constitución.
 | CLI de andamiaje | `sv` | **1.1.1** |
 | BD (driver) | `better-sqlite3` / `@types/better-sqlite3` | **13.0.3** / **9.6.0** |
 | ORM | `drizzle-orm` / `drizzle-kit` | **0.45.4** / **0.31.11** (no se usan las versiones 1.0 beta ni rc) |
-| Autenticación | `better-auth` | **1.7.7** (plugins `bearer`, `admin` y `captcha`; adaptador Drizzle) |
+| Autenticación | `better-auth` | **1.7.7** (plugins `bearer` y `admin`; adaptador Drizzle). El captcha (Turnstile) y los límites de autenticación son propios de la funcionalidad `accounts` (D-02), porque por la API de servidor no actúan ni el plugin `captcha` ni el `rateLimit` |
 | Validación | `zod` | **4.6.5** |
 | OpenAPI | `zod-openapi` | **6.0.2** |
 | i18n | `@inlang/paraglide-js` | **2.27.0** (solo `es`) |
+| Plugins de mensajes de Paraglide | `@inlang/plugin-message-format` / `@inlang/plugin-m-function-matcher` | **4.5.0** / **2.3.0** (devDependencies). `project.inlang/settings.json` los carga desde `node_modules`; el valor por defecto de Paraglide los descarga de jsDelivr en cada build, algo que queda PROHIBIDO |
 | Estilos | `tailwindcss` / `@tailwindcss/vite` | **4.3.3** / **4.3.3** |
 | Gráficas | `layerchart` | **2.6.1** |
 | Email | `resend` | **6.32.1** |
 | Tareas programadas | `croner` | **10.0.1** (zona `Europe/Madrid` explícita en cada tarea) |
-| Logs del servidor | `pino` | **10.4.0** (en `dependencies`) |
+| Logs del servidor | `pino` | **10.4.0** (en `dependencies`). `pino-abstract-transport` 3.0.0 llega solo como dependencia de `pino`; no es dependencia directa de la v4 y solo se declararía al activar el Log Gateway (fase posterior) |
 | Logs del navegador | `loglevel` | **1.9.2** |
 
 No se usa ninguna librería de componentes de UI: los componentes son propios, sobre Tailwind
-(ver principio IX).
+(ver principios IX y XIII).
 
 ### Calidad y tests
 
@@ -481,7 +623,7 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
 |---|---|
 | Coolify | Despliegue (entornos `production` y `staging`). |
 | Backblaze B2 (EU Central) | Destino de Litestream. Bucket privado y clave limitada a ese bucket. |
-| Log Gateway + OpenObserve | Logs y monitorización (servicio `mardomingo_backoffice`). Retención de 30 días. |
+| Log Gateway + OpenObserve | Logs centralizados y monitorización (servicio `mardomingo_backoffice`). **Fase posterior**: no se usa en la v4 (enmienda 2.2.0). En la v4, los logs son stdout y la rotación de Docker. |
 | Resend | Emails transaccionales; dominio con SPF, DKIM y DMARC. |
 | Cloudflare Turnstile | Captcha del registro. |
 | Mistral API | Voxtral (`voxtral-mini-latest`) para transcripción. |
@@ -531,7 +673,7 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
 ## Arquitectura idiomática de SvelteKit
 
 El proyecto sigue estrictamente el modelo mental de SvelteKit 2 y Svelte 5. Esta sección concreta
-los principios IV (capas), IX (accesibilidad y mejora progresiva) y XII (validación) para el
+los principios IV (funcionalidades y capas), IX (accesibilidad y mejora progresiva) y XII (validación) para el
 framework.
 
 ### Rutas y dominios
@@ -540,6 +682,10 @@ framework.
   registro, login), `(web)/panel/…`, `(web)/admin/…`, `api/v1/…` y `client-errors/`. Las URL
   visibles son las de `Historias.md` (`/registro`, `/panel`, `/admin`, `/precios`…).
 - Los parámetros de ruta (`slug`, ids) se restringen con *param matchers* en `src/params/`.
+- Los enlaces y navegaciones internas (`href`, `goto`, `redirect`) se construyen con `resolve()`
+  de `$app/paths`, que tipa la ruta y sus parámetros; la consulta se añade con
+  `URLSearchParams`. PROHIBIDO saltarse esta regla con `eslint-disable`, `@ts-expect-error` o
+  componentes envoltorio.
 - **Separación por host**, aplicada en `handle`:
   - El host de la API (`PUBLIC_API_URL`) solo responde a `/api/v1/*`.
   - El host de la web (`PUBLIC_WEB_URL`) solo responde a la web y a `/client-errors`.
@@ -550,8 +696,9 @@ framework.
 - Opciones de página: `ssr = true` en todo el proyecto; `prerender = false` en la v4 (el
   contenido de landings, precios y legales sale de la BD); `trailingSlash` por defecto.
 - `handle` es un `sequence(...)` con este orden: contexto de la petición (`requestId`, logger) →
-  separación por host → middleware de Paraglide → resolución de la app (`X-App-Id`, solo en la
-  API) → sesión (Better Auth → `event.locals`) → cabeceras de seguridad. `event.locals` está
+  separación por host → middleware de Paraglide → preferencias de apariencia (cookies de tema y
+  efectos validadas con Zod → `event.locals`, solo en la web) → resolución de la app (`X-App-Id`,
+  solo en la API) → sesión (Better Auth → `event.locals`) → cabeceras de seguridad. `event.locals` está
   tipado en `src/app.d.ts`.
 
 ### Carga de datos
@@ -563,7 +710,8 @@ framework.
   llama directamente a los servicios.
 - Todo lo que devuelve un `load` se serializa y llega al navegador. Por eso un `load` devuelve
   **modelos de vista** construidos con funciones de mapeo explícitas
-  (`$lib/server/presenters/`), nunca filas de la BD ni objetos de Better Auth. Al usuario nunca
+  (`presenters.ts` de cada funcionalidad), nunca filas de la BD ni objetos de Better Auth. Al
+  usuario nunca
   le llegan campos internos (modelo, coste real, `has_real_purchase` de otros, hashes, tokens).
 - Sin cascadas: las cargas independientes se lanzan en paralelo (`Promise.all`); `await parent()`
   solo cuando hace falta y después del trabajo independiente.
@@ -583,16 +731,17 @@ framework.
 - Una action es un **controlador** y sigue siempre estos pasos:
   1. Autorización con los *guards* (ver «Autenticación y autorización»).
   2. Lectura y validación del `FormData` con el helper de formularios.
-  3. Llamada a **un** servicio de `$lib/server/services/`.
+  3. Llamada a **un** servicio, a través del `index.ts` de su funcionalidad.
   4. Traducción del resultado:
      - Éxito: `redirect(303, …)` (patrón POST-redirect-GET) o `{ success: true }` con una clave
        de mensaje.
      - Validación: `fail(400, { values, errors })`.
      - Rechazo de negocio: `fail(4xx, { formError })` con el código del error.
-- **La lógica de negocio no vive en rutas ni en actions**, sino en `src/lib/server/services/`.
-  PROHIBIDO `src/lib/services`, porque SvelteKit solo protege del cliente `src/lib/server/**` y
-  los ficheros `*.server.ts`. Las rutas no importan `$lib/server/db` ni los adaptadores; solo
-  servicios, *guards*, el helper de formularios y los *presenters*.
+- **La lógica de negocio no vive en rutas ni en actions**, sino en los servicios de cada
+  funcionalidad (principio IV). PROHIBIDO `src/lib/services`, porque SvelteKit solo protege del
+  cliente `src/lib/server/**` y los ficheros `*.server.ts`. Las rutas no importan
+  `$lib/server/db` ni los adaptadores; solo la API pública de las funcionalidades (servicios y
+  *presenters*), los *guards* y el helper de formularios.
 - **Helper de formularios propio** (`$lib/server/forms/`), sin dependencias nuevas
   (`sveltekit-superforms` no se usa). Hace estas cosas:
   - Convierte `FormData` en un objeto normalizado (campos repetidos como lista, cadena vacía como
@@ -619,6 +768,17 @@ framework.
   la cuenta, y todas las acciones del panel de administración.
 - JavaScript solo mejora la experiencia (estados de envío, gráficas y filtros instantáneos). Las
   gráficas tienen su tabla equivalente (principio IX).
+- **Filtros, orden, búsqueda y paginación** son un `<form method="GET">` con botón visible y
+  enlaces de página, de modo que la URL guarda el estado. Aplicar al cambiar un control es solo
+  una mejora. PROHIBIDO un formulario oculto enviado con `requestSubmit()`.
+- Se usan los controles nativos cuando bastan (incluido `<select>`, estilizado con tokens). Un
+  control propio (combobox) solo se crea si hace falta búsqueda, con alternativa sin JavaScript.
+- **Excepción: el captcha del registro.** Turnstile necesita JavaScript, así que el registro es la
+  única interacción crítica que lo requiere. Sin JavaScript, el formulario lo explica con un aviso
+  visible (`<noscript>`) en lugar de fallar en silencio; el resto del formulario sigue siendo un
+  `<form>` nativo. No se ofrece un camino sin captcha.
+- El selector de tema y el ajuste de efectos funcionan sin JavaScript (formulario que guarda la
+  cookie); con JavaScript se aplican sin recargar.
 
 ### Autenticación y autorización
 
@@ -648,12 +808,19 @@ framework.
   - El estado compartido en el cliente se crea por árbol de componentes con
     `setContext`/`getContext` (p. ej. en el layout).
   - Los datos por petición del servidor viven solo en `event.locals`.
+  - Cuenta también como estado mutable una colección de módulo (`const x = new Map()`, `Set`,
+    arrays u objetos): se congela con `Object.freeze` o no se declara a nivel de módulo.
   - Excepción: las cachés y contadores deliberados del proceso (caché de configuración y de
-    modelos, límites de frecuencia) viven en `$lib/server`, documentados y testeados, y nunca
-    guardan datos de renderizado.
+    modelos, límites de frecuencia) viven en ficheros `*.cache.ts` dentro de su funcionalidad,
+    documentados y testeados, y nunca guardan datos de renderizado.
 - Organización de componentes: `src/lib/components/ui/` para primitivas accesibles genéricas
-  (botón, campo de formulario, diálogo, tabla, aviso) y `src/lib/components/<funcionalidad>/`
-  para el resto. Ficheros en `PascalCase.svelte`; módulos con runes en `*.svelte.ts`.
+  (botón, campo de formulario, diálogo, tabla, paginación, aviso, estado vacío),
+  `src/lib/components/layout/` para el marco (cabecera, pie, navegación, menú de cuenta,
+  selector de tema y efectos, fondo) y `src/lib/components/<funcionalidad>/` para el resto.
+  `layout/` solo importa `ui/` y `$lib/format`; un componente de una funcionalidad no importa los
+  de otra (lo compartido pasa a `ui/`). Ficheros en `PascalCase.svelte`; módulos con runes en
+  `*.svelte.ts`. Los iconos son los del sistema de diseño (componente `Icon`); si se añade una
+  librería de iconos, se importan por su ruta, nunca desde el índice.
 - Los componentes no acceden a la BD, a los servicios ni a `fetch`. El formato de importes
   (BE-FR-22), fechas y números vive en funciones puras de `$lib/format/`, compartidas por
   servidor, cliente y emails.
@@ -679,20 +846,44 @@ framework.
 
 ### Verificación de esta sección
 
-- **ESLint** (`no-restricted-imports`):
+- **ESLint** (`no-restricted-imports` y `no-restricted-syntax`):
   - `$app/stores` y `svelte/store`, en todo el proyecto.
   - `$lib/server/db` y `$lib/server/adapters`, en `src/routes/**`.
   - `fetch` en `src/lib/components/**`.
+  - En `src/lib/server/features/*/domain/**`, `src/lib/shared/**` y `src/lib/server/shared/**`:
+    `$app/*`, `$env/*`, `@sveltejs/*`, `drizzle-orm*`, `better-sqlite3`, `node:*`, la
+    infraestructura común (`$lib/server/db`, `adapters`, `config`, `logging`, `forms`, `api` y
+    `jobs`) y `$lib/server/features/*`, además de `Date.now()`, `new Date()`, `process` y `fetch`.
+  - `consistent-type-assertions` con `assertionStyle: "never"` en todo el código y los tests,
+    salvo `$lib/shared/` (principio XII).
+  - `no-console`, salvo en los módulos de logging; `pino` solo en `$lib/server/logging/` y
+    `loglevel` solo en `$lib/logging/client.ts`.
+  - La regla de navegación sin `resolve()` de `eslint-plugin-svelte`, si existe en la versión
+    fijada (se comprueba en L01).
 - **Tests de arquitectura**:
   - No existen `+page.ts`/`+layout.ts` con `load` fuera de la lista justificada.
-  - No existe `src/lib/services`.
-  - No hay `let`/`$state` mutable a nivel de módulo en ficheros que se importan durante el SSR,
-    salvo en las cachés registradas.
+  - No existen `src/lib/services`, `src/lib/server/domain` ni `src/lib/server/services`.
+  - Una funcionalidad solo importa de otra su `index.ts`; el grafo entre funcionalidades no tiene
+    ciclos y respeta el orden de `ARCHITECTURE.md` (las importaciones `schema.ts` → `schema.ts`
+    para `references()` no cuentan); `audit` y los dos `shared/` no importan funcionalidades y
+    `notifications` solo importa `audit`.
+  - Ningún `repository.ts` importa el `schema.ts` de otra funcionalidad (un `schema.ts` solo lo
+    hace para `references()`), y solo `credits` escribe en las tablas de saldo.
+  - No hay `let`, `$state` ni colecciones sin congelar a nivel de módulo en ficheros que se
+    importan durante el SSR, salvo en los `*.cache.ts`.
+  - Solo `$lib/server/config/env.ts` importa `$env/*` o lee `process.env`; ningún
+    `+layout.server.ts` usa `strictObject`; `prerender` no se activa.
+  - Los códigos de evento son únicos y llevan el prefijo de su funcionalidad.
+  - `components/layout/` solo importa `ui/` y `$lib/format`, y los componentes de una
+    funcionalidad no importan los de otra.
+  - El test de arquitectura **siempre** se ejecuta en cada lote: `vitest related` no lo
+    selecciona porque no importa el código que comprueba.
 - **Tests de integración**:
   - Cada action y cada endpoint protegidos responden `401`/`403` o redirigen sin sesión o con
     el rol equivocado.
-  - Los `load` no devuelven campos prohibidos (comparación del objeto serializado con el modelo
-    de vista).
+  - Los `load` no devuelven campos prohibidos: la función que compone el modelo de vista (en
+    `presenters.ts` o en un `*.data.server.ts` de la ruta) se prueba con las claves exactas
+    (`toStrictEqual`), porque los `load` no se llaman en los tests (`Historias.md` 15.2).
   - La separación por host devuelve `404` en las combinaciones cruzadas, y `/api/v1/health`
     responde con cualquier `Host`.
 - **E2E** con Playwright y `javaScriptEnabled: false`: todos los recorridos críticos de
@@ -705,6 +896,10 @@ framework.
 - Se usa la API estable de SvelteKit 2: **`$env/dynamic/private`** en el servidor. PROHIBIDO
   `$env/static/private` para secretos, porque copiaría su valor en el build y en la imagen
   Docker. El prefijo `PUBLIC_` solo para valores no sensibles; ningún secreto lo lleva.
+- Las variables `PUBLIC_` (`PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `PUBLIC_TURNSTILE_SITE_KEY`) se
+  leen con **`$env/dynamic/public`**, también desde `env.ts`. PROHIBIDO `$env/static/public`,
+  porque los valores cambian por entorno sin reconstruir. El navegador solo las recibe por los
+  datos del layout raíz.
   `kit.experimental.explicitEnvironmentVariables` no se activa.
 - Un único módulo, `$lib/server/config/env.ts`, lee el entorno. Ningún otro módulo importa
   `$env/*` ni lee `process.env`; un test de arquitectura lo comprueba. Así la migración a
@@ -727,7 +922,10 @@ framework.
     ejemplo de `.env.example`.
   - Al arrancar, tras abrir la BD, se comprueba que `BODY_SIZE_LIMIT` es mayor o igual que el
     mayor `max_audio_mb` configurado en cualquier app.
-- Los servicios reciben la configuración por parámetro; los tests no leen el entorno.
+- Los servicios reciben la configuración por parámetro; los tests unitarios y de integración no
+  leen el entorno. Solo los tests HTTP y Playwright arrancan el build con un conjunto mínimo de
+  variables, pasado por `webServer.env` o por el proceso que lanza el `globalSetup`, sin `.env` ni
+  sintaxis de shell (`Historias.md` 15.22).
 - `.env` está en `.gitignore`. Se versiona `.env.example` con **todas** las variables, valores
   de ejemplo no sensibles y un comentario que indica si cada una es secreta.
 - **Cómo recibe el proceso las variables**: en desarrollo, Vite carga `.env`. En staging y
@@ -748,8 +946,8 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | `EMAIL_FROM` | `Cuenta Mardomingo <no-reply@mardomingo.com>` | Dominio con SPF, DKIM y DMARC. `Reply-To`: el email de soporte (`soporte@mardomingo.com`). |
 | `LOG_LEVEL` | `info` en producción; `debug` en staging y desarrollo | Valores de pino. |
 | `CLIENT_LOG_LEVEL` | `warn` en producción; `debug` en desarrollo | No es secreta. Llega al navegador en los datos del layout raíz. |
-| `LOG_GATEWAY_URL` | URL de ingesta del Log Gateway | Obligatoria en staging y producción; ausente en desarrollo. |
-| `LOG_GATEWAY_KEY` | Clave de **solo escritura** del servicio `mardomingo_backoffice` | **Secreta.** Una por entorno. |
+| `LOG_GATEWAY_URL` | URL de ingesta del Log Gateway | No se usa en la v4. Se define al activar el Log Gateway (fase posterior). |
+| `LOG_GATEWAY_KEY` | Clave de **solo escritura** del servicio `mardomingo_backoffice` | No se usa en la v4. Se define al activar el Log Gateway (fase posterior). **Secreta**, una por entorno. |
 | `PORT` | Producción **7311**, staging **7312** | Ver «Proxy, puerto e IP del cliente». |
 | `HOST` | `0.0.0.0` dentro del contenedor | La exposición se limita fuera del contenedor. |
 | `PROTOCOL_HEADER` | `x-forwarded-proto` | |
@@ -778,8 +976,8 @@ Además de las que enumera la sección 9 de `Historias.md`:
   el valor más a la izquierda de `X-Forwarded-For`, que controla el cliente.
 - **Verificación obligatoria en staging** antes de dar por buenos los límites por IP:
   - Se registra la IP real del cliente.
-  - `url.origin` es `https://cuenta-staging.mardomingo.com` y los formularios no reciben un 403
-    de CSRF.
+  - `url.origin` es `https://cuenta-staging.mardomingo.com` y los formularios de la web no reciben
+    un 403 de la comprobación de origen propia.
   - Un `X-Forwarded-For` falsificado por el cliente no cambia la IP registrada.
   - El puerto 7312 no responde desde fuera del host.
 
@@ -789,7 +987,8 @@ Además de las que enumera la sección 9 de `Historias.md`:
 
 - Toda funcionalidad sigue el flujo de spec-kit: `/speckit-specify` → `/speckit-clarify` →
   `/speckit-plan` (con la comprobación de esta constitución) → `/speckit-tasks` →
-  `/speckit-analyze` → `/speckit-implement`.
+  `/speckit-analyze` → `/speckit-implement` → `/speckit-converge` (comprueba que lo implementado
+  cumple la especificación, el plan y los contratos de UX antes de cerrar).
 - Cada especificación cita los requisitos `BE-FR-XX` de `Historias.md` que cubre.
 - Identificadores del código, nombres de tablas y columnas en **inglés**. Documentación, textos
   visibles y mensajes de commit en **español**.
@@ -805,8 +1004,10 @@ Los mismos comandos se usan en local y en el CI, y se documentan en `CLAUDE.md`:
 | Script | Comando |
 |---|---|
 | `check` | `svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings` |
-| `lint` | `prettier --check . && eslint . --max-warnings 0` |
-| `test` | `vitest run` |
+| `lint` | `prettier --check .` y `eslint . --max-warnings 0` (en dos pasadas, `Historias.md` 15.26) |
+| `lint:tokens` | Script de tokens del sistema de diseño (puerta 10) |
+| `test` | `vitest run` de los proyectos `unit`, `component` e `integration` (sin `http`) |
+| `test:http` | `vitest run --project http`: hooks y API contra el build |
 | `test:coverage` | `vitest run --coverage` |
 | `test:e2e` | `playwright test` |
 | `build` | `vite build` |
@@ -838,7 +1039,7 @@ El resto de scripts de testing (`test:unit`, `test:int`, `test:http`, `test:trac
 2. `pnpm lint`.
 3. `pnpm check`.
 4. `pnpm test:coverage` con los umbrales del principio V.
-5. Validación del OpenAPI generado y tests de contrato.
+5. `pnpm test:http`: hooks, API, validación del OpenAPI generado y tests de contrato.
 6. `pnpm test:e2e:smoke`, `pnpm test:e2e:critical` y `pnpm test:e2e:a11y` en Chromium contra un
    build de producción en `APP_ENV=test`; Firefox y WebKit además si la PR toca formularios,
    foco, descargas, subida de ficheros o CSS global. En `main` se ejecutan todos los E2E; cada
@@ -847,13 +1048,19 @@ El resto de scripts de testing (`test:unit`, `test:int`, `test:http`, `test:trac
 8. `pnpm audit --prod` sin vulnerabilidades altas ni críticas.
 9. Comprobación de que las migraciones están al día con el esquema (`drizzle-kit check` y
    generación sin cambios).
+10. `pnpm lint:tokens`: ningún color, gradiente ni sombra de color literal fuera del fichero de
+    tokens del sistema de diseño (principio XIII).
 
 ### Definición de terminado
 
 Una tarea está terminada cuando pasa todas las puertas del CI, cumple los criterios de aceptación
 (`CA`) de sus requisitos, tiene sus tests escritos según el principio V, sus textos en Paraglide,
 su documentación actualizada (incluido el OpenAPI) y, si cambia parámetros o comportamiento
-visible, su reflejo en el panel de administración y en la auditoría. Los lotes cierran con la
+visible, su reflejo en el panel de administración y en la auditoría. Si tiene interfaz, además
+se ha comprobado en tema claro y oscuro, con efectos reducidos, a 320 px de ancho, solo con
+teclado y sin JavaScript (salvo las excepciones de «Mejora progresiva»), y cada comprobación se
+informa como **comprobado**, **pendiente**, **no verificable en este entorno** o **no aplica** (con
+el motivo). Los lotes cierran con la
 *Definition of Checkpoint* y las historias con la *Definition of Done* de `Historias.md` 15.29 y
 15.30.
 
@@ -866,12 +1073,23 @@ visible, su reflejo en el panel de administración y en la auditoría. Los lotes
 
 - Esta constitución **prevalece** sobre cualquier otra práctica, plantilla, especificación, plan o
   tarea. Si `Historias.md` u otro documento técnico la contradice, prevalece la constitución, y la
-  contradicción se resuelve enmendando uno de los dos de forma explícita. Por ejemplo, los
-  `+server.js` que cita `Historias.md` son `+server.ts` por el principio de TypeScript estricto.
+  contradicción se resuelve enmendando uno de los dos de forma explícita. Por ejemplo, la plantilla
+  de plan de Spec Kit propone carpetas `services/`, pero se aplica la estructura del principio IV.
 - Cada plan (`/speckit-plan`) incluye la sección «Constitution Check» con el cumplimiento de cada
   principio. Una violación solo se admite si queda justificada en «Complexity Tracking» y es
   compatible con el orden de prioridades. Los principios marcados como NO NEGOCIABLE no admiten
   excepciones.
+- Cada plan incluye también el **«Architecture Check»** de `ARCHITECTURE.md` (fronteras,
+  dependencias, dueños de tablas, reutilización, abstracciones justificadas, tests, seguridad e
+  impacto en otras funcionalidades). Si una funcionalidad necesita romper una regla
+  arquitectónica, no lo hace en silencio: se cambia el diseño de la funcionalidad o se cambia la
+  arquitectura de forma consciente con un ADR y, si corresponde, una enmienda de esta constitución.
+- **ADR**: las decisiones importantes y difíciles de revertir (framework, persistencia,
+  autenticación, estructura, validación, despliegue, dependencias transversales) se registran en
+  `docs/adr/NNNN-titulo.md` (contexto, decisión, alternativas, consecuencias y estado). Un ADR
+  aceptado no se edita: se sustituye por otro.
+- `ARCHITECTURE.md` es el mapa operativo de la arquitectura y concreta esta constitución sin
+  contradecirla. `CLAUDE.md` contiene las instrucciones para los agentes y remite a ambos.
 - `/speckit-analyze` trata cualquier conflicto con esta constitución como hallazgo CRÍTICO.
 - **Enmiendas**: las propone el propietario, o la IA a petición suya, mediante
   `/speckit-constitution`, con un informe de impacto. Se aprueban por el propietario y se integran
@@ -884,4 +1102,4 @@ visible, su reflejo en el panel de administración y en la auditoría. Los lotes
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 1.4.1 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 2.2.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10

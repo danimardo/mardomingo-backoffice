@@ -1,0 +1,29 @@
+# Gestores de paquetes
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# Generados y ajenos al proyecto
+Design/
+src/lib/paraglide/
+build/
+.svelte-kit/
+coverage/
+drizzle/meta/
+playwright-report/
+test-results/
+.stryker-tmp/
+reports/
+static/
+
+# Gestionados por Spec Kit (no se editan a mano)
+.specify/
+.claude/skills/
+
+# Generados por inlang/Paraglide
+project.inlang/.lix/
+project.inlang/.meta.json
+project.inlang/README.md
+project.inlang/cache/

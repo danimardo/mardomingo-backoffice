@@ -1,10 +1,14 @@
 # Dependencias y builds
-node_modules/
-.svelte-kit/
-build/
-coverage/
-playwright-report/
-test-results/
+/node_modules/
+/.svelte-kit/
+/build/
+/coverage/
+/playwright-report/
+/test-results/
+/e2e/.auth/
+/.stryker-tmp/
+/reports/
+/.outbox/
 
 # Variables de entorno (se versiona solo .env.example)
 .env
@@ -12,7 +16,7 @@ test-results/
 !.env.example
 
 # Logs locales de desarrollo
-.logs/
+/.logs/
 
 # Base de datos local
 *.db
@@ -31,3 +35,12 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Código generado por Paraglide (se regenera en cada build)
+/src/lib/paraglide/
+
+# Temporales de las pruebas (HTTP, integración y depuración).
+/tests/.tmp/
+
+# Historial local de verificación (no se versiona)
+.local/

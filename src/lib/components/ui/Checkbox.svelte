@@ -1,0 +1,63 @@
+<script lang="ts">
+	// Casilla obligatoria o no: nunca premarcada. La etiqueta es el texto de la casilla (con sus enlaces, si los tiene).
+	import type { Snippet } from 'svelte';
+
+	interface Props {
+		id: string;
+		name: string;
+		/** Valor que se envía si la casilla está marcada (por defecto, `on`). */
+		value?: string;
+		checked?: boolean;
+		error?: string;
+		required?: boolean;
+		children: Snippet;
+	}
+
+	let {
+		id,
+		name,
+		value,
+		checked = $bindable(false),
+		error = '',
+		required = false,
+		children
+	}: Props = $props();
+</script>
+
+<div class="checkbox">
+	<input
+		{id}
+		{name}
+		value={value ?? 'on'}
+		type="checkbox"
+		bind:checked
+		{required}
+		aria-invalid={error !== '' ? 'true' : undefined}
+		aria-describedby={error !== '' ? `${id}-error` : undefined}
+	/>
+	<label for={id}>{@render children()}</label>
+	{#if error !== ''}
+		<p id="{id}-error" class="error">{error}</p>
+	{/if}
+</div>
+
+<style>
+	.checkbox {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.5rem;
+		align-items: start;
+	}
+	input {
+		/* 24 px: mínimo de objetivo táctil (WCAG 2.2 AA). Una casilla nativa toma su tamaño de width/height. */
+		width: 1.5rem;
+		height: 1.5rem;
+		margin: 0;
+		margin-top: 0.15rem;
+	}
+	.error {
+		grid-column: 2;
+		margin: 0;
+		color: var(--color-danger);
+	}
+</style>

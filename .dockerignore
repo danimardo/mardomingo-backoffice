@@ -1,0 +1,25 @@
+# Lo que no entra en la imagen: dependencias locales, salidas de build y de pruebas, secretos y temporales.
+node_modules
+build
+.svelte-kit
+coverage
+test-results
+playwright-report
+reports
+.stryker-tmp
+.logs
+.outbox
+.git
+.github
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.db*
+Design
+docs
+specs
+e2e
+tests
+src/lib/paraglide
