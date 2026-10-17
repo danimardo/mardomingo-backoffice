@@ -276,3 +276,12 @@ export {
 	type UserRow,
 	type UserSearchPage
 } from './admin-users';
+
+// Altas, primeros inicios de sesión y cuentas activas para estadísticas (BE-FR-54; T318). Solo lectura.
+export {
+	activeUsersBetween,
+	firstLoginsBetween,
+	signupsBetween,
+	type FirstLoginFact,
+	type SignupFact
+} from './stats-facts';

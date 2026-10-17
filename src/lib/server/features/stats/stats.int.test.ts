@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { paymentsFixture, type PaymentsFixture } from '../../../../../tests/builders/payments';
 import { markRealPurchase } from '../../../../../tests/builders/purchases';
 import type { PaymentFactRow } from '$lib/server/features/payments';
+import type { OperationCostFact, OperationStatsFact } from '$lib/server/features/ai';
 import { statsForPeriod, type StatsDeps } from './service';
 
 /** La misma compra, marcada como real: la fixture de pagos siempre usa el proveedor simulado. */
@@ -36,11 +37,33 @@ function period() {
 	};
 }
 
-function deps(costs: StatsDeps['costFacts'] = () => []): StatsDeps {
+function deps(
+	costs: (p: { fromMs: number; toMs: number }) => OperationCostFact[] = () => []
+): StatsDeps {
 	return {
 		paymentFacts: (p) => f.payments.paymentFactsBetween(p),
-		costFacts: costs,
+		operationFacts: (p) => costs(p).map(asOperation),
+		forfeits: () => [],
+		signups: () => [],
+		firstLogins: () => [],
+		activeUsers: () => 0,
 		usdEurPpmOf: (id) => (id === 'fx_1' ? RATE : null)
+	};
+}
+
+/** Un coste de IA como operación con estado `ok`, para el formato que lee el servicio de estadísticas. */
+function asOperation(cost: OperationCostFact): OperationStatsFact {
+	return {
+		date: cost.date,
+		appId: cost.appId,
+		status: 'ok',
+		costMicroUsd: cost.usdMicro,
+		chargedMicro: 0,
+		absorbedMicro: 0,
+		absorbedReason: null,
+		usedFallback: false,
+		truncated: false,
+		fxRateId: cost.fxRateId
 	};
 }
 

@@ -191,3 +191,6 @@ export function createCredits(config: CreditsConfig): Credits {
 		welcomeOf: (userId) => welcomeOf(deps, userId)
 	};
 }
+
+// Saldo anulado por borrado de cuentas (BE-FR-07 CA4; T318). Solo lectura.
+export { forfeitsBetween, type ForfeitFact } from './stats-facts';
