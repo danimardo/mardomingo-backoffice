@@ -574,5 +574,22 @@
 	"admin_apps_hint_links": "Objeto JSON con los enlaces de la app (por ejemplo, landing).",
 	"admin_apps_hint_sync": "Objeto JSON con las categorías de sincronización.",
 	"admin_apps_hint_origins": "[\"https://ejemplo.es\"]",
-	"admin_apps_hint_overrides": "Objeto JSON: nombre del límite y su valor, sin superar el global."
+	"admin_apps_hint_overrides": "Objeto JSON: nombre del límite y su valor, sin superar el global.",
+	"admin_stats_title": "Estadísticas",
+	"admin_stats_intro": "Ingresos, coste de IA, margen y embudo del periodo. Lo que no tiene datos aparece como «sin datos», nunca como cero.",
+	"admin_stats_no_data": "sin datos",
+	"admin_stats_money": "Dinero",
+	"admin_stats_revenue": "Ingresos (sin IVA, compras reales)",
+	"admin_stats_cost": "Coste de IA en euros",
+	"admin_stats_margin": "Margen bruto",
+	"admin_stats_cancellation_cost": "Coste de cancelaciones sin cobro",
+	"admin_stats_real_purchases": "Compras reales",
+	"admin_stats_simulated_purchases": "Compras simuladas (no son ingresos)",
+	"admin_stats_losses": "Pérdidas y saldo",
+	"admin_stats_absorbed_debt": "Absorbido por deuda",
+	"admin_stats_absorbed_replay": "Absorbido por repeticiones no cobradas",
+	"admin_stats_forfeited": "Saldo anulado por borrado de cuentas",
+	"admin_stats_funnel": "Embudo de altas",
+	"admin_stats_downloads_pending": "Las descargas llegan con la tarea diaria de L14: hasta entonces, sin datos.",
+	"admin_stats_active_users": "Cuentas activas en el periodo: {count}"
 }
