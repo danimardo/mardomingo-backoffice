@@ -484,5 +484,13 @@
 	"admin_account_movements_heading": "Últimos movimientos",
 	"admin_account_adjust_link": "Ajustar saldo",
 	"admin_account_movements_empty": "Sin movimientos todavía.",
-	"admin_account_adjusted": "Ajuste aplicado. Queda registrado en la auditoría."
+	"admin_account_adjusted": "Ajuste aplicado. Queda registrado en la auditoría.",
+	"admin_refund_title": "Reembolso de una compra",
+	"admin_refund_amount_cents": "Importe a reembolsar (céntimos de euro)",
+	"admin_refund_reason": "Motivo (obligatorio)",
+	"admin_refund_confirm": "Confirmo que quiero reembolsar esta compra",
+	"admin_refund_preview": "Vista previa: se reembolsará este importe.",
+	"admin_refund_preview_submit": "Ver vista previa",
+	"admin_refund_submit": "Reembolsar",
+	"admin_refund_error": "No se ha reembolsado nada. Revisa el importe, el motivo y la confirmación."
 }
