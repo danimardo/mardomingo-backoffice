@@ -85,6 +85,13 @@
       "when": 1791812244416,
       "tag": "0011_invoices_immutable",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792182311937,
+      "tag": "0012_precios_estadisticas",
+      "breakpoints": true
     }
   ]
 }
