@@ -19,6 +19,13 @@ import { createPaymentsService, type PaymentsService } from './features/payments
 import { createPrivacy, type Privacy } from './features/privacy';
 import type { AnnouncementsAdminDeps } from './features/apps';
 import type { BrakeReleaseDeps } from './features/protections';
+import { getSetting } from './features/apps';
+import { findActiveAppBySlug } from './features/apps';
+import { priceSamplesBetween } from './features/ai';
+import { manualPriceFor, savePriceReference } from './features/pricing';
+import { RELEASE_SOURCES } from './features/stats/config';
+import { fetchPublicReleases } from './features/stats/github-releases';
+import type { DailyJobDeps } from './features/stats/job';
 import { createFakePaymentsProvider } from './adapters/payments/fake';
 import { createSimulatedProvider } from './adapters/payments/simulated';
 import type { PaymentsProvider } from './adapters/payments/provider';
@@ -71,6 +78,7 @@ export interface Composition {
 	readonly adminUsers: AdminUsersDeps;
 	readonly adminAnnouncements: AnnouncementsAdminDeps;
 	readonly brake: BrakeReleaseDeps;
+	readonly dailyJob: DailyJobDeps;
 	readonly ai: AiDeps;
 	readonly media: MediaDeps;
 	close(): void;
@@ -239,6 +247,22 @@ export function createComposition(
 
 	const brake: BrakeReleaseDeps = { db, clock, logger, audit: auditDeps };
 
+	const dailyJob: DailyJobDeps = {
+		db,
+		logger,
+		clock,
+		releaseSources: RELEASE_SOURCES,
+		appIdOfSlug: (slug) => findActiveAppBySlug(apps, slug)?.id ?? null,
+		fetchReleases: fetchPublicReleases,
+		priceSamples: (period) => priceSamplesBetween(db, period),
+		manualPriceOf: (operationId) => manualPriceFor({ db }, operationId),
+		savePriceReference: (input) => savePriceReference({ db }, input),
+		priceWindowDays: Number(getSetting(apps, 'price_reference_window_days') ?? 30),
+		priceMinSamples: Number(getSetting(apps, 'price_reference_min_samples') ?? 3),
+		expireBuckets: () => credits.expireBuckets(),
+		expireHolds: () => credits.expireHolds()
+	};
+
 	const media: MediaDeps = {
 		transcriber:
 			config.MISTRAL_API_KEY === '' && config.MOCK_MISTRAL_URL === undefined
@@ -273,6 +297,7 @@ export function createComposition(
 		adminUsers,
 		adminAnnouncements,
 		brake,
+		dailyJob,
 		ai,
 		media,
 		close: () => {

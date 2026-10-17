@@ -29,3 +29,16 @@ export const releaseDownloads = sqliteTable(
 		)
 	]
 );
+
+// Registro de las ejecuciones de la tarea diaria (L14; decisión del propietario: bloqueo en base de datos). Una fila por día civil:
+// la clave primaria impide que dos procesos ejecuten el mismo día, y una fila sin `finished_at` marca una ejecución interrumpida.
+export const dailyJobRuns = sqliteTable(
+	'daily_job_runs',
+	{
+		day: civilDate('day').primaryKey(),
+		startedAt: epochMs('started_at').notNull(),
+		finishedAt: epochMs('finished_at'),
+		outcome: text('outcome', { enum: ['ok', 'partial'] })
+	},
+	(table) => [check('daily_job_runs_day_format', civilDateCheck(table.day.name))]
+);

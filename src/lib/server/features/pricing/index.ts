@@ -6,6 +6,8 @@ export {
 	refreshFxFromEcb,
 	setManualFx,
 	usdEurPpmOf,
+	savePriceReference,
+	manualPriceFor,
 	type PricingDeps,
 	type Provider,
 	type RefreshOutcome

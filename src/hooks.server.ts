@@ -24,6 +24,7 @@ import { bodyLimitBytes } from '$lib/server/config/body-limit';
 import { bearerOnlyHeaders } from '$lib/server/api/session';
 import { apiErrorResponse } from '$lib/server/api/errors';
 import { getComposition, setComposition } from '$lib/server/composition.cache';
+import { runDailyJob, startDailyScheduler } from '$lib/server/features/stats';
 import { readEnv } from '$lib/server/config/env';
 import { EnvConfigError, type Env } from '$lib/server/config/env-schema';
 import { migrateDatabase } from '$lib/server/db/migrate';
@@ -107,6 +108,13 @@ export const init: ServerInit = async () => {
 	}
 
 	setComposition(composition);
+	// La tarea diaria (L14) corre dentro de la app, con su bloqueo en base de datos. En las pruebas no se arranca.
+	if (config.APP_ENV !== 'test') {
+		startDailyScheduler(
+			() => runDailyJob(composition.dailyJob),
+			(err) => logger.emit('stats.daily_job.step_failed', { step: 'programador', err })
+		);
+	}
 	// El cuerpo de una subida de audio debe caber: `BODY_SIZE_LIMIT` cubre el mayor `max_audio_mb` de cualquier app (FR-070).
 	const largestAudioMb = largestAudioMbOf(composition.apps);
 	const bodyLimit = config.BODY_SIZE_LIMIT ?? '512K';
