@@ -26,7 +26,14 @@ import {
 	staleWeekdays,
 	type CurrentFx
 } from './domain/fx';
-import { fxRowsInForce, insertFxRecord, lastEcbRecord, usdEurPpmOfRate } from './repository';
+import {
+	fxRowsInForce,
+	insertFxRecord,
+	lastEcbRecord,
+	manualPriceOf,
+	upsertPriceReference,
+	usdEurPpmOfRate
+} from './repository';
 
 export interface PricingDeps {
 	readonly db: Db;
@@ -246,4 +253,25 @@ export function chargeFor(
 /** Tipo USD→EUR (ppm) con el que se hizo una operación, por su `fx_rate_id` (T316). Nulo si no existe. */
 export function usdEurPpmOf(deps: PricingDeps, fxRateId: string): number | null {
 	return usdEurPpmOfRate(deps.db, fxRateId);
+}
+
+/** Guarda el precio de referencia calculado por la tarea diaria, en una transacción (BE-FR-73). El valor manual no se toca. */
+export function savePriceReference(
+	deps: { readonly db: Db },
+	input: {
+		readonly operationId: string;
+		readonly typicalMicro: number | null;
+		readonly source: 'auto' | 'manual' | null;
+		readonly sampleSize: number;
+		readonly computedAt: number;
+	}
+): void {
+	immediateTransaction(deps.db, (tx) => {
+		upsertPriceReference(tx, input);
+	});
+}
+
+/** Valor manual del coste típico de una operación, para el cálculo diario (BE-FR-73). */
+export function manualPriceFor(deps: { readonly db: Db }, operationId: string): number | null {
+	return manualPriceOf(deps.db, operationId);
 }

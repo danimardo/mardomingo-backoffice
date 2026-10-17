@@ -4,8 +4,8 @@ import { desc, eq, lte } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toCivilDate, toEpochMs } from '$lib/shared/time';
-import { toPpm } from '$lib/shared/money';
-import { fxRates } from './schema';
+import { toMicro, toPpm } from '$lib/shared/money';
+import { fxRates, priceReferences } from './schema';
 
 export interface FxRecord {
 	readonly id: string;
@@ -90,4 +90,45 @@ export function usdEurPpmOfRate(db: Db | Tx, fxRateId: string): number | null {
 		.where(eq(fxRates.id, fxRateId))
 		.get();
 	return row?.usdEurPpm ?? null;
+}
+
+/** Valor manual del coste típico de una operación, si el administrador lo fijó (BE-FR-73). Nulo si no hay. */
+export function manualPriceOf(db: Db | Tx, operationId: string): number | null {
+	const row = db
+		.select({ manual: priceReferences.manualTypicalMicro })
+		.from(priceReferences)
+		.where(eq(priceReferences.operationId, operationId))
+		.get();
+	return row?.manual ?? null;
+}
+
+/** Escribe el precio de referencia calculado por la tarea diaria. No toca el valor manual (sobrevive a los recálculos). */
+export function upsertPriceReference(
+	tx: Tx,
+	row: {
+		operationId: string;
+		typicalMicro: number | null;
+		source: 'auto' | 'manual' | null;
+		sampleSize: number;
+		computedAt: number;
+	}
+): void {
+	tx.insert(priceReferences)
+		.values({
+			operationId: row.operationId,
+			typicalMicro: row.typicalMicro === null ? null : toMicro(row.typicalMicro),
+			source: row.source,
+			sampleSize: row.sampleSize,
+			computedAt: toEpochMs(row.computedAt)
+		})
+		.onConflictDoUpdate({
+			target: priceReferences.operationId,
+			set: {
+				typicalMicro: row.typicalMicro === null ? null : toMicro(row.typicalMicro),
+				source: row.source,
+				sampleSize: row.sampleSize,
+				computedAt: toEpochMs(row.computedAt)
+			}
+		})
+		.run();
 }

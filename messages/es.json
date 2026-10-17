@@ -591,5 +591,10 @@
 	"admin_stats_forfeited": "Saldo anulado por borrado de cuentas",
 	"admin_stats_funnel": "Embudo de altas",
 	"admin_stats_downloads_pending": "Las descargas llegan con la tarea diaria de L14: hasta entonces, sin datos.",
-	"admin_stats_active_users": "Cuentas activas en el periodo: {count}"
+	"admin_stats_active_users": "Cuentas activas en el periodo: {count}",
+	"admin_home_title": "Resumen de administración",
+	"admin_home_alerts": "Alertas activas",
+	"admin_home_no_alerts": "No hay alertas activas.",
+	"admin_home_brake": "Freno de coste",
+	"admin_home_accounts": "Cuentas registradas: {count}"
 }

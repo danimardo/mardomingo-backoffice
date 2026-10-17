@@ -1,10 +1,11 @@
 // Operaciones de IA de un periodo para las estadísticas (BE-FR-54; T318–T319). Solo lectura de `ai_operations`, con lo que cada métrica
 // necesita: estado, coste del proveedor, lo cobrado, lo absorbido y por qué, si usó respaldo y si se truncó. La conversión a euros la
 // hace la capa que llama, con el tipo de `pricing`.
-import { and, asc, gte, lte } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, lte } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import { civilDateOf } from '$lib/shared/dates';
 import { toEpochMs } from '$lib/shared/time';
+import { toMicroUsd } from '$lib/shared/money';
 import { aiOperations } from './schema';
 
 export interface OperationStatsFact {
@@ -58,4 +59,27 @@ export function operationStatsBetween(
 			truncated: row.truncated,
 			fxRateId: row.fxRateId
 		}));
+}
+
+/** Costes de las operaciones completadas con éxito en una ventana, por operación, para el precio de referencia (BE-FR-73; L14). */
+export function priceSamplesBetween(
+	db: Pick<Db, 'select'>,
+	input: { readonly fromMs: number; readonly toMs: number }
+): { operationId: string; costMicroUsd: number }[] {
+	return db
+		.select({
+			operationId: aiOperations.appOperationId,
+			costMicroUsd: aiOperations.costMicroUsd
+		})
+		.from(aiOperations)
+		.where(
+			and(
+				eq(aiOperations.status, 'ok'),
+				gt(aiOperations.costMicroUsd, toMicroUsd(0)),
+				gte(aiOperations.createdAt, toEpochMs(input.fromMs)),
+				lte(aiOperations.createdAt, toEpochMs(input.toMs))
+			)
+		)
+		.all()
+		.map((row) => ({ operationId: row.operationId, costMicroUsd: row.costMicroUsd }));
 }

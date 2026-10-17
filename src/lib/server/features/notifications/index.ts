@@ -5,3 +5,4 @@ export type { EmailReason } from './events';
 export { NOTIFICATIONS_LOG_EVENTS, type NotificationsLogFields } from './events';
 export { alertKeys, type AlertKey } from './domain/alert-state';
 export { raiseAlert, clearAlert, type AlertDeps } from './alerts';
+export { activeAlerts, type ActiveAlert } from './alerts-read';
