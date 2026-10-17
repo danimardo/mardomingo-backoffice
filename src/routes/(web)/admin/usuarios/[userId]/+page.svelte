@@ -1,9 +1,10 @@
 <script lang="ts">
 	// W35 · `/admin/usuarios/[userId]`: ficha de la cuenta y sus acciones con confirmación (T306; BE-FR-50, BE-FR-18). Cada acción
 	// destructiva se confirma con una casilla aparte y el motivo es obligatorio. Sin JavaScript funciona igual.
-	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import { formatCredits } from '$lib/components/payments/format';
+	import { resolve } from '$app/paths';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -19,6 +20,38 @@
 
 <h1>{m.admin_users_account_title()}</h1>
 <p>{data.account.email} · {data.account.role}</p>
+<section aria-labelledby="saldo-cuenta">
+	<h2 id="saldo-cuenta">{m.admin_account_balance_heading()}</h2>
+	<dl>
+		<dt>{m.admin_account_balance_total()}</dt>
+		<dd>{formatCredits(data.balance.totalMicro)}</dd>
+		<dt>{m.admin_account_balance_available()}</dt>
+		<dd>{formatCredits(data.balance.availableMicro)}</dd>
+		<dt>{m.admin_account_balance_debt()}</dt>
+		<dd>{formatCredits(data.balance.debtMicro)}</dd>
+	</dl>
+	<p>
+		<a href={resolve(`/admin/usuarios/${data.account.id}/ajuste`)}
+			>{m.admin_account_adjust_link()}</a
+		>
+	</p>
+</section>
+<section aria-labelledby="movimientos-cuenta">
+	<h2 id="movimientos-cuenta">{m.admin_account_movements_heading()}</h2>
+	{#if data.movements.length === 0}
+		<p>{m.admin_account_movements_empty()}</p>
+	{:else}
+		<ul>
+			{#each data.movements as row, index (index)}
+				<li>
+					{new Date(row.createdAt).toLocaleString('es-ES')} · {row.type} · {formatCredits(
+						row.amountMicro
+					)}
+				</li>
+			{/each}
+		</ul>
+	{/if}
+</section>
 {#if data.account.banned}
 	<Banner level="warning">
 		{m.admin_users_state_blocked()}{data.account.banReason

@@ -36,9 +36,30 @@ function reasonOf(form: FormData): string {
 export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 	adminOrThrow(locals);
 	setHeaders({ 'cache-control': 'private, no-store' });
-	const account = accountView(getComposition().adminUsers, params.userId);
+	const composition = getComposition();
+	const account = accountView(composition.adminUsers, params.userId);
 	if (account === null) error(404);
-	return { account };
+	const balance = composition.credits.getBalance(params.userId);
+	const movements = composition.credits.movements({
+		userId: params.userId,
+		fromMs: null,
+		toMs: null,
+		appId: null,
+		page: 1
+	});
+	return {
+		account,
+		balance: {
+			totalMicro: balance.totalMicro,
+			availableMicro: balance.availableMicro,
+			debtMicro: balance.debtMicro
+		},
+		movements: movements.rows.map((row) => ({
+			type: row.type,
+			amountMicro: row.amountMicro,
+			createdAt: new Date(row.createdAt).toISOString()
+		}))
+	};
 };
 
 export const actions: Actions = {
