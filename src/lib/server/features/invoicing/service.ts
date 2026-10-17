@@ -306,6 +306,8 @@ export function deleteBillingProfile(deps: InvoicingDeps, userId: string): boole
 }
 
 export interface InvoicingService {
+	/** Informe contable de un periodo (BE-FR-76, W51): ventas, resumen mensual y coste de IA. Compras y costes llegan por parámetro. */
+	accountingExport(input: AccountingExportInput): AccountingExport;
 	exportBillingProfile(userId: string): BillingProfileExport | null;
 	deleteBillingProfile(userId: string): boolean;
 	saveBillingProfile(input: {
@@ -322,6 +324,7 @@ export interface InvoicingService {
 
 export function createInvoicingService(deps: InvoicingDeps): InvoicingService {
 	return {
+		accountingExport: (input) => accountingExport(deps, input),
 		exportBillingProfile: (userId) => exportBillingProfile(deps, userId),
 		deleteBillingProfile: (userId) => deleteBillingProfile(deps, userId),
 		saveBillingProfile: (input) => saveBillingProfile(deps, input),

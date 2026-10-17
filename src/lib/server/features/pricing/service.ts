@@ -26,7 +26,7 @@ import {
 	staleWeekdays,
 	type CurrentFx
 } from './domain/fx';
-import { fxRowsInForce, insertFxRecord, lastEcbRecord } from './repository';
+import { fxRowsInForce, insertFxRecord, lastEcbRecord, usdEurPpmOfRate } from './repository';
 
 export interface PricingDeps {
 	readonly db: Db;
@@ -241,4 +241,9 @@ export function chargeFor(
 		creditsPerEurUsage: numberSetting(deps, 'credits_per_eur_usage')
 	});
 	return { chargeMicro, fxRateId: fx.fxRateId };
+}
+
+/** Tipo USD→EUR (ppm) con el que se hizo una operación, por su `fx_rate_id` (T316). Nulo si no existe. */
+export function usdEurPpmOf(deps: PricingDeps, fxRateId: string): number | null {
+	return usdEurPpmOfRate(deps.db, fxRateId);
 }

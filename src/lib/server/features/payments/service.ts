@@ -17,6 +17,9 @@ import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs } from '$lib/shared/time';
+import { civilDateOf } from '$lib/shared/dates';
+import { and, asc, gte, lte } from 'drizzle-orm';
+import { payments } from './schema';
 import { toEurCents, toMicro, toPpm } from '$lib/shared/money';
 import { packCreditsMicro } from './domain/pack-credits';
 import { planRefund } from './domain/refund';
@@ -440,6 +443,7 @@ export function exportPayments(deps: PaymentsDeps, userId: string): PaymentExpor
 }
 
 export interface PaymentsService {
+	paymentFactsBetween(input: { readonly fromMs: number; readonly toMs: number }): PaymentFactRow[];
 	exportPayments(userId: string): PaymentExport[];
 	requestFullInvoice(input: { readonly userId: string; readonly paymentId: string }): boolean;
 	purchase(input: PurchaseInput): PurchaseOutcome;
@@ -461,6 +465,7 @@ export interface PaymentsService {
 
 export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 	return {
+		paymentFactsBetween: (input) => paymentFactsBetween(deps, input),
 		exportPayments: (userId) => exportPayments(deps, userId),
 		purchase: (input) => purchase(deps, input),
 		handleProviderEvents: (body) => {
@@ -473,4 +478,52 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 		paymentIdsOf: (userId) => paymentIdsOf(deps, userId),
 		requestFullInvoice: (input) => requestFullInvoice(deps, input)
 	};
+}
+
+/**
+ * Compras de un periodo para la exportación contable (BE-FR-76; T316): solo datos que ya guarda `payments`, con el día civil de
+ * Madrid. Los importes de devolución y de contracargo se toman de la propia compra; sin fila, cero.
+ */
+export function paymentFactsBetween(
+	deps: PaymentsDeps,
+	input: { readonly fromMs: number; readonly toMs: number }
+): PaymentFactRow[] {
+	return deps.db
+		.select()
+		.from(payments)
+		.where(
+			and(
+				gte(payments.createdAt, toEpochMs(input.fromMs)),
+				lte(payments.createdAt, toEpochMs(input.toMs))
+			)
+		)
+		.orderBy(asc(payments.createdAt), asc(payments.id))
+		.all()
+		.map((row) => ({
+			paymentId: row.id,
+			userId: row.userId,
+			date: civilDateOf(toEpochMs(row.createdAt)),
+			country: row.country,
+			baseEurCents: row.baseEurCents,
+			vatEurCents: row.vatEurCents,
+			totalEurCents: row.amountEurCents,
+			refundedEurCents: row.refundedEurCents,
+			chargebackEurCents: row.status === 'chargeback' ? row.amountEurCents : 0,
+			simulated: row.simulated,
+			providerRef: row.providerRef
+		}));
+}
+
+export interface PaymentFactRow {
+	readonly paymentId: string;
+	readonly userId: string;
+	readonly date: string;
+	readonly country: string;
+	readonly baseEurCents: number;
+	readonly vatEurCents: number;
+	readonly totalEurCents: number;
+	readonly refundedEurCents: number;
+	readonly chargebackEurCents: number;
+	readonly simulated: boolean;
+	readonly providerRef: string | null;
 }

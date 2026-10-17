@@ -81,3 +81,13 @@ export function lastEcbRecord(db: Db | Tx): FxRecord | undefined {
 		.get();
 	return row === undefined ? undefined : toRecord(row);
 }
+
+/** Tipo USD→EUR (en ppm) que se guardó con una fila de `fx_rates`, o nulo si no existe. Solo lectura, para la contabilidad (T316). */
+export function usdEurPpmOfRate(db: Db | Tx, fxRateId: string): number | null {
+	const row = db
+		.select({ usdEurPpm: fxRates.usdEurPpm })
+		.from(fxRates)
+		.where(eq(fxRates.id, fxRateId))
+		.get();
+	return row?.usdEurPpm ?? null;
+}

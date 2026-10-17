@@ -492,5 +492,16 @@
 	"admin_refund_preview": "Vista previa: se reembolsará este importe.",
 	"admin_refund_preview_submit": "Ver vista previa",
 	"admin_refund_submit": "Reembolsar",
-	"admin_refund_error": "No se ha reembolsado nada. Revisa el importe, el motivo y la confirmación."
+	"admin_refund_error": "No se ha reembolsado nada. Revisa el importe, el motivo y la confirmación.",
+	"admin_billing_title": "Facturación y exportación contable",
+	"admin_billing_intro": "Informe del periodo: ventas, resumen mensual y coste de IA. Las compras simuladas no cuentan como ingresos.",
+	"admin_billing_from": "Desde",
+	"admin_billing_to": "Hasta",
+	"admin_billing_filter": "Ver periodo",
+	"admin_billing_no_period": "Indica un periodo válido para ver el informe.",
+	"admin_billing_sales": "Ventas en el periodo: {count}",
+	"admin_billing_unconverted": "Operaciones sin tipo de cambio conocido: {count}. No suman euros.",
+	"admin_billing_download_sales": "Descargar ventas (CSV)",
+	"admin_billing_download_monthly": "Descargar resumen mensual (CSV)",
+	"admin_billing_download_ai": "Descargar coste de IA (CSV)"
 }

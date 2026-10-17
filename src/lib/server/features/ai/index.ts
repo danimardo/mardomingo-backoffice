@@ -27,3 +27,4 @@ export {
 	type TranscriptionResponseBody
 } from './contract';
 export { consumptionRowDto, type ConsumptionRowDto } from './presenters';
+export { operationCostFactsBetween, type OperationCostFact } from './cost-facts';

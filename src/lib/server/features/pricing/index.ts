@@ -5,6 +5,7 @@ export {
 	getCurrentFxRate,
 	refreshFxFromEcb,
 	setManualFx,
+	usdEurPpmOf,
 	type PricingDeps,
 	type Provider,
 	type RefreshOutcome
