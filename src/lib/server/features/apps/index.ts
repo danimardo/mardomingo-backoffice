@@ -46,3 +46,15 @@ export { totalTimeoutMs, fitWithin, type TimedAttempt } from './domain/total-tim
 export { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
 export { syncSchemaOf, syncSchemaStampOf } from './service';
 export { announcementsForPanel, type PanelAnnouncement } from './panel-announcements';
+
+// Anuncios del administrador (T315). Las llama solo la composición (W49).
+export {
+	createAnnouncement,
+	deactivateAnnouncement,
+	listAnnouncements,
+	appOptionsForAnnouncements,
+	validatedAnnouncement,
+	type AnnouncementInput,
+	type AnnouncementRow,
+	type AnnouncementsAdminDeps
+} from './announcements-admin';

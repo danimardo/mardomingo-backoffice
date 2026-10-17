@@ -12,9 +12,13 @@ export interface AppsLogFields {
 	'apps.app.rejected': { reason: 'unknown_app' | 'app_disabled' };
 	'apps.config.corrupt': { table: string; field: string };
 	'apps.template.versioned': { version: number };
+	'apps.announcement.created': Record<string, never>;
+	'apps.announcement.deactivated': Record<string, never>;
 }
 
 export const APPS_LOG_EVENTS = Object.freeze({
+	'apps.announcement.created': { level: 'info', msg: 'Anuncio creado' },
+	'apps.announcement.deactivated': { level: 'info', msg: 'Anuncio desactivado' },
 	'apps.settings.updated': { level: 'info', msg: 'Parámetro de configuración actualizado' },
 	'apps.settings.rejected': {
 		level: 'info',

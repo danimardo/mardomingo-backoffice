@@ -17,6 +17,7 @@ import type { InvoicingProvider } from './adapters/invoicing/provider';
 import { createInvoicingService, type InvoicingService } from './features/invoicing';
 import { createPaymentsService, type PaymentsService } from './features/payments';
 import { createPrivacy, type Privacy } from './features/privacy';
+import type { AnnouncementsAdminDeps } from './features/apps';
 import { createFakePaymentsProvider } from './adapters/payments/fake';
 import { createSimulatedProvider } from './adapters/payments/simulated';
 import type { PaymentsProvider } from './adapters/payments/provider';
@@ -67,6 +68,7 @@ export interface Composition {
 	readonly payments: PaymentsService;
 	readonly privacy: Privacy;
 	readonly adminUsers: AdminUsersDeps;
+	readonly adminAnnouncements: AnnouncementsAdminDeps;
 	readonly ai: AiDeps;
 	readonly media: MediaDeps;
 	close(): void;
@@ -225,6 +227,14 @@ export function createComposition(
 		audit: auditDeps
 	};
 
+	const adminAnnouncements: AnnouncementsAdminDeps = {
+		db,
+		logger,
+		clock,
+		ids,
+		audit: auditDeps
+	};
+
 	const media: MediaDeps = {
 		transcriber:
 			config.MISTRAL_API_KEY === '' && config.MOCK_MISTRAL_URL === undefined
@@ -257,6 +267,7 @@ export function createComposition(
 		payments,
 		privacy,
 		adminUsers,
+		adminAnnouncements,
 		ai,
 		media,
 		close: () => {
