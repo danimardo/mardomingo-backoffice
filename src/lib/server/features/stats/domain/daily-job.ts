@@ -8,10 +8,14 @@ export interface PriceReference {
 }
 
 function median(values: readonly number[]): number {
+	// Con un número impar de valores, el central; con uno par, la media de los dos centrales. El corte [inicio, fin) da 1 o 2 valores.
 	const sorted = [...values].sort((left, right) => left - right);
-	const middle = Math.floor(sorted.length / 2);
-	if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
-	return Math.round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
+	const middle = sorted.slice(
+		Math.floor((sorted.length - 1) / 2),
+		Math.floor(sorted.length / 2) + 1
+	);
+	const total = middle.reduce((sum, value) => sum + value, 0);
+	return Math.round(total / middle.length);
 }
 
 /**
@@ -30,7 +34,7 @@ export function priceReference(input: {
 			sampleSize: input.costsMicroUsd.length
 		};
 	}
-	if (input.costsMicroUsd.length < input.minSamples) return null;
+	if (input.costsMicroUsd.length < Math.max(1, input.minSamples)) return null;
 	return {
 		typicalMicro: median(input.costsMicroUsd),
 		source: 'auto',
