@@ -18,6 +18,7 @@ import { createInvoicingService, type InvoicingService } from './features/invoic
 import { createPaymentsService, type PaymentsService } from './features/payments';
 import { createPrivacy, type Privacy } from './features/privacy';
 import type { AnnouncementsAdminDeps } from './features/apps';
+import type { BrakeReleaseDeps } from './features/protections';
 import { createFakePaymentsProvider } from './adapters/payments/fake';
 import { createSimulatedProvider } from './adapters/payments/simulated';
 import type { PaymentsProvider } from './adapters/payments/provider';
@@ -69,6 +70,7 @@ export interface Composition {
 	readonly privacy: Privacy;
 	readonly adminUsers: AdminUsersDeps;
 	readonly adminAnnouncements: AnnouncementsAdminDeps;
+	readonly brake: BrakeReleaseDeps;
 	readonly ai: AiDeps;
 	readonly media: MediaDeps;
 	close(): void;
@@ -235,6 +237,8 @@ export function createComposition(
 		audit: auditDeps
 	};
 
+	const brake: BrakeReleaseDeps = { db, clock, logger, audit: auditDeps };
+
 	const media: MediaDeps = {
 		transcriber:
 			config.MISTRAL_API_KEY === '' && config.MOCK_MISTRAL_URL === undefined
@@ -268,6 +272,7 @@ export function createComposition(
 		privacy,
 		adminUsers,
 		adminAnnouncements,
+		brake,
 		ai,
 		media,
 		close: () => {

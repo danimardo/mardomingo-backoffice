@@ -521,5 +521,17 @@
 	"admin_announcements_active": "Activo",
 	"admin_announcements_inactive": "Inactivo",
 	"admin_announcements_created": "Anuncio creado.",
-	"admin_announcements_all_apps": "Todas las apps"
+	"admin_announcements_all_apps": "Todas las apps",
+	"admin_protections_title": "Protecciones",
+	"admin_protections_intro": "Límites de uso por IP y por cuenta, y el freno de coste diario. Cada cambio queda en la auditoría.",
+	"admin_protections_error": "No se ha aplicado nada. Revisa el motivo y la confirmación.",
+	"admin_protections_brake_heading": "Freno de coste diario",
+	"admin_protections_brake_active": "El freno está activo: las operaciones de IA gratuitas están limitadas hoy.",
+	"admin_protections_brake_inactive": "El freno no está activo.",
+	"admin_protections_release": "Liberar el freno",
+	"admin_protections_limits_heading": "Límites globales",
+	"admin_protections_current": "actual",
+	"admin_protections_reason": "Motivo (obligatorio)",
+	"admin_protections_confirm": "Confirmo este cambio",
+	"admin_protections_save": "Guardar"
 }

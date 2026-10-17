@@ -5,6 +5,7 @@ export {
 	createProtectionsRuntime,
 	guardRequest,
 	releaseBrake,
+	brakeStatus,
 	type BrakeReleaseDeps,
 	type DailyCostPort,
 	type ProtectionsDeps,

@@ -135,3 +135,30 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 		await expect(guard(deps, requestFor('usr_a'))).resolves.toBeTypeOf('function');
 	});
 });
+
+describe('estado del freno para la administración (W33, W44)', () => {
+	it('informa si el freno está activo hoy y deja de estarlo al liberarlo', async () => {
+		const deps = harness.deps;
+		fixture.addUser('usr_a');
+		const adminId = fixture.addUser('adm_b', 'admin');
+		const { brakeStatus } = await import('./index');
+		expect(brakeStatus({ db: fixture.db, clock: fixture.clock }).active).toBe(false);
+
+		harness.costs = [{ userId: 'usr_a', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		await expect(guard(deps, requestFor('usr_a'))).rejects.toMatchObject({
+			code: 'SERVICE_LIMITED'
+		});
+		expect(brakeStatus({ db: fixture.db, clock: fixture.clock }).active).toBe(true);
+
+		releaseBrake(
+			{
+				db: fixture.db,
+				clock: fixture.clock,
+				logger: fixture.logger,
+				audit: { clock: fixture.clock, ids: createIdGenerator(), logger: fixture.logger }
+			},
+			adminId
+		);
+		expect(brakeStatus({ db: fixture.db, clock: fixture.clock }).active).toBe(false);
+	});
+});

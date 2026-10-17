@@ -289,3 +289,14 @@ function numberSetting(
 		throw new AppError('INTERNAL_ERROR', { reason: 'setting_missing' });
 	return value;
 }
+
+/** Estado del freno global para la administración (W33, W44; T313). Solo lectura. */
+export function brakeStatus(deps: Pick<BrakeReleaseDeps, 'db' | 'clock'>): {
+	readonly active: boolean;
+	readonly releasedAt: number | null;
+} {
+	const stored = readBrakeState(deps.db);
+	const today = civilDateOf(toEpochMs(deps.clock.now()));
+	const active = stored !== null && stored.day === today && stored.active;
+	return { active, releasedAt: stored?.releasedAt ?? null };
+}
