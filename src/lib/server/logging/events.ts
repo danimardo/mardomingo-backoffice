@@ -18,7 +18,7 @@ import { SYNC_LOG_EVENTS, type SyncLogFields } from '$lib/server/features/sync';
 import { INVOICING_LOG_EVENTS, type InvoicingLogFields } from '$lib/server/features/invoicing';
 import { PAYMENTS_LOG_EVENTS, type PaymentsLogFields } from '$lib/server/features/payments';
 import { PRIVACY_LOG_EVENTS, type PrivacyLogFields } from '$lib/server/features/privacy';
-import { STATS_LOG_EVENTS, type StatsLogFields } from '$lib/server/features/stats/events';
+import { STATS_LOG_EVENTS, type StatsLogFields } from '$lib/server/features/stats';
 import {
 	NOTIFICATIONS_LOG_EVENTS,
 	type NotificationsLogFields

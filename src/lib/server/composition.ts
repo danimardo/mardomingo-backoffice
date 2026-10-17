@@ -24,7 +24,7 @@ import { findActiveAppBySlug } from './features/apps';
 import { priceSamplesBetween } from './features/ai';
 import { manualPriceFor, savePriceReference } from './features/pricing';
 import { RELEASE_SOURCES } from './features/stats/config';
-import { fetchPublicReleases } from './features/stats/github-releases';
+import { fetchPublicReleases } from './adapters/github/releases';
 import type { DailyJobDeps } from './features/stats/job';
 import { createFakePaymentsProvider } from './adapters/payments/fake';
 import { createSimulatedProvider } from './adapters/payments/simulated';
@@ -256,9 +256,11 @@ export function createComposition(
 		fetchReleases: fetchPublicReleases,
 		priceSamples: (period) => priceSamplesBetween(db, period),
 		manualPriceOf: (operationId) => manualPriceFor({ db }, operationId),
-		savePriceReference: (input) => savePriceReference({ db }, input),
-		priceWindowDays: Number(getSetting(apps, 'price_reference_window_days') ?? 30),
-		priceMinSamples: Number(getSetting(apps, 'price_reference_min_samples') ?? 3),
+		savePriceReference: (input) => {
+			savePriceReference({ db }, input);
+		},
+		priceWindowDays: () => Number(getSetting(apps, 'price_reference_window_days') ?? 30),
+		priceMinSamples: () => Number(getSetting(apps, 'price_reference_min_samples') ?? 3),
 		expireBuckets: () => credits.expireBuckets(),
 		expireHolds: () => credits.expireHolds()
 	};

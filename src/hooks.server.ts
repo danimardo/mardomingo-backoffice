@@ -112,7 +112,9 @@ export const init: ServerInit = async () => {
 	if (config.APP_ENV !== 'test') {
 		startDailyScheduler(
 			() => runDailyJob(composition.dailyJob),
-			(err) => logger.emit('stats.daily_job.step_failed', { step: 'programador', err })
+			(err) => {
+				logger.emit('stats.daily_job.step_failed', { step: 'programador', err });
+			}
 		);
 	}
 	// El cuerpo de una subida de audio debe caber: `BODY_SIZE_LIMIT` cubre el mayor `max_audio_mb` de cualquier app (FR-070).

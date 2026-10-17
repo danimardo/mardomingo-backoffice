@@ -1,5 +1,5 @@
-// Lectura pública de los releases de un repositorio de GitHub para las descargas (L14; decisión del propietario: sin token). El
-// repositorio debe ser público. La respuesta se valida: lo que no tenga la forma esperada no se cuenta.
+// Adaptador de GitHub: lectura pública de los releases de un repositorio para las descargas (L14; sin token). El repositorio debe
+// ser público. La respuesta se valida: lo que no tenga la forma esperada no se cuenta.
 import * as z from 'zod';
 
 const ReleasesBody = z.array(

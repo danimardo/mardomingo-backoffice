@@ -24,17 +24,17 @@ function deps(overrides: Partial<DailyJobDeps> = {}): DailyJobDeps {
 		clock: f.clock,
 		releaseSources: [{ slug: 'secretario', repo: 'danimardo/secretario2' }],
 		appIdOfSlug: (slug) => (slug === 'secretario' ? SEEDED_APP_ID : null),
-		fetchReleases: async () => {
-			if (failFetch) throw new Error('GitHub caído');
-			return [{ assets: releases.map((count) => ({ download_count: count })) }];
+		fetchReleases: () => {
+			if (failFetch) return Promise.reject(new Error('GitHub caído'));
+			return Promise.resolve([{ assets: releases.map((count) => ({ download_count: count })) }]);
 		},
 		priceSamples: () => [],
 		manualPriceOf: () => null,
 		savePriceReference: (input) => {
 			savePriceReference({ db: f.db }, input);
 		},
-		priceWindowDays: 30,
-		priceMinSamples: 3,
+		priceWindowDays: () => 30,
+		priceMinSamples: () => 3,
 		expireBuckets: () => {
 			expired.buckets += 1;
 			return 0;

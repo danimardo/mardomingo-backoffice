@@ -39,8 +39,8 @@ export interface DailyJobDeps {
 		readonly sampleSize: number;
 		readonly computedAt: number;
 	}) => void;
-	readonly priceWindowDays: number;
-	readonly priceMinSamples: number;
+	readonly priceWindowDays: () => number;
+	readonly priceMinSamples: () => number;
 	readonly expireBuckets: () => number;
 	readonly expireHolds: () => number;
 }
@@ -87,8 +87,12 @@ export async function runDailyJob(deps: DailyJobDeps): Promise<DailyJobOutcome> 
 		}
 	};
 
-	await step('descargas', () => recordDownloads(deps, day, now));
-	await step('precios', () => recordPrices(deps, now));
+	await step('descargas', async () => {
+		await recordDownloads(deps, day, now);
+	});
+	await step('precios', () => {
+		recordPrices(deps, now);
+	});
 	await step('caducidades', () => {
 		deps.expireBuckets();
 		deps.expireHolds();
@@ -130,7 +134,7 @@ async function recordDownloads(deps: DailyJobDeps, day: CivilDate, now: EpochMs)
 
 /** Precio de referencia de cada operación con muestras en la ventana (BE-FR-73): mediana, mínimo de muestras, valor manual manda. */
 function recordPrices(deps: DailyJobDeps, now: EpochMs): void {
-	const windowStart = now - deps.priceWindowDays * DAY_MS;
+	const windowStart = now - deps.priceWindowDays() * DAY_MS;
 	const samples = deps.priceSamples({ fromMs: windowStart, toMs: now });
 	const byOperation = new Map<string, number[]>();
 	for (const sample of samples) {
@@ -141,7 +145,7 @@ function recordPrices(deps: DailyJobDeps, now: EpochMs): void {
 	for (const [operationId, costs] of byOperation) {
 		const price = priceReference({
 			costsMicroUsd: costs,
-			minSamples: deps.priceMinSamples,
+			minSamples: deps.priceMinSamples(),
 			manualMicro: deps.manualPriceOf(operationId)
 		});
 		deps.savePriceReference({
