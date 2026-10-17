@@ -5,6 +5,8 @@
 	interface Props {
 		id: string;
 		name: string;
+		/** Valor que se envía si la casilla está marcada (por defecto, `on`). */
+		value?: string;
 		checked?: boolean;
 		error?: string;
 		required?: boolean;
@@ -14,6 +16,7 @@
 	let {
 		id,
 		name,
+		value,
 		checked = $bindable(false),
 		error = '',
 		required = false,
@@ -25,6 +28,7 @@
 	<input
 		{id}
 		{name}
+		value={value ?? 'on'}
 		type="checkbox"
 		bind:checked
 		{required}

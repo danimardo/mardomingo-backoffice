@@ -22,7 +22,7 @@ import { createSimulatedProvider } from './adapters/payments/simulated';
 import type { PaymentsProvider } from './adapters/payments/provider';
 import { createOpenRouterGateway } from './adapters/openrouter/openrouter';
 import type { CaptchaVerifier } from './adapters/turnstile/captcha-verifier';
-import { createAccounts, type Accounts } from './features/accounts';
+import { createAccounts, type Accounts, type AdminUsersDeps } from './features/accounts';
 import type { AiDeps } from './features/ai';
 import type { MediaDeps } from './features/ai/media';
 import { createMistralTranscriber } from './adapters/mistral/transcriber';
@@ -66,6 +66,7 @@ export interface Composition {
 	readonly invoicing: InvoicingService;
 	readonly payments: PaymentsService;
 	readonly privacy: Privacy;
+	readonly adminUsers: AdminUsersDeps;
 	readonly ai: AiDeps;
 	readonly media: MediaDeps;
 	close(): void;
@@ -216,6 +217,14 @@ export function createComposition(
 		payments
 	});
 
+	const adminUsers: AdminUsersDeps = {
+		db,
+		logger,
+		clock,
+		ids,
+		audit: auditDeps
+	};
+
 	const media: MediaDeps = {
 		transcriber:
 			config.MISTRAL_API_KEY === '' && config.MOCK_MISTRAL_URL === undefined
@@ -247,6 +256,7 @@ export function createComposition(
 		invoicing,
 		payments,
 		privacy,
+		adminUsers,
 		ai,
 		media,
 		close: () => {

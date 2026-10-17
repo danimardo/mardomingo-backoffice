@@ -260,3 +260,19 @@ export function reportDenial(logger: Logger, access: Access): void {
 }
 
 export { safeRedirect } from './domain/redirect';
+
+// Administración de usuarios (T305–T306). Las dependencias incluyen la auditoría; las llama solo la composición (W34–W35).
+export {
+	blockUser,
+	closeUserSessions,
+	searchUsers,
+	setTester,
+	unblockUser,
+	userCount,
+	accountView,
+	type AccountView,
+	ADMIN_USERS_PAGE_SIZE,
+	type AdminUsersDeps,
+	type UserRow,
+	type UserSearchPage
+} from './admin-users';

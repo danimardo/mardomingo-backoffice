@@ -8,7 +8,12 @@ const port = new URL(baseUrl).port;
 const webHost = `localhost:${port}`;
 
 describe('acceso a la administración (W46–W47) en el host web', () => {
-	for (const path of ['/admin/auditoria', '/admin/auditoria/aud_inexistente']) {
+	for (const path of [
+		'/admin/auditoria',
+		'/admin/auditoria/aud_inexistente',
+		'/admin/usuarios',
+		'/admin/usuarios/usr_inexistente'
+	]) {
 		it(`${path} sin sesión manda al login y no entrega nada`, async () => {
 			const result = await send(baseUrl, path, { host: webHost, headers: { accept: 'text/html' } });
 
