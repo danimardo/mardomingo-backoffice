@@ -672,5 +672,18 @@
 	"admin_operation_group_preview": "Ver operaciones afectadas",
 	"admin_operation_group_preview_title": "Operaciones que cambiarían",
 	"admin_operation_confirm_group": "Confirmo el cambio en todo el grupo",
-	"admin_operation_group_apply": "Aplicar al grupo"
+	"admin_operation_group_apply": "Aplicar al grupo",
+	"admin_nav_label": "Navegación de administración",
+	"admin_nav_home": "Inicio",
+	"admin_nav_users": "Usuarios",
+	"admin_nav_billing": "Facturación",
+	"admin_nav_apps": "Apps",
+	"admin_nav_economy": "Economía",
+	"admin_nav_announcements": "Anuncios",
+	"admin_nav_protections": "Protecciones",
+	"admin_nav_stats": "Estadísticas",
+	"admin_nav_legal": "Legal",
+	"admin_nav_audit": "Auditoría",
+	"admin_layout_brake_active": "El freno global está activo: los cobros y la IA están limitados.",
+	"admin_layout_alerts": "Alertas activas: {count}"
 }
