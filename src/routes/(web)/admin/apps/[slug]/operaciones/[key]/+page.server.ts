@@ -10,6 +10,7 @@ import {
 	createTemplateVersion,
 	deactivateOperation,
 	findActiveAppBySlug,
+	updateOperationSettings,
 	operationForAdmin
 } from '$lib/server/features/apps';
 import { checkOperationActivatable } from '$lib/server/features/ai';
@@ -58,7 +59,10 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 			mode: operation.mode,
 			model: operation.model,
 			active: operation.active,
-			timeoutMs: operation.timeoutMs
+			timeoutMs: operation.timeoutMs,
+			maxOutputTokens: operation.maxOutputTokens,
+			temperatureMilli: operation.temperatureMilli,
+			maxCostMicro: operation.maxCostMicro
 		},
 		activatable: check.ok,
 		rejection: check.ok ? null : check.reason
@@ -138,6 +142,34 @@ export const actions: Actions = {
 				actorId: admin.id,
 				operationId: operation.id,
 				body
+			});
+		} catch (cause) {
+			if (cause instanceof AppError) return failureOf(cause);
+			throw cause;
+		}
+		redirect(303, resolve(`/admin/apps/${params.slug}/operaciones/${params.key}`));
+	},
+	guardarOperacion: async ({ locals, params, request }) => {
+		const admin = adminOrThrow(locals);
+		const form = await request.formData();
+		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const composition = getComposition();
+		const app = findActiveAppBySlug(composition.apps, params.slug);
+		if (app === undefined) error(404);
+		const operation = operationForAdmin({ db: composition.db }, app.id, params.key);
+		if (operation === null) error(404);
+		const tokens = textOf(form, 'tokensSalida');
+		try {
+			updateOperationSettings(composition.apps, {
+				actorId: admin.id,
+				operationId: operation.id,
+				settings: {
+					timeoutMs: Number(textOf(form, 'tiempoMs')),
+					maxOutputTokens: tokens === '' ? null : Number(tokens),
+					temperatureMilli: Number(textOf(form, 'temperaturaMilli')),
+					maxCostMicro: Number(textOf(form, 'costeMaximoMicro'))
+				},
+				reason: textOf(form, 'motivo')
 			});
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
