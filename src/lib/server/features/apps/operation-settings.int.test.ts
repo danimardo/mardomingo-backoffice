@@ -4,10 +4,16 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { creditsFixture, type CreditsFixture } from '../../../../../tests/builders/credits';
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
-import { addOperation, appsTestContext, chatOperation } from '../../../../../tests/builders/apps';
+import {
+	addOperation,
+	appsTestContext,
+	chatOperation,
+	type AppsTestContext
+} from '../../../../../tests/builders/apps';
 import { adminAudit } from '../audit/schema';
 import { appOperations } from './schema';
 import { updateOperationSettings } from './operation-settings';
+import { operationsInGroup } from './admin-apps';
 
 let f: CreditsFixture;
 let adminId: string;
@@ -88,5 +94,45 @@ describe('ajustes de operación (T311)', () => {
 				reason: 'prueba'
 			});
 		}).toThrow(expect.objectContaining({ code: 'VALIDATION_ERROR' }));
+	});
+
+	it('aplicar al grupo cambia cada operación del grupo y no toca las de otro grupo', () => {
+		const ctx: AppsTestContext = { deps: deps(), logger: f.logger, adminId };
+		const hermana = addOperation(
+			ctx,
+			SEEDED_APP_ID,
+			chatOperation('op_ajustes_hermana', { groupLabel: 'redaccion', timeoutMs: 20_000 })
+		);
+		const otra = addOperation(
+			ctx,
+			SEEDED_APP_ID,
+			chatOperation('op_ajustes_otra', { groupLabel: 'otro', timeoutMs: 30_000 })
+		);
+		f.db
+			.update(appOperations)
+			.set({ groupLabel: 'redaccion', timeoutMs: 20_000 })
+			.where(eq(appOperations.id, operationId))
+			.run();
+
+		const miembros = operationsInGroup({ db: f.db }, SEEDED_APP_ID, 'redaccion').map((m) => m.id);
+		expect(miembros.sort()).toEqual([operationId, hermana].sort());
+
+		for (const id of miembros) {
+			updateOperationSettings(deps(), {
+				actorId: adminId,
+				operationId: id,
+				settings: valid,
+				reason: 'grupo'
+			});
+		}
+
+		for (const id of miembros) {
+			expect(
+				f.db.select().from(appOperations).where(eq(appOperations.id, id)).get()?.timeoutMs
+			).toBe(45_000);
+		}
+		expect(
+			f.db.select().from(appOperations).where(eq(appOperations.id, otra)).get()?.timeoutMs
+		).toBe(30_000);
 	});
 });

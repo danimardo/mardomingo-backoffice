@@ -115,3 +115,74 @@
 		<p><Button type="submit" variant="primary">{m.admin_operation_save_settings()}</Button></p>
 	</form>
 </section>
+
+{#if data.operation.groupLabel !== null}
+	<section aria-labelledby="grupo">
+		<h2 id="grupo">{m.admin_operation_group()}: {data.operation.groupLabel}</h2>
+		<p>{m.admin_operation_group_hint()}</p>
+		<form method="POST" action="?/previsualizarGrupo">
+			<TextField
+				id="tiempoMs-grupo"
+				name="tiempoMs"
+				label={m.admin_operation_timeout()}
+				value={data.operation.timeoutMs.toString()}
+				required
+			/>
+			<TextField
+				id="tokensSalida-grupo"
+				name="tokensSalida"
+				label={m.admin_operation_max_tokens()}
+				value={data.operation.maxOutputTokens?.toString() ?? ''}
+			/>
+			<TextField
+				id="temperaturaMilli-grupo"
+				name="temperaturaMilli"
+				label={m.admin_operation_temperature()}
+				value={data.operation.temperatureMilli.toString()}
+				required
+			/>
+			<TextField
+				id="costeMaximoMicro-grupo"
+				name="costeMaximoMicro"
+				label={m.admin_operation_max_cost()}
+				value={data.operation.maxCostMicro.toString()}
+				required
+			/>
+			<TextField id="motivo-grupo" name="motivo" label={m.admin_operation_reason()} required />
+			<p><Button type="submit" variant="secondary">{m.admin_operation_group_preview()}</Button></p>
+		</form>
+
+		{#if form?.groupPreview}
+			<h3>{m.admin_operation_group_preview_title()}</h3>
+			<p>{form.groupPreview.keys.join(', ')}</p>
+			<form method="POST" action="?/aplicarAlGrupo">
+				<input type="hidden" name="tiempoMs" value={form.groupPreview.settings.timeoutMs} />
+				<input
+					type="hidden"
+					name="tokensSalida"
+					value={form.groupPreview.settings.maxOutputTokens ?? ''}
+				/>
+				<input
+					type="hidden"
+					name="temperaturaMilli"
+					value={form.groupPreview.settings.temperatureMilli}
+				/>
+				<input
+					type="hidden"
+					name="costeMaximoMicro"
+					value={form.groupPreview.settings.maxCostMicro}
+				/>
+				<TextField
+					id="motivo-aplicar-grupo"
+					name="motivo"
+					label={m.admin_operation_reason()}
+					required
+				/>
+				<Checkbox id="confirmado-grupo" name="confirmado" value="true"
+					>{m.admin_operation_confirm_group()}</Checkbox
+				>
+				<p><Button type="submit" variant="primary">{m.admin_operation_group_apply()}</Button></p>
+			</form>
+		{/if}
+	</section>
+{/if}

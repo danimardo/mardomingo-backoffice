@@ -14,3 +14,6 @@ export {
 	type SalePack
 } from './service';
 export { PAYMENTS_LOG_EVENTS, type PaymentsLogFields } from './events';
+
+// Paquetes para la administración, solo lectura (W38; T309).
+export { listPacksForAdmin, type AdminPackRow } from './admin-packs';

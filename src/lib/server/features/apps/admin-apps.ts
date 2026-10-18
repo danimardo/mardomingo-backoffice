@@ -56,6 +56,7 @@ export interface AdminOperationRow {
 	readonly capabilities: Capabilities;
 	readonly estimatedMaxCostMicroUsd: number | null;
 	readonly timeoutMs: number;
+	readonly groupLabel: string | null;
 	readonly maxOutputTokens: number | null;
 	readonly temperatureMilli: number;
 	readonly maxCostMicro: number;
@@ -81,10 +82,25 @@ export function operationForAdmin(
 				timeoutMs: appOperations.timeoutMs,
 				maxOutputTokens: appOperations.maxOutputTokens,
 				temperatureMilli: appOperations.temperatureMilli,
-				maxCostMicro: appOperations.maxCostMicro
+				maxCostMicro: appOperations.maxCostMicro,
+				groupLabel: appOperations.groupLabel
 			})
 			.from(appOperations)
 			.where(and(eq(appOperations.appId, appId), eq(appOperations.key, key)))
 			.get() ?? null
 	);
+}
+
+/** Operaciones de la misma app con la misma etiqueta de grupo (W41: aplicar al grupo). Solo lectura. */
+export function operationsInGroup(
+	deps: { readonly db: Db },
+	appId: string,
+	groupLabel: string
+): { readonly id: string; readonly key: string }[] {
+	return deps.db
+		.select({ id: appOperations.id, key: appOperations.key })
+		.from(appOperations)
+		.where(and(eq(appOperations.appId, appId), eq(appOperations.groupLabel, groupLabel)))
+		.orderBy(asc(appOperations.key))
+		.all();
 }

@@ -11,6 +11,7 @@ import {
 	deactivateOperation,
 	findActiveAppBySlug,
 	updateOperationSettings,
+	operationsInGroup,
 	operationForAdmin
 } from '$lib/server/features/apps';
 import { checkOperationActivatable } from '$lib/server/features/ai';
@@ -32,6 +33,16 @@ function adminOrThrow(locals: App.Locals) {
 function textOf(form: FormData, key: string): string {
 	const value = form.get(key);
 	return typeof value === 'string' ? value : '';
+}
+
+function settingsOf(form: FormData) {
+	const tokens = textOf(form, 'tokensSalida');
+	return {
+		timeoutMs: Number(textOf(form, 'tiempoMs')),
+		maxOutputTokens: tokens === '' ? null : Number(tokens),
+		temperatureMilli: Number(textOf(form, 'temperaturaMilli')),
+		maxCostMicro: Number(textOf(form, 'costeMaximoMicro'))
+	};
 }
 
 export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
@@ -57,6 +68,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 			key: operation.key,
 			kind: operation.kind,
 			mode: operation.mode,
+			groupLabel: operation.groupLabel,
 			model: operation.model,
 			active: operation.active,
 			timeoutMs: operation.timeoutMs,
@@ -158,19 +170,57 @@ export const actions: Actions = {
 		if (app === undefined) error(404);
 		const operation = operationForAdmin({ db: composition.db }, app.id, params.key);
 		if (operation === null) error(404);
-		const tokens = textOf(form, 'tokensSalida');
 		try {
 			updateOperationSettings(composition.apps, {
 				actorId: admin.id,
 				operationId: operation.id,
-				settings: {
-					timeoutMs: Number(textOf(form, 'tiempoMs')),
-					maxOutputTokens: tokens === '' ? null : Number(tokens),
-					temperatureMilli: Number(textOf(form, 'temperaturaMilli')),
-					maxCostMicro: Number(textOf(form, 'costeMaximoMicro'))
-				},
+				settings: settingsOf(form),
 				reason: textOf(form, 'motivo')
 			});
+		} catch (cause) {
+			if (cause instanceof AppError) return failureOf(cause);
+			throw cause;
+		}
+		redirect(303, resolve(`/admin/apps/${params.slug}/operaciones/${params.key}`));
+	},
+	previsualizarGrupo: async ({ locals, params, request }) => {
+		adminOrThrow(locals);
+		const form = await request.formData();
+		const composition = getComposition();
+		const app = findActiveAppBySlug(composition.apps, params.slug);
+		if (app === undefined) error(404);
+		const operation = operationForAdmin({ db: composition.db }, app.id, params.key);
+		if (operation === null) error(404);
+		if (operation.groupLabel === null) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const members = operationsInGroup({ db: composition.db }, app.id, operation.groupLabel);
+		return {
+			groupPreview: {
+				groupLabel: operation.groupLabel,
+				keys: members.map((m) => m.key),
+				settings: settingsOf(form)
+			}
+		};
+	},
+	aplicarAlGrupo: async ({ locals, params, request }) => {
+		const admin = adminOrThrow(locals);
+		const form = await request.formData();
+		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const composition = getComposition();
+		const app = findActiveAppBySlug(composition.apps, params.slug);
+		if (app === undefined) error(404);
+		const operation = operationForAdmin({ db: composition.db }, app.id, params.key);
+		if (operation === null) error(404);
+		if (operation.groupLabel === null) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const members = operationsInGroup({ db: composition.db }, app.id, operation.groupLabel);
+		try {
+			for (const member of members) {
+				updateOperationSettings(composition.apps, {
+					actorId: admin.id,
+					operationId: member.id,
+					settings: settingsOf(form),
+					reason: textOf(form, 'motivo')
+				});
+			}
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
