@@ -23,7 +23,8 @@ export function seedLegalDocuments(tx: Tx, ids: () => string, now: EpochMs): voi
 				version: PROVISIONAL_VERSION,
 				content: PROVISIONAL_TEXT,
 				contentHash: hash,
-				requiresReacceptance: false,
+				// Exige aceptación: quien no haya aceptado la primera versión queda bloqueado hasta aceptarla (BE-FR-70 CA1).
+				requiresReacceptance: true,
 				publishedAt: now,
 				createdBy: null,
 				createdAt: now

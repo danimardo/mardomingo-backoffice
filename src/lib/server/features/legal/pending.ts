@@ -1,4 +1,4 @@
-// Documentos legales que una cuenta todavía no ha aceptado en su versión vigente (BE-FR-70 CA1; T133). Los tres de
+// Documentos legales que una cuenta todavía no ha aceptado en su versión vigente que exige reaceptación (BE-FR-70 CA1; T133; T314). Los tres de
 // la aceptación del registro: términos, privacidad y uso aceptable. La edad no se vuelve a pedir.
 import { and, desc, eq } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
@@ -21,7 +21,8 @@ export function pendingAcceptancesOf(
 ): readonly PendingAcceptance[] {
 	return PENDING_CHECKED.flatMap((document) => {
 		const current = readCurrentVersion(db, document, now);
-		if (current === undefined) return [];
+		// Solo una versión que exige reaceptación bloquea (BE-FR-70); una informativa solo se notifica.
+		if (current === undefined || !current.requiresReacceptance) return [];
 		const accepted = db
 			.select({ version: termsAcceptances.version })
 			.from(termsAcceptances)
