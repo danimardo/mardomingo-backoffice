@@ -14,11 +14,20 @@ export interface AppsLogFields {
 	'apps.template.versioned': { version: number };
 	'apps.announcement.created': Record<string, never>;
 	'apps.announcement.deactivated': Record<string, never>;
+	'apps.operation.activated': Record<string, never>;
+	'apps.operation.activation_rejected': {
+		reason: 'no_model' | 'model_unknown' | 'model_incapable' | 'no_price';
+	};
 }
 
 export const APPS_LOG_EVENTS = Object.freeze({
 	'apps.announcement.created': { level: 'info', msg: 'Anuncio creado' },
 	'apps.announcement.deactivated': { level: 'info', msg: 'Anuncio desactivado' },
+	'apps.operation.activated': { level: 'info', msg: 'Operación de IA activada' },
+	'apps.operation.activation_rejected': {
+		level: 'info',
+		msg: 'Activación de operación de IA rechazada por la comprobación del modelo'
+	},
 	'apps.settings.updated': { level: 'info', msg: 'Parámetro de configuración actualizado' },
 	'apps.settings.rejected': {
 		level: 'info',

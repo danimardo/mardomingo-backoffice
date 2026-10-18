@@ -1,8 +1,9 @@
 // Lectura de las apps para la administración (W39–W40; T310). Solo lectura: las escrituras pasan por `createApp`,
 // `updateAppOverrides` y `createOperation`, que validan y auditan.
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
-import { apps } from './schema';
+import type { Capabilities } from './json-schemas';
+import { apps, appOperations } from './schema';
 
 export interface AdminAppRow {
 	readonly id: string;
@@ -41,6 +42,41 @@ export function appForAdmin(deps: { readonly db: Db }, slug: string): AdminAppRo
 			})
 			.from(apps)
 			.where(eq(apps.slug, slug))
+			.get() ?? null
+	);
+}
+
+export interface AdminOperationRow {
+	readonly id: string;
+	readonly key: string;
+	readonly kind: 'chat' | 'transcription' | 'image';
+	readonly model: string | null;
+	readonly active: boolean;
+	readonly capabilities: Capabilities;
+	readonly estimatedMaxCostMicroUsd: number | null;
+	readonly timeoutMs: number;
+}
+
+/** Una operación de una app para la ficha de W41 (solo lectura). */
+export function operationForAdmin(
+	deps: { readonly db: Db },
+	appId: string,
+	key: string
+): AdminOperationRow | null {
+	return (
+		deps.db
+			.select({
+				id: appOperations.id,
+				key: appOperations.key,
+				kind: appOperations.kind,
+				model: appOperations.model,
+				active: appOperations.active,
+				capabilities: appOperations.capabilities,
+				estimatedMaxCostMicroUsd: appOperations.estimatedMaxCostMicroUsd,
+				timeoutMs: appOperations.timeoutMs
+			})
+			.from(appOperations)
+			.where(and(eq(appOperations.appId, appId), eq(appOperations.key, key)))
 			.get() ?? null
 	);
 }
