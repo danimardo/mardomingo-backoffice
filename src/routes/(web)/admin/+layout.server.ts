@@ -8,12 +8,11 @@ import { brakeStatus } from '$lib/server/features/protections';
 import * as m from '$lib/paraglide/messages.js';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = ({ locals, setHeaders }) => {
+export const load: LayoutServerLoad = ({ locals }) => {
 	const isAdmin = accessFor(locals.user, 'admin').kind === 'allow';
 	if (!isAdmin) {
 		return { isAdmin, links: [], brakeActive: false, alertsHref: '', alertsActiveCount: 0 };
 	}
-	setHeaders({ 'cache-control': 'private, no-store' });
 	const composition = getComposition();
 	const brake = brakeStatus({ db: composition.db, clock: composition.clock });
 	return {

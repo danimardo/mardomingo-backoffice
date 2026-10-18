@@ -32,6 +32,8 @@ test.beforeAll(async ({ baseURL }) => {
 	// Promoción a administrador: solo en la base E2E de esta ejecución.
 	const db = new Database(readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8'));
 	try {
+		// Un reintento de la suite crea otra cuenta: se quita el rol antes para no violar el índice de un solo administrador.
+		db.prepare("UPDATE user SET role = 'user' WHERE role = 'admin'").run();
 		db.prepare("UPDATE user SET role = 'admin' WHERE email = ?").run(email);
 	} finally {
 		db.close();
