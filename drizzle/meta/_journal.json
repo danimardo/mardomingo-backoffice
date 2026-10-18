@@ -99,6 +99,13 @@
       "when": 1792263679651,
       "tag": "0013_tarea_diaria",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1792321482055,
+      "tag": "0014_legal_reaceptacion_inicial",
+      "breakpoints": true
     }
   ]
 }
