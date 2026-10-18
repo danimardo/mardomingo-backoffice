@@ -53,7 +53,9 @@
 			hint="AAAA-MM-DD"
 			required
 		/>
-		<TextField id="contenido" name="contenido" label={m.admin_legal_content()} required />
+		<!-- Id propio: `contenido` lo usa el <main> del layout (salto al contenido). -->
+		<label for="contenido-documento">{m.admin_legal_content()} *</label>
+		<textarea id="contenido-documento" name="contenido" rows="16" required></textarea>
 		<Checkbox id="requiereReaceptacion" name="requiereReaceptacion" value="true"
 			>{m.admin_legal_require_reacceptance()}</Checkbox
 		>

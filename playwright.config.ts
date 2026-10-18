@@ -3,7 +3,7 @@
 // configuración. La web y la API se sirven desde el mismo proceso, en hosts distintos (localhost y 127.0.0.1),
 // para que la separación por host se ejerza igual que en producción.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defineConfig, devices } from '@playwright/test';
 import { TURNSTILE_MOCK_URL } from './e2e/constants';
@@ -13,6 +13,13 @@ const WEB_ORIGIN = `http://localhost:${String(PORT)}`;
 const API_ORIGIN = `http://127.0.0.1:${String(PORT)}`;
 const E2E_DIR = join('test-results', 'e2e');
 mkdirSync(E2E_DIR, { recursive: true });
+// Ruta de la base del servidor E2E. La ejecución principal la crea y la escribe en un fichero; los workers la leen de ahí, así
+// los specs que necesitan la base (p. ej. promover a administrador) la conocen sin leer el entorno.
+const E2E_DB_FILE = join(E2E_DIR, 'db-path.txt');
+if (process.env.TEST_WORKER_INDEX === undefined) {
+	writeFileSync(E2E_DB_FILE, join(E2E_DIR, `app-${randomUUID()}.db`));
+}
+const e2eDbPath = readFileSync(E2E_DB_FILE, 'utf8');
 
 const nightly = process.env.E2E_NIGHTLY === '1';
 
@@ -77,7 +84,7 @@ export default defineConfig({
 			// Cubre el mayor max_audio_mb (10 MB): el arranque se niega si no (FR-070).
 			BODY_SIZE_LIMIT: '10M',
 			// Base nueva en cada carga: el servidor arranca siempre con datos vacíos.
-			DATABASE_PATH: join(E2E_DIR, `app-${randomUUID()}.db`),
+			DATABASE_PATH: e2eDbPath,
 			BETTER_AUTH_SECRET: randomBytes(32).toString('hex'),
 			EMAIL_HASH_KEY: randomBytes(32).toString('hex'),
 			LOG_LEVEL: 'debug',
