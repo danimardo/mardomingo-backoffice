@@ -61,3 +61,18 @@
 		</form>
 	</section>
 {/if}
+
+{#if data.operation.mode === 'plantilla'}
+	<section aria-labelledby="plantilla">
+		<h2 id="plantilla">{m.admin_operation_template()}</h2>
+		<p>{m.admin_operation_template_hint()}</p>
+		<form method="POST" action="?/guardarPlantilla">
+			<label for="plantilla-texto">{m.admin_operation_template_body()}</label>
+			<textarea id="plantilla-texto" name="plantilla" rows="16" required></textarea>
+			<Checkbox id="confirmado-plantilla" name="confirmado" value="true"
+				>{m.admin_operation_confirm_template()}</Checkbox
+			>
+			<p><Button type="submit" variant="primary">{m.admin_operation_template_save()}</Button></p>
+		</form>
+	</section>
+{/if}
