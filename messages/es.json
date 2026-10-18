@@ -639,5 +639,7 @@
 	"admin_operation_rejection": "La última comprobación no permite activarla (motivo técnico)",
 	"admin_operation_activate": "Activar operación",
 	"admin_operation_reason": "Motivo de la activación",
-	"admin_operation_confirm": "Confirmo la activación"
+	"admin_operation_confirm": "Confirmo la activación",
+	"admin_operation_deactivate": "Desactivar operación",
+	"admin_operation_confirm_deactivate": "Confirmo la desactivación"
 }

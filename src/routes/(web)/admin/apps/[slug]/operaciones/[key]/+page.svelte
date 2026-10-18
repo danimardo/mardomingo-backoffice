@@ -48,3 +48,16 @@
 		</form>
 	</section>
 {/if}
+
+{#if data.operation.active}
+	<section aria-labelledby="desactivar">
+		<h2 id="desactivar">{m.admin_operation_deactivate()}</h2>
+		<form method="POST" action="?/desactivar">
+			<TextField id="motivo-desactivar" name="motivo" label={m.admin_operation_reason()} required />
+			<Checkbox id="confirmado-desactivar" name="confirmado" value="true"
+				>{m.admin_operation_confirm_deactivate()}</Checkbox
+			>
+			<p><Button type="submit" variant="secondary">{m.admin_operation_deactivate()}</Button></p>
+		</form>
+	</section>
+{/if}

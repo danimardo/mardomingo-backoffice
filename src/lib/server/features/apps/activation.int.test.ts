@@ -8,7 +8,7 @@ import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-set
 import { addOperation, appsTestContext, chatOperation } from '../../../../../tests/builders/apps';
 import { adminAudit } from '../audit/schema';
 import { appOperations } from './schema';
-import { activateOperation } from './activation';
+import { activateOperation, deactivateOperation } from './activation';
 
 let f: CreditsFixture;
 let adminId: string;
@@ -77,5 +77,20 @@ describe('activación de operaciones (T311)', () => {
 				reason: 'puesta en marcha'
 			})
 		]);
+	});
+
+	it('desactivar una operación activa la deja inactiva y queda auditada', () => {
+		activateOperation(deps(), {
+			actorId: adminId,
+			operationId,
+			check: { ok: true },
+			reason: 'alta'
+		});
+		deactivateOperation(deps(), { actorId: adminId, operationId, reason: 'mantenimiento' });
+
+		expect(isActive()).toBe(false);
+		expect(
+			f.db.select().from(adminAudit).where(eq(adminAudit.action, 'apps.operation.deactivate')).all()
+		).toEqual([expect.objectContaining({ entityId: operationId, reason: 'mantenimiento' })]);
 	});
 });

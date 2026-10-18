@@ -55,3 +55,40 @@ export function activateOperation(deps: AppsDeps, input: ActivateOperationInput)
 	});
 	deps.logger.emit('apps.operation.activated', {});
 }
+
+export interface DeactivateOperationInput {
+	readonly actorId: string;
+	readonly operationId: string;
+	readonly reason: string;
+}
+
+/** Desactiva una operación. No exige comprobación: quitar una operación del servicio siempre es seguro (W41). */
+export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationInput): void {
+	const now = deps.clock.now();
+	immediateTransaction(deps.db, (tx) => {
+		const before = tx
+			.select({ active: appOperations.active })
+			.from(appOperations)
+			.where(eq(appOperations.id, input.operationId))
+			.get();
+		if (before === undefined) throw new AppError('NOT_FOUND', { field: 'operation' });
+		tx.update(appOperations)
+			.set({ active: false, updatedAt: now })
+			.where(eq(appOperations.id, input.operationId))
+			.run();
+		recordEntry(
+			tx,
+			{
+				adminId: input.actorId,
+				action: 'apps.operation.deactivate',
+				entity: 'operation',
+				entityId: input.operationId,
+				before: { active: before.active },
+				after: { active: false },
+				reason: input.reason
+			},
+			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
+		);
+	});
+	deps.logger.emit('apps.operation.deactivated', {});
+}
