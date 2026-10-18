@@ -1,7 +1,7 @@
 // Administración de usuarios (BE-FR-50, BE-FR-04 CA4, BE-FR-18; W34–W35; T305–T306). Cada acción va en una transacción con su
 // entrada de auditoría: si la acción no se escribe, tampoco la entrada, y al revés. El motivo es obligatorio en el bloqueo.
 // La auditoría solo guarda ids y el estado anterior y nuevo, nunca datos personales.
-import { and, count, desc, eq, like, or } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, like, or } from 'drizzle-orm';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction, type Tx } from '$lib/server/db/tx';
@@ -265,4 +265,14 @@ export function accountView(deps: Pick<AdminUsersDeps, 'db'>, userId: string): A
 		banReason: row.banReason,
 		deleted: row.deletedAt !== null
 	};
+}
+
+/** Direcciones de las cuentas verificadas y no borradas: a ellas llega un aviso de versión legal informativa (BE-FR-70). */
+export function verifiedUserEmails(deps: Pick<AdminUsersDeps, 'db'>): string[] {
+	return deps.db
+		.select({ email: user.email })
+		.from(user)
+		.where(and(eq(user.emailVerified, true), isNull(user.deletedAt)))
+		.all()
+		.map((row) => row.email);
 }

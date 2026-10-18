@@ -596,5 +596,20 @@
 	"admin_home_alerts": "Alertas activas",
 	"admin_home_no_alerts": "No hay alertas activas.",
 	"admin_home_brake": "Freno de coste",
-	"admin_home_accounts": "Cuentas registradas: {count}"
+	"admin_home_accounts": "Cuentas registradas: {count}",
+	"notifications_legal_update_subject": "Hemos actualizado un documento legal",
+	"notifications_legal_update_body": "Hemos publicado una nueva versión de uno de nuestros documentos legales. No tienes que hacer nada: puedes leerla en tu panel de cuenta.",
+	"admin_legal_title": "Documentos legales",
+	"admin_legal_intro": "Una versión publicada no se edita. Las informativas avisan por correo; las que exigen reaceptación bloquean hasta que cada persona las acepte.",
+	"admin_legal_error": "No se ha publicado nada. Revisa los campos y la confirmación.",
+	"admin_legal_current": "Versiones vigentes",
+	"admin_legal_none": "sin versión",
+	"admin_legal_reacceptance": "exige reaceptación",
+	"admin_legal_publish": "Publicar una versión",
+	"admin_legal_document": "Documento",
+	"admin_legal_version": "Versión (fecha de publicación)",
+	"admin_legal_content": "Contenido en Markdown",
+	"admin_legal_require_reacceptance": "Exige que cada persona lo acepte de nuevo",
+	"admin_legal_confirm": "Confirmo que quiero publicar esta versión",
+	"admin_legal_submit": "Publicar"
 }

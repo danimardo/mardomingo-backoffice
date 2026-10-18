@@ -269,6 +269,7 @@ export {
 	setTester,
 	unblockUser,
 	userCount,
+	verifiedUserEmails,
 	accountView,
 	type AccountView,
 	ADMIN_USERS_PAGE_SIZE,

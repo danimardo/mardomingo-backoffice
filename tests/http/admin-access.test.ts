@@ -19,6 +19,7 @@ describe('acceso a la administración (W46–W47) en el host web', () => {
 		'/admin/anuncios',
 		'/admin/protecciones',
 		'/admin/estadisticas',
+		'/admin/legal',
 		'/admin/apps',
 		'/admin/apps/secretario',
 		'/admin/apps/secretario/predeterminados',
