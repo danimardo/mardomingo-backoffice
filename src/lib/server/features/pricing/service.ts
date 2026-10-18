@@ -5,6 +5,8 @@ import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { FxSource } from '$lib/server/adapters/ecb/fx-source';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction } from '$lib/server/db/tx';
+import { priceReferences } from './schema';
+import { toMicro } from '$lib/shared/money';
 import { getEffectiveConfig, getSetting, type AppsDeps } from '$lib/server/features/apps';
 import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
 import {
@@ -274,4 +276,54 @@ export function savePriceReference(
 /** Valor manual del coste típico de una operación, para el cálculo diario (BE-FR-73). */
 export function manualPriceFor(deps: { readonly db: Db }, operationId: string): number | null {
 	return manualPriceOf(deps.db, operationId);
+}
+
+/**
+ * Fija o quita el valor manual del coste típico de una operación (BE-FR-73; W38). El valor manual no toca el calculado ni su origen:
+ * sobrevive a los recálculos diarios. Queda en la auditoría con el valor anterior y el nuevo.
+ */
+export function setManualPrice(
+	deps: Pick<PricingDeps, 'db' | 'logger' | 'clock' | 'audit'>,
+	input: {
+		readonly adminId: string;
+		readonly operationId: string;
+		readonly microUsd: number | null;
+		readonly reason: string;
+	}
+): void {
+	const reason = input.reason.trim();
+	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	if (input.microUsd !== null && (!Number.isInteger(input.microUsd) || input.microUsd < 0)) {
+		throw new AppError('VALIDATION_ERROR', { field: 'microUsd' });
+	}
+	immediateTransaction(deps.db, (tx) => {
+		const before = manualPriceOf(tx, input.operationId);
+		const manual = input.microUsd === null ? null : toMicro(input.microUsd);
+		tx.insert(priceReferences)
+			.values({
+				operationId: input.operationId,
+				manualTypicalMicro: manual,
+				sampleSize: 0,
+				computedAt: null
+			})
+			.onConflictDoUpdate({
+				target: priceReferences.operationId,
+				set: { manualTypicalMicro: manual }
+			})
+			.run();
+		recordEntry(
+			tx,
+			{
+				adminId: input.adminId,
+				action: 'pricing.price.manual',
+				entity: 'price_reference',
+				entityId: input.operationId,
+				before: { manualMicro: before },
+				after: { manualMicro: input.microUsd },
+				reason
+			},
+			deps.audit
+		);
+		deps.logger.emit('pricing.price.manual_set', { cleared: input.microUsd === null });
+	});
 }

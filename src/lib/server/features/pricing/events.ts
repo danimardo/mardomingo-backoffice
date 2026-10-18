@@ -2,6 +2,7 @@
 import type { LogEventMeta } from '$lib/server/logging/events';
 
 export interface PricingLogFields {
+	'pricing.price.manual_set': { cleared: boolean };
 	'pricing.fx.refreshed': Record<string, never>;
 	'pricing.fx.refresh_failed': { reason: 'unavailable' | 'invalid' | 'http' | 'stale_observation' };
 	'pricing.fx.manual_set': Record<string, never>;
@@ -9,6 +10,7 @@ export interface PricingLogFields {
 }
 
 export const PRICING_LOG_EVENTS = Object.freeze({
+	'pricing.price.manual_set': { level: 'info', msg: 'Precio orientativo manual fijado o quitado' },
 	'pricing.fx.refreshed': { level: 'info', msg: 'Tipo de cambio actualizado desde el BCE' },
 	'pricing.fx.refresh_failed': {
 		level: 'warn',

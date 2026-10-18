@@ -8,6 +8,7 @@ export {
 	usdEurPpmOf,
 	savePriceReference,
 	manualPriceFor,
+	setManualPrice,
 	type PricingDeps,
 	type Provider,
 	type RefreshOutcome
