@@ -7,6 +7,7 @@ import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import {
 	activateOperation,
+	deactivateOperation,
 	findActiveAppBySlug,
 	operationForAdmin
 } from '$lib/server/features/apps';
@@ -86,6 +87,27 @@ export const actions: Actions = {
 				actorId: admin.id,
 				operationId: operation.id,
 				check,
+				reason: textOf(form, 'motivo')
+			});
+		} catch (cause) {
+			if (cause instanceof AppError) return failureOf(cause);
+			throw cause;
+		}
+		redirect(303, resolve(`/admin/apps/${params.slug}/operaciones/${params.key}`));
+	},
+	desactivar: async ({ locals, params, request }) => {
+		const admin = adminOrThrow(locals);
+		const form = await request.formData();
+		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const composition = getComposition();
+		const app = findActiveAppBySlug(composition.apps, params.slug);
+		if (app === undefined) error(404);
+		const operation = operationForAdmin({ db: composition.db }, app.id, params.key);
+		if (operation === null) error(404);
+		try {
+			deactivateOperation(composition.apps, {
+				actorId: admin.id,
+				operationId: operation.id,
 				reason: textOf(form, 'motivo')
 			});
 		} catch (cause) {
