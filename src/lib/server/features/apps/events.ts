@@ -14,6 +14,7 @@ export interface AppsLogFields {
 	'apps.template.versioned': { version: number };
 	'apps.announcement.created': Record<string, never>;
 	'apps.announcement.deactivated': Record<string, never>;
+	'apps.announcement.updated': Record<string, never>;
 	'apps.operation.activated': Record<string, never>;
 	'apps.operation.deactivated': Record<string, never>;
 	'apps.operation.updated': Record<string, never>;
@@ -25,6 +26,7 @@ export interface AppsLogFields {
 export const APPS_LOG_EVENTS = Object.freeze({
 	'apps.announcement.created': { level: 'info', msg: 'Anuncio creado' },
 	'apps.announcement.deactivated': { level: 'info', msg: 'Anuncio desactivado' },
+	'apps.announcement.updated': { level: 'info', msg: 'Anuncio editado' },
 	'apps.operation.activated': { level: 'info', msg: 'Operación de IA activada' },
 	'apps.operation.deactivated': { level: 'info', msg: 'Operación de IA desactivada' },
 	'apps.operation.updated': { level: 'info', msg: 'Parámetros de operación de IA actualizados' },

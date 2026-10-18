@@ -51,6 +51,7 @@ export { announcementsForPanel, type PanelAnnouncement } from './panel-announcem
 export {
 	createAnnouncement,
 	deactivateAnnouncement,
+	updateAnnouncement,
 	listAnnouncements,
 	appOptionsForAnnouncements,
 	validatedAnnouncement,

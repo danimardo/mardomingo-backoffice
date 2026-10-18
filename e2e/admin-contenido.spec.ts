@@ -1,7 +1,6 @@
-// Documentos legales desde el panel de administración de extremo a extremo (T314; BE-FR-70, W48). Un administrador publica una
-// versión informativa y otra que exige reaceptación; cada publicación aparece como vigente en W48. La cuenta administradora se
-// promueve en la base del servidor E2E (ruta en `test-results/e2e/db-path.txt`, escrita por `playwright.config.ts`); el bloqueo de IA y sincronización lo prueban
-// `legal/pending.int.test.ts` y el de la reaceptación en la base.
+// Administración de contenido de extremo a extremo (T314, T315; W48, W49). Un solo spec con una sola cuenta administradora: el
+// índice `one_admin` impide dos administradores en la misma base, y cada spec no puede promover el suyo. La cuenta se promueve en la
+// base del servidor E2E (ruta en `test-results/e2e/db-path.txt`, escrita por `playwright.config.ts`).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -21,7 +20,7 @@ let email = '';
 
 test.beforeAll(async ({ baseURL }) => {
 	const base = baseURL ?? 'http://localhost:7390';
-	email = uniqueGmail('admin-legal');
+	email = uniqueGmail('admin-contenido');
 	const request = await playwrightRequest.newContext({ baseURL: base });
 	try {
 		await registerThroughForm(request, base, email);
@@ -29,10 +28,9 @@ test.beforeAll(async ({ baseURL }) => {
 	} finally {
 		await request.dispose();
 	}
-	// Promoción a administrador: solo en la base E2E de esta ejecución.
 	const db = new Database(readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8'));
 	try {
-		// Un reintento de la suite crea otra cuenta: se quita el rol antes para no violar el índice de un solo administrador.
+		// Un reintento crea otra cuenta: se quita el rol antes para no violar el índice de un solo administrador.
 		db.prepare("UPDATE user SET role = 'user' WHERE role = 'admin'").run();
 		db.prepare("UPDATE user SET role = 'admin' WHERE email = ?").run(email);
 	} finally {
@@ -49,6 +47,8 @@ async function loginAsAdmin(page: Page): Promise<void> {
 	await page.waitForLoadState('networkidle');
 	await expect(page).toHaveURL(/\/panel$/);
 }
+
+// --- Documentos legales (W48) ---
 
 async function publish(
 	page: Page,
@@ -83,4 +83,46 @@ test('@BE-FR-70 una versión que exige reaceptación se marca como tal en W48', 
 	await publish(page, { document: 'withdrawal_waiver', version: '2026-12-15', reacceptance: true });
 
 	await expect(page.getByText(/withdrawal_waiver · 2026-12-15 · .*reaceptación/)).toBeVisible();
+});
+
+// --- Anuncios (W49) ---
+
+async function fillAnnouncement(page: Page, message: string): Promise<void> {
+	await page.goto('/admin/anuncios');
+	await page.waitForLoadState('networkidle');
+	const nuevo = page.getByRole('region', { name: 'Nuevo anuncio' });
+	await nuevo.getByLabel(/^Mensaje/).fill(message);
+	await nuevo.getByLabel(/^Nivel/).selectOption('info');
+	await nuevo.getByLabel(/^Inicio/).fill('2026-10-01T08:00');
+}
+
+test('@BE-FR-85 previsualizar muestra el anuncio sin guardarlo', async ({ page }) => {
+	await loginAsAdmin(page);
+	const message = 'Previsualización E2E sin guardar';
+	await fillAnnouncement(page, message);
+	await page
+		.getByRole('region', { name: 'Nuevo anuncio' })
+		.getByRole('button', { name: 'Previsualizar' })
+		.click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByRole('heading', { name: 'Vista previa' })).toBeVisible();
+	await expect(page.getByText(message)).toBeVisible();
+	await expect(page.getByText('Así se verá. Todavía no se ha guardado nada.')).toBeVisible();
+	await page.goto('/admin/anuncios');
+	await expect(page.getByText(message)).toHaveCount(0);
+});
+
+test('@BE-FR-85 un anuncio creado aparece en la lista con su identificador', async ({ page }) => {
+	await loginAsAdmin(page);
+	const message = 'Anuncio E2E creado';
+	await fillAnnouncement(page, message);
+	await page
+		.getByRole('region', { name: 'Nuevo anuncio' })
+		.getByRole('button', { name: 'Crear anuncio' })
+		.click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByText(message)).toBeVisible();
+	await expect(page.locator('code').filter({ hasText: /^ann_/ }).first()).toBeVisible();
 });

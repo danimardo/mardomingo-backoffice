@@ -685,5 +685,12 @@
 	"admin_nav_legal": "Legal",
 	"admin_nav_audit": "Auditoría",
 	"admin_layout_brake_active": "El freno global está activo: los cobros y la IA están limitados.",
-	"admin_layout_alerts": "Alertas activas: {count}"
+	"admin_layout_alerts": "Alertas activas: {count}",
+	"admin_announcements_preview": "Previsualizar",
+	"admin_announcements_preview_title": "Vista previa",
+	"admin_announcements_preview_note": "Así se verá. Todavía no se ha guardado nada.",
+	"admin_announcements_edit": "Editar un anuncio",
+	"admin_announcements_edit_hint": "Copia el identificador del anuncio desde la lista. Los cambios se auditan; el estado activo o inactivo no cambia.",
+	"admin_announcements_id": "Identificador del anuncio",
+	"admin_announcements_save": "Guardar cambios"
 }
