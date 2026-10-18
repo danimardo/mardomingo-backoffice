@@ -641,5 +641,10 @@
 	"admin_operation_reason": "Motivo de la activación",
 	"admin_operation_confirm": "Confirmo la activación",
 	"admin_operation_deactivate": "Desactivar operación",
-	"admin_operation_confirm_deactivate": "Confirmo la desactivación"
+	"admin_operation_confirm_deactivate": "Confirmo la desactivación",
+	"admin_operation_template": "Plantilla del prompt",
+	"admin_operation_template_hint": "Cada guardado publica una versión nueva e inmutable; la anterior no se edita.",
+	"admin_operation_template_body": "Plantilla en JSON",
+	"admin_operation_confirm_template": "Confirmo la publicación de la versión",
+	"admin_operation_template_save": "Publicar versión"
 }

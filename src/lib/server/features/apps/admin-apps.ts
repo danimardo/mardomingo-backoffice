@@ -50,6 +50,7 @@ export interface AdminOperationRow {
 	readonly id: string;
 	readonly key: string;
 	readonly kind: 'chat' | 'transcription' | 'image';
+	readonly mode: 'libre' | 'plantilla';
 	readonly model: string | null;
 	readonly active: boolean;
 	readonly capabilities: Capabilities;
@@ -69,6 +70,7 @@ export function operationForAdmin(
 				id: appOperations.id,
 				key: appOperations.key,
 				kind: appOperations.kind,
+				mode: appOperations.mode,
 				model: appOperations.model,
 				active: appOperations.active,
 				capabilities: appOperations.capabilities,

@@ -7,6 +7,7 @@ import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import {
 	activateOperation,
+	createTemplateVersion,
 	deactivateOperation,
 	findActiveAppBySlug,
 	operationForAdmin
@@ -54,6 +55,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 		operation: {
 			key: operation.key,
 			kind: operation.kind,
+			mode: operation.mode,
 			model: operation.model,
 			active: operation.active,
 			timeoutMs: operation.timeoutMs
@@ -109,6 +111,33 @@ export const actions: Actions = {
 				actorId: admin.id,
 				operationId: operation.id,
 				reason: textOf(form, 'motivo')
+			});
+		} catch (cause) {
+			if (cause instanceof AppError) return failureOf(cause);
+			throw cause;
+		}
+		redirect(303, resolve(`/admin/apps/${params.slug}/operaciones/${params.key}`));
+	},
+	guardarPlantilla: async ({ locals, params, request }) => {
+		const admin = adminOrThrow(locals);
+		const form = await request.formData();
+		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const composition = getComposition();
+		const app = findActiveAppBySlug(composition.apps, params.slug);
+		if (app === undefined) error(404);
+		const operation = operationForAdmin({ db: composition.db }, app.id, params.key);
+		if (operation === null) error(404);
+		let body: unknown;
+		try {
+			body = JSON.parse(textOf(form, 'plantilla'));
+		} catch {
+			return fail(400, { errors: { plantilla: 'validation_invalid' } });
+		}
+		try {
+			createTemplateVersion(composition.apps, {
+				actorId: admin.id,
+				operationId: operation.id,
+				body
 			});
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
