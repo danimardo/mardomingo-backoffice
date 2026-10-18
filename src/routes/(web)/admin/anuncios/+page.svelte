@@ -75,7 +75,71 @@
 			label={m.admin_announcements_max_version()}
 			error={errors.maxVersion ?? ''}
 		/>
-		<p><Button type="submit" variant="primary">{m.admin_announcements_submit()}</Button></p>
+		<p>
+			<Button type="submit" formaction="?/previsualizar" variant="secondary"
+				>{m.admin_announcements_preview()}</Button
+			>
+			<Button type="submit" variant="primary">{m.admin_announcements_submit()}</Button>
+		</p>
+	</form>
+</section>
+
+{#if form?.preview}
+	<section aria-labelledby="vista-previa-anuncio">
+		<h2 id="vista-previa-anuncio">{m.admin_announcements_preview_title()}</h2>
+		<p>
+			{form.preview.level} · {form.preview.message}{form.preview.link
+				? ` · ${form.preview.link}`
+				: ''}
+		</p>
+		<p>{m.admin_announcements_preview_note()}</p>
+	</section>
+{/if}
+
+<section aria-labelledby="editar-anuncio">
+	<h2 id="editar-anuncio">{m.admin_announcements_edit()}</h2>
+	<p>{m.admin_announcements_edit_hint()}</p>
+	<form method="POST" action="?/guardar">
+		<TextField id="editar-id" name="anuncioId" label={m.admin_announcements_id()} required />
+		<Select
+			id="editar"
+			name="appId"
+			label={m.admin_announcements_app()}
+			options={[
+				{ value: '', label: m.admin_announcements_all_apps() },
+				...data.apps.map((app) => ({ value: app.id, label: app.name }))
+			]}
+		/>
+		<Select
+			id="editar-nivel"
+			name="nivel"
+			label={m.admin_announcements_level()}
+			options={[
+				{ value: 'info', label: 'Info' },
+				{ value: 'warning', label: 'Aviso' },
+				{ value: 'critical', label: 'Crítico' }
+			]}
+		/>
+		<TextField
+			id="editar-mensaje"
+			name="mensaje"
+			label={m.admin_announcements_message()}
+			required
+		/>
+		<TextField id="editar-enlace" name="enlace" label={m.admin_announcements_link()} />
+		<TextField id="editar-inicio" name="inicio" label={m.admin_announcements_starts()} required />
+		<TextField id="editar-fin" name="fin" label={m.admin_announcements_ends()} />
+		<TextField
+			id="editar-minVersion"
+			name="minVersion"
+			label={m.admin_announcements_min_version()}
+		/>
+		<TextField
+			id="editar-maxVersion"
+			name="maxVersion"
+			label={m.admin_announcements_max_version()}
+		/>
+		<p><Button type="submit" variant="primary">{m.admin_announcements_save()}</Button></p>
 	</form>
 </section>
 
@@ -92,11 +156,11 @@
 			{#each data.announcements as row (row.id)}
 				<li>
 					{row.appId ? (appNames.get(row.appId) ?? row.appId) : m.admin_announcements_all_apps()} · {row.level}
-					· {row.message}
+					· {row.message} · <code>{row.id}</code>
 					({row.active ? m.admin_announcements_active() : m.admin_announcements_inactive()})
 					{#if row.active}
-						<form method="POST" action="?/desactivar" style="display:inline">
-							<input type="hidden" name="id" value={row.id} />
+						<form method="POST" action="?/desactivar">
+							<input type="hidden" name="anuncioId" value={row.id} />
 							<Button type="submit" variant="ghost">{m.admin_announcements_deactivate()}</Button>
 						</form>
 					{/if}

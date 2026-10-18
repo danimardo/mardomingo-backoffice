@@ -1,5 +1,6 @@
 // Anuncios del administrador contra SQLite real (BE-FR-85 CA1–CA2; T315): creación para una app o para todas, validación de la
 // ventana, el nivel, el enlace y las versiones, auditoría por cada cambio, desactivar sin borrar y la lista.
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { creditsFixture, type CreditsFixture } from '../../../../../tests/builders/credits';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
@@ -10,6 +11,7 @@ import {
 	createAnnouncement,
 	deactivateAnnouncement,
 	listAnnouncements,
+	updateAnnouncement,
 	type AnnouncementInput,
 	type AnnouncementsAdminDeps
 } from './index';
@@ -181,5 +183,48 @@ describe('anuncios del administrador (BE-FR-85)', () => {
 		expect(codeOf(() => deactivateAnnouncement(deps, { adminId, id: 'ann_inexistente' }))).toBe(
 			'NOT_FOUND'
 		);
+	});
+
+	it('editar un anuncio cambia sus datos, conserva su estado y audita antes y después', () => {
+		const { id } = createAnnouncement(deps, { adminId, announcement: announcement() });
+		deactivateAnnouncement(deps, { adminId, id });
+
+		updateAnnouncement(deps, {
+			adminId,
+			id,
+			announcement: announcement({ level: 'warning', message: 'Mantenimiento aplazado.' })
+		});
+
+		expect(listAnnouncements({ db: f.db })).toEqual([
+			expect.objectContaining({
+				id,
+				level: 'warning',
+				message: 'Mantenimiento aplazado.',
+				active: false
+			})
+		]);
+		expect(
+			f.db.select().from(adminAudit).where(eq(adminAudit.action, 'apps.announcement.update')).all()
+		).toEqual([expect.objectContaining({ entityId: id, adminId })]);
+	});
+
+	it('editar con datos no válidos no cambia el anuncio', () => {
+		const { id } = createAnnouncement(deps, { adminId, announcement: announcement() });
+
+		expect(() =>
+			updateAnnouncement(deps, {
+				adminId,
+				id,
+				announcement: announcement({ link: 'javascript:alert(1)' })
+			})
+		).toThrow(expect.objectContaining({ code: 'VALIDATION_ERROR' }));
+
+		expect(listAnnouncements({ db: f.db })[0]?.link).toBeNull();
+	});
+
+	it('editar un anuncio que no existe responde NOT_FOUND', () => {
+		expect(() =>
+			updateAnnouncement(deps, { adminId, id: 'ann_no_existe', announcement: announcement() })
+		).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
 	});
 });

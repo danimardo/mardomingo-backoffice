@@ -140,6 +140,40 @@ export function createAnnouncement(
 	});
 }
 
+/** Edita un anuncio activo o inactivo: valida igual que al crear, conserva su estado y audita antes y después (W49; T315). */
+export function updateAnnouncement(
+	deps: AnnouncementsAdminDeps,
+	input: { adminId: string; id: string; announcement: AnnouncementInput }
+): string {
+	const data = validatedAnnouncement(input.announcement);
+	return immediateTransaction(deps.db, (tx) => {
+		const current = tx.select().from(announcements).where(eq(announcements.id, input.id)).get();
+		if (current === undefined) throw new AppError('NOT_FOUND');
+		tx.update(announcements)
+			.set({
+				appId: data.appId,
+				level: data.level,
+				message: data.message,
+				link: data.link,
+				startsAt: data.startsAt,
+				endsAt: data.endsAt,
+				minVersion: data.minVersion,
+				maxVersion: data.maxVersion,
+				updatedAt: deps.clock.now()
+			})
+			.where(eq(announcements.id, input.id))
+			.run();
+		deps.logger.emit('apps.announcement.updated', {});
+		return audit(tx, deps, {
+			action: 'apps.announcement.update',
+			id: input.id,
+			adminId: input.adminId,
+			before: { level: current.level, appId: current.appId },
+			after: { level: data.level, appId: data.appId }
+		});
+	});
+}
+
 /** Desactiva un anuncio sin borrarlo (queda en el historial). Si ya estaba inactivo, no hace nada y devuelve `null`. */
 export function deactivateAnnouncement(
 	deps: AnnouncementsAdminDeps,

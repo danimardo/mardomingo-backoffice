@@ -6,6 +6,8 @@ import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import {
 	createAnnouncement,
+	updateAnnouncement,
+	validatedAnnouncement,
 	deactivateAnnouncement,
 	listAnnouncements,
 	appOptionsForAnnouncements,
@@ -56,26 +58,60 @@ export const load: PageServerLoad = ({ locals, setHeaders }) => {
 	};
 };
 
+/** Lee el anuncio del formulario (crear, previsualizar y guardar comparten campos). Devuelve `null` si una fecha no es válida. */
+function announcementOf(form: FormData): AnnouncementInput | null {
+	const startsAt = instantOf(textOf(form, 'inicio'));
+	const endsRaw = instantOf(textOf(form, 'fin'));
+	if (startsAt === null || Number.isNaN(startsAt) || Number.isNaN(endsRaw)) return null;
+	const appValue = textOf(form, 'appId');
+	return {
+		appId: appValue === '' ? null : appValue,
+		level: textOf(form, 'nivel'),
+		message: textOf(form, 'mensaje'),
+		link: textOf(form, 'enlace') || null,
+		startsAt: toEpochMs(startsAt),
+		endsAt: endsRaw === null ? null : toEpochMs(endsRaw),
+		minVersion: textOf(form, 'minVersion') || null,
+		maxVersion: textOf(form, 'maxVersion') || null
+	};
+}
+
 export const actions: Actions = {
+	previsualizar: async ({ locals, request }) => {
+		adminOrThrow(locals);
+		const form = await request.formData();
+		const input = announcementOf(form);
+		if (input === null) return fail(400, { errors: { inicio: 'validation_invalid' } });
+		try {
+			return { preview: validatedAnnouncement(input) };
+		} catch (cause) {
+			if (cause instanceof AppError) return failureOf(cause);
+			throw cause;
+		}
+	},
+	guardar: async ({ locals, request }) => {
+		const admin = adminOrThrow(locals);
+		const form = await request.formData();
+		const input = announcementOf(form);
+		if (input === null) return fail(400, { errors: { inicio: 'validation_invalid' } });
+		try {
+			updateAnnouncement(getComposition().adminAnnouncements, {
+				adminId: admin.id,
+				id: textOf(form, 'anuncioId'),
+				announcement: input
+			});
+		} catch (cause) {
+			if (cause instanceof AppError) return failureOf(cause);
+			throw cause;
+		}
+		const back = resolve('/admin/anuncios');
+		redirect(303, back);
+	},
 	crear: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
-		const startsAt = instantOf(textOf(form, 'inicio'));
-		const endsRaw = instantOf(textOf(form, 'fin'));
-		if (startsAt === null || Number.isNaN(startsAt))
-			return fail(400, { errors: { inicio: 'validation_invalid' } });
-		if (Number.isNaN(endsRaw)) return fail(400, { errors: { fin: 'validation_invalid' } });
-		const appValue = textOf(form, 'appId');
-		const input: AnnouncementInput = {
-			appId: appValue === '' ? null : appValue,
-			level: textOf(form, 'nivel'),
-			message: textOf(form, 'mensaje'),
-			link: textOf(form, 'enlace') || null,
-			startsAt: toEpochMs(startsAt),
-			endsAt: endsRaw === null ? null : toEpochMs(endsRaw),
-			minVersion: textOf(form, 'minVersion') || null,
-			maxVersion: textOf(form, 'maxVersion') || null
-		};
+		const input = announcementOf(form);
+		if (input === null) return fail(400, { errors: { inicio: 'validation_invalid' } });
 		try {
 			createAnnouncement(getComposition().adminAnnouncements, {
 				adminId: admin.id,
@@ -94,7 +130,7 @@ export const actions: Actions = {
 		try {
 			deactivateAnnouncement(getComposition().adminAnnouncements, {
 				adminId: admin.id,
-				id: textOf(form, 'id')
+				id: textOf(form, 'anuncioId')
 			});
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
