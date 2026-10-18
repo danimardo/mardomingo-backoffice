@@ -89,10 +89,12 @@ describe('precio orientativo manual (BE-FR-73)', () => {
 	});
 
 	it('sin motivo o con un importe negativo no escribe nada', () => {
-		expect(() => { setManualPrice(deps(), { adminId, operationId, microUsd: 5, reason: '  ' }); }
-		).toThrow();
-		expect(() => { setManualPrice(deps(), { adminId, operationId, microUsd: -5, reason: 'x' }); }
-		).toThrow();
+		expect(() => {
+			setManualPrice(deps(), { adminId, operationId, microUsd: 5, reason: '  ' });
+		}).toThrow();
+		expect(() => {
+			setManualPrice(deps(), { adminId, operationId, microUsd: -5, reason: 'x' });
+		}).toThrow();
 		expect(f.db.select().from(priceReferences).all()).toEqual([]);
 	});
 });
