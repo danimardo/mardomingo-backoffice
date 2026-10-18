@@ -29,3 +29,7 @@ export {
 export { consumptionRowDto, type ConsumptionRowDto } from './presenters';
 export { operationStatsBetween, priceSamplesBetween, type OperationStatsFact } from './stats-facts';
 export { operationCostFactsBetween, type OperationCostFact } from './cost-facts';
+
+// Comprobación de activación de operaciones contra el catálogo guardado (W41; T311).
+export { checkOperationActivatable } from './activation';
+export type { ActivationCheck, ActivationNeeds } from './domain/activation';

@@ -60,3 +60,7 @@ export {
 } from './announcements-admin';
 
 export { appForAdmin, listAppsForAdmin, type AdminAppRow } from './admin-apps';
+
+// Activación de operaciones de IA (W41; T311). La comprobación del modelo vive en `ai`.
+export { activateOperation, type ActivationCheck, type ActivationRejection } from './activation';
+export { operationForAdmin, type AdminOperationRow } from './admin-apps';

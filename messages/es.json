@@ -629,5 +629,15 @@
 	"admin_economy_operation": "Identificador de la operación",
 	"admin_economy_micro_usd": "Precio manual en micro-USD",
 	"admin_economy_micro_usd_hint": "Dejar vacío para quitar el precio manual",
-	"admin_economy_price_save": "Guardar precio manual"
+	"admin_economy_price_save": "Guardar precio manual",
+	"admin_operation_title": "Operación de IA",
+	"admin_operation_no_model": "Sin modelo",
+	"admin_operation_error": "No se ha activado la operación. Revisa el motivo y la confirmación.",
+	"admin_operation_status": "Estado",
+	"admin_operation_active": "Activa",
+	"admin_operation_inactive": "Inactiva",
+	"admin_operation_rejection": "La última comprobación no permite activarla (motivo técnico)",
+	"admin_operation_activate": "Activar operación",
+	"admin_operation_reason": "Motivo de la activación",
+	"admin_operation_confirm": "Confirmo la activación"
 }
