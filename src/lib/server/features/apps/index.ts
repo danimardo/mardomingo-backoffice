@@ -68,9 +68,12 @@ export {
 	type ActivationCheck,
 	type ActivationRejection
 } from './activation';
-export { operationForAdmin, type AdminOperationRow } from './admin-apps';
+export { operationForAdmin, operationsInGroup, type AdminOperationRow } from './admin-apps';
 export {
 	updateOperationSettings,
 	OperationSafeSettings,
 	type OperationSafeSettings as OperationSafeSettingsValue
 } from './operation-settings';
+
+// Previsualización de cambios de parámetros económicos (W38; T309). No escribe.
+export { previewSettingChange, type SettingPreview } from './setting-preview';

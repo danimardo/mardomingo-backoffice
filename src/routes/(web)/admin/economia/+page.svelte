@@ -43,9 +43,65 @@
 			<Checkbox id={`confirmado-${setting.key}`} name="confirmado" value="true"
 				>{m.admin_economy_confirm()}</Checkbox
 			>
-			<p><Button type="submit" variant="secondary">{m.admin_economy_save()}</Button></p>
+			<p>
+				<Button type="submit" formaction="?/previsualizarParametro" variant="secondary"
+					>{m.admin_economy_preview()}</Button
+				>
+			</p>
 		</form>
 	{/each}
+
+	{#if form?.preview}
+		<section aria-labelledby="vista-previa">
+			<h3 id="vista-previa">{m.admin_economy_preview_title()}</h3>
+			{#if form.preview.valid}
+				<p>
+					{form.preview.key}: {form.preview.before ?? ''} → {form.preview.after ?? ''} ({m.admin_economy_scope_global()})
+				</p>
+				<form method="POST" action="?/guardarParametro">
+					<input type="hidden" name="clave" value={form.preview.key} />
+					<input type="hidden" name="valor" value={form.preview.after ?? ''} />
+					<TextField
+						id="motivo-vista-previa"
+						name="motivo"
+						label={m.admin_economy_reason()}
+						required
+					/>
+					<Checkbox id="confirmado-vista-previa" name="confirmado" value="true"
+						>{m.admin_economy_confirm()}</Checkbox
+					>
+					<p><Button type="submit" variant="primary">{m.admin_economy_save()}</Button></p>
+				</form>
+			{:else}
+				<Banner level="critical">{m.admin_economy_preview_invalid()}</Banner>
+			{/if}
+		</section>
+	{/if}
+</section>
+
+<section aria-labelledby="paquetes">
+	<h2 id="paquetes">{m.admin_economy_packs()}</h2>
+	<p>{m.admin_economy_packs_hint()}</p>
+	<table>
+		<thead>
+			<tr>
+				<th scope="col">{m.admin_economy_pack_name()}</th>
+				<th scope="col">{m.admin_economy_pack_price()}</th>
+				<th scope="col">{m.admin_economy_pack_bonus()}</th>
+				<th scope="col">{m.admin_economy_pack_active()}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{#each data.packs as pack (pack.id)}
+				<tr>
+					<td>{pack.name}</td>
+					<td>{pack.priceEurCents / 100} €</td>
+					<td>{pack.bonusPpm / 10000} %</td>
+					<td>{pack.active ? m.admin_economy_yes() : m.admin_economy_no()}</td>
+				</tr>
+			{/each}
+		</tbody>
+	</table>
 </section>
 
 <section aria-labelledby="tipo-cambio">

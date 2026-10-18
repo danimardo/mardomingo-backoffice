@@ -5,7 +5,8 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
-import { getSetting, updateSetting } from '$lib/server/features/apps';
+import { getSetting, previewSettingChange, updateSetting } from '$lib/server/features/apps';
+import { listPacksForAdmin } from '$lib/server/features/payments';
 import {
 	clearManualFx,
 	getCurrentFxRate,
@@ -69,11 +70,20 @@ export const load: PageServerLoad = ({ locals, setHeaders }) => {
 			key,
 			value: valueText(getSetting(composition.apps, key))
 		})),
-		fx: { usdEurPpm: fx.usdEurPpm, source: fx.source, effectiveFrom: fx.effectiveFrom }
+		fx: { usdEurPpm: fx.usdEurPpm, source: fx.source, effectiveFrom: fx.effectiveFrom },
+		packs: listPacksForAdmin({ db: composition.db })
 	};
 };
 
 export const actions: Actions = {
+	previsualizarParametro: async ({ locals, request }) => {
+		adminOrThrow(locals);
+		const form = await request.formData();
+		const key = textOf(form, 'clave');
+		if (!isEconomyKey(key)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const preview = previewSettingChange(getComposition().apps, key, Number(textOf(form, 'valor')));
+		return { preview };
+	},
 	guardarParametro: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
