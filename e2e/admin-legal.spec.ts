@@ -65,19 +65,20 @@ async function publish(
 	await page.waitForLoadState('networkidle');
 }
 
+// Solo documentos que el registro no acepta (términos, privacidad y uso aceptable): otros specs se registran con la versión inicial.
 test('@BE-FR-70 un administrador publica una versión informativa y aparece como vigente', async ({
 	page
 }) => {
 	await loginAsAdmin(page);
-	await publish(page, { document: 'terms', version: '2026-12-01', reacceptance: false });
+	await publish(page, { document: 'cookies', version: '2026-12-01', reacceptance: false });
 
 	await expect(page).toHaveURL(/\/admin\/legal$/);
-	await expect(page.getByText('terms · 2026-12-01')).toBeVisible();
+	await expect(page.getByText('cookies · 2026-12-01')).toBeVisible();
 });
 
 test('@BE-FR-70 una versión que exige reaceptación se marca como tal en W48', async ({ page }) => {
 	await loginAsAdmin(page);
-	await publish(page, { document: 'privacy', version: '2026-12-15', reacceptance: true });
+	await publish(page, { document: 'withdrawal_waiver', version: '2026-12-15', reacceptance: true });
 
-	await expect(page.getByText(/privacy · 2026-12-15 · .*reaceptación/)).toBeVisible();
+	await expect(page.getByText(/withdrawal_waiver · 2026-12-15 · .*reaceptación/)).toBeVisible();
 });
