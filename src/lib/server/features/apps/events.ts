@@ -16,6 +16,7 @@ export interface AppsLogFields {
 	'apps.announcement.deactivated': Record<string, never>;
 	'apps.operation.activated': Record<string, never>;
 	'apps.operation.deactivated': Record<string, never>;
+	'apps.operation.updated': Record<string, never>;
 	'apps.operation.activation_rejected': {
 		reason: 'no_model' | 'model_unknown' | 'model_incapable' | 'no_price';
 	};
@@ -26,6 +27,7 @@ export const APPS_LOG_EVENTS = Object.freeze({
 	'apps.announcement.deactivated': { level: 'info', msg: 'Anuncio desactivado' },
 	'apps.operation.activated': { level: 'info', msg: 'Operación de IA activada' },
 	'apps.operation.deactivated': { level: 'info', msg: 'Operación de IA desactivada' },
+	'apps.operation.updated': { level: 'info', msg: 'Parámetros de operación de IA actualizados' },
 	'apps.operation.activation_rejected': {
 		level: 'info',
 		msg: 'Activación de operación de IA rechazada por la comprobación del modelo'

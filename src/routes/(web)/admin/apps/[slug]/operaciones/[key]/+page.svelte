@@ -76,3 +76,42 @@
 		</form>
 	</section>
 {/if}
+
+<section aria-labelledby="parametros">
+	<h2 id="parametros">{m.admin_operation_settings()}</h2>
+	<p>{m.admin_operation_settings_hint()}</p>
+	<form method="POST" action="?/guardarOperacion">
+		<TextField
+			id="tiempoMs"
+			name="tiempoMs"
+			label={m.admin_operation_timeout()}
+			value={data.operation.timeoutMs.toString()}
+			required
+		/>
+		<TextField
+			id="tokensSalida"
+			name="tokensSalida"
+			label={m.admin_operation_max_tokens()}
+			value={data.operation.maxOutputTokens?.toString() ?? ''}
+		/>
+		<TextField
+			id="temperaturaMilli"
+			name="temperaturaMilli"
+			label={m.admin_operation_temperature()}
+			value={data.operation.temperatureMilli.toString()}
+			required
+		/>
+		<TextField
+			id="costeMaximoMicro"
+			name="costeMaximoMicro"
+			label={m.admin_operation_max_cost()}
+			value={data.operation.maxCostMicro.toString()}
+			required
+		/>
+		<TextField id="motivo-operacion" name="motivo" label={m.admin_operation_reason()} required />
+		<Checkbox id="confirmado-operacion" name="confirmado" value="true"
+			>{m.admin_operation_confirm_settings()}</Checkbox
+		>
+		<p><Button type="submit" variant="primary">{m.admin_operation_save_settings()}</Button></p>
+	</form>
+</section>

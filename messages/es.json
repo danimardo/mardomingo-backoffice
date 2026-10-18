@@ -646,5 +646,13 @@
 	"admin_operation_template_hint": "Cada guardado publica una versión nueva e inmutable; la anterior no se edita.",
 	"admin_operation_template_body": "Plantilla en JSON",
 	"admin_operation_confirm_template": "Confirmo la publicación de la versión",
-	"admin_operation_template_save": "Publicar versión"
+	"admin_operation_template_save": "Publicar versión",
+	"admin_operation_settings": "Parámetros de la operación",
+	"admin_operation_settings_hint": "Solo se cambian los parámetros seguros. Para cambiar el modelo, hay que volver a activar la operación.",
+	"admin_operation_timeout": "Tiempo máximo (ms)",
+	"admin_operation_max_tokens": "Tokens de salida máximos (vacío = sin límite)",
+	"admin_operation_temperature": "Temperatura (milésimas, p. ej. 700)",
+	"admin_operation_max_cost": "Coste máximo por petición (micro-créditos)",
+	"admin_operation_confirm_settings": "Confirmo el cambio de parámetros",
+	"admin_operation_save_settings": "Guardar parámetros"
 }

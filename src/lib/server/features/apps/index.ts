@@ -69,3 +69,8 @@ export {
 	type ActivationRejection
 } from './activation';
 export { operationForAdmin, type AdminOperationRow } from './admin-apps';
+export {
+	updateOperationSettings,
+	OperationSafeSettings,
+	type OperationSafeSettings as OperationSafeSettingsValue
+} from './operation-settings';

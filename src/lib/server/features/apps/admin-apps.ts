@@ -56,6 +56,9 @@ export interface AdminOperationRow {
 	readonly capabilities: Capabilities;
 	readonly estimatedMaxCostMicroUsd: number | null;
 	readonly timeoutMs: number;
+	readonly maxOutputTokens: number | null;
+	readonly temperatureMilli: number;
+	readonly maxCostMicro: number;
 }
 
 /** Una operación de una app para la ficha de W41 (solo lectura). */
@@ -75,7 +78,10 @@ export function operationForAdmin(
 				active: appOperations.active,
 				capabilities: appOperations.capabilities,
 				estimatedMaxCostMicroUsd: appOperations.estimatedMaxCostMicroUsd,
-				timeoutMs: appOperations.timeoutMs
+				timeoutMs: appOperations.timeoutMs,
+				maxOutputTokens: appOperations.maxOutputTokens,
+				temperatureMilli: appOperations.temperatureMilli,
+				maxCostMicro: appOperations.maxCostMicro
 			})
 			.from(appOperations)
 			.where(and(eq(appOperations.appId, appId), eq(appOperations.key, key)))
