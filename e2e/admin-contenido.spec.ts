@@ -126,3 +126,22 @@ test('@BE-FR-85 un anuncio creado aparece en la lista con su identificador', asy
 	await expect(page.getByText(message)).toBeVisible();
 	await expect(page.locator('code').filter({ hasText: /^ann_/ }).first()).toBeVisible();
 });
+
+test('@BE-FR-76 la facturación filtra un periodo y descarga el CSV de ventas con su nombre', async ({
+	page
+}) => {
+	await loginAsAdmin(page);
+	await page.goto('/admin/facturacion?desde=2026-10-01&hasta=2026-10-31');
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByText('Ventas en el periodo: 0')).toBeVisible();
+	const href = await page
+		.getByRole('link', { name: 'Descargar ventas (CSV)' })
+		.getAttribute('href');
+	expect(href).toContain('/admin/facturacion/exportar?archivo=ventas');
+
+	const response = await page.request.get(href ?? '');
+	expect(response.status()).toBe(200);
+	expect(response.headers()['content-type']).toContain('text/csv');
+	expect(response.headers()['content-disposition']).toContain('attachment');
+});
