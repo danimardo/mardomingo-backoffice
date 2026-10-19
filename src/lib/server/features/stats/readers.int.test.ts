@@ -8,7 +8,9 @@ import { insertInFlightOperation } from '../../../../../tests/builders/ai-operat
 import { paymentsFixture, type PaymentsFixture } from '../../../../../tests/builders/payments';
 import { operationStatsBetween } from '../ai';
 import { aiOperations } from '../ai/schema';
-import { signupsBetween } from '../accounts';
+import { firstLoginsBetween, signupsBetween } from '../accounts';
+import { userAppActivity } from '../accounts/schema';
+import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
 import { forfeitsBetween } from '../credits';
 
 let f: PaymentsFixture;
@@ -78,5 +80,37 @@ describe('lecturas de estadísticas contra la base de datos (T318)', () => {
 
 		expect(signups.length).toBeGreaterThan(0);
 		expect(signups.every((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date))).toBe(true);
+	});
+
+	it('una operación truncada o que usó respaldo sale marcada, para contarla aparte', () => {
+		const { userId } = f.addAccount('usr_lect_flags');
+		const id = insertInFlightOperation(f.base.db, { userId });
+		f.base.db
+			.update(aiOperations)
+			.set({
+				status: 'ok',
+				truncated: true,
+				usedFallback: true,
+				completedAt: toEpochMs(f.base.clock.now())
+			})
+			.where(eq(aiOperations.id, id))
+			.run();
+
+		const row = operationStatsBetween(f.base.db, period()).find((fact) => fact.status === 'ok');
+
+		expect(row).toMatchObject({ truncated: true, usedFallback: true });
+	});
+
+	it('los primeros inicios se cuentan por app de origen dentro del periodo', () => {
+		const { userId } = f.addAccount('usr_lect_primer_login');
+		const now = toEpochMs(f.base.clock.now());
+		f.base.db
+			.insert(userAppActivity)
+			.values({ userId, appId: SEEDED_APP_ID, firstLoginAt: now, lastUsedAt: now })
+			.run();
+
+		const facts = firstLoginsBetween(f.base.db, period());
+
+		expect(facts).toEqual([expect.objectContaining({ appId: SEEDED_APP_ID })]);
 	});
 });
