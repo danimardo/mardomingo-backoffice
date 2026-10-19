@@ -145,9 +145,11 @@ export function statsForPeriod(deps: StatsDeps, period: StatsPeriod): PeriodStat
 	const downloadRows = deps.downloads(period);
 	const downloadTotal =
 		downloadRows.length === 0 ? null : downloadRows.reduce((sum, row) => sum + row.downloads, 0);
+	const verifiedCount = signupsList.filter((row) => row.verified).length;
 	const stages = funnel([
 		{ stage: 'descargas', count: downloadTotal },
 		{ stage: 'altas', count: signupsList.length },
+		{ stage: 'verificadas', count: verifiedCount },
 		{ stage: 'primer_login', count: firstLogins.length }
 	]);
 

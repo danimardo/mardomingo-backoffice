@@ -50,6 +50,7 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 		expect(stats.totals.funnel).toEqual([
 			{ stage: 'descargas', count: null, rate: null },
 			{ stage: 'altas', count: 0, rate: null },
+			{ stage: 'verificadas', count: 0, rate: null },
 			{ stage: 'primer_login', count: 0, rate: null }
 		]);
 		expect(stats.totals.downloads).toBeNull();
@@ -122,9 +123,9 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 		const stats = statsForPeriod(
 			deps({
 				signups: () => [
-					{ date: '2026-10-02', appId: 'app_a' },
-					{ date: '2026-10-03', appId: 'app_a' },
-					{ date: '2026-10-04', appId: null }
+					{ date: '2026-10-02', appId: 'app_a', verified: true },
+					{ date: '2026-10-03', appId: 'app_a', verified: true },
+					{ date: '2026-10-04', appId: null, verified: false }
 				],
 				firstLogins: () => [{ date: '2026-10-03', appId: 'app_a' }]
 			}),
@@ -134,7 +135,8 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 		expect(stats.totals.signupsByApp.get('app_a')).toBe(2);
 		expect(stats.totals.signupsByApp.get('sin_app')).toBe(1);
 		expect(stats.totals.firstLoginsByApp.get('app_a')).toBe(1);
-		expect(stats.totals.funnel[2]).toEqual({ stage: 'primer_login', count: 1, rate: 1 / 3 });
+		expect(stats.totals.funnel[2]).toEqual({ stage: 'verificadas', count: 2, rate: 2 / 3 });
+		expect(stats.totals.funnel[3]).toEqual({ stage: 'primer_login', count: 1, rate: 1 / 2 });
 	});
 
 	it('el coste de una operación sin tipo conocido no suma euros y se cuenta aparte', () => {

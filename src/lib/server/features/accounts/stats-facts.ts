@@ -9,6 +9,8 @@ import { user, userAppActivity } from './schema';
 export interface SignupFact {
 	readonly date: string;
 	readonly appId: string | null;
+	/** La cuenta ya verificó su email (BE-FR-03). */
+	readonly verified: boolean;
 }
 
 export interface FirstLoginFact {
@@ -21,14 +23,18 @@ export function signupsBetween(
 	input: { readonly fromMs: number; readonly toMs: number }
 ): SignupFact[] {
 	return db
-		.select({ createdAt: user.createdAt, appId: user.signupAppId })
+		.select({ createdAt: user.createdAt, appId: user.signupAppId, verified: user.emailVerified })
 		.from(user)
 		.where(
 			and(gte(user.createdAt, new Date(input.fromMs)), lte(user.createdAt, new Date(input.toMs)))
 		)
 		.orderBy(asc(user.createdAt))
 		.all()
-		.map((row) => ({ date: civilDateOf(toEpochMs(row.createdAt.getTime())), appId: row.appId }));
+		.map((row) => ({
+			date: civilDateOf(toEpochMs(row.createdAt.getTime())),
+			appId: row.appId,
+			verified: row.verified
+		}));
 }
 
 export function firstLoginsBetween(
