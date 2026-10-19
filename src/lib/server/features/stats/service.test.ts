@@ -32,6 +32,7 @@ function deps(overrides: Partial<StatsDeps> = {}): StatsDeps {
 		firstLogins: () => [],
 		activeUsers: () => 0,
 		usdEurPpmOf: (id) => (id === 'fx_1' ? 920_000 : null),
+		downloads: () => [],
 		...overrides
 	};
 }

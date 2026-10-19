@@ -13,7 +13,8 @@ import {
 import { operationStatsBetween } from '$lib/server/features/ai';
 import { forfeitsBetween } from '$lib/server/features/credits';
 import { usdEurPpmOf } from '$lib/server/features/pricing';
-import { statsForPeriod } from '$lib/server/features/stats';
+import { releaseDownloadsBetween, statsForPeriod } from '$lib/server/features/stats';
+import { toCivilDate } from '$lib/shared/time';
 import type { PageServerLoad } from './$types';
 
 function bounds(desde: string, hasta: string): { fromMs: number; toMs: number } | null {
@@ -46,7 +47,12 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 			signups: (p) => signupsBetween(composition.db, p),
 			firstLogins: (p) => firstLoginsBetween(composition.db, p),
 			activeUsers: (p) => activeUsersBetween(composition.db, p),
-			usdEurPpmOf: (id) => usdEurPpmOf(composition.pricing, id)
+			usdEurPpmOf: (id) => usdEurPpmOf(composition.pricing, id),
+			downloads: () =>
+				releaseDownloadsBetween(composition.db, {
+					fromDay: toCivilDate(desde),
+					toDay: toCivilDate(hasta)
+				})
 		},
 		period
 	);
@@ -67,7 +73,8 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 			activeUsers: stats.totals.activeUsers,
 			signupsByApp: [...stats.totals.signupsByApp.entries()],
 			firstLoginsByApp: [...stats.totals.firstLoginsByApp.entries()],
-			funnel: stats.totals.funnel
+			funnel: stats.totals.funnel,
+			downloads: stats.totals.downloads
 		}
 	};
 };

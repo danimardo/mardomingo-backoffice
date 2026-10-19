@@ -56,7 +56,7 @@ async function publish(
 ): Promise<void> {
 	await page.goto('/admin/legal');
 	await page.waitForLoadState('networkidle');
-	await page.getByLabel(/^Documento/).fill(options.document);
+	await page.locator('input#documento').fill(options.document);
 	await page.getByLabel(/^Versión \(fecha de publicación\)/).fill(options.version);
 	await page.getByLabel(/^Contenido en Markdown/).fill(`# Versión ${options.version}`);
 	if (options.reacceptance) {
@@ -144,4 +144,16 @@ test('@BE-FR-76 la facturación filtra un periodo y descarga el CSV de ventas co
 	expect(response.status()).toBe(200);
 	expect(response.headers()['content-type']).toContain('text/csv');
 	expect(response.headers()['content-disposition']).toContain('attachment');
+});
+
+test('@BE-FR-54 las estadísticas muestran «sin datos» donde no hay datos, nunca cero', async ({
+	page
+}) => {
+	await loginAsAdmin(page);
+	await page.goto('/admin/estadisticas?desde=2026-10-01&hasta=2026-10-31');
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByRole('heading', { name: 'Estadísticas', level: 1 })).toBeVisible();
+	await expect(page.getByText('descargas: sin datos')).toBeVisible();
+	await expect(page.getByText(/^altas: /)).toBeVisible();
 });
