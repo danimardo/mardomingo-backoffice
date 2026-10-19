@@ -48,9 +48,11 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 		expect(stats.totals.forfeitedMicro).toBe(0);
 		expect(stats.totals.activeUsers).toBe(0);
 		expect(stats.totals.funnel).toEqual([
+			{ stage: 'descargas', count: null, rate: null },
 			{ stage: 'altas', count: 0, rate: null },
 			{ stage: 'primer_login', count: 0, rate: null }
 		]);
+		expect(stats.totals.downloads).toBeNull();
 	});
 
 	it('el coste de las cancelaciones sin cobro se suma aparte, en euros', () => {
@@ -132,7 +134,7 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 		expect(stats.totals.signupsByApp.get('app_a')).toBe(2);
 		expect(stats.totals.signupsByApp.get('sin_app')).toBe(1);
 		expect(stats.totals.firstLoginsByApp.get('app_a')).toBe(1);
-		expect(stats.totals.funnel[1]).toEqual({ stage: 'primer_login', count: 1, rate: 1 / 3 });
+		expect(stats.totals.funnel[2]).toEqual({ stage: 'primer_login', count: 1, rate: 1 / 3 });
 	});
 
 	it('el coste de una operación sin tipo conocido no suma euros y se cuenta aparte', () => {
