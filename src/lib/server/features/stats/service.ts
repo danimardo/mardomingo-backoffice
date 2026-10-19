@@ -33,6 +33,7 @@ export interface StatsDeps {
 	readonly activeUsers: (period: StatsPeriod) => number;
 	readonly usdEurPpmOf: (fxRateId: string) => number | null;
 	readonly downloads: (period: StatsPeriod) => readonly DownloadFact[];
+	readonly firstOperations: (period: StatsPeriod) => readonly { readonly date: string }[];
 }
 
 export interface DayStats {
@@ -150,7 +151,8 @@ export function statsForPeriod(deps: StatsDeps, period: StatsPeriod): PeriodStat
 		{ stage: 'descargas', count: downloadTotal },
 		{ stage: 'altas', count: signupsList.length },
 		{ stage: 'verificadas', count: verifiedCount },
-		{ stage: 'primer_login', count: firstLogins.length }
+		{ stage: 'primer_login', count: firstLogins.length },
+		{ stage: 'primera_operacion', count: deps.firstOperations(period).length }
 	]);
 
 	return {

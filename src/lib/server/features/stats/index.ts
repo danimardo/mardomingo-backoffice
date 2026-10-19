@@ -8,8 +8,7 @@ export {
 	type FunnelStage
 } from './domain/metrics';
 
-// Tarea diaria (L14): la ejecuta el programador del arranque; las pruebas no la arrancan.
-export { runDailyJob, type DailyJobDeps, type DailyJobOutcome } from './job';
-export { startDailyScheduler } from './scheduler';
+// Tareas de estadísticas (L14): las programa `jobs/`; las pruebas no arrancan el programador.
+export { runDownloads, runPrices, type StatsTasksDeps } from './job';
 export { STATS_LOG_EVENTS, type StatsLogFields } from './events';
 export { releaseDownloadsBetween, type DownloadFact } from './downloads-read';

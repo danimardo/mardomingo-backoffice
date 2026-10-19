@@ -6,7 +6,7 @@ import { toEpochMs } from '$lib/shared/time';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertInFlightOperation } from '../../../../../tests/builders/ai-operations';
 import { paymentsFixture, type PaymentsFixture } from '../../../../../tests/builders/payments';
-import { operationStatsBetween } from '../ai';
+import { firstOperationsBetween, operationStatsBetween } from '../ai';
 import { aiOperations } from '../ai/schema';
 import { firstLoginsBetween, signupsBetween } from '../accounts';
 import { userAppActivity } from '../accounts/schema';
@@ -112,5 +112,27 @@ describe('lecturas de estadísticas contra la base de datos (T318)', () => {
 		const facts = firstLoginsBetween(f.base.db, period());
 
 		expect(facts).toEqual([expect.objectContaining({ appId: SEEDED_APP_ID })]);
+	});
+
+	it('la primera operación de IA cuenta una vez por cuenta, en el periodo de su primera operación de toda la historia', () => {
+		const nueva = f.addAccount('usr_lect_primera_nueva').userId;
+		const antigua = f.addAccount('usr_lect_primera_antigua').userId;
+		insertInFlightOperation(f.base.db, { userId: nueva });
+		const before = insertInFlightOperation(f.base.db, { userId: antigua });
+		const during = insertInFlightOperation(f.base.db, { userId: antigua });
+		f.base.db
+			.update(aiOperations)
+			.set({ createdAt: toEpochMs(Date.UTC(2026, 8, 1)) })
+			.where(eq(aiOperations.id, before))
+			.run();
+		f.base.db
+			.update(aiOperations)
+			.set({ createdAt: toEpochMs(Date.UTC(2026, 9, 15)) })
+			.where(eq(aiOperations.id, during))
+			.run();
+
+		const facts = firstOperationsBetween(f.base.db, period());
+
+		expect(facts.length).toBe(1);
 	});
 });

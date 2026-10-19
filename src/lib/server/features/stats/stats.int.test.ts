@@ -48,7 +48,8 @@ function deps(
 		firstLogins: () => [],
 		activeUsers: () => 0,
 		usdEurPpmOf: (id) => (id === 'fx_1' ? RATE : null),
-		downloads: () => []
+		downloads: () => [],
+		firstOperations: () => []
 	};
 }
 

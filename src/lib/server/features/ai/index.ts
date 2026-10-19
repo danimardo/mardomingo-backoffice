@@ -11,6 +11,7 @@ export {
 } from './service';
 export { ChatRequestBody, idempotencyKeyOf, type ChatResponseBody } from './contract';
 export { consumptionPage, type ConsumptionPage, type ConsumptionRow } from './consumption';
+export { anonymizeOperationsBefore } from './retention';
 export { exportOperations, type OperationExport } from './export';
 export { AI_LOG_EVENTS, type AiLogFields } from './events';
 export {
@@ -27,7 +28,13 @@ export {
 	type TranscriptionResponseBody
 } from './contract';
 export { consumptionRowDto, type ConsumptionRowDto } from './presenters';
-export { operationStatsBetween, priceSamplesBetween, type OperationStatsFact } from './stats-facts';
+export {
+	operationStatsBetween,
+	priceSamplesBetween,
+	firstOperationsBetween,
+	type OperationStatsFact,
+	type FirstOperationFact
+} from './stats-facts';
 export { operationCostFactsBetween, type OperationCostFact } from './cost-facts';
 
 // Comprobación de activación de operaciones contra el catálogo guardado (W41; T311).

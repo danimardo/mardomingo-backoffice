@@ -33,6 +33,7 @@ function deps(overrides: Partial<StatsDeps> = {}): StatsDeps {
 		activeUsers: () => 0,
 		usdEurPpmOf: (id) => (id === 'fx_1' ? 920_000 : null),
 		downloads: () => [],
+		firstOperations: () => [],
 		...overrides
 	};
 }
@@ -51,7 +52,8 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 			{ stage: 'descargas', count: null, rate: null },
 			{ stage: 'altas', count: 0, rate: null },
 			{ stage: 'verificadas', count: 0, rate: null },
-			{ stage: 'primer_login', count: 0, rate: null }
+			{ stage: 'primer_login', count: 0, rate: null },
+			{ stage: 'primera_operacion', count: 0, rate: null }
 		]);
 		expect(stats.totals.downloads).toBeNull();
 	});
@@ -137,6 +139,7 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 		expect(stats.totals.firstLoginsByApp.get('app_a')).toBe(1);
 		expect(stats.totals.funnel[2]).toEqual({ stage: 'verificadas', count: 2, rate: 2 / 3 });
 		expect(stats.totals.funnel[3]).toEqual({ stage: 'primer_login', count: 1, rate: 1 / 2 });
+		expect(stats.totals.funnel[4]).toEqual({ stage: 'primera_operacion', count: 0, rate: 0 });
 	});
 
 	it('el coste de una operación sin tipo conocido no suma euros y se cuenta aparte', () => {
