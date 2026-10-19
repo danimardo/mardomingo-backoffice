@@ -9,6 +9,8 @@ import { createFakeLogger } from '../../../../tests/builders/fake-logger';
 import { TEMPLATE_DB } from '../../../../tests/setup/integration.global-setup';
 import { parseEnv } from '$lib/server/config/env-schema';
 import { createComposition, type Composition } from '$lib/server/composition';
+import { currentVersions, recordWithdrawalWaiver } from '$lib/server/features/legal';
+import { toEpochMs } from '$lib/shared/time';
 import { accountingReport } from './accounting-report';
 
 let composition: Composition;
@@ -53,5 +55,50 @@ describe('informe contable de un periodo sin movimientos (T316)', () => {
 
 		expect(report.export.monthlyCsv.length).toBeGreaterThan(0);
 		expect(report.export.aiCostsCsv.length).toBeGreaterThan(0);
+	});
+});
+
+describe('compra simulada en el informe del periodo (T316)', () => {
+	it('una compra simulada cuenta como compra del periodo pero no genera filas de ingresos', () => {
+		const now = composition.clock.now();
+		const userId = 'usr_informe_compra';
+		const stamp = Number(now);
+		composition.sqlite
+			.prepare(
+				`INSERT INTO user (id, name, email, email_verified, role, banned, created_at, updated_at)
+				 VALUES (?, '', ?, 1, 'user', 0, ?, ?)`
+			)
+			.run(userId, 'informe.compra@ejemplo.es', stamp, stamp);
+		composition.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-informe-compra' });
+		const version = currentVersions(composition.legal, toEpochMs(now), ['withdrawal_waiver']).get(
+			'withdrawal_waiver'
+		)?.version;
+		if (version === undefined) throw new Error('la renuncia debía estar sembrada');
+		const waiverId = recordWithdrawalWaiver(composition.legal, {
+			userId,
+			appId: null,
+			ip: null,
+			now: toEpochMs(now),
+			version
+		});
+
+		const bought = composition.payments.purchase({
+			userId,
+			role: 'user',
+			attemptId: 'att_informe_compra',
+			packId: 'pck_seed_10eur',
+			wantsFullInvoice: false,
+			withdrawalAcceptanceId: waiverId
+		});
+		expect(bought.status).toBe('completed');
+
+		const report = accountingReport(composition, {
+			fromMs: Date.UTC(2000, 0, 1),
+			toMs: Date.UTC(2100, 0, 1)
+		});
+
+		expect(report.purchases).toBe(1);
+		expect(report.export.salesCsv.trim().split('\n')).toHaveLength(1);
+		expect(report.export.monthlyCsv.trim().split('\n')).toHaveLength(1);
 	});
 });
