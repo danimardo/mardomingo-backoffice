@@ -11,7 +11,6 @@ export {
 } from './service';
 export { ChatRequestBody, idempotencyKeyOf, type ChatResponseBody } from './contract';
 export { consumptionPage, type ConsumptionPage, type ConsumptionRow } from './consumption';
-export { anonymizeOperationsBefore } from './retention';
 export { exportOperations, type OperationExport } from './export';
 export { AI_LOG_EVENTS, type AiLogFields } from './events';
 export {
