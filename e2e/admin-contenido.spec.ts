@@ -157,3 +157,22 @@ test('@BE-FR-54 las estadísticas muestran «sin datos» donde no hay datos, nun
 	await expect(page.getByText('descargas: sin datos')).toBeVisible();
 	await expect(page.getByText(/^altas: /)).toBeVisible();
 });
+
+test('@BE-FR-50 la lista encuentra la cuenta por email y su ficha muestra bolsas, facturas y datos fiscales', async ({
+	page
+}) => {
+	await loginAsAdmin(page);
+	await page.goto('/admin/usuarios');
+	await page.waitForLoadState('networkidle');
+	await page.locator('#busqueda').fill(email);
+	await page.getByRole('button', { name: 'Buscar' }).click();
+	await page.waitForLoadState('networkidle');
+
+	await page.getByRole('link', { name: email }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByRole('heading', { name: 'Bolsas de crédito' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Facturas' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Datos fiscales' })).toBeVisible();
+	await expect(page.getByText('No tiene datos fiscales registrados.')).toBeVisible();
+});
