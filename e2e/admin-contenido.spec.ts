@@ -176,3 +176,27 @@ test('@BE-FR-50 la lista encuentra la cuenta por email y su ficha muestra bolsas
 	await expect(page.getByRole('heading', { name: 'Datos fiscales' })).toBeVisible();
 	await expect(page.getByText('No tiene datos fiscales registrados.')).toBeVisible();
 });
+
+test('@BE-FR-50 previsualizar un bloqueo muestra el paso de confirmación y no bloquea nada', async ({
+	page
+}) => {
+	await loginAsAdmin(page);
+	await page.goto('/admin/usuarios');
+	await page.waitForLoadState('networkidle');
+	await page.locator('#busqueda').fill(email);
+	await page.getByRole('button', { name: 'Buscar' }).click();
+	await page.waitForLoadState('networkidle');
+	await page.getByRole('link', { name: email }).click();
+	await page.waitForLoadState('networkidle');
+
+	const bloqueo = page.locator('section[aria-labelledby="bloquear"]');
+	await bloqueo.locator('input[name="motivo"]').fill('Prueba de vista previa');
+	await bloqueo.getByRole('button', { name: 'Previsualizar' }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByRole('heading', { name: 'Vista previa' })).toBeVisible();
+	await expect(
+		page.getByText('Todavía no se ha cambiado nada. Confirma para aplicarlo.')
+	).toBeVisible();
+	await expect(page.locator('section[aria-labelledby="bloquear"]')).toBeVisible();
+});

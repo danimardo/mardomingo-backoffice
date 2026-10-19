@@ -705,5 +705,9 @@
 	"admin_account_invoices_empty": "Sin facturas.",
 	"admin_account_fiscal_heading": "Datos fiscales",
 	"admin_account_fiscal_present": "Tiene datos fiscales registrados.",
-	"admin_account_fiscal_absent": "No tiene datos fiscales registrados."
+	"admin_account_fiscal_absent": "No tiene datos fiscales registrados.",
+	"admin_users_preview_note": "Todavía no se ha cambiado nada. Confirma para aplicarlo.",
+	"admin_users_preview_apply": "Aplicar tras la vista previa",
+	"admin_users_preview_title": "Vista previa",
+	"admin_users_preview_button": "Previsualizar"
 }

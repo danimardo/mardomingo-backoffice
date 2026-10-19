@@ -106,20 +106,26 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 	};
 };
 
+/** Acciones de la ficha que tienen vista previa (`?/previsualizar`). */
+const PREVIEWABLE = Object.freeze(['bloquear', 'desbloquear', 'tester', 'cerrarSesiones']);
+
 export const actions: Actions = {
-	// Vista previa: dice qué cambiaría y no cambia nada.
+	// Vista previa: dice qué cambiaría la acción y no cambia nada. La confirmación la hace el formulario de la acción real.
 	previsualizar: async ({ locals, params, request }) => {
 		adminOrThrow(locals);
 		const form = await request.formData();
+		const accion = form.get('accion');
+		if (typeof accion !== 'string' || !PREVIEWABLE.includes(accion)) {
+			return fail(400, { formError: 'VALIDATION_ERROR' });
+		}
 		const account = accountView(getComposition().adminUsers, params.userId);
 		if (account === null) error(404);
 		return {
 			preview: {
+				accion,
 				subject: account.email,
-				banned: account.banned,
-				role: account.role,
 				reason: reasonOf(form),
-				action: form.get('accion')
+				on: form.get('on') === 'true' ? 'true' : 'false'
 			}
 		};
 	},
