@@ -10,6 +10,7 @@ import type { OperationStatsFact } from '$lib/server/features/ai';
 import type { FirstLoginFact, SignupFact } from '$lib/server/features/accounts';
 import type { ForfeitFact } from '$lib/server/features/credits';
 import type { PaymentFactRow } from '$lib/server/features/payments';
+import type { DownloadFact } from './downloads-read';
 import {
 	funnel,
 	grossMargin,
@@ -31,6 +32,7 @@ export interface StatsDeps {
 	readonly firstLogins: (period: StatsPeriod) => readonly FirstLoginFact[];
 	readonly activeUsers: (period: StatsPeriod) => number;
 	readonly usdEurPpmOf: (fxRateId: string) => number | null;
+	readonly downloads: (period: StatsPeriod) => readonly DownloadFact[];
 }
 
 export interface DayStats {
@@ -61,6 +63,8 @@ export interface PeriodStats {
 		readonly signupsByApp: ReadonlyMap<string, number>;
 		readonly firstLoginsByApp: ReadonlyMap<string, number>;
 		readonly funnel: readonly FunnelStage[];
+		/** Descargas de los releases del periodo; nulo si la tarea diaria no tiene datos (no es cero). */
+		readonly downloads: number | null;
 	};
 }
 
@@ -138,7 +142,11 @@ export function statsForPeriod(deps: StatsDeps, period: StatsPeriod): PeriodStat
 		(row) => row.appId,
 		() => 1
 	);
+	const downloadRows = deps.downloads(period);
+	const downloadTotal =
+		downloadRows.length === 0 ? null : downloadRows.reduce((sum, row) => sum + row.downloads, 0);
 	const stages = funnel([
+		{ stage: 'descargas', count: downloadTotal },
 		{ stage: 'altas', count: signupsList.length },
 		{ stage: 'primer_login', count: firstLogins.length }
 	]);
@@ -163,7 +171,8 @@ export function statsForPeriod(deps: StatsDeps, period: StatsPeriod): PeriodStat
 			activeUsers: deps.activeUsers(period),
 			signupsByApp,
 			firstLoginsByApp,
-			funnel: stages
+			funnel: stages,
+			downloads: downloadTotal
 		}
 	};
 }

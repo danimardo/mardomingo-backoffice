@@ -12,3 +12,4 @@ export {
 export { runDailyJob, type DailyJobDeps, type DailyJobOutcome } from './job';
 export { startDailyScheduler } from './scheduler';
 export { STATS_LOG_EVENTS, type StatsLogFields } from './events';
+export { releaseDownloadsBetween, type DownloadFact } from './downloads-read';
