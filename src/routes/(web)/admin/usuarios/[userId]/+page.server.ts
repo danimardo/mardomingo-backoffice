@@ -5,6 +5,8 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
+import { consumptionPage } from '$lib/server/features/ai';
+import { paymentsForAdmin } from '$lib/server/features/payments';
 import {
 	accessFor,
 	accountView,
@@ -57,6 +59,26 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 		movements: movements.rows.map((row) => ({
 			type: row.type,
 			amountMicro: row.amountMicro,
+			createdAt: new Date(row.createdAt).toISOString()
+		})),
+		payments: paymentsForAdmin(composition.db, params.userId, 20).map((row) => ({
+			id: row.id,
+			status: row.status,
+			amountEurCents: row.amountEurCents,
+			simulated: row.simulated,
+			createdAt: new Date(row.createdAt).toISOString()
+		})),
+		consumption: consumptionPage(composition.db, {
+			userId: params.userId,
+			fromMs: null,
+			toMs: null,
+			appId: null,
+			page: 1
+		}).rows.map((row) => ({
+			appId: row.appId,
+			operation: row.operation,
+			status: row.status,
+			chargedMicro: row.chargedMicro,
 			createdAt: new Date(row.createdAt).toISOString()
 		}))
 	};

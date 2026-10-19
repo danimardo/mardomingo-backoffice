@@ -692,5 +692,10 @@
 	"admin_announcements_edit": "Editar un anuncio",
 	"admin_announcements_edit_hint": "Copia el identificador del anuncio desde la lista. Los cambios se auditan; el estado activo o inactivo no cambia.",
 	"admin_announcements_id": "Identificador del anuncio",
-	"admin_announcements_save": "Guardar cambios"
+	"admin_announcements_save": "Guardar cambios",
+	"admin_account_payments_heading": "Pagos",
+	"admin_account_payments_empty": "Sin pagos.",
+	"admin_account_payment_simulated": "simulado",
+	"admin_account_consumption_heading": "Consumo de IA (últimas operaciones)",
+	"admin_account_consumption_empty": "Sin operaciones de IA."
 }

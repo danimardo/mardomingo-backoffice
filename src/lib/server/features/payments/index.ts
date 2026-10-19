@@ -17,3 +17,6 @@ export { PAYMENTS_LOG_EVENTS, type PaymentsLogFields } from './events';
 
 // Paquetes para la administración, solo lectura (W38; T309).
 export { listPacksForAdmin, type AdminPackRow } from './admin-packs';
+
+// Pagos de una cuenta para su ficha de administración (W35; T306). Solo lectura.
+export { paymentsForAdmin, type AdminPaymentRow } from './admin-payments';
