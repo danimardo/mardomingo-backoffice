@@ -1,12 +1,14 @@
-// Catálogo de eventos de `stats` (contracts/log-events.md 3.12; L14). Solo contadores y el proveedor, nunca importes de cuentas.
+// Catálogo de eventos de `stats` (contracts/log-events.md; L14). Solo contadores y nombres de paso, nunca importes de cuentas.
 import type { LogEventMeta } from '$lib/server/logging/events';
 
 export interface StatsLogFields {
-	'stats.downloads.fetched': { provider: 'github'; count: number };
-	'stats.downloads.fetch_failed': { provider: 'github'; err: unknown };
+	'stats.daily_job.started': Record<string, never>;
+	'stats.daily_job.finished': { failed: number };
+	'stats.daily_job.step_failed': { step: string; err: unknown };
 }
 
 export const STATS_LOG_EVENTS = Object.freeze({
-	'stats.downloads.fetched': { level: 'info', msg: 'Descargas de GitHub Releases obtenidas' },
-	'stats.downloads.fetch_failed': { level: 'warn', msg: 'No se pudieron obtener las descargas' }
+	'stats.daily_job.started': { level: 'info', msg: 'Tarea diaria iniciada' },
+	'stats.daily_job.finished': { level: 'info', msg: 'Tarea diaria terminada' },
+	'stats.daily_job.step_failed': { level: 'error', msg: 'Paso de la tarea diaria fallido' }
 } as const satisfies Record<keyof StatsLogFields, LogEventMeta>);
