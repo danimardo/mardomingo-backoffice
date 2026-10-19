@@ -200,3 +200,42 @@ test('@BE-FR-50 previsualizar un bloqueo muestra el paso de confirmación y no b
 	).toBeVisible();
 	await expect(page.locator('section[aria-labelledby="bloquear"]')).toBeVisible();
 });
+
+test('@BE-FR-50 un administrador bloquea y desbloquea una cuenta, cada acción con su confirmación', async ({
+	page,
+	baseURL
+}) => {
+	const base = baseURL ?? 'http://localhost:7390';
+	const objetivo = uniqueGmail('objetivo-bloqueo');
+	const request = await playwrightRequest.newContext({ baseURL: base });
+	try {
+		await registerThroughForm(request, base, objetivo);
+		await verifyThroughForm(request, base, verificationTokenFor(objetivo));
+	} finally {
+		await request.dispose();
+	}
+
+	await loginAsAdmin(page);
+	await page.goto('/admin/usuarios');
+	await page.waitForLoadState('networkidle');
+	await page.locator('#busqueda').fill(objetivo);
+	await page.getByRole('button', { name: 'Buscar' }).click();
+	await page.waitForLoadState('networkidle');
+	await page.getByRole('link', { name: objetivo }).click();
+	await page.waitForLoadState('networkidle');
+
+	const bloquear = page.locator('section[aria-labelledby="bloquear"]');
+	await bloquear.locator('input[name="motivo"]').fill('Bloqueo de prueba E2E');
+	await bloquear.getByRole('checkbox', { name: 'Confirmo esta acción' }).check();
+	await bloquear.getByRole('button', { name: 'Bloquear', exact: true }).click();
+	await page.waitForLoadState('networkidle');
+
+	const desbloquear = page.locator('section[aria-labelledby="desbloquear"]');
+	await expect(desbloquear).toBeVisible();
+	await desbloquear.locator('input[name="motivo"]').fill('Desbloqueo de prueba E2E');
+	await desbloquear.getByRole('checkbox', { name: 'Confirmo esta acción' }).check();
+	await desbloquear.getByRole('button', { name: 'Desbloquear', exact: true }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.locator('section[aria-labelledby="bloquear"]')).toBeVisible();
+});
