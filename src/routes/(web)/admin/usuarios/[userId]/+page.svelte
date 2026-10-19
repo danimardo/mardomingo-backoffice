@@ -36,6 +36,42 @@
 		>
 	</p>
 </section>
+<section aria-labelledby="bolsas-cuenta">
+	<h2 id="bolsas-cuenta">{m.admin_account_buckets_heading()}</h2>
+	{#if data.buckets.length === 0}
+		<p>{m.admin_account_buckets_empty()}</p>
+	{:else}
+		<ul>
+			{#each data.buckets as row, index (index)}
+				<li>
+					{row.kind} · {row.source} · {formatCredits(row.remainingMicro)} / {formatCredits(
+						row.initialMicro
+					)}{row.expiresAt
+						? ` · ${m.admin_account_bucket_expires()} ${row.expiresAt}`
+						: ''}{row.simulated ? ` · ${m.admin_account_payment_simulated()}` : ''}
+				</li>
+			{/each}
+		</ul>
+	{/if}
+</section>
+<section aria-labelledby="facturas-cuenta">
+	<h2 id="facturas-cuenta">{m.admin_account_invoices_heading()}</h2>
+	{#if data.invoices.length === 0}
+		<p>{m.admin_account_invoices_empty()}</p>
+	{:else}
+		<ul>
+			{#each data.invoices as row (row.id)}
+				<li>
+					{row.number} · {row.kind} · {row.issuedAt} · {(row.amountEurCents / 100).toFixed(2)} €
+				</li>
+			{/each}
+		</ul>
+	{/if}
+</section>
+<section aria-labelledby="fiscal-cuenta">
+	<h2 id="fiscal-cuenta">{m.admin_account_fiscal_heading()}</h2>
+	<p>{data.fiscalProfile ? m.admin_account_fiscal_present() : m.admin_account_fiscal_absent()}</p>
+</section>
 <section aria-labelledby="pagos-cuenta">
 	<h2 id="pagos-cuenta">{m.admin_account_payments_heading()}</h2>
 	{#if data.payments.length === 0}
