@@ -36,6 +36,38 @@
 		>
 	</p>
 </section>
+<section aria-labelledby="pagos-cuenta">
+	<h2 id="pagos-cuenta">{m.admin_account_payments_heading()}</h2>
+	{#if data.payments.length === 0}
+		<p>{m.admin_account_payments_empty()}</p>
+	{:else}
+		<ul>
+			{#each data.payments as row (row.id)}
+				<li>
+					{row.createdAt} · {row.status} · {(row.amountEurCents / 100).toFixed(2)} €{row.simulated
+						? ` · ${m.admin_account_payment_simulated()}`
+						: ''}
+				</li>
+			{/each}
+		</ul>
+	{/if}
+</section>
+<section aria-labelledby="consumo-cuenta">
+	<h2 id="consumo-cuenta">{m.admin_account_consumption_heading()}</h2>
+	{#if data.consumption.length === 0}
+		<p>{m.admin_account_consumption_empty()}</p>
+	{:else}
+		<ul>
+			{#each data.consumption as row, index (index)}
+				<li>
+					{row.createdAt} · {row.appId} · {row.operation} · {row.status} · {formatCredits(
+						row.chargedMicro
+					)}
+				</li>
+			{/each}
+		</ul>
+	{/if}
+</section>
 <section aria-labelledby="movimientos-cuenta">
 	<h2 id="movimientos-cuenta">{m.admin_account_movements_heading()}</h2>
 	{#if data.movements.length === 0}
