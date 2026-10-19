@@ -27,7 +27,13 @@ export {
 	type TranscriptionResponseBody
 } from './contract';
 export { consumptionRowDto, type ConsumptionRowDto } from './presenters';
-export { operationStatsBetween, priceSamplesBetween, type OperationStatsFact } from './stats-facts';
+export {
+	operationStatsBetween,
+	priceSamplesBetween,
+	firstOperationsBetween,
+	type OperationStatsFact,
+	type FirstOperationFact
+} from './stats-facts';
 export { operationCostFactsBetween, type OperationCostFact } from './cost-facts';
 
 // Comprobación de activación de operaciones contra el catálogo guardado (W41; T311).

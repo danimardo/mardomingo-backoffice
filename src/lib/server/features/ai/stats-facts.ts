@@ -1,7 +1,7 @@
 // Operaciones de IA de un periodo para las estadísticas (BE-FR-54; T318–T319). Solo lectura de `ai_operations`, con lo que cada métrica
 // necesita: estado, coste del proveedor, lo cobrado, lo absorbido y por qué, si usó respaldo y si se truncó. La conversión a euros la
 // hace la capa que llama, con el tipo de `pricing`.
-import { and, asc, eq, gt, gte, lte } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, isNotNull, lte, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import { civilDateOf } from '$lib/shared/dates';
 import { toEpochMs } from '$lib/shared/time';
@@ -82,4 +82,26 @@ export function priceSamplesBetween(
 		)
 		.all()
 		.map((row) => ({ operationId: row.operationId, costMicroUsd: row.costMicroUsd }));
+}
+
+export interface FirstOperationFact {
+	readonly date: string;
+}
+
+/**
+ * Cuentas cuya primera operación de IA (de toda su historia) cae en el periodo (W45 embudo; T318). Se mira la primera de cada
+ * cuenta, no las del periodo, para que una cuenta cuente una sola vez.
+ */
+export function firstOperationsBetween(
+	db: Pick<Db, 'select'>,
+	input: { readonly fromMs: number; readonly toMs: number }
+): FirstOperationFact[] {
+	return db
+		.select({ first: sql<number>`min(${aiOperations.createdAt})` })
+		.from(aiOperations)
+		.where(isNotNull(aiOperations.userId))
+		.groupBy(aiOperations.userId)
+		.all()
+		.filter((row) => row.first >= input.fromMs && row.first <= input.toMs)
+		.map((row) => ({ date: civilDateOf(toEpochMs(row.first)) }));
 }

@@ -10,7 +10,7 @@ import {
 	firstLoginsBetween,
 	signupsBetween
 } from '$lib/server/features/accounts';
-import { operationStatsBetween } from '$lib/server/features/ai';
+import { firstOperationsBetween, operationStatsBetween } from '$lib/server/features/ai';
 import { forfeitsBetween } from '$lib/server/features/credits';
 import { usdEurPpmOf } from '$lib/server/features/pricing';
 import { releaseDownloadsBetween, statsForPeriod } from '$lib/server/features/stats';
@@ -48,6 +48,7 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 			firstLogins: (p) => firstLoginsBetween(composition.db, p),
 			activeUsers: (p) => activeUsersBetween(composition.db, p),
 			usdEurPpmOf: (id) => usdEurPpmOf(composition.pricing, id),
+			firstOperations: (p) => firstOperationsBetween(composition.db, p),
 			downloads: () =>
 				releaseDownloadsBetween(composition.db, {
 					fromDay: toCivilDate(desde),
