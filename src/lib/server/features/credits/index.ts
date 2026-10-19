@@ -194,3 +194,5 @@ export function createCredits(config: CreditsConfig): Credits {
 
 // Saldo anulado por borrado de cuentas (BE-FR-07 CA4; T318). Solo lectura.
 export { forfeitsBetween, type ForfeitFact } from './stats-facts';
+// Bolsas de una cuenta para su ficha de administración (W35; T306). Solo lectura.
+export { bucketsForAdmin, type AdminBucketRow } from './admin-buckets';

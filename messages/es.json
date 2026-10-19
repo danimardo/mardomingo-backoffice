@@ -697,5 +697,13 @@
 	"admin_account_payments_empty": "Sin pagos.",
 	"admin_account_payment_simulated": "simulado",
 	"admin_account_consumption_heading": "Consumo de IA (últimas operaciones)",
-	"admin_account_consumption_empty": "Sin operaciones de IA."
+	"admin_account_consumption_empty": "Sin operaciones de IA.",
+	"admin_account_buckets_heading": "Bolsas de crédito",
+	"admin_account_buckets_empty": "Sin bolsas.",
+	"admin_account_bucket_expires": "caduca:",
+	"admin_account_invoices_heading": "Facturas",
+	"admin_account_invoices_empty": "Sin facturas.",
+	"admin_account_fiscal_heading": "Datos fiscales",
+	"admin_account_fiscal_present": "Tiene datos fiscales registrados.",
+	"admin_account_fiscal_absent": "No tiene datos fiscales registrados."
 }

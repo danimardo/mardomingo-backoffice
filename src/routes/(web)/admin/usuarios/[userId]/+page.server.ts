@@ -6,6 +6,8 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { consumptionPage } from '$lib/server/features/ai';
+import { bucketsForAdmin } from '$lib/server/features/credits';
+import { billingProfileOf, invoicesFor } from '$lib/server/features/invoicing';
 import { paymentsForAdmin } from '$lib/server/features/payments';
 import {
 	accessFor,
@@ -61,6 +63,26 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 			amountMicro: row.amountMicro,
 			createdAt: new Date(row.createdAt).toISOString()
 		})),
+		buckets: bucketsForAdmin(composition.db, params.userId, 50).map((row) => ({
+			kind: row.kind,
+			source: row.source,
+			initialMicro: row.initialMicro,
+			remainingMicro: row.remainingMicro,
+			expiresAt: row.expiresAt === null ? null : new Date(row.expiresAt).toISOString(),
+			simulated: row.simulated,
+			createdAt: new Date(row.createdAt).toISOString()
+		})),
+		invoices: invoicesFor(
+			{ db: composition.db },
+			composition.payments.paymentIdsOf(params.userId)
+		).map((row) => ({
+			id: row.id,
+			kind: row.kind,
+			number: `${row.series}-${row.number}`,
+			amountEurCents: row.amountEurCents,
+			issuedAt: new Date(row.issuedAt).toISOString()
+		})),
+		fiscalProfile: billingProfileOf(composition.db, params.userId) !== undefined,
 		payments: paymentsForAdmin(composition.db, params.userId, 20).map((row) => ({
 			id: row.id,
 			status: row.status,
