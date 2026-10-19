@@ -11,6 +11,17 @@
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	type PreviewAction = 'bloquear' | 'desbloquear' | 'tester' | 'cerrarSesiones';
+	function isPreviewAction(value: string): value is PreviewAction {
+		return value in previewLabels;
+	}
+	const previewLabels: Record<PreviewAction, () => string> = {
+		bloquear: m.admin_users_submit_block,
+		desbloquear: m.admin_users_submit_unblock,
+		tester: m.admin_users_submit_tester_on,
+		cerrarSesiones: m.admin_users_submit_close
+	};
 	const errorText = $derived(form?.formError ? m.admin_users_error() : '');
 </script>
 
@@ -131,28 +142,60 @@
 	<Banner level="critical">{errorText}</Banner>
 {/if}
 
+{#if form?.preview}
+	<section aria-labelledby="vista-previa-ficha">
+		<h2 id="vista-previa-ficha">{m.admin_users_preview_title()}</h2>
+		<p>
+			{isPreviewAction(form.preview.accion) ? previewLabels[form.preview.accion]() : ''} · {form
+				.preview.subject} · {m.admin_users_reason()}:
+			{form.preview.reason}
+		</p>
+		<p>{m.admin_users_preview_note()}</p>
+		<form method="POST" action={`?/${form.preview.accion}`}>
+			<input type="hidden" name="motivo" value={form.preview.reason} />
+			<input type="hidden" name="on" value={form.preview.on} />
+			<Checkbox id="confirmado-vista-previa-ficha" name="confirmado" value="true"
+				>{m.admin_users_confirm()}</Checkbox
+			>
+			<p><Button type="submit" variant="primary">{m.admin_users_preview_apply()}</Button></p>
+		</form>
+	</section>
+{/if}
+
 {#if !data.account.deleted}
 	{#if !data.account.banned}
 		<section aria-labelledby="bloquear">
 			<h2 id="bloquear">{m.admin_users_block_heading()}</h2>
 			<p>{m.admin_users_block_intro()}</p>
 			<form method="POST" action="?/bloquear">
+				<input type="hidden" name="accion" value="bloquear" />
 				<TextField id="motivo-bloqueo" name="motivo" label={m.admin_users_reason()} required />
 				<Checkbox id="confirmado-bloqueo" name="confirmado" value="true"
 					>{m.admin_users_confirm()}</Checkbox
 				>
 				<p><Button type="submit" variant="primary">{m.admin_users_submit_block()}</Button></p>
+				<p>
+					<Button type="submit" formaction="?/previsualizar" variant="ghost"
+						>{m.admin_users_preview_button()}</Button
+					>
+				</p>
 			</form>
 		</section>
 	{:else}
 		<section aria-labelledby="desbloquear">
 			<h2 id="desbloquear">{m.admin_users_unblock_heading()}</h2>
 			<form method="POST" action="?/desbloquear">
+				<input type="hidden" name="accion" value="desbloquear" />
 				<TextField id="motivo-desbloqueo" name="motivo" label={m.admin_users_reason()} required />
 				<Checkbox id="confirmado-desbloqueo" name="confirmado" value="true"
 					>{m.admin_users_confirm()}</Checkbox
 				>
 				<p><Button type="submit" variant="primary">{m.admin_users_submit_unblock()}</Button></p>
+				<p>
+					<Button type="submit" formaction="?/previsualizar" variant="ghost"
+						>{m.admin_users_preview_button()}</Button
+					>
+				</p>
 			</form>
 		</section>
 	{/if}
@@ -160,6 +203,7 @@
 	<section aria-labelledby="tester">
 		<h2 id="tester">{m.admin_users_tester_heading()}</h2>
 		<form method="POST" action="?/tester">
+			<input type="hidden" name="accion" value="tester" />
 			<input
 				type="hidden"
 				name="on"
@@ -176,17 +220,28 @@
 						: m.admin_users_submit_tester_on()}
 				</Button>
 			</p>
+			<p>
+				<Button type="submit" formaction="?/previsualizar" variant="ghost"
+					>{m.admin_users_preview_button()}</Button
+				>
+			</p>
 		</form>
 	</section>
 
 	<section aria-labelledby="sesiones">
 		<h2 id="sesiones">{m.admin_users_sessions_heading()}</h2>
 		<form method="POST" action="?/cerrarSesiones">
+			<input type="hidden" name="accion" value="cerrarSesiones" />
 			<TextField id="motivo-sesiones" name="motivo" label={m.admin_users_reason()} required />
 			<Checkbox id="confirmado-sesiones" name="confirmado" value="true"
 				>{m.admin_users_confirm()}</Checkbox
 			>
 			<p><Button type="submit" variant="secondary">{m.admin_users_submit_close()}</Button></p>
+			<p>
+				<Button type="submit" formaction="?/previsualizar" variant="ghost"
+					>{m.admin_users_preview_button()}</Button
+				>
+			</p>
 		</form>
 	</section>
 {/if}
