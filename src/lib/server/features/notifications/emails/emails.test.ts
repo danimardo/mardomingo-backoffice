@@ -24,6 +24,7 @@ describe('email de verificación', () => {
 
 		expect(mail.html).toContain('<meta name="color-scheme" content="light dark">');
 		expect(mail.html).toContain('<meta name="supported-color-schemes" content="light dark">');
+		expect(mail.html).toContain('@media (prefers-color-scheme: dark)');
 		expect(mail.html).toContain(escapeHtml(LINK));
 	});
 
