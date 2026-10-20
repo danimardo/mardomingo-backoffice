@@ -98,4 +98,4 @@
 	{/if}
 </section>
 
-<p><a href={resolve('/admin/usuarios')}>{m.admin_users_title()}</a></p>
+<p><Button href={resolve('/admin/usuarios')} variant="ghost">{m.admin_users_title()}</Button></p>

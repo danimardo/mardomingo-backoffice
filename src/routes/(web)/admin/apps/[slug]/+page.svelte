@@ -89,8 +89,8 @@
 </section>
 
 <p>
-	<a href={resolve(`/admin/apps/${data.app.slug}/predeterminados`)}
-		>{m.admin_apps_defaults_link()}</a
+	<Button href={resolve(`/admin/apps/${data.app.slug}/predeterminados`)} variant="ghost"
+		>{m.admin_apps_defaults_link()}</Button
 	>
 </p>
-<p><a href={resolve('/admin/apps')}>{m.admin_apps_title()}</a></p>
+<p><Button href={resolve('/admin/apps')} variant="ghost">{m.admin_apps_title()}</Button></p>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/ui/Button.svelte';
 	// W47 · `/admin/auditoria/[entryId]`: una entrada con su motivo y sus instantáneas (T303; BE-FR-55). Solo lectura.
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
@@ -34,4 +35,4 @@
 <h2>{m.admin_audit_after()}</h2>
 <pre>{show(data.entry.after)}</pre>
 
-<p><a href={resolve('/admin/auditoria')}>{m.admin_audit_back()}</a></p>
+<p><Button href={resolve('/admin/auditoria')} variant="ghost">{m.admin_audit_back()}</Button></p>

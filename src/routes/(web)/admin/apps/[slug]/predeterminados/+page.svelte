@@ -36,7 +36,7 @@
 </form>
 
 <p>
-	<a href={resolve(`/admin/apps/${data.app.slug}/predeterminados/copiar`)}
-		>{m.admin_defaults_copy_link()}</a
+	<Button href={resolve(`/admin/apps/${data.app.slug}/predeterminados/copiar`)} variant="ghost"
+		>{m.admin_defaults_copy_link()}</Button
 	>
 </p>

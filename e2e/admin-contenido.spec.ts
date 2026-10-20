@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { request as playwrightRequest, type Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { checkAccessibility } from './fixtures/axe';
 import {
 	PASSWORD,
 	registerThroughForm,
@@ -464,3 +465,56 @@ test.describe('sin JavaScript', () => {
 		await expect(page.locator(`#valor-${SALDO_MINIMO}`)).toHaveValue('5000000');
 	});
 });
+
+// --- Accesibilidad del panel (T323; 16.11): cada página de administración en ambos temas ---
+
+function auditEntryId(): string {
+	const db = dbFile();
+	try {
+		return (
+			db.prepare<[], { id: string }>('SELECT id FROM admin_audit LIMIT 1').get()?.id ??
+			'sin-entrada'
+		);
+	} finally {
+		db.close();
+	}
+}
+
+// Páginas de administración: las estáticas y las dinámicas con un valor sembrado. La reembolso no entra: necesita una compra pagada.
+const ADMIN_PAGES: readonly (readonly [string, () => string])[] = [
+	['/admin', () => '/admin'],
+	['/admin/anuncios', () => '/admin/anuncios'],
+	['/admin/apps', () => '/admin/apps'],
+	['/admin/apps/[slug]', () => '/admin/apps/secretario'],
+	['/admin/apps/[slug]/operaciones/[key]', () => '/admin/apps/secretario/operaciones/improve'],
+	['/admin/apps/[slug]/predeterminados', () => '/admin/apps/secretario/predeterminados'],
+	[
+		'/admin/apps/[slug]/predeterminados/copiar',
+		() => '/admin/apps/secretario/predeterminados/copiar'
+	],
+	['/admin/auditoria', () => '/admin/auditoria'],
+	['/admin/auditoria/[entryId]', () => `/admin/auditoria/${auditEntryId()}`],
+	['/admin/economia', () => '/admin/economia'],
+	['/admin/estadisticas', () => '/admin/estadisticas'],
+	['/admin/facturacion', () => '/admin/facturacion'],
+	['/admin/legal', () => '/admin/legal'],
+	['/admin/protecciones', () => '/admin/protecciones'],
+	['/admin/usuarios', () => '/admin/usuarios'],
+	['/admin/usuarios/[userId]', () => `/admin/usuarios/${userIdOf(email)}`],
+	['/admin/usuarios/[userId]/ajuste', () => `/admin/usuarios/${userIdOf(email)}/ajuste`]
+];
+
+for (const scheme of ['light', 'dark'] as const) {
+	for (const [plantilla, ruta] of ADMIN_PAGES) {
+		test(`@BE-FR-10 accesible sin violaciones serious o critical en ${plantilla} con tema ${scheme}`, async ({
+			page
+		}, testInfo) => {
+			await loginAsAdmin(page);
+			await page.emulateMedia({ colorScheme: scheme });
+			await page.goto(ruta());
+			await page.waitForLoadState('networkidle');
+
+			await checkAccessibility(page, testInfo);
+		});
+	}
+}
