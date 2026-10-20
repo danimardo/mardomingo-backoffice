@@ -23,6 +23,7 @@ describe('email de verificación', () => {
 		const mail = verificationEmail({ link: LINK, appName: null, supportEmail: SUPPORT });
 
 		expect(mail.html).toContain('<meta name="color-scheme" content="light dark">');
+		expect(mail.html).toContain('<meta name="supported-color-schemes" content="light dark">');
 		expect(mail.html).toContain(escapeHtml(LINK));
 	});
 

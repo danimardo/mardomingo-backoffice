@@ -68,6 +68,7 @@ export function renderLayout(input: LayoutInput): EmailContent {
 	const html =
 		'<!doctype html><html lang="es"><head><meta charset="utf-8">' +
 		'<meta name="color-scheme" content="light dark">' +
+		'<meta name="supported-color-schemes" content="light dark">' +
 		`<title>${escapeHtml(input.subject)}</title></head>` +
 		'<body style="margin:0;padding:24px;font-family:system-ui,sans-serif;line-height:1.5;">' +
 		`<h1 style="font-size:1.25rem;">${escapeHtml(input.subject)}</h1>` +
