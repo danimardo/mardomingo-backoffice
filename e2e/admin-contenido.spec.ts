@@ -421,3 +421,46 @@ test('@BE-FR-50 marcar tester exige confirmación y motivo, y solo entonces camb
 	await page.waitForLoadState('networkidle');
 	expect(roleOf(userId).split(',')).toContain('tester');
 });
+
+// --- Sin JavaScript (crítico 10; T322, 15.12): un cambio económico completo con vista previa y confirmación ---
+
+const SALDO_MINIMO = 'min_balance_to_operate';
+
+async function cambiarSaldoMinimo(page: Page, valor: string, motivo: string): Promise<void> {
+	await page.goto('/admin/economia');
+	const formulario = page.locator('form', {
+		has: page.locator(`input[name="clave"][value="${SALDO_MINIMO}"]`)
+	});
+	await formulario.locator('input[name="valor"]').fill(valor);
+	await formulario.locator('input[name="motivo"]').fill(motivo);
+	await formulario.getByRole('button', { name: 'Previsualizar cambio' }).click();
+	await page.waitForLoadState('load');
+
+	const aplicar = page.locator('form', {
+		has: page.locator(`input[name="valor"][value="${valor}"]`)
+	});
+	await expect(page.getByRole('heading', { name: 'Vista previa del cambio' })).toBeVisible();
+	await aplicar.locator('input[name="motivo"]').fill(motivo);
+	await aplicar.getByLabel('Confirmo este cambio').check();
+	await aplicar.getByRole('button', { name: 'Guardar parámetro' }).click();
+	await page.waitForLoadState('load');
+}
+
+test.describe('sin JavaScript', () => {
+	// Con JavaScript desactivado el navegador bloquea las precargas de módulos por la CSP: no afecta a la página (como en accounts.spec).
+	test.use({ javaScriptEnabled: false, guardAllow: [/requestfailed: .*\(csp\)/] });
+
+	test('@BE-FR-61 cambiar un parámetro económico funciona sin JavaScript y se ve en la siguiente carga', async ({
+		page
+	}) => {
+		await loginAsAdmin(page);
+		await cambiarSaldoMinimo(page, '5000001', 'Prueba E2E sin JavaScript');
+
+		await page.goto('/admin/economia');
+		await expect(page.locator(`#valor-${SALDO_MINIMO}`)).toHaveValue('5000001');
+
+		await cambiarSaldoMinimo(page, '5000000', 'Restaurar valor de prueba E2E');
+		await page.goto('/admin/economia');
+		await expect(page.locator(`#valor-${SALDO_MINIMO}`)).toHaveValue('5000000');
+	});
+});
