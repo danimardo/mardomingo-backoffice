@@ -239,3 +239,185 @@ test('@BE-FR-50 un administrador bloquea y desbloquea una cuenta, cada acción c
 
 	await expect(page.locator('section[aria-labelledby="bloquear"]')).toBeVisible();
 });
+
+// --- Ajuste de saldo (W36; T307, BE-FR-18, 15.12) ---
+
+function dbFile(): Database.Database {
+	return new Database(readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8'));
+}
+
+function userIdOf(address: string): string {
+	const db = dbFile();
+	try {
+		const row = db
+			.prepare<[string], { id: string }>('SELECT id FROM user WHERE email = ?')
+			.get(address);
+		if (row === undefined) throw new Error(`no existe la cuenta ${address}`);
+		return row.id;
+	} finally {
+		db.close();
+	}
+}
+
+function adjustmentsOf(userId: string): number {
+	const db = dbFile();
+	try {
+		return (
+			db
+				.prepare<[string], { n: number }>(
+					"SELECT COUNT(*) AS n FROM credit_movements WHERE user_id = ? AND type = 'adjustment'"
+				)
+				.get(userId)?.n ?? 0
+		);
+	} finally {
+		db.close();
+	}
+}
+
+async function createTarget(baseURL: string | undefined, prefix: string): Promise<string> {
+	const base = baseURL ?? 'http://localhost:7390';
+	const address = uniqueGmail(prefix);
+	const request = await playwrightRequest.newContext({ baseURL: base });
+	try {
+		await registerThroughForm(request, base, address);
+		await verifyThroughForm(request, base, verificationTokenFor(address));
+	} finally {
+		await request.dispose();
+	}
+	return address;
+}
+
+async function fillAdjustment(page: Page, motivo: string): Promise<void> {
+	await page.locator('input#cantidad').fill('2');
+	await page.locator('select#tipo').selectOption('credit');
+	await page.locator('select#bolsa').selectOption('free');
+	await page.locator('input#vence').fill('2030-01-01');
+	await page.locator('input#motivo').fill(motivo);
+}
+
+test('@BE-FR-18 la vista previa del ajuste no cambia el saldo; aplicarlo sí, y deja su aviso', async ({
+	page,
+	baseURL
+}) => {
+	const address = await createTarget(baseURL, 'ajuste-vista');
+	const userId = userIdOf(address);
+	await loginAsAdmin(page);
+	await page.goto(`/admin/usuarios/${userId}/ajuste`);
+	await page.waitForLoadState('networkidle');
+	await fillAdjustment(page, 'Compensación de prueba E2E');
+	const antes = adjustmentsOf(userId);
+
+	await page.getByRole('button', { name: 'Ver vista previa' }).click();
+	await page.waitForLoadState('networkidle');
+	await expect(page.getByRole('heading', { name: 'Ver vista previa' })).toBeVisible();
+	await expect(page.getByText('Saldo después')).toBeVisible();
+	expect(adjustmentsOf(userId)).toBe(antes);
+
+	await page.getByLabel('Confirmo que quiero aplicar este ajuste').check();
+	await page.getByRole('button', { name: 'Aplicar ajuste' }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page).toHaveURL(/aviso=ajuste_aplicado/);
+	expect(adjustmentsOf(userId)).toBe(antes + 1);
+});
+
+test('@BE-FR-18 un reenvío del mismo formulario no aplica el ajuste dos veces (15.12)', async ({
+	page,
+	baseURL
+}) => {
+	const address = await createTarget(baseURL, 'ajuste-doble');
+	const userId = userIdOf(address);
+	await loginAsAdmin(page);
+	await page.goto(`/admin/usuarios/${userId}/ajuste`);
+	await page.waitForLoadState('networkidle');
+	await fillAdjustment(page, 'Doble envío E2E');
+	const clave = await page.locator('input[name="clave"]').inputValue();
+	const antes = adjustmentsOf(userId);
+
+	await page.getByLabel('Confirmo que quiero aplicar este ajuste').check();
+	await page.getByRole('button', { name: 'Aplicar ajuste' }).click();
+	await page.waitForLoadState('networkidle');
+	expect(adjustmentsOf(userId)).toBe(antes + 1);
+
+	// Un reenvío con la misma clave (recarga, red lenta o doble clic que llega tarde).
+	const reenvio = await page.request.post(`/admin/usuarios/${userId}/ajuste?/ajustarSaldo`, {
+		form: {
+			cantidad: '2',
+			tipo: 'credit',
+			bolsa: 'free',
+			vence: '2030-01-01',
+			motivo: 'Doble envío E2E',
+			confirmado: 'true',
+			clave
+		},
+		headers: { origin: baseURL ?? 'http://localhost:7390' }
+	});
+
+	expect(reenvio.status()).toBeLessThan(500);
+	expect(adjustmentsOf(userId)).toBe(antes + 1);
+});
+
+// El 400 es la respuesta esperada al aplicar sin confirmar: el navegador lo registra y el fixture lo admite solo aquí.
+test.use({ guardAllow: [/status of 400 \(Bad Request\)/] });
+
+test('@BE-FR-18 aplicar sin la casilla de confirmación no cambia nada y lo dice', async ({
+	page,
+	baseURL
+}) => {
+	const address = await createTarget(baseURL, 'ajuste-sinconfirmar');
+	const userId = userIdOf(address);
+	await loginAsAdmin(page);
+	await page.goto(`/admin/usuarios/${userId}/ajuste`);
+	await page.waitForLoadState('networkidle');
+	await fillAdjustment(page, 'Sin confirmar E2E');
+	const antes = adjustmentsOf(userId);
+
+	await page.getByRole('button', { name: 'Aplicar ajuste' }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByText('No se ha aplicado nada. Revisa los campos.')).toBeVisible();
+	expect(adjustmentsOf(userId)).toBe(antes);
+});
+
+// --- Marcar tester (T306, BE-FR-50): el paso de confirmación de la ficha ---
+
+function roleOf(userId: string): string {
+	const db = dbFile();
+	try {
+		return (
+			db.prepare<[string], { role: string }>('SELECT role FROM user WHERE id = ?').get(userId)
+				?.role ?? ''
+		);
+	} finally {
+		db.close();
+	}
+}
+
+// El primer envío sin confirmar responde 400 a propósito: el fixture lo admite solo en este test.
+test.use({ guardAllow: [/status of 400 \(Bad Request\)/] });
+
+test('@BE-FR-50 marcar tester exige confirmación y motivo, y solo entonces cambia el rol', async ({
+	page,
+	baseURL
+}) => {
+	const address = await createTarget(baseURL, 'tester-objetivo');
+	const userId = userIdOf(address);
+	await loginAsAdmin(page);
+	await page.goto(`/admin/usuarios/${userId}`);
+	await page.waitForLoadState('networkidle');
+
+	const testerSeccion = page.locator('section[aria-labelledby="tester"]');
+	await testerSeccion.locator('input[name="motivo"]').fill('Prueba de tester E2E');
+	await testerSeccion.getByRole('button', { name: 'Marcar tester' }).click();
+	await page.waitForLoadState('networkidle');
+	expect(roleOf(userId).split(',')).not.toContain('tester');
+
+	await page.goto(`/admin/usuarios/${userId}`);
+	await page.waitForLoadState('networkidle');
+	const conConfirmacion = page.locator('section[aria-labelledby="tester"]');
+	await conConfirmacion.locator('input[name="motivo"]').fill('Prueba de tester E2E');
+	await conConfirmacion.getByRole('checkbox', { name: 'Confirmo esta acción' }).check();
+	await conConfirmacion.getByRole('button', { name: 'Marcar tester' }).click();
+	await page.waitForLoadState('networkidle');
+	expect(roleOf(userId).split(',')).toContain('tester');
+});
