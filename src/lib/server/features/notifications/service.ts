@@ -67,7 +67,9 @@ function contentOf(deps: NotificationsDeps, email: AccountEmail) {
 			supportEmail
 		});
 	}
-	return passwordChangedEmail({ supportEmail });
+	if (email.reason === 'password_changed') return passwordChangedEmail({ supportEmail });
+	// Un motivo sin plantilla no debe salir con el texto de otro aviso: se falla en vez de enviar un email equivocado.
+	throw new Error(`sin plantilla para el motivo ${email.reason}`);
 }
 
 /** Envía un email de la cuenta. Devuelve `true` si el proveedor lo aceptó. */
