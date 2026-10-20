@@ -1,5 +1,6 @@
 // Aviso de saldo bajo contra SQLite real (T254; BE-FR-49.7): avisa una sola vez al cruzar el umbral hacia abajo, no repite
 // mientras siga por debajo y se rearma al superarlo. Con el umbral nulo no hay aviso.
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertInFlightOperation } from '../../../../../tests/builders/ai-operations';
@@ -71,6 +72,7 @@ describe('aviso de saldo bajo (BE-FR-49.7)', () => {
 		charge(200);
 
 		f.credits.adjust({
+			idempotencyKey: randomUUID(),
 			adminId: f.addUser('adm_aviso', 'admin'),
 			userId,
 			direction: 'credit',

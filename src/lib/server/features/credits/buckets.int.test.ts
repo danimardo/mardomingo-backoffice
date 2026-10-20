@@ -1,5 +1,6 @@
 // Bolsas del saldo para el resumen del panel contra SQLite real (T258; BE-FR-49.1, BE-FR-22): solo las que tienen saldo, con su
 // tipo, origen, saldo restante, fecha de caducidad (día de Madrid) y marca de simulada. Sin ids internos.
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { creditsFixture, type CreditsFixture } from '../../../../../tests/builders/credits';
 import { bucketsOf } from './service';
@@ -21,6 +22,7 @@ describe('bucketsOf (BE-FR-49.1)', () => {
 	it('lista las bolsas con saldo: gratuita de bienvenida con su caducidad y la compra simulada', () => {
 		f.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-bolsas' });
 		f.credits.adjust({
+			idempotencyKey: randomUUID(),
 			adminId: f.addUser('adm_bolsas', 'admin'),
 			userId,
 			direction: 'credit',

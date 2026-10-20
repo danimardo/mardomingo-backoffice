@@ -1,6 +1,7 @@
 // Servicio de créditos contra SQLite real (T122; BE-FR-11.5, 12–18, 71; SC-002; D8, D10, D13, D14, D-16; Historias 15.19):
 // bienvenida una sola vez, concurrencia de las reservas, cobro con deuda hasta max_debt, arranque con reservas abiertas,
 // ajuste con liquidación de deuda y auditoría, ajuste negativo rechazado, caducidades y saldo desglosado.
+import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminAudit } from '$lib/server/features/audit/schema';
@@ -228,6 +229,7 @@ describe('ajustes del administrador (BE-FR-18, D13, D-16)', () => {
 		fixture.credits.chargeAndRelease({ holdId: reserved.holdId, realCostMicro: 1205 * CREDIT });
 
 		const outcome = fixture.credits.adjust({
+			idempotencyKey: randomUUID(),
 			adminId,
 			userId,
 			direction: 'credit',
@@ -260,6 +262,7 @@ describe('ajustes del administrador (BE-FR-18, D13, D-16)', () => {
 		const before = movementsOf(userId).length;
 
 		const outcome = fixture.credits.adjust({
+			idempotencyKey: randomUUID(),
 			adminId,
 			userId,
 			direction: 'debit',
@@ -372,6 +375,7 @@ describe('eventos (Historias 15.19)', () => {
 		if (!reserved.ok) throw new Error('la reserva debía caber');
 		fixture.credits.chargeAndRelease({ holdId: reserved.holdId, realCostMicro: 1205 * CREDIT });
 		fixture.credits.adjust({
+			idempotencyKey: randomUUID(),
 			adminId,
 			userId,
 			direction: 'credit',
@@ -388,5 +392,58 @@ describe('eventos (Historias 15.19)', () => {
 			}
 		}
 		expect(JSON.stringify(credit)).not.toContain('usr_a@ejemplo.es');
+	});
+});
+
+describe('ajustes idempotentes (T307, 15.12)', () => {
+	it('un reenvío con la misma clave no vuelve a aplicar el ajuste ni a auditarlo', () => {
+		const userId = fixture.addUser('usr_idem');
+		const adminId = fixture.addUser('usr_admin_idem', 'admin');
+		fixture.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-idem' });
+		const antes = fixture.credits.getBalance(userId).totalMicro;
+		const idempotencyKey = randomUUID();
+		const ajuste = {
+			idempotencyKey,
+			adminId,
+			userId,
+			direction: 'credit' as const,
+			kind: 'free' as const,
+			amountMicro: 5 * CREDIT,
+			expiresAt: null,
+			reason: 'Compensación'
+		};
+
+		expect(fixture.credits.adjust(ajuste)).toEqual({ ok: true });
+		expect(fixture.credits.adjust(ajuste)).toEqual({ ok: false, reason: 'repeated' });
+
+		expect(fixture.credits.getBalance(userId).totalMicro).toBe(antes + 5 * CREDIT);
+		expect(
+			fixture.db
+				.select()
+				.from(adminAudit)
+				.where(and(eq(adminAudit.adminId, adminId), eq(adminAudit.action, 'credits.adjust')))
+				.all()
+		).toHaveLength(1);
+	});
+
+	it('un ajuste rechazado no consume su clave: el reintento con la misma clave sí se aplica', () => {
+		const userId = fixture.addUser('usr_idem_retry');
+		const adminId = fixture.addUser('usr_admin_retry', 'admin');
+		fixture.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-idem-retry' });
+		const idempotencyKey = randomUUID();
+		const base = {
+			idempotencyKey,
+			adminId,
+			userId,
+			direction: 'debit' as const,
+			kind: 'free' as const,
+			reason: 'Corrección'
+		};
+
+		expect(fixture.credits.adjust({ ...base, amountMicro: 999_999 * CREDIT })).toEqual({
+			ok: false,
+			reason: 'exceeds_available'
+		});
+		expect(fixture.credits.adjust({ ...base, amountMicro: 1 * CREDIT })).toEqual({ ok: true });
 	});
 });

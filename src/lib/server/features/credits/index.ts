@@ -126,6 +126,7 @@ export interface Credits {
 		readonly amountMicro: number;
 		readonly simulated: boolean;
 	}): PurchaseGrantOutcome;
+		readonly idempotencyKey: string;
 	/** Retira de la bolsa de la compra los créditos de un reembolso, con motivo y administrador (BE-FR-27). */
 	withdrawForRefund(input: {
 		readonly adminId: string;

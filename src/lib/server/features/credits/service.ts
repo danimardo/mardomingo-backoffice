@@ -32,7 +32,7 @@ import {
 	type LedgerState,
 	type LineType
 } from './domain/ledger';
-import { creditBuckets, creditMovements } from './schema';
+import { adjustmentKeys, creditBuckets, creditMovements } from './schema';
 import {
 	accountHasWelcome,
 	closeHold,
@@ -306,7 +306,7 @@ export function expireHolds(deps: CreditsDeps): number {
 // Ajustes manuales (BE-FR-18, D-16)
 
 export type AdjustOutcome =
-	{ readonly ok: true } | { readonly ok: false; readonly reason: 'exceeds_available' };
+	{ readonly ok: true } | { readonly ok: false; readonly reason: 'exceeds_available' | 'repeated' };
 
 /**
  * Ajuste del administrador (BE-FR-18): suma (liquidando primero la deuda) o resta (nunca más que el disponible, D-16).
@@ -324,10 +324,17 @@ export function adjust(
 		readonly reason: string;
 	}
 ): AdjustOutcome {
+		/** Clave del formulario: un envío repetido con la misma clave no vuelve a aplicar el ajuste (T307, 15.12). */
+		readonly idempotencyKey: string;
 	return immediateTransaction(deps.db, (tx) => {
 		const now = deps.clock.now();
 		const before = loadState(tx, input.userId);
 		const snapshot = (state: LedgerState) => ({
+		if (
+			tx.select().from(adjustmentKeys).where(eq(adjustmentKeys.key, input.idempotencyKey)).get() !==
+			undefined
+		)
+			return { ok: false, reason: 'repeated' };
 			balanceMicro: balanceOf(state),
 			debtMicro: state.debt
 		});
@@ -376,6 +383,7 @@ export function adjust(
 			);
 			return { ok: true };
 		}
+			tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
 
 		const available = balanceOf(before) - reservedOf(tx, input.userId);
 		const result = applyNegativeAdjustment(before, {
@@ -414,6 +422,7 @@ export function adjust(
 		);
 		return { ok: true };
 	});
+		tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
