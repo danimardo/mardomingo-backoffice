@@ -114,6 +114,11 @@ export function runPrices(deps: StatsTasksDeps): number {
 			sampleSize: costs.length,
 			computedAt: now
 		});
+		if (price !== null)
+			deps.logger.emit('pricing.reference.recomputed', {
+				count: costs.length,
+				status: price.source
+			});
 	}
 	return byOperation.size;
 }

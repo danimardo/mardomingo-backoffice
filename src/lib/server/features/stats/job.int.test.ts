@@ -142,6 +142,9 @@ describe('precio de referencia (BE-FR-73)', () => {
 			f.db.select().from(priceReferences).where(eq(priceReferences.operationId, operationId)).get()
 				?.typicalMicro
 		).toBe(200);
+		expect(
+			eventsNamed(f.logger, 'pricing.reference.recomputed').map((event) => event.fields)
+		).toEqual([{ count: 3, status: 'auto' }]);
 
 		f.clock.advance(DAY);
 		runPrices(deps({ priceSamples: () => samples, manualPriceOf: () => 999 }));
@@ -152,5 +155,9 @@ describe('precio de referencia (BE-FR-73)', () => {
 			.get();
 		expect(stored?.typicalMicro).toBe(999);
 		expect(stored?.source).toBe('manual');
+		expect(eventsNamed(f.logger, 'pricing.reference.recomputed').at(-1)?.fields).toEqual({
+			count: 3,
+			status: 'manual'
+		});
 	});
 });
