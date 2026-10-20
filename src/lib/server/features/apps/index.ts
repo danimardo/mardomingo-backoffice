@@ -5,6 +5,7 @@ export {
 	appAccessOf,
 	appNamesOf,
 	operationNamesOf,
+	operationKeysOf,
 	activeAppsForPanel,
 	type PanelApp,
 	announcementsFor,

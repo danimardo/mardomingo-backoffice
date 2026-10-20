@@ -58,6 +58,8 @@ function asOperation(cost: OperationCostFact): OperationStatsFact {
 	return {
 		date: cost.date,
 		appId: cost.appId,
+		operationKey: 'improve',
+		userId: null,
 		status: 'ok',
 		costMicroUsd: cost.usdMicro,
 		chargedMicro: 0,

@@ -914,6 +914,20 @@ export function operationNamesOf(
 	return new Map(rows.map((row) => [row.id, row.name]));
 }
 
+/** Clave de cada operación (`improve`, `enhance`…) por su id; para agrupar y filtrar las estadísticas (T320). */
+export function operationKeysOf(
+	db: Pick<Db, 'select'>,
+	ids: readonly string[]
+): Map<string, string> {
+	if (ids.length === 0) return new Map();
+	const rows = db
+		.select({ id: appOperations.id, key: appOperations.key })
+		.from(appOperations)
+		.where(inArray(appOperations.id, [...ids]))
+		.all();
+	return new Map(rows.map((row) => [row.id, row.key]));
+}
+
 export function appNamesOf(
 	deps: Pick<AppsDeps, 'db'>,
 	ids: readonly string[]

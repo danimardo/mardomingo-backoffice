@@ -7,6 +7,8 @@ import { releaseDownloads } from './schema';
 
 export interface DownloadFact {
 	readonly appId: string;
+	/** Día civil de la medición (`AAAA-MM-DD`), para agrupar el embudo por semana (T320). */
+	readonly day: string;
 	readonly downloads: number;
 }
 
@@ -16,7 +18,11 @@ export function releaseDownloadsBetween(
 	period: { readonly fromDay: CivilDate; readonly toDay: CivilDate }
 ): DownloadFact[] {
 	const rows = db
-		.select({ appId: releaseDownloads.appId, downloads: releaseDownloads.downloads })
+		.select({
+			appId: releaseDownloads.appId,
+			day: releaseDownloads.day,
+			downloads: releaseDownloads.downloads
+		})
 		.from(releaseDownloads)
 		.where(
 			and(
@@ -27,6 +33,6 @@ export function releaseDownloadsBetween(
 		)
 		.all();
 	return rows.flatMap((row) =>
-		row.downloads === null ? [] : [{ appId: row.appId, downloads: row.downloads }]
+		row.downloads === null ? [] : [{ appId: row.appId, day: row.day, downloads: row.downloads }]
 	);
 }

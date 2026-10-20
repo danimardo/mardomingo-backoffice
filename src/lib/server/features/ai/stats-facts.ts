@@ -6,11 +6,16 @@ import type { Db } from '$lib/server/db/client';
 import { civilDateOf } from '$lib/shared/dates';
 import { toEpochMs } from '$lib/shared/time';
 import { toMicroUsd } from '$lib/shared/money';
+import { operationKeysOf } from '$lib/server/features/apps';
 import { aiOperations } from './schema';
 
 export interface OperationStatsFact {
 	readonly date: string;
 	readonly appId: string;
+	/** Clave de la operación dentro de su app (p. ej. `improve`), para agrupar y filtrar (T320). */
+	readonly operationKey: string;
+	/** Usuario que la lanzó; nulo solo tras la anonimización a los 24 meses. */
+	readonly userId: string | null;
 	readonly status: string;
 	readonly costMicroUsd: number;
 	readonly chargedMicro: number;
@@ -25,10 +30,12 @@ export function operationStatsBetween(
 	db: Pick<Db, 'select'>,
 	input: { readonly fromMs: number; readonly toMs: number }
 ): OperationStatsFact[] {
-	return db
+	const rows = db
 		.select({
 			createdAt: aiOperations.createdAt,
 			appId: aiOperations.appId,
+			appOperationId: aiOperations.appOperationId,
+			userId: aiOperations.userId,
 			status: aiOperations.status,
 			costMicroUsd: aiOperations.costMicroUsd,
 			chargedMicro: aiOperations.chargedMicro,
@@ -46,19 +53,26 @@ export function operationStatsBetween(
 			)
 		)
 		.orderBy(asc(aiOperations.createdAt))
-		.all()
-		.map((row) => ({
-			date: civilDateOf(toEpochMs(row.createdAt)),
-			appId: row.appId,
-			status: row.status,
-			costMicroUsd: row.costMicroUsd,
-			chargedMicro: row.chargedMicro,
-			absorbedMicro: row.absorbedMicro,
-			absorbedReason: row.absorbedReason,
-			usedFallback: row.usedFallback,
-			truncated: row.truncated,
-			fxRateId: row.fxRateId
-		}));
+		.all();
+	// La clave de la operación vive en `apps`: se lee por su índice público, no por su tabla (ARCHITECTURE §3).
+	const keys = operationKeysOf(
+		db,
+		rows.map((row) => row.appOperationId)
+	);
+	return rows.map((row) => ({
+		date: civilDateOf(toEpochMs(row.createdAt)),
+		appId: row.appId,
+		operationKey: keys.get(row.appOperationId) ?? '',
+		userId: row.userId,
+		status: row.status,
+		costMicroUsd: row.costMicroUsd,
+		chargedMicro: row.chargedMicro,
+		absorbedMicro: row.absorbedMicro,
+		absorbedReason: row.absorbedReason,
+		usedFallback: row.usedFallback,
+		truncated: row.truncated,
+		fxRateId: row.fxRateId
+	}));
 }
 
 /** Costes de las operaciones completadas con éxito en una ventana, por operación, para el precio de referencia (BE-FR-73; L14). */

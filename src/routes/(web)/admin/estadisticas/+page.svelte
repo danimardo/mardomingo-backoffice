@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ChartContainer from '$lib/components/ui/ChartContainer.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import { formatCredits, formatEuros } from '$lib/components/payments/format';
 	import * as m from '$lib/paraglide/messages.js';
@@ -38,6 +39,36 @@
 		value={data.hasta}
 		hint="AAAA-MM-DD"
 	/>
+	<TextField id="app" name="app" label={m.admin_stats_app_filter()} value={data.app} />
+	<TextField
+		id="operacion"
+		name="operacion"
+		label={m.admin_stats_operation_filter()}
+		value={data.operacion}
+	/>
+	<Select
+		id="agrupacion"
+		name="agrupacion"
+		label={m.admin_stats_grouping()}
+		value={data.agrupacion}
+		options={[
+			{ value: 'dia', label: m.admin_stats_group_day() },
+			{ value: 'app', label: m.admin_stats_group_app() },
+			{ value: 'operacion', label: m.admin_stats_group_operation() },
+			{ value: 'usuario', label: m.admin_stats_group_user() }
+		]}
+	/>
+	<Select
+		id="embudo"
+		name="embudo"
+		label={m.admin_stats_funnel_mode()}
+		value={data.embudo}
+		options={[
+			{ value: 'semanal', label: m.admin_stats_funnel_weekly() },
+			{ value: 'acumulado', label: m.admin_stats_funnel_cumulative() }
+		]}
+	/>
+	<p>{m.admin_stats_filter_note()}</p>
 	<p><Button type="submit" variant="primary">{m.admin_billing_filter()}</Button></p>
 </form>
 
@@ -84,6 +115,62 @@
 		</ul>
 		<p>{m.admin_stats_active_users({ count: String(data.stats.activeUsers) })}</p>
 	</section>
+
+	<section aria-labelledby="embudo-semanas">
+		<h2 id="embudo-semanas">{m.admin_stats_funnel_weeks_heading()}</h2>
+		<table>
+			<thead>
+				<tr>
+					<th scope="col">{m.admin_stats_week()}</th>
+					<th scope="col">{m.admin_stats_stage_downloads()}</th>
+					<th scope="col">{m.admin_stats_stage_signups()}</th>
+					<th scope="col">{m.admin_stats_stage_verified()}</th>
+					<th scope="col">{m.admin_stats_stage_first_login()}</th>
+					<th scope="col">{m.admin_stats_stage_first_operation()}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each data.stats.funnelWeeks as row (row.week)}
+					<tr>
+						<th scope="row">{row.week}</th>
+						<td>{row.counts.descargas ?? m.admin_stats_no_data()}</td>
+						<td>{row.counts.altas ?? m.admin_stats_no_data()}</td>
+						<td>{row.counts.verificadas ?? m.admin_stats_no_data()}</td>
+						<td>{row.counts.primer_login ?? m.admin_stats_no_data()}</td>
+						<td>{row.counts.primera_operacion ?? m.admin_stats_no_data()}</td>
+					</tr>
+				{:else}
+					<tr><td colspan="6">{m.admin_stats_no_data()}</td></tr>
+				{/each}
+			</tbody>
+		</table>
+	</section>
+
+	{#if data.stats.groups.length > 0}
+		<section aria-labelledby="por-grupo">
+			<h2 id="por-grupo">{m.admin_stats_groups_heading()}</h2>
+			<table>
+				<thead>
+					<tr>
+						<th scope="col">{m.admin_stats_group_key()}</th>
+						<th scope="col">{m.admin_stats_group_operations()}</th>
+						<th scope="col">{m.admin_stats_group_cost()}</th>
+						<th scope="col">{m.admin_stats_group_unconverted()}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.stats.groups as group (group.key)}
+						<tr>
+							<th scope="row">{group.key}</th>
+							<td>{group.operations}</td>
+							<td>{euros(group.costEurCents)}</td>
+							<td>{group.unconverted}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</section>
+	{/if}
 
 	<section aria-labelledby="serie-diaria">
 		<h2 id="serie-diaria">{m.admin_stats_daily()}</h2>

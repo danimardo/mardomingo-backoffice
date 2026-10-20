@@ -59,4 +59,30 @@ describe('estadísticas con sesión de administrador (W45, T320)', () => {
 
 		expect(result.status).toBe(303);
 	});
+
+	it('una agrupación que no existe vuelve a día y no muestra la tabla por grupo', async () => {
+		const result = await get(`${PAGE}?desde=2026-10-01&hasta=2026-10-31&agrupacion=inventada`);
+
+		expect(result.status).toBe(200);
+		expect(result.text).not.toContain('Por grupo');
+		expect(result.text).toContain('Ingresos por día');
+	});
+
+	it('agrupar por app en un periodo sin operaciones responde 200 sin inventar grupos', async () => {
+		const result = await get(
+			`${PAGE}?desde=2000-01-01&hasta=2000-01-31&agrupacion=app&app=secretario`
+		);
+
+		expect(result.status).toBe(200);
+		expect(result.text).not.toContain('Por grupo');
+	});
+
+	it('el embudo acumulado se acepta y uno que no existe vuelve a semanal', async () => {
+		const acumulado = await get(`${PAGE}?desde=2026-10-01&hasta=2026-10-31&embudo=acumulado`);
+		const inventado = await get(`${PAGE}?desde=2026-10-01&hasta=2026-10-31&embudo=inventado`);
+
+		expect(acumulado.status).toBe(200);
+		expect(inventado.status).toBe(200);
+		expect(acumulado.text).toContain('Embudo de alta por semana');
+	});
 });

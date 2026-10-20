@@ -13,9 +13,34 @@ import {
 import { firstOperationsBetween, operationStatsBetween } from '$lib/server/features/ai';
 import { forfeitsBetween } from '$lib/server/features/credits';
 import { usdEurPpmOf } from '$lib/server/features/pricing';
-import { releaseDownloadsBetween, statsForPeriod } from '$lib/server/features/stats';
+import {
+	releaseDownloadsBetween,
+	statsForPeriod,
+	type FunnelMode,
+	type StatsGrouping
+} from '$lib/server/features/stats';
 import { toCivilDate } from '$lib/shared/time';
 import type { PageServerLoad } from './$types';
+
+const GROUPINGS = Object.freeze([
+	'dia',
+	'app',
+	'operacion',
+	'usuario'
+] as const satisfies readonly StatsGrouping[]);
+
+/** Agrupación pedida en la query; un valor que no está en la lista vuelve a `dia`, como en el resto del panel. */
+function groupingOf(value: string | null): StatsGrouping {
+	const found = GROUPINGS.find((grouping) => grouping === value);
+	return found ?? 'dia';
+}
+
+const EMBUDOS = Object.freeze(['semanal', 'acumulado'] as const satisfies readonly FunnelMode[]);
+
+/** Modo del embudo pedido; un valor que no está en la lista vuelve a `semanal`. */
+function embudoOf(value: string | null): FunnelMode {
+	return EMBUDOS.find((mode) => mode === value) ?? 'semanal';
+}
 
 function bounds(desde: string, hasta: string): { fromMs: number; toMs: number } | null {
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return null;
@@ -35,8 +60,12 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 
 	const desde = url.searchParams.get('desde') ?? '';
 	const hasta = url.searchParams.get('hasta') ?? '';
+	const app = url.searchParams.get('app') ?? '';
+	const operacion = url.searchParams.get('operacion') ?? '';
+	const agrupacion = groupingOf(url.searchParams.get('agrupacion'));
+	const embudo = embudoOf(url.searchParams.get('embudo'));
 	const period = bounds(desde, hasta);
-	if (period === null) return { desde, hasta, stats: null };
+	if (period === null) return { desde, hasta, app, operacion, agrupacion, embudo, stats: null };
 
 	const composition = getComposition();
 	const stats = statsForPeriod(
@@ -55,12 +84,29 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 					toDay: toCivilDate(hasta)
 				})
 		},
-		period
+		period,
+		{
+			grouping: agrupacion,
+			embudo,
+			appId: app === '' ? undefined : app,
+			operationKey: operacion === '' ? undefined : operacion
+		}
 	);
 	return {
 		desde,
 		hasta,
+		app,
+		operacion,
+		agrupacion,
+		embudo,
 		stats: {
+			funnelWeeks: stats.funnelWeeks.map((row) => ({ week: row.week, counts: row.counts })),
+			groups: stats.groups.map((group) => ({
+				key: group.key,
+				operations: group.operations,
+				costEurCents: group.costEurCents,
+				unconverted: group.unconverted
+			})),
 			revenueEurCents: stats.totals.revenueEurCents,
 			costEurCents: stats.totals.costEurCents,
 			marginEurCents: stats.totals.marginEurCents,
