@@ -8,6 +8,7 @@ import { FAKE_OK } from '$lib/server/adapters/openrouter/fake';
 import { FAKE_TRANSCRIPTION } from '$lib/server/adapters/mistral/fake';
 import { updateSetting } from '$lib/server/features/apps';
 import { appOperations } from '$lib/server/features/apps/schema';
+import { activeAlerts } from '$lib/server/features/notifications';
 import { chargeFor } from '$lib/server/features/pricing';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import {
@@ -181,6 +182,7 @@ describe('transcripción (E08)', () => {
 		});
 		expect(f.transcriber.calls).toHaveLength(1);
 		expect(eventsNamed(f.chat.base.logger, 'ai.provider.billing_error')).toHaveLength(1);
+		expect(activeAlerts(f.chat.base.db).map((alert) => alert.key)).toContain('mistral_billing');
 		expect(f.chat.base.credits.getBalance(f.chat.userId).totalMicro).toBe(1_000_000_000);
 		expect(f.chat.base.db.select().from(aiOperations).all()).toEqual([
 			expect.objectContaining({

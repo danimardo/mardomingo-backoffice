@@ -13,6 +13,7 @@ import {
 	getEffectiveConfig,
 	type EffectiveOperation
 } from '$lib/server/features/apps';
+import { alertKeys, raiseAlert } from '$lib/server/features/notifications';
 import { checkMaxCost, chargeFor } from '$lib/server/features/pricing';
 import { AppError } from '$lib/server/shared/errors';
 import { toMicro } from '$lib/shared/money';
@@ -279,6 +280,10 @@ async function transcriptionFlow(
 					deps.logger.emit('ai.provider.billing_error', {
 						provider: 'mistral',
 						httpStatus: outcome.httpStatus
+					});
+					await raiseAlert(deps.alerts, {
+						key: alertKeys.mistralBilling(),
+						detail: `Error de facturación de Mistral (HTTP ${outcome.httpStatus === null ? 'sin código' : String(outcome.httpStatus)}).`
 					});
 					break;
 				}
