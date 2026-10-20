@@ -660,6 +660,7 @@
 	"admin_economy_preview_title": "Vista previa del cambio",
 	"admin_economy_preview_invalid": "El valor no es válido: no se puede guardar.",
 	"admin_economy_scope_global": "alcance global",
+	"admin_economy_default_label": "Valor por defecto",
 	"admin_economy_packs": "Paquetes de crédito",
 	"admin_economy_packs_hint": "Solo lectura: cambiar un paquete cambia lo que cobra el cliente y se decidirá en otra fase.",
 	"admin_economy_pack_name": "Paquete",
