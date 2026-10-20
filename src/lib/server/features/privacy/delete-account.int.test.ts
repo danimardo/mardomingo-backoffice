@@ -131,7 +131,7 @@ describe('borrado de cuenta (BE-FR-07)', () => {
 		);
 		expect(forfeits.every((movement) => movement.amountMicro < 0)).toBe(true);
 		expect(events('credits.balance.forfeited').map((event) => event.fields)).toEqual([
-			{ count: withBalance.length }
+			{ reason: 'user', count: withBalance.length }
 		]);
 		const holds = db().select().from(creditHolds).where(eq(creditHolds.userId, saver)).all();
 		expect(holds.length).toBeGreaterThan(0);

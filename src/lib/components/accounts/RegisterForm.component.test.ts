@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RegisterForm from './RegisterForm.svelte';
 
 const legal = [
-	{ kind: 'terms', version: '2026-06' },
-	{ kind: 'privacy', version: '2026-06' },
-	{ kind: 'aup', version: '2026-06' }
+	{ kind: 'terms', version: '2026-06', url: '/terminos' },
+	{ kind: 'privacy', version: '2026-06', url: '/privacidad' },
+	{ kind: 'aup', version: '2026-06', url: '/uso-aceptable' }
 ];
 
 const base = {

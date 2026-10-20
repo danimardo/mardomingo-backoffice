@@ -3,9 +3,9 @@
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import Banner from '$lib/components/ui/Banner.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import BalanceCard from '$lib/components/credits/BalanceCard.svelte';
+	import PendingAcceptancesBanner from '$lib/components/legal/PendingAcceptancesBanner.svelte';
 	import AnnouncementsBanner from '$lib/components/notifications/AnnouncementsBanner.svelte';
 	import { formatCredits } from '$lib/components/payments/format';
 	import type { ActionData, PageData } from './$types';
@@ -22,6 +22,13 @@
 				return m.panel_doc_aup();
 		}
 	}
+
+	const documentsFailed = $derived(
+		form?.errors.documents !== undefined && form.errors.documents !== ''
+	);
+	const pendingItems = $derived(
+		data.pendingAcceptances.map((item) => ({ ...item, label: documentLabel(item.document) }))
+	);
 
 	const bucketRows = $derived(
 		data.buckets.map((bucket) => [
@@ -70,27 +77,7 @@
 
 <AnnouncementsBanner items={data.announcements} />
 
-{#if data.pendingAcceptances.length > 0}
-	<section aria-labelledby="pendientes-titulo">
-		<h2 id="pendientes-titulo">{m.panel_pending_documents()}</h2>
-		<p>{m.panel_pending_effect()}</p>
-		{#if form?.errors.documents}
-			<Banner level="critical">{m.panel_pending_error()}</Banner>
-		{/if}
-		<form method="POST" action="?/aceptarDocumentos">
-			<fieldset>
-				<legend>{m.panel_pending_choose()}</legend>
-				{#each data.pendingAcceptances as item (item.document)}
-					<label class="casilla">
-						<input type="checkbox" name="documents" value={`${item.document}:${item.version}`} />
-						<span>{documentLabel(item.document)}</span>
-					</label>
-				{/each}
-			</fieldset>
-			<p><Button type="submit" variant="primary">{m.panel_pending_accept()}</Button></p>
-		</form>
-	</section>
-{/if}
+<PendingAcceptancesBanner items={pendingItems} failed={documentsFailed} />
 
 <p>{m.panel_support({ email: data.supportEmail })}</p>
 

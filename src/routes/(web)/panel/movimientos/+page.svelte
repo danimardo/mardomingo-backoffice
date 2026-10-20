@@ -1,6 +1,7 @@
 <script lang="ts">
 	// W22 · `/panel/movimientos`: lista de movimientos con filtro GET (sin JavaScript), paginación que conserva los filtros y
 	// exportación con los mismos filtros (W23). Vacío legítimo y «sin coincidencias» por separado (UX-09).
+	import { formatCredits } from '$lib/format/credits';
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import Banner from '$lib/components/ui/Banner.svelte';
@@ -35,14 +36,10 @@
 		}
 	}
 
-	const creditsFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+	// Los créditos llegan convertidos de micro-créditos; se formatean con la regla de BE-FR-22.
+	const creditsText = (credits: number): string => formatCredits(Math.round(credits * 1_000_000));
 	const rows = $derived(
-		data.rows.map((row) => [
-			row.date,
-			typeLabel(row.type),
-			creditsFormat.format(row.credits),
-			row.appName
-		])
+		data.rows.map((row) => [row.date, typeLabel(row.type), creditsText(row.credits), row.appName])
 	);
 	const columns = [
 		{ key: 'date', label: m.movements_col_date(), align: 'start' as const },

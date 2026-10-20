@@ -28,4 +28,21 @@ describe('touchActivity (BE-FR-86)', () => {
 		expect(row?.lastActivityAt).toBe(NOW + 60_000);
 		expect(row?.email).toBe(`${userId}@ejemplo.es`);
 	});
+
+	it('no escribe otra vez antes de una hora, y sí después', () => {
+		touchActivity(f.db, userId, toEpochMs(NOW));
+		touchActivity(f.db, userId, toEpochMs(NOW + 59 * 60_000));
+		expect(f.db.select().from(user).where(eq(user.id, userId)).get()?.lastActivityAt).toBe(NOW);
+
+		touchActivity(f.db, userId, toEpochMs(NOW + 60 * 60_000));
+		expect(f.db.select().from(user).where(eq(user.id, userId)).get()?.lastActivityAt).toBe(
+			NOW + 60 * 60_000
+		);
+	});
+
+	it('una cuenta que no existe no falla', () => {
+		expect(() => {
+			touchActivity(f.db, 'usr_no_existe', toEpochMs(NOW));
+		}).not.toThrow();
+	});
 });

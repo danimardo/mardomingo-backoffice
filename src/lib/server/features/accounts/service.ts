@@ -644,7 +644,7 @@ export function resetTokenStateOf(deps: AccountsBase, token: string): 'valid' | 
 		.from(verification)
 		.where(eq(verification.identifier, `reset-password:${token}`))
 		.get();
-	if (row === undefined || row.expiresAt.getTime() <= Date.now()) return 'invalid';
+	if (row === undefined || row.expiresAt.getTime() <= deps.clock.now()) return 'invalid';
 	return 'valid';
 }
 
