@@ -75,7 +75,12 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 			signupsByApp: [...stats.totals.signupsByApp.entries()],
 			firstLoginsByApp: [...stats.totals.firstLoginsByApp.entries()],
 			funnel: stats.totals.funnel,
-			downloads: stats.totals.downloads
+			downloads: stats.totals.downloads,
+			days: stats.days.map((day) => ({
+				day: day.day,
+				revenueEurCents: day.revenueEurCents,
+				costEurCents: day.costEurCents
+			}))
 		}
 	};
 };

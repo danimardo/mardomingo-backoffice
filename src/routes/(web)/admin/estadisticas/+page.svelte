@@ -3,6 +3,7 @@
 	// «sin datos», nunca como cero. Sin JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Button from '$lib/components/ui/Button.svelte';
+	import ChartContainer from '$lib/components/ui/ChartContainer.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import { formatCredits, formatEuros } from '$lib/components/payments/format';
 	import * as m from '$lib/paraglide/messages.js';
@@ -82,6 +83,30 @@
 			{/each}
 		</ul>
 		<p>{m.admin_stats_active_users({ count: String(data.stats.activeUsers) })}</p>
+	</section>
+
+	<section aria-labelledby="serie-diaria">
+		<h2 id="serie-diaria">{m.admin_stats_daily()}</h2>
+		<ChartContainer
+			title={m.admin_stats_chart_revenue()}
+			period={`${data.desde} – ${data.hasta}`}
+			unit={m.admin_stats_unit_euros()}
+			validity={m.admin_stats_validity()}
+			points={data.stats.days.map((day) => ({
+				label: day.day,
+				value: day.revenueEurCents === null ? null : day.revenueEurCents / 100
+			}))}
+		/>
+		<ChartContainer
+			title={m.admin_stats_chart_cost()}
+			period={`${data.desde} – ${data.hasta}`}
+			unit={m.admin_stats_unit_euros()}
+			validity={m.admin_stats_validity()}
+			points={data.stats.days.map((day) => ({
+				label: day.day,
+				value: day.costEurCents === null ? null : day.costEurCents / 100
+			}))}
+		/>
 	</section>
 
 	{#if data.stats.unconvertedOperations > 0}
