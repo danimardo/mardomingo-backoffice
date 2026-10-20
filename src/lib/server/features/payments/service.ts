@@ -172,15 +172,14 @@ export function purchase(deps: PaymentsDeps, input: PurchaseInput): PurchaseOutc
  * acredita dos veces (BE-FR-24 CA1).
  */
 function completePayment(deps: PaymentsDeps, row: PaymentRow): void {
+	// Orden pensado para reintentar tras una caída a medias: acreditar y facturar son idempotentes (la bolsa se enlaza al pago y
+	// la factura lleva su `issueKey`) y la compra solo pasa a `completed` al final. Si el proceso cae antes, la compra sigue
+	// `pending` y el siguiente evento repite los pasos sin acreditar ni facturar dos veces; si cayera después, ya estaría todo.
 	deps.credits.grantPurchase({
 		userId: row.userId,
 		paymentId: row.id,
 		amountMicro: row.creditsMicro,
 		simulated: row.simulated
-	});
-	const now = toEpochMs(deps.clock.now());
-	immediateTransaction(deps.db, (tx) => {
-		setStatus(tx, row.id, 'completed', now, now);
 	});
 	deps.invoicing.issueForPayment({
 		paymentId: row.id,
@@ -189,6 +188,10 @@ function completePayment(deps: PaymentsDeps, row: PaymentRow): void {
 		kind: row.wantsFullInvoice ? 'full' : 'simplified',
 		amountEurCents: row.amountEurCents,
 		issueKey: `payment:${row.id}:initial`
+	});
+	const now = toEpochMs(deps.clock.now());
+	immediateTransaction(deps.db, (tx) => {
+		setStatus(tx, row.id, 'completed', now, now);
 	});
 	deps.logger.emit('payments.purchase.completed', {});
 }
@@ -217,6 +220,11 @@ function applyEvent(deps: PaymentsDeps, event: PaymentEvent): void {
 	if (event.type === 'chargeback_opened') {
 		if (row.status === 'chargeback') {
 			deps.logger.emit('payments.webhook.duplicate', {});
+			return;
+		}
+		// Sin acreditación no hay nada que retirar ni factura que rectificar, y bloquear la cuenta sería arbitrario.
+		if (row.status !== 'completed' && row.status !== 'refunded') {
+			deps.logger.emit('payments.webhook.rejected', { reason: 'not_completed' });
 			return;
 		}
 		applyChargeback(deps, row);

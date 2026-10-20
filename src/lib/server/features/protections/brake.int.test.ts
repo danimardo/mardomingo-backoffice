@@ -86,6 +86,25 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 		expect(harness.sender.sent).toHaveLength(0);
 	});
 
+	it('con el freno activo, la cuenta con compra real sigue operando y la gratuita no (BE-FR-46 CA1)', async () => {
+		const deps = harness.deps;
+		fixture.addUser('usr_gratis');
+		fixture.credits.grantWelcome({
+			userId: fixture.addUser('usr_pagadora'),
+			emailNormalizedHash: 'h-pagadora'
+		});
+		markRealPurchase(fixture.db, 'usr_pagadora');
+		harness.costs = [{ userId: 'usr_gratis', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		await expect(guard(deps, requestFor('usr_gratis'))).rejects.toMatchObject({
+			code: 'SERVICE_LIMITED'
+		});
+
+		await expect(guard(deps, requestFor('usr_pagadora'))).resolves.toBeTypeOf('function');
+		await expect(guard(deps, requestFor('usr_gratis'))).rejects.toMatchObject({
+			code: 'SERVICE_LIMITED'
+		});
+	});
+
 	it('al cambiar de día del calendario de Madrid vuelve a estar libre', async () => {
 		const deps = harness.deps;
 		fixture.addUser('usr_a');
