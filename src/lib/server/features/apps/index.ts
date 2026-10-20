@@ -25,6 +25,8 @@ export {
 	resolveAppBySlug,
 	supportEmail,
 	setAppMaintenance,
+	updateAppDetails,
+	updateAppVersions,
 	updateAppOverrides,
 	updateSetting,
 	type AppsDeps,
@@ -62,7 +64,13 @@ export {
 	type AnnouncementsAdminDeps
 } from './announcements-admin';
 
-export { appForAdmin, listAppsForAdmin, type AdminAppRow } from './admin-apps';
+export {
+	appForAdmin,
+	appDetailsForAdmin,
+	listAppsForAdmin,
+	type AdminAppDetails,
+	type AdminAppRow
+} from './admin-apps';
 
 // Activación de operaciones de IA (W41; T311). La comprobación del modelo vive en `ai`.
 export {

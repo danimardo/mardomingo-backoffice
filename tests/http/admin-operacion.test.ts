@@ -108,4 +108,13 @@ describe('operación de IA con sesión de administrador (W41, T311)', () => {
 		expect(result.status).toBe(400);
 		expect(auditCount('apps.operation.settings')).toBe(antes);
 	});
+
+	it('una clave con formato inválido no casa con la ruta y responde 404 (param matcher, T310)', async () => {
+		const result = await send(baseUrl, `/admin/apps/${SLUG}/operaciones/op_mal_formado`, {
+			host: session.webHost,
+			headers: { accept: 'text/html', cookie: session.cookie }
+		});
+
+		expect(result.status).toBe(404);
+	});
 });

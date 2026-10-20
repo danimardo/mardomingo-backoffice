@@ -110,3 +110,43 @@ export function operationsInGroup(
 		.orderBy(asc(appOperations.key))
 		.all();
 }
+
+/** Datos completos de una app para el formulario de la ficha (W40): los campos editables, en su forma guardada. */
+export interface AdminAppDetails {
+	readonly id: string;
+	readonly name: string;
+	readonly description: string;
+	readonly supportEmail: string | null;
+	readonly postVerifyText: string | null;
+	readonly links: unknown;
+	readonly allowedOrigins: unknown;
+	readonly syncSchema: unknown;
+	readonly minAppVersion: string | null;
+	readonly recommendedAppVersion: string | null;
+	readonly enforceVersion: boolean;
+}
+
+export function appDetailsForAdmin(
+	deps: { readonly db: Db },
+	slug: string
+): AdminAppDetails | null {
+	return (
+		deps.db
+			.select({
+				id: apps.id,
+				name: apps.name,
+				description: apps.description,
+				supportEmail: apps.supportEmail,
+				postVerifyText: apps.postVerifyText,
+				links: apps.links,
+				allowedOrigins: apps.allowedOrigins,
+				syncSchema: apps.syncSchema,
+				minAppVersion: apps.minAppVersion,
+				recommendedAppVersion: apps.recommendedAppVersion,
+				enforceVersion: apps.enforceVersion
+			})
+			.from(apps)
+			.where(eq(apps.slug, slug))
+			.get() ?? null
+	);
+}

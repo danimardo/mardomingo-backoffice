@@ -460,6 +460,150 @@ export function setAppMaintenance(deps: AppsDeps, input: SetAppMaintenanceInput)
 	deps.logger.emit('apps.settings.updated', { key: 'maintenance', scope: 'app' });
 }
 
+export interface UpdateAppDetailsInput {
+	readonly actorId: string;
+	readonly appId: string;
+	readonly name: string;
+	readonly description: string;
+	readonly supportEmail: string | null;
+	readonly postVerifyText: string | null;
+	readonly links: unknown;
+	readonly allowedOrigins: unknown;
+	readonly syncSchema: unknown;
+	readonly reason: string;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Datos editables de una app (W40, `guardarApp`). La auditoría no guarda el correo de soporte (regla de 3.7: nunca emails),
+ * solo si está configurado;: nombre, descripción, soporte, texto tras la verificación, enlaces, orígenes CORS
+ * y esquema de sincronización. Cada valor se valida con su esquema antes de tocar la fila; el cambio se audita en la misma transacción.
+ */
+export function updateAppDetails(deps: AppsDeps, input: UpdateAppDetailsInput): void {
+	requireReason(input.reason);
+	const name = input.name.trim();
+	const description = input.description.trim();
+	const support = input.supportEmail === null ? null : input.supportEmail.trim();
+	const postVerify = input.postVerifyText === null ? null : input.postVerifyText.trim();
+	const links = AppLinks.safeParse(input.links);
+	const origins = AllowedOrigins.safeParse(input.allowedOrigins);
+	const sync = SyncSchema.safeParse(input.syncSchema);
+	const invalid =
+		name === '' ||
+		name.length > 100 ||
+		description.length > 500 ||
+		(support !== null && (support === '' ? false : !EMAIL_PATTERN.test(support))) ||
+		(postVerify !== null && postVerify.length > 500) ||
+		!links.success ||
+		!origins.success ||
+		!sync.success;
+	if (invalid) throw new AppError('VALIDATION_ERROR', { field: 'app' });
+	const now = deps.clock.now();
+	const nextSupport = support === null || support === '' ? null : support;
+
+	immediateTransaction(deps.db, (tx) => {
+		const app = readApp(deps.db, deps.logger, input.appId);
+		if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
+		tx.update(apps)
+			.set({
+				name,
+				description,
+				supportEmail: nextSupport,
+				postVerifyText: postVerify === '' ? null : postVerify,
+				links: links.data,
+				allowedOrigins: origins.data,
+				syncSchema: sync.data,
+				updatedAt: now
+			})
+			.where(eq(apps.id, app.id))
+			.run();
+		recordEntry(
+			tx,
+			{
+				adminId: input.actorId,
+				action: 'apps.app.update',
+				entity: 'app',
+				entityId: app.id,
+				before: {
+					name: app.name,
+					support_configured: app.supportEmail !== null,
+					allowed_origins: app.allowedOrigins
+				},
+				after: { name, support_configured: nextSupport !== null, allowed_origins: origins.data },
+				reason: input.reason
+			},
+			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
+		);
+	});
+	deps.logger.emit('apps.settings.updated', { key: 'app_details', scope: 'app' });
+}
+
+export interface UpdateAppVersionsInput {
+	readonly actorId: string;
+	readonly appId: string;
+	readonly minAppVersion: string | null;
+	readonly recommendedAppVersion: string | null;
+	readonly enforceVersion: boolean;
+	readonly reason: string;
+}
+
+/** Versión mínima, recomendada y si se exige (W40, `guardarVersiones`); mismo formato que la cabecera `X-App-Version` (contrato API). */
+const VERSION_PATTERN = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
+
+export function updateAppVersions(deps: AppsDeps, input: UpdateAppVersionsInput): void {
+	requireReason(input.reason);
+	const min =
+		input.minAppVersion === null || input.minAppVersion.trim() === ''
+			? null
+			: input.minAppVersion.trim();
+	const recommended =
+		input.recommendedAppVersion === null || input.recommendedAppVersion.trim() === ''
+			? null
+			: input.recommendedAppVersion.trim();
+	const invalid =
+		(min !== null && !VERSION_PATTERN.test(min)) ||
+		(recommended !== null && !VERSION_PATTERN.test(recommended)) ||
+		(input.enforceVersion && min === null);
+	if (invalid) throw new AppError('VALIDATION_ERROR', { field: 'version' });
+	const now = deps.clock.now();
+	immediateTransaction(deps.db, (tx) => {
+		const app = readApp(deps.db, deps.logger, input.appId);
+		if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
+		tx.update(apps)
+			.set({
+				minAppVersion: min,
+				recommendedAppVersion: recommended,
+				enforceVersion: input.enforceVersion,
+				updatedAt: now
+			})
+			.where(eq(apps.id, app.id))
+			.run();
+		recordEntry(
+			tx,
+			{
+				adminId: input.actorId,
+				action: 'apps.app.versions',
+				entity: 'app',
+				entityId: app.id,
+				before: {
+					min_app_version: app.minAppVersion,
+					recommended_app_version: app.recommendedAppVersion,
+					enforce_version: app.enforceVersion
+				},
+				after: {
+					min_app_version: min,
+					recommended_app_version: recommended,
+					enforce_version: input.enforceVersion
+				},
+				reason: input.reason
+			},
+			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
+		);
+	});
+	deps.logger.emit('apps.settings.updated', { key: 'app_versions', scope: 'app' });
+}
+
 export interface NewApp {
 	readonly slug: string;
 	readonly name: string;

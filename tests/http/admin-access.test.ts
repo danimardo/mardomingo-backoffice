@@ -25,7 +25,7 @@ describe('acceso a la administración (W46–W47) en el host web', () => {
 		'/admin/apps/secretario',
 		'/admin/apps/secretario/predeterminados',
 		'/admin/apps/secretario/predeterminados/copiar',
-		'/admin/apps/secretario/operaciones/op_inexistente'
+		'/admin/apps/secretario/operaciones/op-inexistente'
 	]) {
 		it(`${path} sin sesión manda al login y no entrega nada`, async () => {
 			const result = await send(baseUrl, path, { host: webHost, headers: { accept: 'text/html' } });

@@ -43,6 +43,24 @@ function maintenanceActive(): number {
 	}
 }
 
+function versionsOf(): { min: string; recommended: string; enforce: boolean } {
+	const db = new Database(databasePath, { readonly: true });
+	try {
+		const row = db
+			.prepare<[string], { min: string | null; recommended: string | null; enforce: number }>(
+				'SELECT min_app_version AS min, recommended_app_version AS recommended, enforce_version AS enforce FROM apps WHERE slug = ?'
+			)
+			.get(SLUG);
+		return {
+			min: row?.min ?? '',
+			recommended: row?.recommended ?? '',
+			enforce: row?.enforce === 1
+		};
+	} finally {
+		db.close();
+	}
+}
+
 beforeAll(async () => {
 	session = await loginAsAdmin(baseUrl, databasePath, {
 		id: 'usr_http_apps_admin',
@@ -122,5 +140,114 @@ describe('apps con sesión de administrador (W39–W40, T310)', () => {
 		expect(aplicado.status).toBe(303);
 		expect(maintenanceActive()).toBe(1);
 		expect(auditCount('apps.maintenance.update')).toBe(antes + 1);
+	});
+
+	it('guardar los datos de la app sin confirmación o con un correo inválido responde 400 y no audita', async () => {
+		const antes = auditCount('apps.app.update');
+		const base = `nombre=Secretario&descripcion=&enlaces=${encodeURIComponent(JSON.stringify({ landing: { type: 'internal' } }))}&origenes=%5B%5D&esquemaSincronizacion=%7B%7D&motivo=Datos+de+prueba`;
+
+		const sinConfirmar = await postAdmin(session, `/admin/apps/${SLUG}?/guardarApp`, base);
+		const correoMalo = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/guardarApp`,
+			`${base}&soporte=no-es-un-correo&confirmado=true`
+		);
+
+		expect(sinConfirmar.status).toBe(400);
+		expect(correoMalo.status).toBe(400);
+		expect(auditCount('apps.app.update')).toBe(antes);
+	});
+
+	it('guardar los datos con valores válidos responde 303 y queda auditado', async () => {
+		const antes = auditCount('apps.app.update');
+		const enlaces = JSON.stringify(SECRETARIO_LINKS);
+		const esquema = JSON.stringify(SECRETARIO_SYNC_SCHEMA);
+		const origenes = JSON.stringify(['https://secretario.mardomingo.com']);
+
+		const aplicado = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/guardarApp`,
+			new URLSearchParams({
+				nombre: 'Secretario',
+				descripcion: 'Asistente de IA',
+				soporte: 'soporte@mardomingo.com',
+				textoPostVerificacion: '',
+				enlaces,
+				origenes,
+				esquemaSincronizacion: esquema,
+				motivo: 'Datos de prueba E2E',
+				confirmado: 'true'
+			}).toString()
+		);
+
+		expect(aplicado.status).toBe(303);
+		expect(auditCount('apps.app.update')).toBe(antes + 1);
+	});
+
+	it('crear una operación sin confirmación, con un tipo que no existe o con capacidades que no son JSON responde 400', async () => {
+		const antes = auditCount('apps.operation.create');
+		const base =
+			'clave=prueba-http-invalida&nombre=Prueba&modelo=&grupo=&tiempoMs=45000&costeMaximoMicro=1000&motivo=Alta+de+prueba';
+
+		const sinConfirmar = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/crearOperacion`,
+			`${base}&tipo=chat&capacidades=%7B%7D`
+		);
+		const tipoInventado = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/crearOperacion`,
+			`${base}&tipo=video&capacidades=%7B%7D&confirmado=true`
+		);
+		const capacidadesRotas = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/crearOperacion`,
+			`${base}&tipo=chat&capacidades=no-es-json&confirmado=true`
+		);
+
+		expect(sinConfirmar.status).toBe(400);
+		expect(tipoInventado.status).toBe(400);
+		expect(capacidadesRotas.status).toBe(400);
+		expect(auditCount('apps.operation.create')).toBe(antes);
+	});
+
+	it('guardar las versiones sin confirmación o con una versión mal formada responde 400 y no audita', async () => {
+		const antes = auditCount('apps.app.versions');
+
+		const sinConfirmar = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/guardarVersiones`,
+			'versionMinima=1.0.0&motivo=Sin+confirmar'
+		);
+		const malFormada = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/guardarVersiones`,
+			'versionMinima=uno.cero&motivo=Version+mala&confirmado=true'
+		);
+
+		expect(sinConfirmar.status).toBe(400);
+		expect(malFormada.status).toBe(400);
+		expect(auditCount('apps.app.versions')).toBe(antes);
+	});
+
+	it('guardar las versiones válidas responde 303 y queda auditado', async () => {
+		const antes = auditCount('apps.app.versions');
+		const actual = versionsOf();
+
+		// Se guardan los valores que ya tiene la app: la prueba audita el guardado sin cambiar la versión que exigen las demás pruebas.
+		const aplicado = await postAdmin(
+			session,
+			`/admin/apps/${SLUG}?/guardarVersiones`,
+			new URLSearchParams({
+				versionMinima: actual.min,
+				versionRecomendada: actual.recommended,
+				exigirVersion: actual.enforce ? 'true' : 'false',
+				motivo: 'Versiones+de+prueba',
+				confirmado: 'true'
+			}).toString()
+		);
+
+		expect(aplicado.status).toBe(303);
+		expect(auditCount('apps.app.versions')).toBe(antes + 1);
 	});
 });
