@@ -232,7 +232,7 @@ describe('documento OpenAPI (api-v1)', () => {
 	it('publica GET y PUT de /sync y GET de /defaults', async () => {
 		const result = await send(baseUrl, '/api/v1/openapi.json', {
 			host: apiHost,
-			headers: { accept: 'application/json' }
+			headers
 		});
 
 		expect(result.status).toBe(200);

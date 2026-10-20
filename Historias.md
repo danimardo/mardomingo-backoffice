@@ -178,7 +178,7 @@ Cada requisito tiene identificador `BE-FR-XX` y criterios de aceptación (`CA`).
 - Esquema del documento de sincronización (BE-FR-39) y predeterminados (BE-FR-42).
 - Catálogo de operaciones (BE-FR-77).
 - Email de soporte propio opcional (BE-FR-84).
-- CA1: Toda petición a `/api/v1` (salvo `/health`, `/openapi.json` y el _preflight_ CORS, BE-FR-65 CA2) lleva `X-App-Id`. Ausente o desconocido → `400 UNKNOWN_APP`; app `disabled` → `503 APP_DISABLED`.
+- CA1: Toda petición a `/api/v1` (salvo `/health` y el _preflight_ CORS, BE-FR-65 CA2) lleva `X-App-Id`. Ausente o desconocido → `400 UNKNOWN_APP`; app `disabled` → `503 APP_DISABLED`.
 - CA2: `X-App-Id` **identifica, no autentica**: los clientes públicos no pueden guardar secretos. La seguridad descansa en la sesión del usuario, los límites y las reservas.
 - CA3: Dar de alta una app o una operación no requiere redesplegar.
 - **Perfil inicial:** se crea la app `secretario` (tipo `desktop`) con las operaciones de BE-FR-31, el esquema de sincronización de BE-FR-39 y los parámetros de audio de la sección 9.
@@ -782,7 +782,7 @@ Toda escritura que afecte a saldo o reservas (reserva, cobro, compra, ajuste, ca
 ### 7.1 Convenciones
 
 - Base: `https://api.mardomingo.com/api/v1`.
-- **Contrato OpenAPI 3.1** publicado en `GET /api/v1/openapi.json` (público), generado a partir de los esquemas de validación. Es la referencia para los clientes y para generar clientes tipados; los tests comprueban que las respuestas lo cumplen.
+- **Contrato OpenAPI 3.1** publicado en `GET /api/v1/openapi.json` (**con sesión**: exige `X-App-Id` y un token Bearer de esa app; no es público), generado a partir de los esquemas de validación. Es la referencia para los clientes y para generar clientes tipados; los tests comprueban que las respuestas lo cumplen.
 - Autenticación: `Authorization: Bearer <token de sesión>` (salvo los endpoints marcados como públicos).
 - Cabeceras enviadas por las apps en **todas** las peticiones: `X-App-Id: <slug>`, `X-App-Version: x.y.z` y, en escritorio y móvil, `X-Device-Name: <nombre del equipo>`.
 - Cabecera `Idempotency-Key: <uuid>` recomendada en `/ai/*` (BE-FR-81).
@@ -999,9 +999,9 @@ Cabecera `If-Match: 42` (obligatoria). Cuerpo: `{ "data": { ... } }` (mismo form
 
 `{ "status": "ok" }` si la base de datos responde; si no responde, `503`. Lo usan Coolify y la monitorización.
 
-#### `GET /openapi.json` _(público)_
+#### `GET /openapi.json` _(Bearer)_
 
-Contrato OpenAPI 3.1 de la API (7.1).
+Contrato OpenAPI 3.1 de la API (7.1). **No es público** (decisión del propietario, 2026-10-19): exige `X-App-Id` y una sesión Bearer de esa app; sin ellas responde `400 UNKNOWN_APP` o `401 UNAUTHENTICATED`. No se bloquea por versión mínima ni por mantenimiento.
 
 ### 7.4 Comportamiento ante desconexión del cliente
 

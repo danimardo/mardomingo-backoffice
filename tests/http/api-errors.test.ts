@@ -5,6 +5,10 @@ import * as z from 'zod';
 import { jsonOf, send } from './client';
 
 const baseUrl = inject('httpBaseUrl');
+const token = inject('httpChatToken');
+
+const appHeaders = { 'x-app-id': 'secretario', 'x-app-version': '4.0.0' };
+const signedIn = { ...appHeaders, authorization: `Bearer ${token}` };
 
 const apiErrorBody = z.object({
 	error: z.object({
@@ -43,13 +47,48 @@ describe('errores de la API en formato 7.1', () => {
 });
 
 describe('documento OpenAPI', () => {
-	it('se sirve como OpenAPI 3.1 con su estructura y el error 7.1 como componente', async () => {
-		const result = await send(baseUrl, '/api/v1/openapi.json');
+	it('con sesión se sirve como OpenAPI 3.1 con su estructura y el error 7.1 como componente', async () => {
+		const result = await send(baseUrl, '/api/v1/openapi.json', { headers: signedIn });
 		const document = openApiMinimal.parse(jsonOf(result));
 
 		expect(result.status).toBe(200);
 		expect(document.openapi).toBe('3.1.0');
 		expect(document.paths).toHaveProperty('/health');
 		expect(document.components.schemas).toHaveProperty('ApiError');
+		expect(result.headers['cache-control']).toBe('private, no-store');
+	});
+
+	it('no es público: sin sesión responde 401 UNAUTHENTICATED y no revela el documento', async () => {
+		const result = await send(baseUrl, '/api/v1/openapi.json', { headers: appHeaders });
+
+		expect(result.status).toBe(401);
+		expect(apiErrorBody.parse(jsonOf(result)).error.code).toBe('UNAUTHENTICATED');
+		expect(result.text).not.toContain('"openapi"');
+	});
+
+	it('con un token inventado también responde 401', async () => {
+		const result = await send(baseUrl, '/api/v1/openapi.json', {
+			headers: { ...appHeaders, authorization: 'Bearer token-inventado' }
+		});
+
+		expect(result.status).toBe(401);
+		expect(result.text).not.toContain('"openapi"');
+	});
+
+	it('sin X-App-Id responde 400 UNKNOWN_APP, ni siquiera con token', async () => {
+		const result = await send(baseUrl, '/api/v1/openapi.json', {
+			headers: { authorization: `Bearer ${token}` }
+		});
+
+		expect(result.status).toBe(400);
+		expect(apiErrorBody.parse(jsonOf(result)).error.code).toBe('UNKNOWN_APP');
+	});
+
+	it('el token cuenta aunque la app esté en una versión antigua: es documentación y no se bloquea por versión', async () => {
+		const result = await send(baseUrl, '/api/v1/openapi.json', {
+			headers: { ...signedIn, 'x-app-version': '0.0.1' }
+		});
+
+		expect(result.status).toBe(200);
 	});
 });
