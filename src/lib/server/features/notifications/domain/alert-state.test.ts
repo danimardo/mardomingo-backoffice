@@ -58,3 +58,11 @@ describe('claves de alerta tipadas', () => {
 		expect(alertKeys.flagged('usr_1', '2026-10-11')).toBe('flagged:usr_1:2026-10-11');
 	});
 });
+
+describe('catálogo de claves de L14 (T325)', () => {
+	it('las alertas de saldo y de ledger tienen su clave exacta', () => {
+		expect(alertKeys.openrouterBalance()).toBe('openrouter_balance');
+		expect(alertKeys.mistralBilling()).toBe('mistral_billing');
+		expect(alertKeys.ledgerMismatch('usr_1')).toBe('ledger_mismatch:usr_1');
+	});
+});
