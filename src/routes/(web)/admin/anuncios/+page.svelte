@@ -3,6 +3,7 @@
 	// funciona igual.
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -167,6 +168,9 @@
 								label={m.admin_announcements_reason()}
 								required
 							/>
+							<Checkbox id={`confirmado-anuncio-${row.id}`} name="confirmado" value="true"
+								>{m.admin_announcements_confirm()}</Checkbox
+							>
 							<Button type="submit" variant="ghost">{m.admin_announcements_deactivate()}</Button>
 						</form>
 					{/if}

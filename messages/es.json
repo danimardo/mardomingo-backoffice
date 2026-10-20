@@ -524,6 +524,7 @@
 	"admin_announcements_empty": "No hay anuncios todavía.",
 	"admin_announcements_deactivate": "Desactivar",
 	"admin_announcements_reason": "Motivo",
+	"admin_announcements_confirm": "Confirmo que quiero desactivar este anuncio",
 	"admin_announcements_active": "Activo",
 	"admin_announcements_inactive": "Inactivo",
 	"admin_announcements_created": "Anuncio creado.",

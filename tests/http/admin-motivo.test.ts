@@ -75,4 +75,16 @@ describe('motivo ausente en las acciones que escriben (T321)', () => {
 		expect(result.status).toBe(400);
 		expect(auditTotal()).toBe(antes);
 	});
+
+	it('desactivar un anuncio sin confirmación responde 400 y no audita', async () => {
+		const antes = auditTotal();
+		const result = await postAdmin(
+			session,
+			'/admin/anuncios?/desactivar',
+			'anuncioId=ann_inexistente&motivo=Sin+confirmar'
+		);
+
+		expect(result.status).toBe(400);
+		expect(auditTotal()).toBe(antes);
+	});
 });
