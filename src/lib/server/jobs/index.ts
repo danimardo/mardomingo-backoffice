@@ -11,6 +11,7 @@ import { toEpochMs } from '$lib/shared/time';
 import { runOpenRouterBalance } from './openrouter-balance';
 import { runHoldsCleanup } from './holds-cleanup';
 import { runFreeCreditsExpiry } from './free-credits-expiry';
+import { runDisposableDomains } from './disposable-domains';
 
 /** Las claves de los ajustes se conservan 400 días: después no hay formulario abierto que pueda reenviarlas (T307). */
 const ADJUSTMENT_KEY_RETENTION_MS = 400 * 24 * 60 * 60 * 1000;
@@ -58,6 +59,12 @@ function runners(composition: Composition): Record<ScheduledTaskName, Task['run'
 		'release-downloads': () => runDownloads(composition.statsTasks),
 		'models-refresh': async () =>
 			(await refreshModelCache(composition.ai)) === 'refreshed' ? 1 : 0,
+		'disposable-domains': () =>
+			runDisposableDomains({
+				db: composition.db,
+				logger: composition.logger,
+				clock: composition.clock
+			}).then((count) => (count > 0 ? 1 : 0)),
 		'fx-ecb': async () =>
 			(await refreshFxFromEcb(composition.pricing)).status === 'updated' ? 1 : 0
 	};

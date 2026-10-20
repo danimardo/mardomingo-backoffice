@@ -91,8 +91,16 @@ describe('cambios de hora de Madrid', () => {
 	});
 
 	const DAILY = tasks.filter(
-		(task) => task.pattern.split(' ')[2] === '*' && task.pattern.split(' ')[1] !== '*'
+		(task) =>
+			task.pattern.split(' ')[2] === '*' &&
+			task.pattern.split(' ')[4] === '*' &&
+			task.pattern.split(' ')[1] !== '*'
 	);
+
+	it('la lista de dominios desechables se refresca los lunes a las 04:15 (T340)', () => {
+		const found = tasks.find((task) => task.name === 'disposable-domains');
+		expect(found?.pattern).toBe('15 4 * * 1');
+	});
 
 	it('en el cambio de octubre (2026-10-25, día de 25 horas) cada tarea corre una sola vez ese día, a su hora', () => {
 		for (const task of DAILY) {

@@ -321,3 +321,6 @@ export {
 	type FirstLoginFact,
 	type SignupFact
 } from './stats-facts';
+
+// Refresco de la lista de dominios desechables (T340).
+export { applyDisposableDomains } from './disposable-refresh';

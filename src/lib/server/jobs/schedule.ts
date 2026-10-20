@@ -5,7 +5,7 @@
 // las 02:00 y las 03:00 (los cambios de hora, R14). El BCE publica hacia las 16:00, así que se consulta a las 16:30. Las tareas que
 // deben ponerse al día tras un reinicio (croner no guarda estado) se lanzan también al arrancar.
 //
-// Pendientes de L14 (no programadas todavía): `sync-tombstones-cleanup` y `disposable-domains`.
+// Semanal: `disposable-domains` los lunes a las 04:15 (T340). Pendiente: `sync-tombstones-cleanup`, que no aplica (T338).
 
 /** Tareas ya programadas. */
 export type ScheduledTaskName =
@@ -20,7 +20,8 @@ export type ScheduledTaskName =
 	| 'price-references'
 	| 'release-downloads'
 	| 'models-refresh'
-	| 'fx-ecb';
+	| 'fx-ecb'
+	| 'disposable-domains';
 
 export interface TaskSchedule {
 	readonly name: ScheduledTaskName;
@@ -42,5 +43,6 @@ export const SCHEDULE: readonly TaskSchedule[] = Object.freeze([
 	{ name: 'price-references', pattern: '50 4 * * *', catchUpOnStart: false },
 	{ name: 'release-downloads', pattern: '0 5 * * *', catchUpOnStart: false },
 	{ name: 'models-refresh', pattern: '10 5 * * *', catchUpOnStart: false },
-	{ name: 'fx-ecb', pattern: '30 16 * * *', catchUpOnStart: true }
+	{ name: 'fx-ecb', pattern: '30 16 * * *', catchUpOnStart: true },
+	{ name: 'disposable-domains', pattern: '15 4 * * 1', catchUpOnStart: false }
 ]);
