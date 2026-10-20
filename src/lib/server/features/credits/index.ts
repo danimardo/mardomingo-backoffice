@@ -6,6 +6,7 @@ import {
 	chargeAndRelease,
 	checkLedger,
 	expireBuckets,
+	warnExpiringBuckets,
 	expireHolds,
 	forfeitAll,
 	getBalance,
@@ -105,6 +106,8 @@ export interface Credits {
 	expireHolds(): number;
 	/** Caducidad de bolsas gratuitas (BE-FR-16). */
 	expireBuckets(): number;
+	/** Usuarios con una bolsa gratuita que caduca en `windowMs` y aún no tienen aviso; los marca (T330). */
+	warnExpiringBuckets(windowMs: number): string[];
 	/** Borrado de la cuenta: bolsas a cero con `forfeit`, umbral borrado y deuda intacta (BE-FR-07 CA4). Solo `privacy`. */
 	forfeitAll(
 		userId: string,
@@ -190,6 +193,7 @@ export function createCredits(config: CreditsConfig): Credits {
 		releaseOpenHoldsOnStartup: () => releaseOpenHoldsOnStartup(deps),
 		expireHolds: () => expireHolds(deps),
 		expireBuckets: () => expireBuckets(deps),
+		warnExpiringBuckets: (windowMs) => warnExpiringBuckets(deps, { windowMs }),
 		forfeitAll: (userId, reason) => forfeitAll(deps, userId, reason),
 		releaseOpenHolds: (userId) => releaseOpenHolds(deps, userId),
 		checkLedger: () => checkLedger(deps),

@@ -8,6 +8,7 @@ export type EmailReason =
 	| 'password_changed'
 	| 'admin_alert'
 	| 'low_balance'
+	| 'free_expiry_warning'
 	| 'email_change_verify'
 	| 'email_changed_notice'
 	| 'legal_update'

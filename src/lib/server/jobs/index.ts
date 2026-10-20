@@ -10,6 +10,7 @@ import { SCHEDULE, type ScheduledTaskName } from './schedule';
 import { toEpochMs } from '$lib/shared/time';
 import { runOpenRouterBalance } from './openrouter-balance';
 import { runHoldsCleanup } from './holds-cleanup';
+import { runFreeCreditsExpiry } from './free-credits-expiry';
 
 /** Las claves de los ajustes se conservan 400 días: después no hay formulario abierto que pueda reenviarlas (T307). */
 const ADJUSTMENT_KEY_RETENTION_MS = 400 * 24 * 60 * 60 * 1000;
@@ -33,7 +34,13 @@ function runners(composition: Composition): Record<ScheduledTaskName, Task['run'
 			const report = await privacy.processInactive();
 			return report.notified + report.cancelled + report.deleted;
 		},
-		'free-credits-expiry': () => credits.expireBuckets(),
+		'free-credits-expiry': () =>
+			runFreeCreditsExpiry({
+				db: composition.db,
+				credits,
+				notifications: composition.notifications,
+				warningDays: Number(getSetting(apps, 'free_expiry_warning_days') ?? 7)
+			}),
 		'holds-cleanup': () => runHoldsCleanup(credits),
 		'openrouter-balance': async () =>
 			(await runOpenRouterBalance({

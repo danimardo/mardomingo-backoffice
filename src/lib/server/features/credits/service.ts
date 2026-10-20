@@ -59,7 +59,9 @@ import {
 	setRealPurchase,
 	lowBalanceStateOf,
 	setLowBalanceNotified,
-	setLowBalanceThreshold as writeLowBalanceThreshold
+	setLowBalanceThreshold as writeLowBalanceThreshold,
+	freeBucketsExpiringSoon,
+	markExpiryWarned
 } from './repository';
 
 export interface CreditsDeps {
@@ -447,6 +449,24 @@ export function expireBuckets(deps: CreditsDeps): number {
 		});
 	}
 	return touched;
+}
+
+/**
+ * Usuarios con una bolsa gratuita que caduca en la ventana `windowMs` y que aún no han recibido el aviso (T330). Marca cada
+ * bolsa antes de devolver el usuario, así que el aviso sale una sola vez aunque la tarea se repita.
+ */
+export function warnExpiringBuckets(
+	deps: CreditsDeps,
+	input: { readonly windowMs: number }
+): string[] {
+	const now = deps.clock.now();
+	const users = immediateTransaction(deps.db, (tx) => {
+		const buckets = freeBucketsExpiringSoon(tx, now, now + input.windowMs);
+		for (const bucket of buckets) markExpiryWarned(tx, bucket.id, now);
+		return [...new Set(buckets.map((bucket) => bucket.userId))];
+	});
+	if (users.length > 0) deps.logger.emit('credits.expiry.warned', { count: users.length });
+	return users;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

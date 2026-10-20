@@ -331,6 +331,8 @@
 	"sessions_close_error": "No se ha podido cerrar esa sesión. Recarga la página y vuelve a intentarlo.",
 	"notifications_low_balance_subject": "Tu saldo está bajo",
 	"notifications_low_balance_body": "Tu saldo de créditos ha bajado del umbral que elegiste. Puedes revisarlo en tu panel.",
+	"notifications_free_expiry_subject": "Tus créditos gratuitos caducan pronto",
+	"notifications_free_expiry_body": "Tienes créditos gratuitos que caducan dentro de {days} días. Puedes usarlos antes de esa fecha y revisar tu saldo en tu panel.",
 	"movements_app_label": "App",
 	"movements_app_all": "Todas las apps",
 	"panel_balance_eur": "Equivalente en euros",

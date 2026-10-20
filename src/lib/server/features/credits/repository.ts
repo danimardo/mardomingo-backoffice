@@ -414,6 +414,34 @@ export function closeHold(tx: Tx, id: string, reason: ReleaseReason, now: EpochM
 }
 
 /** Bolsas gratuitas caducadas con saldo, de cualquier cuenta (BE-FR-16). */
+/** Bolsas gratuitas con saldo que caducan en (desde, hasta] y aún no tienen su aviso (T330). */
+export function freeBucketsExpiringSoon(
+	db: Db | Tx,
+	fromMs: number,
+	untilMs: number
+): { readonly id: string; readonly userId: string }[] {
+	return db
+		.select({ id: creditBuckets.id, userId: creditBuckets.userId })
+		.from(creditBuckets)
+		.where(
+			and(
+				eq(creditBuckets.kind, 'free'),
+				gt(creditBuckets.remainingMicro, toMicro(0)),
+				gt(creditBuckets.expiresAt, toEpochMs(fromMs)),
+				lte(creditBuckets.expiresAt, toEpochMs(untilMs)),
+				isNull(creditBuckets.expiryWarningSentAt)
+			)
+		)
+		.all();
+}
+
+export function markExpiryWarned(tx: Tx, bucketId: string, now: number): void {
+	tx.update(creditBuckets)
+		.set({ expiryWarningSentAt: toEpochMs(now) })
+		.where(eq(creditBuckets.id, bucketId))
+		.run();
+}
+
 export function expiredFreeBucketUsers(db: Db | Tx, now: number): string[] {
 	const rows = db
 		.selectDistinct({ userId: creditBuckets.userId })
