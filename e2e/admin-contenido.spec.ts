@@ -167,6 +167,8 @@ test('@BE-FR-50 la lista encuentra la cuenta por email y su ficha muestra bolsas
 	await page.waitForLoadState('networkidle');
 	await page.locator('#busqueda').fill(email);
 	await page.getByRole('button', { name: 'Buscar' }).click();
+	// Esperar la navegación del formulario GET: si el clic en el enlace llega antes, la petición de datos se aborta.
+	await page.waitForURL(/[?&]q=/);
 	await page.waitForLoadState('networkidle');
 
 	await page.getByRole('link', { name: email }).click();
@@ -186,6 +188,8 @@ test('@BE-FR-50 previsualizar un bloqueo muestra el paso de confirmación y no b
 	await page.waitForLoadState('networkidle');
 	await page.locator('#busqueda').fill(email);
 	await page.getByRole('button', { name: 'Buscar' }).click();
+	// Esperar la navegación del formulario GET: si el clic en el enlace llega antes, la petición de datos se aborta.
+	await page.waitForURL(/[?&]q=/);
 	await page.waitForLoadState('networkidle');
 	await page.getByRole('link', { name: email }).click();
 	await page.waitForLoadState('networkidle');
@@ -221,6 +225,8 @@ test('@BE-FR-50 un administrador bloquea y desbloquea una cuenta, cada acción c
 	await page.waitForLoadState('networkidle');
 	await page.locator('#busqueda').fill(objetivo);
 	await page.getByRole('button', { name: 'Buscar' }).click();
+	// Esperar la navegación del formulario GET: si el clic en el enlace llega antes, la petición de datos se aborta.
+	await page.waitForURL(/[?&]q=/);
 	await page.waitForLoadState('networkidle');
 	await page.getByRole('link', { name: objetivo }).click();
 	await page.waitForLoadState('networkidle');

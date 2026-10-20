@@ -23,6 +23,9 @@ const e2eDbPath = readFileSync(E2E_DB_FILE, 'utf8');
 
 const nightly = process.env.E2E_NIGHTLY === '1';
 
+/** Spec de administración con un único administrador por base: solo en chromium (T314). */
+const ADMIN_SPEC = /admin-contenido\.spec\.ts/;
+
 export default defineConfig({
 	testDir: 'e2e',
 	globalSetup: './e2e/global-setup.ts',
@@ -50,17 +53,18 @@ export default defineConfig({
 		{
 			name: 'firefox',
 			use: { ...devices['Desktop Firefox'] },
-			testIgnore: /.*\.setup\.ts/
+			// Un solo administrador por base (índice one_admin): este spec corre solo en chromium (ver ADMIN_SPEC).
+			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
 		},
 		{
 			name: 'webkit',
 			use: { ...devices['Desktop Safari'] },
-			testIgnore: /.*\.setup\.ts/
+			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
 		},
 		{
 			name: 'mobile-webkit',
 			use: { ...devices['iPhone 13'] },
-			testIgnore: /.*\.setup\.ts/
+			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
 		},
 		{
 			name: 'visual',
