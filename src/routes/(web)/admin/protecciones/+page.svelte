@@ -49,20 +49,53 @@
 <section aria-labelledby="limites">
 	<h2 id="limites">{m.admin_protections_limits_heading()}</h2>
 	{#each data.limits as limit (limit.key)}
-		<form method="POST" action="?/guardarLimite">
+		<form method="POST" action="?/guardarLimites">
 			<input type="hidden" name="clave" value={limit.key} />
 			<TextField
 				id={`valor-${limit.key}`}
 				name="valor"
 				label={`${limit.key} (${m.admin_protections_current()}: ${limit.value})`}
 			/>
+			<p>{m.admin_economy_scope_global()}</p>
 			<TextField id={`motivo-${limit.key}`} name="motivo" label={m.admin_protections_reason()} />
 			<Checkbox id={`confirmado-${limit.key}`} name="confirmado" value="true"
 				>{m.admin_protections_confirm()}</Checkbox
 			>
-			<p><Button type="submit" variant="secondary">{m.admin_protections_save()}</Button></p>
+			<p>
+				<Button type="submit" formaction="?/previsualizarLimites" variant="ghost"
+					>{m.admin_protections_preview()}</Button
+				>
+				<Button type="submit" variant="secondary">{m.admin_protections_save()}</Button>
+			</p>
 		</form>
 	{/each}
+
+	{#if form?.preview}
+		<section aria-labelledby="vista-previa-limite">
+			<h3 id="vista-previa-limite">{m.admin_protections_preview_title()}</h3>
+			{#if form.preview.valid}
+				<p>
+					{form.preview.key}: {form.preview.before ?? ''} → {form.preview.after ?? ''} ({m.admin_economy_scope_global()})
+				</p>
+				<form method="POST" action="?/guardarLimites">
+					<input type="hidden" name="clave" value={form.preview.key} />
+					<input type="hidden" name="valor" value={form.preview.after ?? ''} />
+					<TextField
+						id="motivo-vista-previa"
+						name="motivo"
+						label={m.admin_protections_reason()}
+						required
+					/>
+					<Checkbox id="confirmado-vista-previa" name="confirmado" value="true"
+						>{m.admin_protections_confirm()}</Checkbox
+					>
+					<p><Button type="submit" variant="primary">{m.admin_protections_save()}</Button></p>
+				</form>
+			{:else}
+				<Banner level="critical">{m.admin_protections_error()}</Banner>
+			{/if}
+		</section>
+	{/if}
 </section>
 
 <p><a href={resolve('/admin/usuarios')}>{m.admin_users_title()}</a></p>

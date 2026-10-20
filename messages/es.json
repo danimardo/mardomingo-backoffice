@@ -535,6 +535,8 @@
 	"admin_protections_reason": "Motivo (obligatorio)",
 	"admin_protections_confirm": "Confirmo este cambio",
 	"admin_protections_save": "Guardar",
+	"admin_protections_preview": "Ver vista previa",
+	"admin_protections_preview_title": "Vista previa del límite",
 	"admin_defaults_title": "Predeterminados",
 	"admin_defaults_intro": "Documento que reciben las cuentas nuevas de esta app. Se valida con el esquema de sincronización. No cambia ninguna cuenta existente.",
 	"admin_defaults_error": "No se ha guardado nada. Revisa los datos y la confirmación.",

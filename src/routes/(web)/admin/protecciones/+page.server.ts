@@ -5,7 +5,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
-import { getSetting, updateSetting } from '$lib/server/features/apps';
+import { getSetting, previewSettingChange, updateSetting } from '$lib/server/features/apps';
 import { brakeStatus, releaseBrake } from '$lib/server/features/protections';
 import { isConfirmed } from '$lib/server/forms/confirmation';
 import { AppError } from '$lib/server/shared/errors';
@@ -24,6 +24,11 @@ const PROTECTION_LIMITS = Object.freeze([
 	'max_concurrent_transcriptions',
 	'global_daily_free_cost_brake_eur'
 ] as const);
+
+/** `true` si la clave es uno de los límites que W44 permite cambiar. Estrecha el tipo sin aserciones. */
+function isLimitKey(value: string): value is (typeof PROTECTION_LIMITS)[number] {
+	return PROTECTION_LIMITS.some((key) => key === value);
+}
 
 function adminOrThrow(locals: App.Locals) {
 	const access = accessFor(locals.user, 'admin');
@@ -59,15 +64,20 @@ export const load: PageServerLoad = ({ locals, setHeaders }) => {
 };
 
 export const actions: Actions = {
-	guardarLimite: async ({ locals, request }) => {
+	previsualizarLimites: async ({ locals, request }) => {
+		adminOrThrow(locals);
+		const form = await request.formData();
+		const key = textOf(form, 'clave');
+		if (!isLimitKey(key)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const preview = previewSettingChange(getComposition().apps, key, Number(textOf(form, 'valor')));
+		return { preview };
+	},
+	guardarLimites: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const key = textOf(form, 'clave');
-		const allowed: readonly string[] = PROTECTION_LIMITS;
-		if (!allowed.includes(key)) {
-			return fail(400, { formError: 'VALIDATION_ERROR' });
-		}
+		if (!isLimitKey(key)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		try {
 			updateSetting(getComposition().apps, {
 				actorId: admin.id,
