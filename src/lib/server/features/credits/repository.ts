@@ -1,7 +1,7 @@
 // Acceso a las tablas de `credits` (T123). Solo lee y escribe filas; ninguna regla vive aquí (eso es `domain/ledger.ts`).
 // Las escrituras reciben el `Tx` de la transacción `BEGIN IMMEDIATE` que abre el servicio.
 import type { Micro } from '$lib/shared/money';
-import { and, eq, gt, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toMicro } from '$lib/shared/money';
@@ -449,4 +449,71 @@ export function setLowBalanceThreshold(
 		.set({ lowBalanceThresholdMicro: thresholdMicro, lowBalanceNotified: false, updatedAt: now })
 		.where(eq(userBalances.userId, userId))
 		.run();
+}
+
+/** Reservas ya liberadas antes del corte (retención de 24 meses; BE-FR-83). Las abiertas nunca se borran. */
+export function deleteReleasedHoldsBefore(db: Db | Tx, before: EpochMs): number {
+	return db
+		.delete(creditHolds)
+		.where(and(isNotNull(creditHolds.releasedAt), lt(creditHolds.releasedAt, before)))
+		.run().changes;
+}
+
+/** Cuentas con alguna bolsa cuyo saldo no es la suma de sus movimientos (comprobación del ledger, BE-FR-15 CA1). */
+export function usersWithBucketMismatch(db: Db | Tx): Set<string> {
+	const sums = new Map(
+		db
+			.select({
+				bucketId: creditMovements.bucketId,
+				total: sql<number>`sum(${creditMovements.amountMicro})`
+			})
+			.from(creditMovements)
+			.where(isNotNull(creditMovements.bucketId))
+			.groupBy(creditMovements.bucketId)
+			.all()
+			.map((row) => [row.bucketId, row.total])
+	);
+	const affected = new Set<string>();
+	for (const bucket of db
+		.select({
+			id: creditBuckets.id,
+			userId: creditBuckets.userId,
+			remainingMicro: creditBuckets.remainingMicro
+		})
+		.from(creditBuckets)
+		.all()) {
+		if ((sums.get(bucket.id) ?? 0) !== bucket.remainingMicro) affected.add(bucket.userId);
+	}
+	return affected;
+}
+
+/**
+ * Cuentas cuya deuda no es lo que dicen las líneas sin bolsa del ledger: cada parte de un cobro que pasa a deuda es una línea
+ * nula negativa y cada liquidación una positiva, así que la deuda es la suma cambiada de signo.
+ */
+export function usersWithDebtMismatch(db: Db | Tx): Set<string> {
+	const lines = new Map(
+		db
+			.select({
+				userId: creditMovements.userId,
+				total: sql<number>`sum(${creditMovements.amountMicro})`
+			})
+			.from(creditMovements)
+			.where(isNull(creditMovements.bucketId))
+			.groupBy(creditMovements.userId)
+			.all()
+			.map((row) => [row.userId, row.total])
+	);
+	const debts = new Map(
+		db
+			.select({ userId: userBalances.userId, debtMicro: userBalances.debtMicro })
+			.from(userBalances)
+			.all()
+			.map((row) => [row.userId, row.debtMicro])
+	);
+	const affected = new Set<string>();
+	for (const userId of new Set([...lines.keys(), ...debts.keys()])) {
+		if ((debts.get(userId) ?? 0) !== -(lines.get(userId) ?? 0)) affected.add(userId);
+	}
+	return affected;
 }

@@ -4,6 +4,7 @@ import {
 	adjust,
 	applyChargeback,
 	chargeAndRelease,
+	checkLedger,
 	expireBuckets,
 	expireHolds,
 	forfeitAll,
@@ -30,7 +31,13 @@ import {
 } from './service';
 import type { AuditDeps } from '$lib/server/features/audit';
 import type { BucketKind } from './domain/ledger';
-import { freeAccountsOpenHoldsMicro, realPurchaseUserIds, type ReleaseReason } from './repository';
+import { immediateTransaction } from '$lib/server/db/tx';
+import {
+	deleteReleasedHoldsBefore,
+	freeAccountsOpenHoldsMicro,
+	realPurchaseUserIds,
+	type ReleaseReason
+} from './repository';
 import {
 	bucketsOf,
 	lowBalanceView,
@@ -98,9 +105,16 @@ export interface Credits {
 	/** Caducidad de bolsas gratuitas (BE-FR-16). */
 	expireBuckets(): number;
 	/** Borrado de la cuenta: bolsas a cero con `forfeit`, umbral borrado y deuda intacta (BE-FR-07 CA4). Solo `privacy`. */
-	forfeitAll(userId: string): { readonly forfeitedMicro: number; readonly buckets: number };
+	forfeitAll(
+		userId: string,
+		reason?: 'user' | 'inactivity'
+	): { readonly forfeitedMicro: number; readonly buckets: number };
 	/** Borrado de la cuenta: libera sin cobro las reservas abiertas (BE-FR-07). Solo `privacy`. */
 	releaseOpenHolds(userId: string): number;
+	/** Retención (BE-FR-83): borra las reservas liberadas antes del corte. Solo `privacy`. */
+	purgeReleasedHolds(before: EpochMs): number;
+	/** Comprobación del ledger (BE-FR-15 CA1): cuentas cuyo saldo no se reconstruye desde los movimientos. */
+	checkLedger(): string[];
 	/** Todos los movimientos de la cuenta, para la exportación RGPD (BE-FR-08). */
 	exportMovements(userId: string): MovementExportRow[];
 	/** Ajuste del administrador con motivo y auditoría (BE-FR-18). */
@@ -112,6 +126,7 @@ export interface Credits {
 		readonly amountMicro: number;
 		readonly expiresAt?: EpochMs | null;
 		readonly reason: string;
+		readonly idempotencyKey: string;
 	}): AdjustOutcome;
 	/** Saldo: total, reservado y disponible (BE-FR-71 CA2). */
 	getBalance(userId: string): BalanceView;
@@ -126,7 +141,6 @@ export interface Credits {
 		readonly amountMicro: number;
 		readonly simulated: boolean;
 	}): PurchaseGrantOutcome;
-		readonly idempotencyKey: string;
 	/** Retira de la bolsa de la compra los créditos de un reembolso, con motivo y administrador (BE-FR-27). */
 	withdrawForRefund(input: {
 		readonly adminId: string;
@@ -173,8 +187,11 @@ export function createCredits(config: CreditsConfig): Credits {
 		releaseOpenHoldsOnStartup: () => releaseOpenHoldsOnStartup(deps),
 		expireHolds: () => expireHolds(deps),
 		expireBuckets: () => expireBuckets(deps),
-		forfeitAll: (userId) => forfeitAll(deps, userId),
+		forfeitAll: (userId, reason) => forfeitAll(deps, userId, reason),
 		releaseOpenHolds: (userId) => releaseOpenHolds(deps, userId),
+		checkLedger: () => checkLedger(deps),
+		purgeReleasedHolds: (before) =>
+			immediateTransaction(deps.db, (tx) => deleteReleasedHoldsBefore(tx, before)),
 		exportMovements: (userId) => movementsForExport(deps, userId),
 		adjust: (input) => adjust(deps, input),
 		getBalance: (userId) => getBalance(deps, userId),

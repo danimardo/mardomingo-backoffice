@@ -49,6 +49,8 @@ import {
 	persistState,
 	reservedOf,
 	type ReleaseReason,
+	usersWithBucketMismatch,
+	usersWithDebtMismatch,
 	insertMovements,
 	usageSince,
 	bucketOfPayment,
@@ -322,19 +324,19 @@ export function adjust(
 		readonly amountMicro: number;
 		readonly expiresAt?: EpochMs | null | undefined;
 		readonly reason: string;
-	}
-): AdjustOutcome {
 		/** Clave del formulario: un envío repetido con la misma clave no vuelve a aplicar el ajuste (T307, 15.12). */
 		readonly idempotencyKey: string;
+	}
+): AdjustOutcome {
 	return immediateTransaction(deps.db, (tx) => {
 		const now = deps.clock.now();
-		const before = loadState(tx, input.userId);
-		const snapshot = (state: LedgerState) => ({
 		if (
 			tx.select().from(adjustmentKeys).where(eq(adjustmentKeys.key, input.idempotencyKey)).get() !==
 			undefined
 		)
 			return { ok: false, reason: 'repeated' };
+		const before = loadState(tx, input.userId);
+		const snapshot = (state: LedgerState) => ({
 			balanceMicro: balanceOf(state),
 			debtMicro: state.debt
 		});
@@ -381,9 +383,9 @@ export function adjust(
 				},
 				deps.auditDeps
 			);
+			tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
 			return { ok: true };
 		}
-			tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
 
 		const available = balanceOf(before) - reservedOf(tx, input.userId);
 		const result = applyNegativeAdjustment(before, {
@@ -420,9 +422,9 @@ export function adjust(
 			},
 			deps.auditDeps
 		);
+		tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
 		return { ok: true };
 	});
-		tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -457,7 +459,8 @@ export function expireBuckets(deps: CreditsDeps): number {
  */
 export function forfeitAll(
 	deps: CreditsDeps,
-	userId: string
+	userId: string,
+	reason: 'user' | 'inactivity' = 'user'
 ): { readonly forfeitedMicro: number; readonly buckets: number } {
 	return immediateTransaction(deps.db, (tx) => {
 		const now = deps.clock.now();
@@ -466,7 +469,7 @@ export function forfeitAll(
 		if (result.lines.length > 0) {
 			persistState(tx, userId, before, result.state, now);
 			insertMovements(tx, movementRows(userId, result.lines), idsOf(deps, 'mov'), now);
-			deps.logger.emit('credits.balance.forfeited', { count: result.lines.length });
+			deps.logger.emit('credits.balance.forfeited', { reason, count: result.lines.length });
 		}
 		writeLowBalanceThreshold(tx, userId, null, now);
 		return {
@@ -823,4 +826,21 @@ export function lowBalanceView(
 		thresholdMicro: state.thresholdMicro,
 		isBelow: state.thresholdMicro !== null && total < state.thresholdMicro
 	};
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Comprobación del ledger (BE-FR-15 CA1, SC-003)
+
+/**
+ * Comprueba que el saldo materializado de cada cuenta se puede reconstruir a partir de los movimientos: el resto de cada bolsa
+ * es la suma de sus movimientos y la deuda es la suma cambiada de signo de las líneas sin bolsa. Devuelve las cuentas con
+ * discrepancia y registra un único `credits.ledger.mismatch` con su recuento (nunca las identidades). No escribe nada.
+ */
+export function checkLedger(deps: Pick<CreditsDeps, 'db' | 'logger'>): string[] {
+	const affected = new Set([
+		...usersWithBucketMismatch(deps.db),
+		...usersWithDebtMismatch(deps.db)
+	]);
+	if (affected.size > 0) deps.logger.emit('credits.ledger.mismatch', { count: affected.size });
+	return [...affected].sort();
 }
