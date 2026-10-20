@@ -256,6 +256,27 @@ describe('valor manual auditado (BE-FR-87 CA3)', () => {
 	});
 });
 
+describe('el refresco automático respeta el valor manual (BE-FR-87 CA3)', () => {
+	it('un refresco con el manual vigente no lo sustituye, y al desactivarlo se vuelve al último valor del BCE', async () => {
+		fake.next({ status: 'observation', timePeriod: '2026-10-09', rate: '1.0870' });
+		fixture.clock.set(Date.UTC(2026, 9, 9, 17, 0, 0));
+		await refreshFxFromEcb(deps);
+
+		fixture.clock.advance(1_000);
+		setManualFx(deps, { adminId, usdEurPpm: toPpm(950_000), reason: 'Tipo de la gestoría' });
+
+		fake.next({ status: 'observation', timePeriod: '2026-10-09', rate: '1.1000' });
+		fixture.clock.advance(1_000);
+		await refreshFxFromEcb(deps);
+		expect(getCurrentFxRate(deps)).toMatchObject({ usdEurPpm: toPpm(950_000), source: 'manual' });
+
+		fixture.clock.advance(1_000);
+		expect(clearManualFx(deps, { adminId, reason: 'Vuelta al BCE' })).toEqual({ ok: true });
+		const expected = fxUsdEurPpm({ bceRatePpm: toPpm(1_100_000), bufferPpm: toPpm(BUFFER) });
+		expect(getCurrentFxRate(deps)).toMatchObject({ usdEurPpm: expected, source: 'ecb' });
+	});
+});
+
 describe('vigencia en el instante del cobro (BE-FR-87 CA1) y valor por defecto', () => {
 	it('sin filas, 0,92 (920.000 ppm); después, lo que esté vigente en ese instante', () => {
 		expect(getCurrentFxRate(deps)).toMatchObject({ usdEurPpm: toPpm(920_000), source: 'default' });

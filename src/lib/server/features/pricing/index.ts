@@ -13,6 +13,8 @@ export {
 	type Provider,
 	type RefreshOutcome
 } from './service';
+export { publicPricePage } from './public-prices';
+export type { PricePage, PriceOperation } from './presenters';
 export { PRICING_LOG_EVENTS, type PricingLogFields } from './events';
 export {
 	estimateChatMicroUsd,

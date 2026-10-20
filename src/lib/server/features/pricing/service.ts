@@ -116,6 +116,10 @@ export async function refreshFxFromEcb(deps: PricingDeps): Promise<RefreshOutcom
 	const usdEurPpm = fxUsdEurPpm({ bceRatePpm, bufferPpm });
 	const now = deps.clock.now();
 	immediateTransaction(deps.db, (tx) => {
+		// Con un valor manual vigente, la observación se guarda sin entrar en vigor (un instante antes que el manual):
+		// el manual rige hasta que se desactive (BE-FR-87 CA3) y al desactivarlo se vuelve al último valor del BCE.
+		const inForce = currentRowOf(fxRowsInForce(tx, now), now);
+		const effectiveFrom = inForce?.source === 'manual' ? inForce.effectiveFrom - 1 : now;
 		insertFxRecord(tx, {
 			id: deps.ids('fx'),
 			usdEurPpm,
@@ -123,7 +127,7 @@ export async function refreshFxFromEcb(deps: PricingDeps): Promise<RefreshOutcom
 			ecbRatePpm: bceRatePpm,
 			ecbDate: fetched.timePeriod,
 			bufferPpm,
-			effectiveFrom: now,
+			effectiveFrom,
 			createdBy: null,
 			createdAt: now
 		});

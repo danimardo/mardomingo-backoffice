@@ -64,6 +64,21 @@ export {
 	type AnnouncementsAdminDeps
 } from './announcements-admin';
 
+// Landings públicas (T346; W01 y W02).
+export {
+	activeOperationsForPrices,
+	landingRows,
+	landingRowBySlug,
+	type PricedOperationRow
+} from './landings';
+export {
+	appPageOf,
+	landingListOf,
+	type AppPage,
+	type LandingAppRow,
+	type LandingListItem
+} from './presenters';
+
 export {
 	appForAdmin,
 	appDetailsForAdmin,
