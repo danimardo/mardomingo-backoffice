@@ -9,6 +9,7 @@ import { runLedgerCheck } from './ledger-check';
 import { SCHEDULE, type ScheduledTaskName } from './schedule';
 import { toEpochMs } from '$lib/shared/time';
 import { runOpenRouterBalance } from './openrouter-balance';
+import { runHoldsCleanup } from './holds-cleanup';
 
 /** Las claves de los ajustes se conservan 400 días: después no hay formulario abierto que pueda reenviarlas (T307). */
 const ADJUSTMENT_KEY_RETENTION_MS = 400 * 24 * 60 * 60 * 1000;
@@ -33,7 +34,7 @@ function runners(composition: Composition): Record<ScheduledTaskName, Task['run'
 			return report.notified + report.cancelled + report.deleted;
 		},
 		'free-credits-expiry': () => credits.expireBuckets(),
-		'holds-cleanup': () => credits.expireHolds(),
+		'holds-cleanup': () => runHoldsCleanup(credits),
 		'openrouter-balance': async () =>
 			(await runOpenRouterBalance({
 				gateway: composition.ai.gateway,
