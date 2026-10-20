@@ -9,7 +9,15 @@ import { insertInFlightOperation } from '../../../../../tests/builders/ai-operat
 import { creditsFixture, type CreditsFixture } from '../../../../../tests/builders/credits';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
-import { creditBuckets, creditHolds, creditMovements, userBalances, welcomeGrants } from './schema';
+import {
+	adjustmentKeys,
+	creditBuckets,
+	creditHolds,
+	creditMovements,
+	userBalances,
+	welcomeGrants
+} from './schema';
+import { toEpochMs } from '$lib/shared/time';
 
 const CREDIT = 1_000_000;
 const WELCOME = 1000 * CREDIT;
@@ -445,5 +453,40 @@ describe('ajustes idempotentes (T307, 15.12)', () => {
 			reason: 'exceeds_available'
 		});
 		expect(fixture.credits.adjust({ ...base, amountMicro: 1 * CREDIT })).toEqual({ ok: true });
+	});
+});
+
+describe('retención de las claves de ajustes (T307, 400 días)', () => {
+	it('borra las claves anteriores al corte y conserva las recientes', () => {
+		const userId = fixture.addUser('usr_retencion_claves');
+		const adminId = fixture.addUser('usr_admin_retencion', 'admin');
+		fixture.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-retencion' });
+		const antigua = randomUUID();
+		const reciente = randomUUID();
+		const base = {
+			adminId,
+			userId,
+			direction: 'credit' as const,
+			kind: 'free' as const,
+			expiresAt: null,
+			amountMicro: 1 * CREDIT,
+			reason: 'Retención'
+		};
+		fixture.credits.adjust({ ...base, idempotencyKey: antigua });
+		fixture.db
+			.update(adjustmentKeys)
+			.set({ createdAt: toEpochMs(fixture.clock.now() - 500 * 24 * 60 * 60 * 1000) })
+			.where(eq(adjustmentKeys.key, antigua))
+			.run();
+		fixture.credits.adjust({ ...base, idempotencyKey: reciente });
+
+		const corte = toEpochMs(fixture.clock.now() - 400 * 24 * 60 * 60 * 1000);
+		expect(fixture.credits.purgeAdjustmentKeys(corte)).toBe(1);
+		expect(
+			fixture.db.select().from(adjustmentKeys).where(eq(adjustmentKeys.key, antigua)).get()
+		).toBeUndefined();
+		expect(
+			fixture.db.select().from(adjustmentKeys).where(eq(adjustmentKeys.key, reciente)).get()
+		).toBeDefined();
 	});
 });

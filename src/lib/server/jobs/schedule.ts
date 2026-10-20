@@ -15,6 +15,7 @@ export type ScheduledTaskName =
 	| 'free-credits-expiry'
 	| 'holds-cleanup'
 	| 'ledger-check'
+	| 'adjustment-keys-cleanup'
 	| 'price-references'
 	| 'release-downloads'
 	| 'models-refresh'
@@ -35,6 +36,7 @@ export const SCHEDULE: readonly TaskSchedule[] = Object.freeze([
 	{ name: 'free-credits-expiry', pattern: '30 4 * * *', catchUpOnStart: true },
 	{ name: 'holds-cleanup', pattern: '40 4 * * *', catchUpOnStart: true },
 	{ name: 'ledger-check', pattern: '45 4 * * *', catchUpOnStart: false },
+	{ name: 'adjustment-keys-cleanup', pattern: '55 4 * * *', catchUpOnStart: false },
 	{ name: 'price-references', pattern: '50 4 * * *', catchUpOnStart: false },
 	{ name: 'release-downloads', pattern: '0 5 * * *', catchUpOnStart: false },
 	{ name: 'models-refresh', pattern: '10 5 * * *', catchUpOnStart: false },

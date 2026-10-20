@@ -7,7 +7,10 @@ import { refreshFxFromEcb } from '$lib/server/features/pricing';
 import { runDownloads, runPrices } from '$lib/server/features/stats';
 import { runLedgerCheck } from './ledger-check';
 import { SCHEDULE, type ScheduledTaskName } from './schedule';
+import { toEpochMs } from '$lib/shared/time';
 
+/** Las claves de los ajustes se conservan 400 días: después no hay formulario abierto que pueda reenviarlas (T307). */
+const ADJUSTMENT_KEY_RETENTION_MS = 400 * 24 * 60 * 60 * 1000;
 import { startTasks, type RunningTasks, type Task } from './run-task';
 
 export { runTask, startTasks, TASK_TIMEZONE } from './run-task';
@@ -30,6 +33,8 @@ function runners(composition: Composition): Record<ScheduledTaskName, Task['run'
 		},
 		'free-credits-expiry': () => credits.expireBuckets(),
 		'holds-cleanup': () => credits.expireHolds(),
+		'adjustment-keys-cleanup': () =>
+			credits.purgeAdjustmentKeys(toEpochMs(composition.clock.now() - ADJUSTMENT_KEY_RETENTION_MS)),
 		'ledger-check': () =>
 			runLedgerCheck({ credits, alerts: composition.pricing.alerts, db: composition.db }),
 		'price-references': () => runPrices(composition.statsTasks),

@@ -16,6 +16,7 @@ export type TaskName =
 	| 'openrouter-balance'
 	| 'free-credits-expiry'
 	| 'ledger-check'
+	| 'adjustment-keys-cleanup'
 	| 'models-refresh'
 	| 'price-references'
 	| 'sync-tombstones-cleanup'

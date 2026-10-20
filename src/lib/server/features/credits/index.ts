@@ -33,6 +33,7 @@ import type { AuditDeps } from '$lib/server/features/audit';
 import type { BucketKind } from './domain/ledger';
 import { immediateTransaction } from '$lib/server/db/tx';
 import {
+	deleteAdjustmentKeysBefore,
 	deleteReleasedHoldsBefore,
 	freeAccountsOpenHoldsMicro,
 	realPurchaseUserIds,
@@ -113,6 +114,8 @@ export interface Credits {
 	releaseOpenHolds(userId: string): number;
 	/** Retención (BE-FR-83): borra las reservas liberadas antes del corte. Solo `privacy`. */
 	purgeReleasedHolds(before: EpochMs): number;
+	/** Retención de las claves de los ajustes (T307, 400 días): borra las anteriores a `before`. */
+	purgeAdjustmentKeys(before: EpochMs): number;
 	/** Comprobación del ledger (BE-FR-15 CA1): cuentas cuyo saldo no se reconstruye desde los movimientos. */
 	checkLedger(): string[];
 	/** Todos los movimientos de la cuenta, para la exportación RGPD (BE-FR-08). */
@@ -192,6 +195,8 @@ export function createCredits(config: CreditsConfig): Credits {
 		checkLedger: () => checkLedger(deps),
 		purgeReleasedHolds: (before) =>
 			immediateTransaction(deps.db, (tx) => deleteReleasedHoldsBefore(tx, before)),
+		purgeAdjustmentKeys: (before) =>
+			immediateTransaction(deps.db, (tx) => deleteAdjustmentKeysBefore(tx, before)),
 		exportMovements: (userId) => movementsForExport(deps, userId),
 		adjust: (input) => adjust(deps, input),
 		getBalance: (userId) => getBalance(deps, userId),

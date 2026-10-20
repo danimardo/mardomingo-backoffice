@@ -92,7 +92,7 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 **Tareas** (valores de `task`, Historias 11): `openrouter-balance` (cada hora), `free-credits-expiry`,
 `ledger-check`, `models-refresh`, `price-references`, `sync-tombstones-cleanup`,
 `unverified-accounts-cleanup`, `retention`, `holds-cleanup`, `fx-ecb`, `inactive-accounts`,
-`release-downloads` (diarias) y `disposable-domains` (semanal).
+`release-downloads` y `adjustment-keys-cleanup` (diarias) y `disposable-domains` (semanal).
 
 ### 2.2 `http.*` — peticiones (`$lib/server/logging/events.ts`)
 

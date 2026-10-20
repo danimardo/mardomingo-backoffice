@@ -14,7 +14,14 @@ import type {
 	LineType,
 	LedgerState
 } from './domain/ledger';
-import { creditBuckets, creditHolds, creditMovements, userBalances, welcomeGrants } from './schema';
+import {
+	adjustmentKeys,
+	creditBuckets,
+	creditHolds,
+	creditMovements,
+	userBalances,
+	welcomeGrants
+} from './schema';
 
 export type ReleaseReason = 'consumed' | 'released' | 'expired' | 'interrupted';
 
@@ -452,6 +459,11 @@ export function setLowBalanceThreshold(
 }
 
 /** Reservas ya liberadas antes del corte (retención de 24 meses; BE-FR-83). Las abiertas nunca se borran. */
+/** Retención de las claves de ajustes ya aplicados (T307): borra las anteriores a `before`. Sin datos personales. */
+export function deleteAdjustmentKeysBefore(db: Db | Tx, before: EpochMs): number {
+	return db.delete(adjustmentKeys).where(lt(adjustmentKeys.createdAt, before)).run().changes;
+}
+
 export function deleteReleasedHoldsBefore(db: Db | Tx, before: EpochMs): number {
 	return db
 		.delete(creditHolds)
