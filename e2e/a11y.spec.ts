@@ -3,11 +3,14 @@ import { expect, test } from './fixtures';
 import { checkAccessibility } from './fixtures/axe';
 import { staticPublicRoutes } from './fixtures/routes';
 
-const routes = staticPublicRoutes();
+// Las rutas con parámetros dinámicos se añaden a mano con un valor sembrado (la landing de Secretario).
+const routes = [...staticPublicRoutes(), '/apps/secretario'];
 
 test('la lista de rutas cubre todas las páginas de src/routes', () => {
 	expect(routes).toContain('/');
 	expect(routes).toContain('/preferencias');
+	expect(routes).toContain('/precios');
+	expect(routes).toContain('/terminos');
 });
 
 for (const scheme of ['light', 'dark'] as const) {
