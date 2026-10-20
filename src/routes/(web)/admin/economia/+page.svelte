@@ -37,6 +37,7 @@
 			<p>
 				{m.admin_economy_default_label()}: {setting.defaultValue} · {m.admin_economy_scope_global()}
 			</p>
+			<p>{setting.explanation}</p>
 			<TextField
 				id={`motivo-${setting.key}`}
 				name="motivo"

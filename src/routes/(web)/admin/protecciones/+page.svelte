@@ -46,6 +46,21 @@
 	{/if}
 </section>
 
+<section aria-labelledby="mistral">
+	<h2 id="mistral">{m.admin_protections_mistral_heading()}</h2>
+	<p>{m.admin_protections_mistral_intro()}</p>
+	<form method="POST" action="?/fijarAlertaMistral">
+		<Checkbox id="error-mistral" name="error" value="true"
+			>{m.admin_protections_mistral_error()}</Checkbox
+		>
+		<TextField id="motivo-mistral" name="motivo" label={m.admin_protections_reason()} required />
+		<Checkbox id="confirmado-mistral" name="confirmado" value="true"
+			>{m.admin_protections_confirm()}</Checkbox
+		>
+		<p><Button type="submit" variant="secondary">{m.admin_protections_mistral_save()}</Button></p>
+	</form>
+</section>
+
 <section aria-labelledby="limites">
 	<h2 id="limites">{m.admin_protections_limits_heading()}</h2>
 	{#each data.limits as limit (limit.key)}

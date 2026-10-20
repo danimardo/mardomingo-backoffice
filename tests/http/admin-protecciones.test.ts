@@ -16,12 +16,12 @@ const PREVIEW = '/admin/protecciones?/previsualizarLimites';
 
 let session: AdminSession;
 
-function auditCount(): number {
+function auditCount(action = 'apps.setting.update'): number {
 	const db = new Database(databasePath, { readonly: true });
 	try {
 		const row = db
 			.prepare<[string], { n: number }>('SELECT COUNT(*) AS n FROM admin_audit WHERE action = ?')
-			.get('apps.setting.update');
+			.get(action);
 		return row?.n ?? 0;
 	} finally {
 		db.close();
@@ -108,5 +108,54 @@ describe('límites de protección con sesión de administrador (W44, T313)', () 
 		expect(auditCount()).toBe(antes + 1);
 		expect(await pageHtml()).toContain(`${KEY} (`);
 		expect(await pageHtml()).toContain(`: ${CHANGED_VALUE})`);
+	});
+
+	it('declarar el error de facturación de Mistral exige confirmación y motivo, y activa y limpia la alerta con su auditoría (T326)', async () => {
+		const audit = auditCount('notifications.mistral_billing.set');
+		const alertaActiva = (): number => {
+			const db = new Database(databasePath, { readonly: true });
+			try {
+				return (
+					db
+						.prepare<[], { active: number }>(
+							"SELECT active FROM alerts_state WHERE key = 'mistral_billing'"
+						)
+						.get()?.active ?? 0
+				);
+			} finally {
+				db.close();
+			}
+		};
+
+		const sinConfirmar = await postAdmin(
+			session,
+			`/admin/protecciones?/fijarAlertaMistral`,
+			'error=true&motivo=Sin+confirmar'
+		);
+		const sinMotivo = await postAdmin(
+			session,
+			`/admin/protecciones?/fijarAlertaMistral`,
+			'error=true&motivo=+&confirmado=true'
+		);
+		expect(sinConfirmar.status).toBe(400);
+		expect(sinMotivo.status).toBe(400);
+		expect(alertaActiva()).toBe(0);
+
+		const declarar = await postAdmin(
+			session,
+			`/admin/protecciones?/fijarAlertaMistral`,
+			'error=true&motivo=Factura+rechazada&confirmado=true'
+		);
+		expect(declarar.status).toBe(303);
+		expect(alertaActiva()).toBe(1);
+
+		const limpiar = await postAdmin(
+			session,
+			`/admin/protecciones?/fijarAlertaMistral`,
+			'motivo=Factura+resuelta&confirmado=true'
+		);
+		expect(limpiar.status).toBe(303);
+		expect(alertaActiva()).toBe(0);
+		expect(auditCount('notifications.mistral_billing.set')).toBe(audit + 2);
 	});
 });

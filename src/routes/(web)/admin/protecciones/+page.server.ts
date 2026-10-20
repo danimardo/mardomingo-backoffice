@@ -7,6 +7,7 @@ import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import { getSetting, previewSettingChange, updateSetting } from '$lib/server/features/apps';
 import { brakeStatus, releaseBrake } from '$lib/server/features/protections';
+import { setMistralBillingError } from '$lib/server/features/notifications';
 import { isConfirmed } from '$lib/server/forms/confirmation';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
@@ -64,6 +65,24 @@ export const load: PageServerLoad = ({ locals, setHeaders }) => {
 };
 
 export const actions: Actions = {
+	fijarAlertaMistral: async ({ locals, request }) => {
+		const admin = adminOrThrow(locals);
+		const form = await request.formData();
+		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const reason = textOf(form, 'motivo').trim();
+		if (reason === '') return fail(400, { errors: { motivo: 'validation_required' } });
+		const composition = getComposition();
+		await setMistralBillingError(
+			{ ...composition.pricing.alerts, audit: composition.pricing.audit },
+			{
+				adminId: admin.id,
+				error: textOf(form, 'error') === 'true',
+				reason
+			}
+		);
+		const back = resolve('/admin/protecciones');
+		redirect(303, back);
+	},
 	previsualizarLimites: async ({ locals, request }) => {
 		adminOrThrow(locals);
 		const form = await request.formData();

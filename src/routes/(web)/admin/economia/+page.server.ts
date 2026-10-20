@@ -18,6 +18,7 @@ import {
 	setManualFx,
 	setManualPrice
 } from '$lib/server/features/pricing';
+import * as m from '$lib/paraglide/messages.js';
 import { isConfirmed } from '$lib/server/forms/confirmation';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
@@ -41,6 +42,30 @@ type EconomyKey = (typeof ECONOMY_KEYS)[number];
 /** `true` si la clave es de las que W38 permite cambiar. Estrecha el tipo sin aserciones. */
 function isEconomyKey(value: string): value is EconomyKey {
 	return ECONOMY_KEYS.some((key) => key === value);
+}
+
+/** Explicación de un parámetro para la ficha. Son borradores pendientes de revisión: se marcan como tales en el texto. */
+function explanationOf(key: EconomyKey): string {
+	switch (key) {
+		case 'min_balance_to_operate':
+			return m.admin_economy_explain_min_balance_to_operate();
+		case 'max_debt':
+			return m.admin_economy_explain_max_debt();
+		case 'daily_cap_no_purchase':
+			return m.admin_economy_explain_daily_cap_no_purchase();
+		case 'hold_ttl_seconds':
+			return m.admin_economy_explain_hold_ttl_seconds();
+		case 'global_daily_free_cost_brake_eur':
+			return m.admin_economy_explain_global_daily_free_cost_brake_eur();
+		case 'openrouter_balance_alert_usd':
+			return m.admin_economy_explain_openrouter_balance_alert_usd();
+		case 'model_price_change_alert_pct':
+			return m.admin_economy_explain_model_price_change_alert_pct();
+		case 'price_reference_window_days':
+			return m.admin_economy_explain_price_reference_window_days();
+		case 'price_reference_min_samples':
+			return m.admin_economy_explain_price_reference_min_samples();
+	}
 }
 
 /** Vuelta a la vista tras cada acción: la ruta se resuelve una vez y `redirect` recibe la variable. */
@@ -76,6 +101,7 @@ export const load: PageServerLoad = ({ locals, setHeaders }) => {
 			value: valueText(getSetting(composition.apps, key)),
 			// Parámetros globales: el origen es siempre «global»; las sobrescrituras por app viven en W40.
 			defaultValue: valueText(DEFAULT_SETTINGS[key]),
+			explanation: explanationOf(key),
 			origin: 'global' as const
 		})),
 		fx: { usdEurPpm: fx.usdEurPpm, source: fx.source, effectiveFrom: fx.effectiveFrom },

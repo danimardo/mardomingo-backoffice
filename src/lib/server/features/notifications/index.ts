@@ -7,3 +7,4 @@ export { alertKeys, type AlertKey } from './domain/alert-state';
 export { raiseAlert, clearAlert, type AlertDeps } from './alerts';
 export { activeAlerts, type ActiveAlert } from './alerts-read';
 export { purgeAlertKeysBefore } from './alerts-retention';
+export { setMistralBillingError } from './mistral-billing';
