@@ -253,14 +253,6 @@ function creditsForRefund(row: PaymentRow, amountEurCents: number): number {
 }
 
 /**
- * Reembolso manual (BE-FR-27): motivo obligatorio, créditos retirados de la bolsa de la compra y rectificativa. La
- * auditoría registra el cambio en la misma transacción que el importe devuelto.
- */
-export function refund(
-	deps: PaymentsDeps,
-	input: {
-		readonly adminId: string;
-/**
  * Vista previa del reembolso (BE-FR-27, T308): los créditos que se retirarían para ese importe, sin escribir nada. El
  * reembolso real vuelve a validar todo en `refund`.
  */
@@ -276,6 +268,14 @@ export function refundPreview(
 	};
 }
 
+/**
+ * Reembolso manual (BE-FR-27): motivo obligatorio, créditos retirados de la bolsa de la compra y rectificativa. La
+ * auditoría registra el cambio en la misma transacción que el importe devuelto.
+ */
+export function refund(
+	deps: PaymentsDeps,
+	input: {
+		readonly adminId: string;
 		readonly paymentId: string;
 		readonly amountEurCents: number;
 		readonly reason: string;
@@ -462,6 +462,10 @@ export interface PaymentsService {
 	paymentFactsBetween(input: { readonly fromMs: number; readonly toMs: number }): PaymentFactRow[];
 	exportPayments(userId: string): PaymentExport[];
 	requestFullInvoice(input: { readonly userId: string; readonly paymentId: string }): boolean;
+	refundPreview(input: { readonly paymentId: string; readonly amountEurCents: number }): {
+		readonly creditsToWithdrawMicro: number;
+		readonly refundableEurCents: number;
+	};
 	purchase(input: PurchaseInput): PurchaseOutcome;
 	handleProviderEvents(body: unknown): void;
 	refund(input: {
@@ -470,10 +474,6 @@ export interface PaymentsService {
 		readonly amountEurCents: number;
 		readonly reason: string;
 	}): RefundOutcome;
-	refundPreview(input: { readonly paymentId: string; readonly amountEurCents: number }): {
-		readonly creditsToWithdrawMicro: number;
-		readonly refundableEurCents: number;
-	};
 	packsForSale(): SalePack[];
 	availability(role: string): {
 		readonly canPurchase: boolean;
@@ -492,6 +492,7 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 			handleProviderEvents(deps, body);
 		},
 		refund: (input) => refund(deps, input),
+		refundPreview: (input) => refundPreview(deps, input),
 		packsForSale: () => packsForSale(deps),
 		availability: (role) => purchaseAvailability(deps, role),
 		purchaseOf: (userId, paymentId) => purchaseOf(deps, userId, paymentId),
@@ -500,7 +501,6 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 	};
 }
 
-		refundPreview: (input) => refundPreview(deps, input),
 /**
  * Compras de un periodo para la exportación contable (BE-FR-76; T316): solo datos que ya guarda `payments`, con el día civil de
  * Madrid. Los importes de devolución y de contracargo se toman de la propia compra; sin fila, cero.
