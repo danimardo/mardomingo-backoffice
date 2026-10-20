@@ -260,6 +260,22 @@ export function refund(
 	deps: PaymentsDeps,
 	input: {
 		readonly adminId: string;
+/**
+ * Vista previa del reembolso (BE-FR-27, T308): los créditos que se retirarían para ese importe, sin escribir nada. El
+ * reembolso real vuelve a validar todo en `refund`.
+ */
+export function refundPreview(
+	deps: PaymentsDeps,
+	input: { readonly paymentId: string; readonly amountEurCents: number }
+): { readonly creditsToWithdrawMicro: number; readonly refundableEurCents: number } {
+	const row = findById(deps.db, input.paymentId);
+	if (row === undefined) throw new AppError('NOT_FOUND');
+	return {
+		creditsToWithdrawMicro: creditsForRefund(row, input.amountEurCents),
+		refundableEurCents: row.amountEurCents - row.refundedEurCents
+	};
+}
+
 		readonly paymentId: string;
 		readonly amountEurCents: number;
 		readonly reason: string;
@@ -454,6 +470,10 @@ export interface PaymentsService {
 		readonly amountEurCents: number;
 		readonly reason: string;
 	}): RefundOutcome;
+	refundPreview(input: { readonly paymentId: string; readonly amountEurCents: number }): {
+		readonly creditsToWithdrawMicro: number;
+		readonly refundableEurCents: number;
+	};
 	packsForSale(): SalePack[];
 	availability(role: string): {
 		readonly canPurchase: boolean;
@@ -480,6 +500,7 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 	};
 }
 
+		refundPreview: (input) => refundPreview(deps, input),
 /**
  * Compras de un periodo para la exportación contable (BE-FR-76; T316): solo datos que ya guarda `payments`, con el día civil de
  * Madrid. Los importes de devolución y de contracargo se toman de la propia compra; sin fila, cero.
