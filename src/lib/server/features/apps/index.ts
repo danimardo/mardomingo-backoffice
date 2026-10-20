@@ -103,3 +103,6 @@ export {
 
 // Previsualización de cambios de parámetros económicos (W38; T309). No escribe.
 export { previewSettingChange, type SettingPreview } from './setting-preview';
+
+// Modelos asignados a operaciones activas, para la vigilancia de `ai` (T335).
+export { assignedModelsOf, type AssignedModelRow } from './assigned-models';
