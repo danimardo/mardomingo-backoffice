@@ -811,23 +811,31 @@ async function settleOk(
 	input: SettleOk
 ): Promise<ChatResponseBody | null> {
 	const { outcome, attempt } = input.result;
-	const billing = await billAndClose(deps, ctx, {
-		operationId: input.operationId,
-		operation: input.operation,
-		holdId: input.holdId,
-		replay: input.replay,
-		now: input.now,
-		holdMicro: input.holdMicro,
-		provider: 'openrouter',
-		model: outcome.model,
-		usedFallback: attempt.isFallback,
-		inputTokens: outcome.inputTokens,
-		outputTokens: outcome.outputTokens,
-		truncated: outcome.truncated,
-		generationId: outcome.generationId,
-		costMicroUsd: outcome.costMicroUsd,
-		audioMs: null
-	});
+	// El cobro es atómico: si falla, no hay cobro y la reserva sigue abierta, así que se libera como en el resto de fallos
+	// inesperados en lugar de quedar retenida hasta el reinicio.
+	let billing: Awaited<ReturnType<typeof billAndClose>>;
+	try {
+		billing = await billAndClose(deps, ctx, {
+			operationId: input.operationId,
+			operation: input.operation,
+			holdId: input.holdId,
+			replay: input.replay,
+			now: input.now,
+			holdMicro: input.holdMicro,
+			provider: 'openrouter',
+			model: outcome.model,
+			usedFallback: attempt.isFallback,
+			inputTokens: outcome.inputTokens,
+			outputTokens: outcome.outputTokens,
+			truncated: outcome.truncated,
+			generationId: outcome.generationId,
+			costMicroUsd: outcome.costMicroUsd,
+			audioMs: null
+		});
+	} catch (error) {
+		abandonUnexpected(deps, input.operationId, input.holdId, input.now);
+		throw error;
+	}
 
 	if (!billing.delivered) {
 		deps.logger.emit('ai.operation.cancelled', {
