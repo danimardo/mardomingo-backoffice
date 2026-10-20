@@ -174,7 +174,7 @@ export const actions: Actions = {
 				adminId: admin.id,
 				userId: params.userId,
 				on: form.get('on') === 'true',
-				reason: reasonOf(form) || null
+				reason: reasonOf(form)
 			});
 			const target = `${resolve('/admin/usuarios')}/${encodeURIComponent(params.userId)}`;
 			const next = entryId === null ? target : savedRedirect(target, entryId);

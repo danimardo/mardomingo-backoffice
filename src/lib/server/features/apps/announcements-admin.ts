@@ -86,6 +86,7 @@ function audit(
 		adminId: string;
 		before: Record<string, unknown> | null;
 		after: Record<string, unknown> | null;
+		reason?: string | null;
 	}
 ): string {
 	return recordEntry(
@@ -97,7 +98,7 @@ function audit(
 			entityId: input.id,
 			before: input.before,
 			after: input.after,
-			reason: null
+			reason: input.reason ?? null
 		},
 		deps.audit
 	);
@@ -177,8 +178,10 @@ export function updateAnnouncement(
 /** Desactiva un anuncio sin borrarlo (queda en el historial). Si ya estaba inactivo, no hace nada y devuelve `null`. */
 export function deactivateAnnouncement(
 	deps: AnnouncementsAdminDeps,
-	input: { adminId: string; id: string }
+	input: { adminId: string; id: string; reason: string }
 ): string | null {
+	const reason = input.reason.trim();
+	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
 	return immediateTransaction(deps.db, (tx) => {
 		const current = tx.select().from(announcements).where(eq(announcements.id, input.id)).get();
 		if (current === undefined) throw new AppError('NOT_FOUND');
@@ -193,7 +196,8 @@ export function deactivateAnnouncement(
 			id: input.id,
 			adminId: input.adminId,
 			before: { active: true },
-			after: { active: false }
+			after: { active: false },
+			reason
 		});
 	});
 }

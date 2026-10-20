@@ -101,7 +101,12 @@ describe('motivo obligatorio y sin cambios si falla (BE-FR-55)', () => {
 
 	it('una cuenta inexistente no cambia nada y responde NOT_FOUND', () => {
 		expect(() =>
-			setTester(adminDeps, { adminId, userId: 'usr_no_existe', on: true, reason: null })
+			setTester(adminDeps, {
+				adminId,
+				userId: 'usr_no_existe',
+				on: true,
+				reason: 'Motivo de prueba'
+			})
 		).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
 	});
 

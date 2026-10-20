@@ -166,10 +166,16 @@ describe('anuncios del administrador (BE-FR-85)', () => {
 	it('desactivar no borra: queda inactivo, con auditoría; repetirlo no hace nada', () => {
 		const made = createAnnouncement(deps, { adminId, announcement: announcement() });
 
-		const auditId = deactivateAnnouncement(deps, { adminId, id: made.id });
+		const auditId = deactivateAnnouncement(deps, {
+			adminId,
+			id: made.id,
+			reason: 'Motivo de prueba'
+		});
 		expect(auditId).not.toBeNull();
 		expect(listAnnouncements(deps)[0]?.active).toBe(false);
-		expect(deactivateAnnouncement(deps, { adminId, id: made.id })).toBeNull();
+		expect(
+			deactivateAnnouncement(deps, { adminId, id: made.id, reason: 'Motivo de prueba' })
+		).toBeNull();
 		expect(
 			f.db
 				.select()
@@ -180,14 +186,16 @@ describe('anuncios del administrador (BE-FR-85)', () => {
 	});
 
 	it('desactivar uno que no existe responde NOT_FOUND', () => {
-		expect(codeOf(() => deactivateAnnouncement(deps, { adminId, id: 'ann_inexistente' }))).toBe(
-			'NOT_FOUND'
-		);
+		expect(
+			codeOf(() =>
+				deactivateAnnouncement(deps, { adminId, id: 'ann_inexistente', reason: 'Motivo de prueba' })
+			)
+		).toBe('NOT_FOUND');
 	});
 
 	it('editar un anuncio cambia sus datos, conserva su estado y audita antes y después', () => {
 		const { id } = createAnnouncement(deps, { adminId, announcement: announcement() });
-		deactivateAnnouncement(deps, { adminId, id });
+		deactivateAnnouncement(deps, { adminId, id, reason: 'Motivo de prueba' });
 
 		updateAnnouncement(deps, {
 			adminId,

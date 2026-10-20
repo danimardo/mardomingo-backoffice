@@ -32,7 +32,10 @@ const MUTACIONES: readonly (readonly [string, string])[] = [
 	['/admin/usuarios/usr_matriz_objetivo', 'bloquear'],
 	['/admin/usuarios/usr_matriz_objetivo', 'desbloquear'],
 	['/admin/usuarios/usr_matriz_objetivo', 'cerrarSesiones'],
-	['/admin/usuarios/usr_matriz_objetivo/ajuste', 'ajustarSaldo']
+	['/admin/usuarios/usr_matriz_objetivo/ajuste', 'ajustarSaldo'],
+	['/admin/anuncios', 'desactivar'],
+	['/admin/apps/secretario/operaciones/improve', 'desactivar'],
+	['/admin/usuarios/usr_matriz_objetivo', 'tester']
 ];
 
 let session: AdminSession;

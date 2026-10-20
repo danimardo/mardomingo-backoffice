@@ -189,8 +189,9 @@ export function unblockUser(
 /** Marca o desmarca el rol `tester`. Otros roles (`admin`) no se tocan aquí. Devuelve `null` si ya estaba así. */
 export function setTester(
 	deps: AdminUsersDeps,
-	input: { adminId: string; userId: string; on: boolean; reason: string | null }
+	input: { adminId: string; userId: string; on: boolean; reason: string }
 ): string | null {
+	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
 	return immediateTransaction(deps.db, (tx) => {
 		const current = loadUser(tx, input.userId);
 		const roles = current.role.split(',').filter((role) => role !== '');

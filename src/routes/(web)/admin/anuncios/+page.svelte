@@ -161,6 +161,12 @@
 					{#if row.active}
 						<form method="POST" action="?/desactivar">
 							<input type="hidden" name="anuncioId" value={row.id} />
+							<TextField
+								id={`motivo-anuncio-${row.id}`}
+								name="motivo"
+								label={m.admin_announcements_reason()}
+								required
+							/>
 							<Button type="submit" variant="ghost">{m.admin_announcements_deactivate()}</Button>
 						</form>
 					{/if}

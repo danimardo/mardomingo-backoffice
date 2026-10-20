@@ -130,7 +130,8 @@ export const actions: Actions = {
 		try {
 			deactivateAnnouncement(getComposition().adminAnnouncements, {
 				adminId: admin.id,
-				id: textOf(form, 'anuncioId')
+				id: textOf(form, 'anuncioId'),
+				reason: textOf(form, 'motivo')
 			});
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
