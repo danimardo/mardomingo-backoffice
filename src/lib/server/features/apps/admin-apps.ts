@@ -12,6 +12,8 @@ export interface AdminAppRow {
 	readonly status: string;
 	readonly description: string | null;
 	readonly supportEmail: string | null;
+	readonly maintenanceActive: boolean;
+	readonly maintenanceMessage: string;
 }
 
 export function listAppsForAdmin(deps: { readonly db: Db }): AdminAppRow[] {
@@ -22,6 +24,8 @@ export function listAppsForAdmin(deps: { readonly db: Db }): AdminAppRow[] {
 			name: apps.name,
 			status: apps.status,
 			description: apps.description,
+			maintenanceActive: apps.maintenanceActive,
+			maintenanceMessage: apps.maintenanceMessage,
 			supportEmail: apps.supportEmail
 		})
 		.from(apps)
@@ -38,7 +42,9 @@ export function appForAdmin(deps: { readonly db: Db }, slug: string): AdminAppRo
 				name: apps.name,
 				status: apps.status,
 				description: apps.description,
-				supportEmail: apps.supportEmail
+				supportEmail: apps.supportEmail,
+				maintenanceActive: apps.maintenanceActive,
+				maintenanceMessage: apps.maintenanceMessage
 			})
 			.from(apps)
 			.where(eq(apps.slug, slug))

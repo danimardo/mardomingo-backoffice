@@ -414,6 +414,52 @@ export function updateAppOverrides(deps: AppsDeps, input: UpdateAppOverridesInpu
 	deps.logger.emit('apps.settings.updated', { key: 'settings_overrides', scope: 'app' });
 }
 
+export interface SetAppMaintenanceInput {
+	readonly actorId: string;
+	readonly appId: string;
+	readonly active: boolean;
+	readonly message: string;
+	readonly reason: string;
+}
+
+/** Mantenimiento de una app (BE-FR-47, BE-FR-52): la API responde 503 MAINTENANCE desde la siguiente petición. Audita en la misma
+ * transacción; un mantenimiento activo exige un mensaje. */
+export function setAppMaintenance(deps: AppsDeps, input: SetAppMaintenanceInput): void {
+	requireReason(input.reason);
+	const message = input.message.trim();
+	if (message.length > 500 || (input.active && message === '')) {
+		deps.logger.emit('apps.settings.rejected', {
+			key: 'maintenance',
+			scope: 'app',
+			reason: 'validation'
+		});
+		throw new AppError('VALIDATION_ERROR', { field: 'maintenance' });
+	}
+	const now = deps.clock.now();
+	immediateTransaction(deps.db, (tx) => {
+		const app = readApp(deps.db, deps.logger, input.appId);
+		if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
+		tx.update(apps)
+			.set({ maintenanceActive: input.active, maintenanceMessage: message, updatedAt: now })
+			.where(eq(apps.id, app.id))
+			.run();
+		recordEntry(
+			tx,
+			{
+				adminId: input.actorId,
+				action: 'apps.maintenance.update',
+				entity: 'app',
+				entityId: app.id,
+				before: { maintenance: { active: app.maintenanceActive, message: app.maintenanceMessage } },
+				after: { maintenance: { active: input.active, message } },
+				reason: input.reason
+			},
+			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
+		);
+	});
+	deps.logger.emit('apps.settings.updated', { key: 'maintenance', scope: 'app' });
+}
+
 export interface NewApp {
 	readonly slug: string;
 	readonly name: string;

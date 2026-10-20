@@ -5,7 +5,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
-import { appForAdmin, updateAppOverrides } from '$lib/server/features/apps';
+import { appForAdmin, setAppMaintenance, updateAppOverrides } from '$lib/server/features/apps';
 import { isConfirmed } from '$lib/server/forms/confirmation';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
@@ -34,7 +34,47 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 	return { app };
 };
 
+/** Mantenimiento de la app como valor de formulario: `active` llega como texto y el mensaje se recorta en el servicio. */
+function maintenanceOf(form: FormData) {
+	return { active: textOf(form, 'activo') === 'true', message: textOf(form, 'mensaje') };
+}
+
 export const actions: Actions = {
+	previsualizarMantenimiento: async ({ locals, params, request }) => {
+		adminOrThrow(locals);
+		const form = await request.formData();
+		const app = appForAdmin(getComposition().apps, params.slug);
+		if (app === null) error(404);
+		const next = maintenanceOf(form);
+		return {
+			maintenancePreview: {
+				before: { active: app.maintenanceActive, message: app.maintenanceMessage },
+				after: next
+			}
+		};
+	},
+	guardarMantenimiento: async ({ locals, params, request }) => {
+		const admin = adminOrThrow(locals);
+		const form = await request.formData();
+		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const composition = getComposition();
+		const app = appForAdmin(composition.apps, params.slug);
+		if (app === null) error(404);
+		const next = maintenanceOf(form);
+		try {
+			setAppMaintenance(composition.apps, {
+				actorId: admin.id,
+				appId: app.id,
+				active: next.active,
+				message: next.message,
+				reason: textOf(form, 'motivo')
+			});
+		} catch (cause) {
+			if (cause instanceof AppError) return failureOf(cause);
+			throw cause;
+		}
+		redirect(303, `/admin/apps/${encodeURIComponent(params.slug)}`);
+	},
 	guardarSobrescrituras: async ({ locals, params, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();

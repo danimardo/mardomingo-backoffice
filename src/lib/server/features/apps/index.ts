@@ -23,6 +23,7 @@ export {
 	getSetting,
 	resolveAppBySlug,
 	supportEmail,
+	setAppMaintenance,
 	updateAppOverrides,
 	updateSetting,
 	type AppsDeps,

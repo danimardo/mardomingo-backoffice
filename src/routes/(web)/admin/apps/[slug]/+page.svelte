@@ -26,6 +26,50 @@
 	<Banner level="critical">{m.admin_apps_error()}</Banner>
 {/if}
 
+<section aria-labelledby="mantenimiento">
+	<h2 id="mantenimiento">{m.admin_apps_maintenance_heading()}</h2>
+	<form method="POST" action="?/previsualizarMantenimiento">
+		<Checkbox id="activo-mantenimiento" name="activo" value="true"
+			>{m.admin_apps_maintenance_active()}</Checkbox
+		>
+		<TextField
+			id="mensaje-mantenimiento"
+			name="mensaje"
+			label={m.admin_apps_maintenance_message()}
+			value={data.app.maintenanceMessage}
+		/>
+		<p><Button type="submit" variant="secondary">{m.admin_apps_maintenance_preview()}</Button></p>
+	</form>
+
+	{#if form?.maintenancePreview}
+		<section aria-labelledby="vista-previa-mantenimiento">
+			<h3 id="vista-previa-mantenimiento">{m.admin_apps_maintenance_preview_title()}</h3>
+			<p>
+				{form.maintenancePreview.before.active
+					? m.admin_apps_maintenance_on()
+					: m.admin_apps_maintenance_off()}
+				→
+				{form.maintenancePreview.after.active
+					? m.admin_apps_maintenance_on()
+					: m.admin_apps_maintenance_off()}
+			</p>
+			<form method="POST" action="?/guardarMantenimiento">
+				<input
+					type="hidden"
+					name="activo"
+					value={form.maintenancePreview.after.active ? 'true' : 'false'}
+				/>
+				<input type="hidden" name="mensaje" value={form.maintenancePreview.after.message} />
+				<TextField id="motivo-mantenimiento" name="motivo" label={m.admin_apps_reason()} required />
+				<Checkbox id="confirmado-mantenimiento" name="confirmado" value="true"
+					>{m.admin_apps_confirm()}</Checkbox
+				>
+				<p><Button type="submit" variant="primary">{m.admin_apps_maintenance_save()}</Button></p>
+			</form>
+		</section>
+	{/if}
+</section>
+
 <section aria-labelledby="sobrescrituras">
 	<h2 id="sobrescrituras">{m.admin_apps_overrides_heading()}</h2>
 	<p>{m.admin_apps_overrides_intro()}</p>
