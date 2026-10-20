@@ -10,7 +10,8 @@ export type EmailReason =
 	| 'low_balance'
 	| 'email_change_verify'
 	| 'email_changed_notice'
-	| 'legal_update';
+	| 'legal_update'
+	| 'inactivity_notice';
 
 /** Tipo de alerta al administrador, sin la clave (que puede llevar ids de usuario). */
 export type AlertType =

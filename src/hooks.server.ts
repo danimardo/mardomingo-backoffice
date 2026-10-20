@@ -16,7 +16,7 @@ import * as m from '$lib/paraglide/messages.js';
 import { paraglideMiddleware } from '$lib/paraglide/server.js';
 import { appearanceAttributes, appearanceFromCookies } from '$lib/appearance/preferences';
 import { createComposition, type Composition } from '$lib/server/composition';
-import { sessionUserOf } from '$lib/server/features/accounts';
+import { sessionUserOf, touchActivity } from '$lib/server/features/accounts';
 import { activeAppOrigins, appHeadersOf, resolveAppBySlug } from '$lib/server/features/apps';
 import { interruptOperationsOnStartup } from '$lib/server/features/ai';
 import { largestAudioMbOf } from '$lib/server/features/apps';
@@ -24,7 +24,7 @@ import { bodyLimitBytes } from '$lib/server/config/body-limit';
 import { bearerOnlyHeaders } from '$lib/server/api/session';
 import { apiErrorResponse } from '$lib/server/api/errors';
 import { getComposition, setComposition } from '$lib/server/composition.cache';
-import { runDailyJob, startDailyScheduler } from '$lib/server/features/stats';
+import { startScheduledTasks } from '$lib/server/jobs';
 import { readEnv } from '$lib/server/config/env';
 import { EnvConfigError, type Env } from '$lib/server/config/env-schema';
 import { migrateDatabase } from '$lib/server/db/migrate';
@@ -108,15 +108,9 @@ export const init: ServerInit = async () => {
 	}
 
 	setComposition(composition);
-	// La tarea diaria (L14) corre dentro de la app, con su bloqueo en base de datos. En las pruebas no se arranca.
-	if (config.APP_ENV !== 'test') {
-		startDailyScheduler(
-			() => runDailyJob(composition.dailyJob),
-			(err) => {
-				logger.emit('stats.daily_job.step_failed', { step: 'programador', err });
-			}
-		);
-	}
+	// Tareas periódicas (L14, R14): corren dentro de la app, con croner en Europe/Madrid. Se programan tras las migraciones y en
+	// las pruebas no se arrancan. Las que deben ponerse al día tras un reinicio se lanzan también aquí.
+	const tasks = config.APP_ENV === 'test' ? null : startScheduledTasks(composition);
 	// El cuerpo de una subida de audio debe caber: `BODY_SIZE_LIMIT` cubre el mayor `max_audio_mb` de cualquier app (FR-070).
 	const largestAudioMb = largestAudioMbOf(composition.apps);
 	const bodyLimit = config.BODY_SIZE_LIMIT ?? '512K';
@@ -135,6 +129,7 @@ export const init: ServerInit = async () => {
 
 	process.on('sveltekit:shutdown', (reason: unknown) => {
 		logger.emit('app.stopping', { reason: shutdownReason(reason) });
+		tasks?.stop();
 		composition.close();
 	});
 };
@@ -262,8 +257,8 @@ const appearance: Handle = ({ event, resolve }) => {
 	});
 };
 
-/** Rutas de la API que no exigen `X-App-Id` (contracts/api-v1.md 1.2): el _healthcheck_ y el documento OpenAPI. */
-const APP_EXEMPT_PATHS: readonly string[] = Object.freeze([HEALTH_PATH, '/api/v1/openapi.json']);
+/** Rutas de la API que no exigen `X-App-Id` (contracts/api-v1.md 1.2): solo el _healthcheck_. El documento OpenAPI exige app y sesión. */
+const APP_EXEMPT_PATHS: readonly string[] = Object.freeze([HEALTH_PATH]);
 
 /**
  * Identificación de la app (`X-App-Id`, BE-FR-62 CA1–CA2; T130). Solo en la API. Sin app válida, `400 UNKNOWN_APP`; una
@@ -392,9 +387,12 @@ const sessionStep: Handle = async ({ event, resolve }) => {
 
 /** Carga la sesión de las cabeceras dadas en `locals`; sin sesión válida, lo deja en `null`. */
 async function loadSession(event: RequestEvent, headers: Headers): Promise<void> {
-	const current = await getComposition().accounts.readSession(headers);
+	const composition = getComposition();
+	const current = await composition.accounts.readSession(headers);
 	if (current === null) return;
 	event.locals.user = sessionUserOf(current.user);
+	// Cualquier petición con sesión es actividad de la cuenta (BE-FR-86): web, login de una app o uso de la API.
+	touchActivity(composition.db, current.user.id, composition.clock.now());
 	event.locals.session = {
 		id: current.session.id,
 		appId: typeof current.session.appId === 'string' ? current.session.appId : null

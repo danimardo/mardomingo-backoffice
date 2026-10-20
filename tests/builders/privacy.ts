@@ -206,7 +206,9 @@ export async function privacyFixture(): Promise<PrivacyFixture> {
 		sync,
 		legal,
 		invoicing: panel.fixture.deps.invoicing,
-		payments: panel.fixture.payments
+		payments: panel.fixture.payments,
+		notifications: { sender: mail, logger, supportEmail: () => 'soporte@mardomingo.com' },
+		publicWebUrl: 'https://cuenta.mardomingo.test'
 	};
 	return {
 		panel,

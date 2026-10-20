@@ -5,6 +5,7 @@ import type { EmailSender } from '$lib/server/adapters/resend/email-sender';
 import type { Logger } from '$lib/server/logging/logger';
 import { passwordChangedEmail } from './emails/password-changed';
 import { legalUpdateEmail } from './emails/legal-update';
+import { inactivityNoticeEmail } from './emails/inactivity-notice';
 import { lowBalanceEmail } from './emails/low-balance';
 import { emailChangeVerifyEmail } from './emails/email-change-verify';
 import { emailChangedNoticeEmail } from './emails/email-changed-notice';
@@ -24,6 +25,8 @@ export interface AccountEmail {
 	readonly to: string;
 	/** Enlace de verificación o de recuperación; no aplica al aviso de cambio de contraseña. */
 	readonly link?: string;
+	/** Años de inactividad y días de plazo del aviso de borrado (BE-FR-86). */
+	readonly inactivity?: { readonly years: number; readonly noticeDays: number };
 	/** Nombre visible de la app, cuando el email se refiere a una (BE-FR-64 CA3). */
 	readonly appName?: string;
 	/** Clave de idempotencia: el mismo envío lógico lleva siempre la misma clave. */
@@ -50,6 +53,14 @@ function contentOf(deps: NotificationsDeps, email: AccountEmail) {
 	}
 	if (email.reason === 'email_changed_notice') return emailChangedNoticeEmail({ supportEmail });
 	if (email.reason === 'legal_update') return legalUpdateEmail({ supportEmail });
+	if (email.reason === 'inactivity_notice') {
+		return inactivityNoticeEmail({
+			link: email.link ?? '',
+			years: email.inactivity?.years ?? 0,
+			noticeDays: email.inactivity?.noticeDays ?? 0,
+			supportEmail
+		});
+	}
 	return passwordChangedEmail({ supportEmail });
 }
 

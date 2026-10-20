@@ -7,6 +7,7 @@ export interface PaymentsLogFields {
 	'payments.purchase.duplicate': Record<string, never>;
 	'payments.purchase.failed': { reason: 'provider_unavailable' };
 	'payments.webhook.duplicate': Record<string, never>;
+	'payments.webhook.rejected': { reason: 'not_completed' };
 	'payments.refund.applied': Record<string, never>;
 	'payments.refund.rejected': {
 		reason:
@@ -31,6 +32,10 @@ export const PAYMENTS_LOG_EVENTS = Object.freeze({
 	'payments.webhook.duplicate': {
 		level: 'info',
 		msg: 'Evento de pago repetido: no se aplica otra vez'
+	},
+	'payments.webhook.rejected': {
+		level: 'warn',
+		msg: 'Contracargo sobre una compra no acreditada: no se aplica'
 	},
 	'payments.refund.applied': { level: 'info', msg: 'Reembolso aplicado' },
 	'payments.refund.rejected': { level: 'info', msg: 'Reembolso rechazado' },
