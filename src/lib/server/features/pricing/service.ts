@@ -142,6 +142,8 @@ export function setManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly usdEurPpm: number; readonly reason: string }
 ): void {
+	const reason = input.reason.trim();
+	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
 	const now = deps.clock.now();
 	immediateTransaction(deps.db, (tx) => {
 		const before = getCurrentFxRate(deps).usdEurPpm;
@@ -182,6 +184,7 @@ export function clearManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly reason: string }
 ): { readonly ok: boolean } {
+	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
 	const now = deps.clock.now();
 	const outcome = immediateTransaction(deps.db, (tx) => {
 		const last = lastEcbRecord(tx);

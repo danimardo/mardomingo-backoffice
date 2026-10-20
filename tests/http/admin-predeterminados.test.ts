@@ -2,7 +2,7 @@
 // predeterminados solo se guardan con confirmación, un JSON que no es válido o no cumple el esquema de sincronización responde 400 sin
 // auditoría, y copiar desde una cuenta exige al menos un elemento marcado (400 NOTHING_SELECTED). Ninguna prueba modifica cuentas.
 import Database from 'better-sqlite3';
-import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { loginAsAdmin, postAdmin, type AdminSession } from './admin-session';
 import { send } from './client';
 
@@ -13,6 +13,9 @@ const GUARDAR = `${PAGE}?/guardarPredeterminados`;
 const COPIAR = `${PAGE}/copiar?/copiar`;
 
 let session: AdminSession;
+const USUARIO = 'usr_http_copia_origen';
+let defaultsBefore: string | null = null;
+let appId = '';
 
 function auditCount(action: string): number {
 	const db = new Database(databasePath, { readonly: true });
@@ -27,6 +30,33 @@ function auditCount(action: string): number {
 }
 
 beforeAll(async () => {
+	const db = new Database(databasePath);
+	try {
+		appId =
+			db.prepare<[], { id: string }>("SELECT id FROM apps WHERE slug = 'secretario'").get()?.id ??
+			'';
+		const ahora = Date.now();
+		db.prepare(
+			`INSERT INTO user (id, name, email, email_verified, role, banned, email_normalized, created_at, updated_at)
+			 VALUES (?, '', ?, 1, 'user', 0, ?, ?, ?)`
+		).run(USUARIO, 'copia.origen@ejemplo.es', 'copia.origen@ejemplo.es', ahora, ahora);
+		db.prepare(
+			`INSERT INTO sync_documents (user_id, app_id, revision, data, created_at, updated_at)
+			 VALUES (?, ?, 1, ?, ?, ?)`
+		).run(
+			USUARIO,
+			appId,
+			JSON.stringify({ preferences: { language: { value: 'es', updatedAt: 1 } } }),
+			ahora,
+			ahora
+		);
+		defaultsBefore =
+			db
+				.prepare<[string], { data: string }>('SELECT data FROM app_defaults WHERE app_id = ?')
+				.get(appId)?.data ?? null;
+	} finally {
+		db.close();
+	}
 	session = await loginAsAdmin(baseUrl, databasePath, {
 		id: 'usr_http_predet_admin',
 		email: 'admin.predeterminados.http@ejemplo.es',
@@ -114,5 +144,47 @@ describe('predeterminados con sesión de administrador (W42–W43, T312)', () =>
 		);
 
 		expect(result.status).toBe(400);
+	});
+
+	it('la copia toma el elemento marcado de la cuenta origen, lo deja en predeterminados y audita (CA3–CA4)', async () => {
+		const audit = auditCount('sync.defaults.copied');
+		const vista = await send(baseUrl, `${PAGE}/copiar?usuario=${USUARIO}`, {
+			host: session.webHost,
+			headers: { accept: 'text/html', cookie: session.cookie }
+		});
+		expect(vista.text).toContain('language');
+
+		const copiado = await postAdmin(
+			session,
+			COPIAR,
+			`usuario=${USUARIO}&sel%3Apreferences=language&motivo=Copia+de+prueba&confirmado=true`
+		);
+		expect(copiado.status).toBe(303);
+		expect(auditCount('sync.defaults.copied')).toBe(audit + 1);
+
+		const db = new Database(databasePath, { readonly: true });
+		try {
+			const fila = db
+				.prepare<[string], { data: string }>('SELECT data FROM app_defaults WHERE app_id = ?')
+				.get(appId);
+			expect(JSON.parse(fila?.data ?? '{}')).toEqual({
+				preferences: { language: { value: 'es', updatedAt: 1 } }
+			});
+		} finally {
+			db.close();
+		}
+	});
+
+	afterAll(() => {
+		const db = new Database(databasePath);
+		try {
+			if (defaultsBefore === null)
+				db.prepare('DELETE FROM app_defaults WHERE app_id = ?').run(appId);
+			else
+				db.prepare('UPDATE app_defaults SET data = ? WHERE app_id = ?').run(defaultsBefore, appId);
+			db.prepare('DELETE FROM sync_documents WHERE user_id = ?').run(USUARIO);
+		} finally {
+			db.close();
+		}
 	});
 });
