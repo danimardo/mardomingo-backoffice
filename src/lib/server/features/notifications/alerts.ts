@@ -27,6 +27,9 @@ export function alertTypeOf(key: AlertKey): AlertType {
 	if (key === 'fx_stale') return 'fx_stale';
 	if (key.startsWith('flagged:')) return 'flagged_threshold';
 	if (key.startsWith('global_brake:')) return 'global_brake';
+	if (key.startsWith('ledger_mismatch:')) return 'ledger_mismatch';
+	if (key === 'openrouter_balance') return 'openrouter_balance_low';
+	if (key === 'mistral_billing') return 'mistral_billing_error';
 	return key.endsWith(':retired') ? 'model_retired' : 'model_price';
 }
 

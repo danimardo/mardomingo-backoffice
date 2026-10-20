@@ -65,7 +65,8 @@ describe('registro de tareas', () => {
 
 	it('ninguna tarea diaria cae entre las 02:00 y las 03:00 de Madrid, ni dos a la misma hora', () => {
 		const seen = new Set<string>();
-		for (const task of tasks) {
+		// Las tareas horarias (minuto fijo, hora `*`) no entran: corren cada hora por diseño, también en esas fechas.
+		for (const task of tasks.filter((item) => item.pattern.split(' ')[1] !== '*')) {
 			const [first] = runs(task.pattern, 1, '2026-10-19T00:00:00Z');
 			const time = (first ?? '').slice(11);
 			expect(time < '02:00' || time >= '03:00', `${task.name} a las ${time}`).toBe(true);
@@ -76,7 +77,22 @@ describe('registro de tareas', () => {
 });
 
 describe('cambios de hora de Madrid', () => {
-	const DAILY = tasks.filter((task) => task.pattern.split(' ')[2] === '*');
+	it('la tarea horaria openrouter-balance cubre las 23 horas reales del cambio de marzo (T326)', () => {
+		const hourly = tasks.find((task) => task.name === 'openrouter-balance');
+		expect(hourly?.pattern).toBe('17 * * * *');
+		expect(runs('17 * * * *', 24, '2026-10-24T12:00:00Z')).toHaveLength(24);
+		const marzo = runs('17 * * * *', 60, '2027-03-27T12:00:00Z').filter((run) =>
+			run.startsWith('2027-03-28')
+		);
+		// Croner desplaza la de las 02:17 (que no existe) a las 03:17, que se repite: el duplicado es inocuo porque la tarea es
+		// idempotente (la alerta ya activa se suprime y limpiar dos veces no cambia nada).
+		expect(new Set(marzo)).toHaveProperty('size', 23);
+		expect(marzo.filter((run) => run.endsWith('03:17'))).toHaveLength(2);
+	});
+
+	const DAILY = tasks.filter(
+		(task) => task.pattern.split(' ')[2] === '*' && task.pattern.split(' ')[1] !== '*'
+	);
 
 	it('en el cambio de octubre (2026-10-25, día de 25 horas) cada tarea corre una sola vez ese día, a su hora', () => {
 		for (const task of DAILY) {

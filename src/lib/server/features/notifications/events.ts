@@ -14,7 +14,14 @@ export type EmailReason =
 
 /** Tipo de alerta al administrador, sin la clave (que puede llevar ids de usuario). */
 export type AlertType =
-	'fx_stale' | 'model_retired' | 'model_price' | 'flagged_threshold' | 'global_brake';
+	| 'fx_stale'
+	| 'model_retired'
+	| 'model_price'
+	| 'flagged_threshold'
+	| 'global_brake'
+	| 'ledger_mismatch'
+	| 'openrouter_balance_low'
+	| 'mistral_billing_error';
 
 export interface NotificationsLogFields {
 	'notifications.email.sent': { reason: EmailReason };
