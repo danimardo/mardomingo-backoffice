@@ -69,3 +69,41 @@ export function postAdmin(session: AdminSession, path: string, body: string): Pr
 		body
 	});
 }
+
+/** Sesión de una cuenta normal (sin rol de administrador) para comprobar que las acciones de administración la rechazan (T321). */
+export async function loginAsUser(
+	baseUrl: string,
+	databasePath: string,
+	account: { readonly id: string; readonly email: string; readonly password: string }
+): Promise<AdminSession> {
+	const port = new URL(baseUrl).port;
+	const webHost = `localhost:${port}`;
+	const webOrigin = `http://localhost:${port}`;
+	const db = new Database(databasePath);
+	try {
+		db.prepare(
+			`INSERT INTO user (id, name, email, email_verified, role, banned, email_normalized, created_at, updated_at)
+			 VALUES (?, '', ?, 1, 'user', 0, ?, ?, ?)`
+		).run(account.id, account.email, account.email, Date.now(), Date.now());
+		db.prepare(
+			`INSERT INTO account (id, user_id, account_id, provider_id, password, created_at, updated_at)
+			 VALUES (?, ?, ?, 'credential', ?, ?, ?)`
+		).run(
+			`acc_${account.id}`,
+			account.id,
+			account.id,
+			await hashPassword(account.password),
+			Date.now(),
+			Date.now()
+		);
+	} finally {
+		db.close();
+	}
+	const login = await send(baseUrl, '/login?/entrar', {
+		method: 'POST',
+		host: webHost,
+		headers: { ...FORM_HEADERS, origin: webOrigin },
+		body: `email=${encodeURIComponent(account.email)}&password=${encodeURIComponent(account.password)}&redirectTo=%2Fpanel`
+	});
+	return { baseUrl, webHost, webOrigin, cookie: cookieOf(login) };
+}
