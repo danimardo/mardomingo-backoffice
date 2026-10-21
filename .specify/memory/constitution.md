@@ -1,3 +1,15 @@
+<!--
+SYNC IMPACT REPORT (temporal, para revisión humana; se elimina antes de confirmar el fichero)
+Versión: 2.2.0 → 2.3.0 (MINOR: cambia de forma material el alcance del logging al retirar el Log Gateway).
+Principios modificados: XI (registro y diagnóstico): se quita la «fase posterior» del envío remoto de logs; el principio no cambia.
+Secciones añadidas: ninguna.
+Secciones eliminadas: ninguna. Se retiran las menciones al Log Gateway y a OpenObserve en: nivel warn, envío remoto, retención,
+  tabla de servicios (fila «Log Gateway + OpenObserve») y tabla de variables de entorno (LOG_GATEWAY_URL, LOG_GATEWAY_KEY).
+Motivo: decisión del propietario, 2026-10-21. El Log Gateway no se implementará; los logs son solo locales (stdout en JSON;
+  en desarrollo, pino-pretty y .logs/app.log).
+Pendientes deliberados: `Historias.md` (secciones 1103, 1136–1137, 1241–1242, 1395, 1748, 1863) y los contratos de
+  specs/001-cuenta-mardomingo-v4 (contracts/log-events.md) aún citan la fase posterior: se corrigen en un cambio aparte.
+-->
 # Constitución de Cuenta Mardomingo (mardomingo-backoffice)
 
 Marco innegociable del backend multi-app de IA «Cuenta Mardomingo»: API `api.mardomingo.com`, web
@@ -344,8 +356,7 @@ debe dar por hecho que un log existe para siempre: Docker rota sus ficheros y, e
 - `error`: fallo técnico que requiere atención (excepción no controlada, todos los proveedores
   caídos, discrepancia del ledger, tarea fallida, JSON corrupto en la BD).
 - `warn`: modo degradado o *fallback* (modelo de respaldo, backup de transcripción, coste
-  estimado, tipo de cambio antiguo, email no enviado, freno global, eventos descartados por el
-  Log Gateway, cuando exista, en la fase posterior) y señales de abuso.
+  estimado, tipo de cambio antiguo, email no enviado, freno global) y señales de abuso.
 - `info`: ciclo de vida, una línea por petición terminada (`http.request.completed`),
   operaciones completadas y **rechazos de negocio esperados** (saldo, límites, conflicto de
   sincronización, validación), siempre con `reason`.
@@ -386,12 +397,8 @@ debe dar por hecho que un log existe para siempre: Docker rota sus ficheros y, e
 - Desarrollo: JSON en `.logs/app.log` (ignorado por Git y vaciado en cada arranque) y consola
   legible con `pino-pretty` (solo dependencia de desarrollo), con la hora en `Europe/Madrid`. El
   formato legible nunca sustituye al JSON.
-- Fase posterior (aplazada por la enmienda 2.2.0; no se implementa en la v4): al activar el Log
-  Gateway, staging y producción enviarán además lotes, mediante un *transport* de Pino en un
-  *worker thread*, al servicio `mardomingo_backoffice` (delante de OpenObserve), con `env` =
-  `APP_ENV` y una clave propia de **solo escritura**. Ese envío tendrá un búfer acotado: si el
-  Gateway falla, no bloqueará las peticiones, descartará los eventos más antiguos y registrará en
-  stdout `log.gateway.dropped` con el recuento. Activarlo exige enmendar esta sección.
+- El envío remoto de logs no forma parte del alcance del proyecto (decisión del propietario,
+  enmienda 2.3.0): no hay Log Gateway ni OpenObserve. Los logs son solo locales.
 - Test (`APP_ENV=test`): solo stdout, sin `.logs/` y sin envío remoto, con `LOG_LEVEL=debug` para que el
   marcador de privacidad vea todos los niveles. Los tests unitarios y de integración usan el
   registrador falso.
@@ -417,9 +424,6 @@ debe dar por hecho que un log existe para siempre: Docker rota sus ficheros y, e
 
 - En la v4, la retención de los logs la fija la rotación de Docker en el host. Se verifica en cada
   cambio de infraestructura, igual que su tamaño y número de ficheros.
-- Fase posterior (aplazada por la enmienda 2.2.0): OpenObserve conservará los logs 30 días
-  (BE-FR-83) y los consultará solo el propietario, a través del Log Gateway. La retención se
-  configurará en OpenObserve o en el Gateway, no en la app.
 
 **Catálogo y alertas**
 
@@ -595,7 +599,7 @@ constitución.
 | Gráficas | `layerchart` | **2.6.1** |
 | Email | `resend` | **6.32.1** |
 | Tareas programadas | `croner` | **10.0.1** (zona `Europe/Madrid` explícita en cada tarea) |
-| Logs del servidor | `pino` | **10.4.0** (en `dependencies`). `pino-abstract-transport` 3.0.0 llega solo como dependencia de `pino`; no es dependencia directa de la v4 y solo se declararía al activar el Log Gateway (fase posterior) |
+| Logs del servidor | `pino` | **10.4.0** (en `dependencies`). `pino-abstract-transport` 3.0.0 llega solo como dependencia de `pino`; no es dependencia directa de la v4 |
 | Logs del navegador | `loglevel` | **1.9.2** |
 
 No se usa ninguna librería de componentes de UI: los componentes son propios, sobre Tailwind
@@ -623,7 +627,6 @@ No se usa ninguna librería de componentes de UI: los componentes son propios, s
 |---|---|
 | Coolify | Despliegue (entornos `production` y `staging`). |
 | Backblaze B2 (EU Central) | Destino de Litestream. Bucket privado y clave limitada a ese bucket. |
-| Log Gateway + OpenObserve | Logs centralizados y monitorización (servicio `mardomingo_backoffice`). **Fase posterior**: no se usa en la v4 (enmienda 2.2.0). En la v4, los logs son stdout y la rotación de Docker. |
 | Resend | Emails transaccionales; dominio con SPF, DKIM y DMARC. |
 | Cloudflare Turnstile | Captcha del registro. |
 | Mistral API | Voxtral (`voxtral-mini-latest`) para transcripción. |
@@ -946,8 +949,6 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | `EMAIL_FROM` | `Cuenta Mardomingo <no-reply@mardomingo.com>` | Dominio con SPF, DKIM y DMARC. `Reply-To`: el email de soporte (`soporte@mardomingo.com`). |
 | `LOG_LEVEL` | `info` en producción; `debug` en staging y desarrollo | Valores de pino. |
 | `CLIENT_LOG_LEVEL` | `warn` en producción; `debug` en desarrollo | No es secreta. Llega al navegador en los datos del layout raíz. |
-| `LOG_GATEWAY_URL` | URL de ingesta del Log Gateway | No se usa en la v4. Se define al activar el Log Gateway (fase posterior). |
-| `LOG_GATEWAY_KEY` | Clave de **solo escritura** del servicio `mardomingo_backoffice` | No se usa en la v4. Se define al activar el Log Gateway (fase posterior). **Secreta**, una por entorno. |
 | `PORT` | Producción **7311**, staging **7312** | Ver «Proxy, puerto e IP del cliente». |
 | `HOST` | `0.0.0.0` dentro del contenedor | La exposición se limita fuera del contenedor. |
 | `PROTOCOL_HEADER` | `x-forwarded-proto` | |
@@ -1102,4 +1103,4 @@ el motivo). Los lotes cierran con la
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 2.2.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-10
+**Version**: 2.3.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-21
