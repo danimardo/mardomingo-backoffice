@@ -40,7 +40,6 @@ Monolito modular de SvelteKit en la raíz del repositorio (`ARCHITECTURE.md` §2
 
 #### Entradas del lote y decisiones del propietario
 
-- [ ] T001 **APLAZADA (fase posterior, enmienda 2.2.0).** Pedir al propietario el **contrato de ingesta del Log Gateway** (D-06, R10; entrada de L01): URL de ingesta, autenticación (cabecera y formato de la clave de solo escritura del servicio `mardomingo_backoffice`), formato del lote (NDJSON o array JSON; `service`/`env` en la URL o en el cuerpo), tamaño máximo del lote y de cada evento, códigos de respuesta (`207`, `429` con `Retry-After`), compresión, idempotencia y límite de frecuencia; anotar la respuesta (o su ausencia) en `specs/001-cuenta-mardomingo-v4/research.md` (R10). Sin contrato, `src/lib/server/logging/` solo escribe en stdout
 - [x] T002 Pedir autorización al propietario para inicializar Git en `F:\Apps\mardomingo-backoffice` (rama `main`, después `staging`) y conectar el remoto privado de GitHub `mardomingo-backoffice`, requisito de `scripts/lint-changed.mjs` y de `.github/workflows/`; sin commit ni push sin autorización explícita (`CLAUDE.md`, «Límites»)
 - [x] T003 Registrar el estado de DS-01, 02, 04, 05, 07 y 09 en `Design/` (hoy pendientes: `Design/src/lib/design-system/theme.svelte.ts` usa la clave `networkbench.theme` y `localStorage`; `Design/src/lib/design-system/tokens.css` pinta el oscuro en `:root`, usa tamaños en `px` y los nombres `--color-lavender`/`--color-mauve`; `Design/README.md` describe NetworkBench) y declararlos dentro de L01 (D-20) en el informe del checkpoint _Hecho en L01: estado de DS-01, 02, 03, 04, 05, 07, 08, 09 y 10 registrado en el informe del checkpoint_
 - [x] T004 Pedir al propietario la aprobación de la propuesta tipográfica **DS-04** (cuerpo `1rem` = 16 px, escala en `rem`, pila de fuentes del sistema multiplataforma sin fuentes de terceros, o fuentes autoalojadas con licencia y peso medidos) y de los nombres por rol de **DS-07** (propuesta: `--color-accent` para el salvia y `--color-ambient` para el violeta) antes de fijarlos en `src/lib/design-system/tokens.css` (`CLAUDE.md`: el sistema de diseño solo cambia con aprobación)
@@ -676,7 +675,7 @@ y publicados con T314).
 - [x] T353 [P] [US11] T-HTTP en `tests/http/public-cookies.test.ts`: W01–W07 solo emiten cookies técnicas (sesión y preferencias), sin analítica ni _banner_ de consentimiento, y el HTML no referencia ningún dominio externo [BE-FR-60, US11 escenario 4]
 - [x] T354 [US11] T-E2E en `e2e/public.spec.ts`: smoke de las páginas públicas y de todos sus enlaces internos, ninguna petición a dominios externos (15.17), estados de 16.6 «Landings», landing de Secretario con `Crear cuenta` → `/registro?app=secretario`; _responsive_ a 320, 390 y 1366 px (_mobile-first_); etiquetas `@BE-FR-59`, `@BE-FR-60`, `@BE-FR-73`, `@UX-16`
 - [ ] T355 [US11] T-A11Y en `e2e/a11y.spec.ts`: todas las páginas públicas en ambos temas; matriz de 16.11 en la landing (página clave de 16.8) en `e2e/ux-matrix.spec.ts`; DS-09 sobre `LandingHero` (resultados de contraste en cristal → **pendiente DS-09** y medición manual); Web Vitals de la landing en `e2e/perf/web-vitals.spec.ts`; datos fijos de las capturas de landing y login en `e2e/fixtures/visual.ts` (la línea base, T-VIS-001, en L16) _Parcial 2026-10-19: a11y de las páginas públicas en ambos temas hecha (`e2e/a11y.spec.ts`, incluye `/apps/secretario`); pendientes la matriz de 16.11, DS-09, Web Vitals y los datos de capturas._
-- [ ] T356 [US11] Checkpoint L15: smoke E2E (`e2e/public.spec.ts`) + a11y (`e2e/a11y.spec.ts`) + N3 HTTP de cookies (`tests/http/public-cookies.test.ts`), `lint:changed`, `check`, build, test de arquitectura; estados de 16.6 «Landings» y UX-16 con test; comprobaciones de UX con su estado; sin deuda de tests (Historias 15.29)
+- [x] T356 [US11] Checkpoint L15: smoke E2E (`e2e/public.spec.ts`) + a11y (`e2e/a11y.spec.ts`) + N3 HTTP de cookies (`tests/http/public-cookies.test.ts`), `lint:changed`, `check`, build, test de arquitectura; estados de 16.6 «Landings» y UX-16 con test; comprobaciones de UX con su estado; sin deuda de tests (Historias 15.29)
 
 **Checkpoint**: las landings, `/precios` y los legales se sirven sin JavaScript, solo con cookies técnicas y sin
 recursos externos; US11 es comprobable de forma independiente.
@@ -745,23 +744,23 @@ y Web Vitals, simulacro de restauración, prueba de usabilidad, verificación de
 
 ### Dependencias entre fases
 
-| Fase           | Historia                                  | Lotes                             | Depende de                                                                                          |
-| -------------- | ----------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| 1 Setup        | —                                         | L01                               | Nada (incluye entradas del propietario; el contrato del Log Gateway queda aplazado, enmienda 2.2.0) |
-| 2 Foundational | —                                         | L02                               | Fase 1. **Bloquea todas las historias**                                                             |
-| 3              | US1 Crear y verificar la cuenta (P1)      | L03                               | Fase 2                                                                                              |
-| 4              | US3 Saldo y créditos (P1)                 | L05                               | Fase 3 (la bolsa de bienvenida cierra US1, D-20)                                                    |
-| 5              | US2 Usar la IA (P1)                       | L04 (parte), L06, L07, L08        | Fases 3 y 4. L06 puede empezar en paralelo con L04                                                  |
-| 6              | US8 Protecciones y continuidad (P2)       | L04 (continuación), L09           | Fase 5                                                                                              |
-| 7              | US6 Sincronización y predeterminados (P2) | L11                               | Fase 5 y cierre de L04; puede ir en paralelo con L09                                                |
-| 8              | US4 Comprar créditos y facturación (P2)   | L10                               | Fases 3 y 4 (tablas `packs` y `payments` de L02)                                                    |
-| 9              | US5 Panel de usuario (P2)                 | L12 (panel)                       | L05, L07, L10 y L11                                                                                 |
-| 10             | US10 Privacidad y documentos legales (P3) | L12 (privacidad), L14 (retención) | Fase 9                                                                                              |
-| 11             | US7 Administración (P2)                   | L13                               | L05–L12                                                                                             |
-| 12             | US12 Emails y alertas (P3)                | L14 (emails y tareas)             | L05–L13                                                                                             |
-| 13             | US11 Landings, precios y legales (P3)     | L15                               | L02 y L14                                                                                           |
-| 14             | US9 Apariencia y accesibilidad (P2)       | L16 (UX)                          | L01–L15 (la base visual está en L01)                                                                |
-| 15             | Polish & Cross-Cutting                    | L16                               | Fase 14                                                                                             |
+| Fase           | Historia                                  | Lotes                             | Depende de                                           |
+| -------------- | ----------------------------------------- | --------------------------------- | ---------------------------------------------------- |
+| 1 Setup        | —                                         | L01                               | Nada (incluye entradas del propietario)              |
+| 2 Foundational | —                                         | L02                               | Fase 1. **Bloquea todas las historias**              |
+| 3              | US1 Crear y verificar la cuenta (P1)      | L03                               | Fase 2                                               |
+| 4              | US3 Saldo y créditos (P1)                 | L05                               | Fase 3 (la bolsa de bienvenida cierra US1, D-20)     |
+| 5              | US2 Usar la IA (P1)                       | L04 (parte), L06, L07, L08        | Fases 3 y 4. L06 puede empezar en paralelo con L04   |
+| 6              | US8 Protecciones y continuidad (P2)       | L04 (continuación), L09           | Fase 5                                               |
+| 7              | US6 Sincronización y predeterminados (P2) | L11                               | Fase 5 y cierre de L04; puede ir en paralelo con L09 |
+| 8              | US4 Comprar créditos y facturación (P2)   | L10                               | Fases 3 y 4 (tablas `packs` y `payments` de L02)     |
+| 9              | US5 Panel de usuario (P2)                 | L12 (panel)                       | L05, L07, L10 y L11                                  |
+| 10             | US10 Privacidad y documentos legales (P3) | L12 (privacidad), L14 (retención) | Fase 9                                               |
+| 11             | US7 Administración (P2)                   | L13                               | L05–L12                                              |
+| 12             | US12 Emails y alertas (P3)                | L14 (emails y tareas)             | L05–L13                                              |
+| 13             | US11 Landings, precios y legales (P3)     | L15                               | L02 y L14                                            |
+| 14             | US9 Apariencia y accesibilidad (P2)       | L16 (UX)                          | L01–L15 (la base visual está en L01)                 |
+| 15             | Polish & Cross-Cutting                    | L16                               | Fase 14                                              |
 
 Las historias no siguen estrictamente el orden P1 → P2 → P3: el orden de las fases respeta las dependencias técnicas (por ejemplo, la administración de US7 necesita casi todas las demás) y el orden de los lotes de `Historias.md` 15.6.
 
@@ -893,7 +892,6 @@ Cada fase cierra con su checkpoint y deja algo demostrable: protecciones (US8) �
 
 ### Entradas pendientes del propietario
 
-- Contrato de ingesta del Log Gateway (D-06): **aplazado** a la fase posterior (enmienda 2.2.0).
 - Protección de las ramas `main` y `staging` cuando exista el CI (L01).
 - Valores del _seed_ que faltan (modelos de las operaciones de `secretario`, topes de coste, tarifa de Voxtral, enlace de descarga), pedidos en L02 (T079). **No bloquean el checkpoint de L02**: se siembran valores provisionales marcados como tales y las operaciones de `secretario` quedan **inactivas** hasta que el propietario dé los reales.
 - Textos provisionales del _seed_ legal (términos, privacidad, cookies, uso aceptable y renuncia al desistimiento), en L03 (T092).
@@ -959,3 +957,6 @@ _Decisión del dueño 2026-10-20 (T309): textos aprobados tal cual; se quita el 
 _Decisión del dueño 2026-10-20: T326 lo verifica el dueño con una clave real en staging; T001 queda pendiente (no tiene el contrato todavía); T055/T363 se miden más adelante, antes de L13._
 _Reconciliación 2026-10-21 (L14): T332 y T342 cumplidas con sus pruebas; T337 cubierta por `fx.int.test.ts` y `schedule.test.ts`; T338 no aplica (sin operación de borrado por documento, decisión del dueño). T344 registrada como NO VERIFICADA (decisión del dueño). T341 queda cerrada: las 12 tareas programadas, incluida `disposable-domains` (lunes 04:15); `sync-tombstones-cleanup` no aplica (T338)._
 _Avance 2026-10-21 (T355, parcial): `e2e/ux-matrix.spec.ts` (landing, Secretario y precios × claro/oscuro × efectos normales/reducidos × 320/390/1366 px, sin desbordamiento y con axe; `forced-colors` y `contrast` emulados; transparencia reducida por CDP en Chromium o «no verificable»; sin JavaScript) en Chromium: 45/45. `e2e/perf/web-vitals.spec.ts` (LCP ≤ 2,5 s y CLS ≤ 0,1 en laboratorio con CPU ×4 y red lenta) en Chromium: 2/2. `e2e/fixtures/visual.ts` con los datos fijos de capturas. Pendiente: DS-09 (contraste dentro del cristal, medición manual del dueño, T055/T363), INP (necesita interacción medida) y la matriz completa en Firefox y WebKit (nocturna). Las capturas de referencia van en L16 (se generan en el contenedor oficial)._
+
+_Decisión del dueño 2026-10-21: no se implementa el Log Gateway. Los logs son solo locales (stdout). Se quita T001 de este fichero. La constitución (enmienda 2.2.0) y `Historias.md` aún citan la fase posterior: se corrigen solo con una enmienda formal (`/speckit-constitution` para la constitución; versionado de `Historias.md`)._
+_Checkpoint L15 (T356), cerrado con pendientes el 2026-10-21 (decisión del dueño): `pnpm build`, `pnpm test:http` (312), `pnpm exec vitest run tests/architecture` y E2E en Chromium de públicas, a11y, matriz de UX y Web Vitals (144/144) en verde. Pendientes del dueño: DS-09 (contraste dentro del cristal, medición manual, T055/T363) y la medición de INP. Las matrices de Firefox y WebKit quedan para la ejecución nocturna. T355 sigue abierta por esos dos puntos._

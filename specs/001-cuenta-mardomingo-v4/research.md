@@ -278,13 +278,7 @@ que corresponda).
 - **Pendiente de comprobar en la fase posterior**:
   - cómo localizar el fichero del _transport_ tras `vite build`: un `.mjs` sin compilar resuelto
     con `new URL(..., import.meta.url)`, o una copia a `build/`. **NO VERIFICADO**;
-  - **contrato del Log Gateway** (lo entrega el propietario al activar la fase posterior):
-    - URL de ingesta;
-    - autenticación (cabecera y formato de la clave);
-    - formato del lote (NDJSON o array JSON, campo `service` o `env` en la URL o en el cuerpo);
-    - tamaño máximo del lote y de cada evento;
-    - códigos de respuesta (¿`207`? ¿`429` con `Retry-After`?);
-    - compresión, idempotencia y límite de frecuencia.
+  - **Contrato del Log Gateway**: eliminado del alcance (decisión del dueño, 2026-10-21: solo logs locales).
 
 ## R11 Proveedores de IA
 
