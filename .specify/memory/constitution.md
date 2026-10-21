@@ -1,15 +1,3 @@
-<!--
-SYNC IMPACT REPORT (temporal, para revisión humana; se elimina antes de confirmar el fichero)
-Versión: 2.2.0 → 2.3.0 (MINOR: cambia de forma material el alcance del logging al retirar el Log Gateway).
-Principios modificados: XI (registro y diagnóstico): se quita la «fase posterior» del envío remoto de logs; el principio no cambia.
-Secciones añadidas: ninguna.
-Secciones eliminadas: ninguna. Se retiran las menciones al Log Gateway y a OpenObserve en: nivel warn, envío remoto, retención,
-  tabla de servicios (fila «Log Gateway + OpenObserve») y tabla de variables de entorno (LOG_GATEWAY_URL, LOG_GATEWAY_KEY).
-Motivo: decisión del propietario, 2026-10-21. El Log Gateway no se implementará; los logs son solo locales (stdout en JSON;
-  en desarrollo, pino-pretty y .logs/app.log).
-Pendientes deliberados: `Historias.md` (secciones 1103, 1136–1137, 1241–1242, 1395, 1748, 1863) y los contratos de
-  specs/001-cuenta-mardomingo-v4 (contracts/log-events.md) aún citan la fase posterior: se corrigen en un cambio aparte.
--->
 # Constitución de Cuenta Mardomingo (mardomingo-backoffice)
 
 Marco innegociable del backend multi-app de IA «Cuenta Mardomingo»: API `api.mardomingo.com`, web
