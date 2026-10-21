@@ -37,7 +37,7 @@ function reasonOf(form: FormData): string {
 	return typeof value === 'string' ? value : '';
 }
 
-export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
+export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 	adminOrThrow(locals);
 	setHeaders({ 'cache-control': 'private, no-store' });
 	const composition = getComposition();
@@ -51,7 +51,14 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 		appId: null,
 		page: 1
 	});
+	// Aviso tras una acción aplicada: enlaza con su entrada de auditoría (UX-13). Solo si el id tiene forma de id.
+	const auditId = url.searchParams.get('auditoria') ?? '';
+	const saved =
+		url.searchParams.get('aviso') === 'saved' && /^[A-Za-z0-9_-]{1,64}$/.test(auditId)
+			? auditId
+			: null;
 	return {
+		saved,
 		account,
 		balance: {
 			totalMicro: balance.totalMicro,

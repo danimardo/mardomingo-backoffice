@@ -310,7 +310,8 @@ export function expireHolds(deps: CreditsDeps): number {
 // Ajustes manuales (BE-FR-18, D-16)
 
 export type AdjustOutcome =
-	{ readonly ok: true } | { readonly ok: false; readonly reason: 'exceeds_available' | 'repeated' };
+	| { readonly ok: true; readonly auditId: string }
+	| { readonly ok: false; readonly reason: 'exceeds_available' | 'repeated' };
 
 /**
  * Ajuste del administrador (BE-FR-18): suma (liquidando primero la deuda) o resta (nunca más que el disponible, D-16).
@@ -330,7 +331,7 @@ export function adjust(
 		readonly idempotencyKey: string;
 	}
 ): AdjustOutcome {
-	return immediateTransaction(deps.db, (tx) => {
+	return immediateTransaction(deps.db, (tx): AdjustOutcome => {
 		const now = deps.clock.now();
 		if (
 			tx.select().from(adjustmentKeys).where(eq(adjustmentKeys.key, input.idempotencyKey)).get() !==
@@ -372,7 +373,7 @@ export function adjust(
 			if (result.lines.some((line) => line.type === 'debt_settlement'))
 				deps.logger.emit('credits.debt.settled', {});
 			deps.logger.emit('credits.adjustment.applied', { direction: 'credit', kind: input.kind });
-			recordEntry(
+			const auditId = recordEntry(
 				tx,
 				{
 					adminId: input.adminId,
@@ -386,7 +387,7 @@ export function adjust(
 				deps.auditDeps
 			);
 			tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
-			return { ok: true };
+			return { ok: true, auditId };
 		}
 
 		const available = balanceOf(before) - reservedOf(tx, input.userId);
@@ -411,7 +412,7 @@ export function adjust(
 			now
 		);
 		deps.logger.emit('credits.adjustment.applied', { direction: 'debit', kind: input.kind });
-		recordEntry(
+		const auditId = recordEntry(
 			tx,
 			{
 				adminId: input.adminId,
@@ -425,7 +426,7 @@ export function adjust(
 			deps.auditDeps
 		);
 		tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
-		return { ok: true };
+		return { ok: true, auditId };
 	});
 }
 

@@ -324,7 +324,9 @@ test('@BE-FR-18 la vista previa del ajuste no cambia el saldo; aplicarlo sí, y 
 	await page.getByRole('button', { name: 'Aplicar ajuste' }).click();
 	await page.waitForLoadState('networkidle');
 
-	await expect(page).toHaveURL(/aviso=ajuste_aplicado/);
+	await expect(page).toHaveURL(/aviso=saved&auditoria=/);
+	await expect(page.getByRole('status')).toContainText('Cambio guardado.');
+	await expect(page.getByRole('link', { name: 'Ver la entrada en la auditoría' })).toBeVisible();
 	expect(adjustmentsOf(userId)).toBe(antes + 1);
 });
 

@@ -31,6 +31,14 @@
 
 <h1>{m.admin_users_account_title()}</h1>
 <p>{data.account.email} · {data.account.role}</p>
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
 <section aria-labelledby="saldo-cuenta">
 	<h2 id="saldo-cuenta">{m.admin_account_balance_heading()}</h2>
 	<dl>

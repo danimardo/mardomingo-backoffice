@@ -413,6 +413,8 @@
 	"profile_delete_link": "Ir a borrar mi cuenta",
 	"profile_export_failed": "No hemos podido preparar tu descarga. Inténtalo de nuevo más tarde.",
 	"admin_audit_title": "Auditoría",
+	"admin_notice_saved": "Cambio guardado.",
+	"admin_notice_audit_link": "Ver la entrada en la auditoría",
 	"admin_audit_intro": "Registro de las acciones de administración. Las entradas no se pueden editar ni borrar.",
 	"admin_audit_filter_entity": "Entidad",
 	"admin_audit_filter_action": "Acción",

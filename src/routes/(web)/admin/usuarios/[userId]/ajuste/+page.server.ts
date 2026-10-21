@@ -5,7 +5,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor, accountView } from '$lib/server/features/accounts';
-import { isConfirmed } from '$lib/server/forms/confirmation';
+import { isConfirmed, savedRedirect } from '$lib/server/forms/confirmation';
 import { previewAdjustment } from '$lib/server/web/balance-adjustment';
 import { failureOf } from '$lib/server/web/actions';
 import { AppError } from '$lib/server/shared/errors';
@@ -132,6 +132,7 @@ export const actions: Actions = {
 		const composition = getComposition();
 		const parsed = parse(form, composition.clock.now());
 		if (!parsed.ok) return fail(400, { errors: parsed.errors, values: submitted(form) });
+		let auditId: string | null = null;
 		try {
 			const outcome = composition.credits.adjust({
 				adminId: admin.id,
@@ -143,6 +144,7 @@ export const actions: Actions = {
 				reason: parsed.value.reason,
 				idempotencyKey
 			});
+			if (outcome.ok) auditId = outcome.auditId;
 			// Un reenvío del mismo formulario ya se aplicó: se responde como éxito sin repetir el cambio.
 			if (!outcome.ok && outcome.reason === 'exceeds_available')
 				return fail(400, {
@@ -155,7 +157,8 @@ export const actions: Actions = {
 		}
 		// El aviso va en la ficha de la cuenta; la auditoría del ajuste la escribe `credits` en la misma transacción.
 		const target = `${resolve('/admin/usuarios')}/${encodeURIComponent(params.userId)}`;
-		const next = `${target}?aviso=ajuste_aplicado`;
+		// Un reenvío ya aplicado no tiene entrada nueva: vuelve a la ficha sin aviso.
+		const next = auditId === null ? target : savedRedirect(target, auditId);
 		redirect(303, next);
 	}
 };

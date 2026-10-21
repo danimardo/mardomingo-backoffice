@@ -246,7 +246,7 @@ describe('ajustes del administrador (BE-FR-18, D13, D-16)', () => {
 			reason: 'Compensación por incidencia'
 		});
 
-		expect(outcome).toEqual({ ok: true });
+		expect(outcome).toMatchObject({ ok: true });
 		expect(balanceRow(userId)?.debtMicro).toBe(0);
 		expect(fixture.credits.getBalance(userId).totalMicro).toBe(100 * CREDIT);
 		const settlement = movementsOf(userId).filter((row) => row.type === 'debt_settlement');
@@ -421,7 +421,7 @@ describe('ajustes idempotentes (T307, 15.12)', () => {
 			reason: 'Compensación'
 		};
 
-		expect(fixture.credits.adjust(ajuste)).toEqual({ ok: true });
+		expect(fixture.credits.adjust(ajuste)).toMatchObject({ ok: true });
 		expect(fixture.credits.adjust(ajuste)).toEqual({ ok: false, reason: 'repeated' });
 
 		expect(fixture.credits.getBalance(userId).totalMicro).toBe(antes + 5 * CREDIT);
@@ -452,7 +452,7 @@ describe('ajustes idempotentes (T307, 15.12)', () => {
 			ok: false,
 			reason: 'exceeds_available'
 		});
-		expect(fixture.credits.adjust({ ...base, amountMicro: 1 * CREDIT })).toEqual({ ok: true });
+		expect(fixture.credits.adjust({ ...base, amountMicro: 1 * CREDIT })).toMatchObject({ ok: true });
 	});
 });
 
