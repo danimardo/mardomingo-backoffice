@@ -23,7 +23,8 @@ const config = {
 	reporters: ['clear-text', 'progress', 'html'],
 	htmlReporter: { fileName: 'reports/mutation/index.html' },
 	// Umbrales de referencia para el informe; no bloquean hasta fijar la línea base.
-	thresholds: { high: 80, low: 60, break: null },
+	// Umbral de partida decidido por el propietario (2026-10-22): por debajo del 60 % la ejecución falla.
+	thresholds: { high: 80, low: 60, break: 60 },
 	ignoreStatic: false,
 	timeoutMS: 30000
 };
