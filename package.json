@@ -35,6 +35,8 @@
 		"test:e2e:headed": "playwright test --project chromium --headed",
 		"test:e2e:debug": "playwright test --project chromium --debug",
 		"test:mutation": "stryker run",
+		"perf:seed": "node scripts/perf-seed.mjs",
+		"perf:load": "node scripts/perf-load.mjs",
 		"validate": "pnpm check && pnpm lint && pnpm test:coverage && pnpm build && pnpm test:e2e",
 		"db:generate": "drizzle-kit generate",
 		"docs:api": "node scripts/docs-api.mjs",
