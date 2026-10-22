@@ -976,3 +976,5 @@ _Reconciliación 2026-10-22 (T321): admin-actions.int.test.ts (matriz de accione
 _Reconciliación 2026-10-22 (T326): raiseAlert/clearAlert de L14 (openrouter_balance, mistral_billing, ledger_mismatch) con sus tests._
 _Reconciliación 2026-10-22 (T327): layout con color-scheme, supported-color-schemes y bloque oscuro con tokens aprobados._
 _Reconciliación 2026-10-22 (T343): emails-outbox.int.test.ts cubre los disparadores con plantilla; las exclusiones (factura, recibos) figuran en la propia tarea._
+_Avance 2026-10-22 (T374, parcial): `playwright.config.ts` acepta `E2E_BASE_URL` para apuntar la suite a un despliegue y no levanta servidor local en ese caso. El smoke pasa en local (2/2). Falta ejecutarlo contra un despliegue real: pendiente de staging._
+_Avance 2026-10-22 (T366, T357): la matriz de UX (`e2e/ux-matrix.spec.ts`) y la de accesibilidad (`e2e/a11y.spec.ts`) pasan en Firefox, WebKit y mobile-webkit: 360/360 además de los 45 de Chromium. La nocturna ejecuta cada proyecto completo (`.github/workflows/nightly.yml`)._

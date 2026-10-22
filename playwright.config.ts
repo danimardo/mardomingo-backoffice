@@ -35,7 +35,8 @@ export default defineConfig({
 	retries: process.env.CI ? 1 : 0,
 	reporter: [['list'], ['html', { open: 'never', outputFolder: join(E2E_DIR, 'report') }]],
 	use: {
-		baseURL: WEB_ORIGIN,
+		// E2E_BASE_URL apunta el smoke a un despliegue real (T374); sin ella, el servidor local de la suite.
+		baseURL: process.env.E2E_BASE_URL ?? WEB_ORIGIN,
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure',
 		video: nightly ? 'retain-on-failure' : 'off'
@@ -72,31 +73,35 @@ export default defineConfig({
 			use: { ...devices['Desktop Chrome'] }
 		}
 	],
-	webServer: {
-		// Requiere `pnpm build` antes (la cadena `validate` lo hace). El captcha va al simulador de Turnstile del global setup (`MOCK_TURNSTILE_URL`).
-		command: 'node build/index.js',
-		url: `${WEB_ORIGIN}/api/v1/health`,
-		reuseExistingServer: !process.env.CI,
-		timeout: 60_000,
-		env: {
-			APP_ENV: 'test',
-			HOST: '127.0.0.1',
-			PORT: String(PORT),
-			PUBLIC_API_URL: API_ORIGIN,
-			PUBLIC_WEB_URL: WEB_ORIGIN,
-			BETTER_AUTH_URL: WEB_ORIGIN,
-			// Cubre el mayor max_audio_mb (10 MB): el arranque se niega si no (FR-070).
-			BODY_SIZE_LIMIT: '10M',
-			// Base nueva en cada carga: el servidor arranca siempre con datos vacíos.
-			DATABASE_PATH: e2eDbPath,
-			BETTER_AUTH_SECRET: randomBytes(32).toString('hex'),
-			EMAIL_HASH_KEY: randomBytes(32).toString('hex'),
-			LOG_LEVEL: 'debug',
-			// Captcha de pruebas: el simulador que arranca el global setup en este mismo puerto.
-			MOCK_TURNSTILE_URL: TURNSTILE_MOCK_URL,
-			// Un solo servidor para los tres navegadores: el límite de altas por IP (3/24 h) no admite el total de las pruebas.
-			E2E_REGISTRATIONS_PER_IP_24H: '100',
-			E2E_LOGINS_PER_IP_15MIN: '500'
-		}
-	}
+	// Contra un despliegue no se levanta servidor local: el smoke solo lee la URL indicada.
+	webServer:
+		process.env.E2E_BASE_URL === undefined
+			? {
+					// Requiere `pnpm build` antes (la cadena `validate` lo hace). El captcha va al simulador de Turnstile del global setup (`MOCK_TURNSTILE_URL`).
+					command: 'node build/index.js',
+					url: `${WEB_ORIGIN}/api/v1/health`,
+					reuseExistingServer: !process.env.CI,
+					timeout: 60_000,
+					env: {
+						APP_ENV: 'test',
+						HOST: '127.0.0.1',
+						PORT: String(PORT),
+						PUBLIC_API_URL: API_ORIGIN,
+						PUBLIC_WEB_URL: WEB_ORIGIN,
+						BETTER_AUTH_URL: WEB_ORIGIN,
+						// Cubre el mayor max_audio_mb (10 MB): el arranque se niega si no (FR-070).
+						BODY_SIZE_LIMIT: '10M',
+						// Base nueva en cada carga: el servidor arranca siempre con datos vacíos.
+						DATABASE_PATH: e2eDbPath,
+						BETTER_AUTH_SECRET: randomBytes(32).toString('hex'),
+						EMAIL_HASH_KEY: randomBytes(32).toString('hex'),
+						LOG_LEVEL: 'debug',
+						// Captcha de pruebas: el simulador que arranca el global setup en este mismo puerto.
+						MOCK_TURNSTILE_URL: TURNSTILE_MOCK_URL,
+						// Un solo servidor para los tres navegadores: el límite de altas por IP (3/24 h) no admite el total de las pruebas.
+						E2E_REGISTRATIONS_PER_IP_24H: '100',
+						E2E_LOGINS_PER_IP_15MIN: '500'
+					}
+				}
+			: undefined
 });
