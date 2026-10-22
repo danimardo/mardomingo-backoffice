@@ -56,3 +56,26 @@ describe('lowBalanceVerdict', () => {
 		});
 	});
 });
+
+describe('aviso de saldo bajo: fronteras (T253, mutación)', () => {
+	it('un saldo exactamente igual al umbral no está por debajo: no avisa', () => {
+		expect(lowBalanceVerdict({ balanceMicro: 500, thresholdMicro: 500, notified: false })).toEqual({
+			event: null,
+			notified: false
+		});
+	});
+
+	it('un saldo exactamente igual al umbral con el aviso ya enviado se rearma', () => {
+		expect(lowBalanceVerdict({ balanceMicro: 500, thresholdMicro: 500, notified: true })).toEqual({
+			event: 'rearmed',
+			notified: false
+		});
+	});
+
+	it('un umbral nulo conserva el estado de aviso que ya tenía', () => {
+		expect(lowBalanceVerdict({ balanceMicro: -1, thresholdMicro: null, notified: true })).toEqual({
+			event: null,
+			notified: true
+		});
+	});
+});
