@@ -452,7 +452,9 @@ describe('ajustes idempotentes (T307, 15.12)', () => {
 			ok: false,
 			reason: 'exceeds_available'
 		});
-		expect(fixture.credits.adjust({ ...base, amountMicro: 1 * CREDIT })).toMatchObject({ ok: true });
+		expect(fixture.credits.adjust({ ...base, amountMicro: 1 * CREDIT })).toMatchObject({
+			ok: true
+		});
 	});
 });
 

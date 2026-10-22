@@ -8,6 +8,7 @@ import { legalUpdateEmail } from './emails/legal-update';
 import { inactivityNoticeEmail } from './emails/inactivity-notice';
 import { lowBalanceEmail } from './emails/low-balance';
 import { freeExpiryWarningEmail } from './emails/free-expiry-warning';
+import { invoiceAvailableEmail } from './emails/invoice-available';
 import { emailChangeVerifyEmail } from './emails/email-change-verify';
 import { emailChangedNoticeEmail } from './emails/email-changed-notice';
 import { passwordResetEmail } from './emails/password-reset';
@@ -51,6 +52,7 @@ function contentOf(deps: NotificationsDeps, email: AccountEmail) {
 		return passwordResetEmail({ link: email.link ?? '', supportEmail });
 	}
 	if (email.reason === 'low_balance') return lowBalanceEmail({ supportEmail });
+	if (email.reason === 'invoice_available') return invoiceAvailableEmail({ supportEmail });
 	if (email.reason === 'free_expiry_warning') {
 		return freeExpiryWarningEmail({ days: email.expiry?.days ?? 0, supportEmail });
 	}

@@ -333,6 +333,8 @@
 	"notifications_low_balance_body": "Tu saldo de créditos ha bajado del umbral que elegiste. Puedes revisarlo en tu panel.",
 	"notifications_free_expiry_subject": "Tus créditos gratuitos caducan pronto",
 	"notifications_free_expiry_body": "Tienes créditos gratuitos que caducan dentro de {days} días. Puedes usarlos antes de esa fecha y revisar tu saldo en tu panel.",
+	"notifications_invoice_available_subject": "Tu factura ya está disponible",
+	"notifications_invoice_available_body": "Tu factura ya está disponible en tu panel, en la sección de facturas.",
 	"movements_app_label": "App",
 	"movements_app_all": "Todas las apps",
 	"panel_balance_eur": "Equivalente en euros",
