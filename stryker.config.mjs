@@ -18,6 +18,8 @@ const config = {
 	incremental: true,
 	incrementalFile: 'reports/stryker-incremental.json',
 	tempDirName: '.stryker-tmp',
+	// En Windows, Vitest bloquea ficheros de caché y la limpieza de sandboxes falla con EPERM: no se borra al terminar.
+	cleanTempDir: false,
 	reporters: ['clear-text', 'progress', 'html'],
 	htmlReporter: { fileName: 'reports/mutation/index.html' },
 	// Umbrales de referencia para el informe; no bloquean hasta fijar la línea base.
