@@ -16,8 +16,13 @@ export const TEMPLATE_DB = join(TEMPLATE_DIR, 'template.db');
 /** Identificador fijo de la app `secretario` que siembra el _seed_ (T080). */
 export const SEEDED_APP_ID = 'app_secretario';
 
+// En Windows el borrado puede chocar con un handle recién cerrado (EPERM/EBUSY); se reintenta antes de fallar.
+function removeTemplateDir(): void {
+	rmSync(TEMPLATE_DIR, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}
+
 export default async function setup(): Promise<() => void> {
-	rmSync(TEMPLATE_DIR, { recursive: true, force: true });
+	removeTemplateDir();
 	mkdirSync(TEMPLATE_DIR, { recursive: true });
 	const { sqlite, db } = openDatabase(TEMPLATE_DB);
 	await migrateDatabase({
@@ -34,6 +39,6 @@ export default async function setup(): Promise<() => void> {
 	sqlite.pragma('wal_checkpoint(TRUNCATE)');
 	sqlite.close();
 	return () => {
-		rmSync(TEMPLATE_DIR, { recursive: true, force: true });
+		removeTemplateDir();
 	};
 }
