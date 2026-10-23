@@ -29,3 +29,15 @@ test('@smoke la navegación cliente vuelve a la portada sin recargar la página'
 	const kept = await page.evaluate(() => window.__sinRecarga === true);
 	expect(kept).toBe(true);
 });
+
+test.describe('humo con sesión de usuario', () => {
+	test.use({ storageState: 'e2e/.auth/user.json' });
+
+	test('@smoke el usuario verificado entra al panel con su sesión ya iniciada', async ({ page }) => {
+		const response = await page.goto('/panel');
+
+		expect(response?.status()).toBe(200);
+		await expect(page.locator('main#contenido')).toBeVisible();
+		await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+	});
+});
