@@ -26,6 +26,9 @@ const nightly = process.env.E2E_NIGHTLY === '1';
 /** Spec de administración con un único administrador por base: solo en chromium (T314). */
 const ADMIN_SPEC = /admin-contenido\.spec\.ts/;
 
+/** Publica una versión legal con reaceptación para todas las cuentas: corre el último, en su proyecto (T288). */
+const LEGAL_LAST_SPEC = /legal-critico7\.spec\.ts/;
+
 export default defineConfig({
 	testDir: 'e2e',
 	globalSetup: './e2e/global-setup.ts',
@@ -59,21 +62,28 @@ export default defineConfig({
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Firefox'] },
 			// Un solo administrador por base (índice one_admin): este spec corre solo en chromium (ver ADMIN_SPEC).
-			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC]
 		},
 		{
 			name: 'webkit',
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Safari'] },
-			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC]
 		},
 		{
 			name: 'mobile-webkit',
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['iPhone 13'] },
-			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC]
+		},
+		{
+			name: 'legal-critico7',
+			// Corre después de todos los navegadores: publicar una versión legal afecta a todas las cuentas de la base (T288).
+			dependencies: ['setup', 'chromium', 'firefox', 'webkit', 'mobile-webkit'],
+			testMatch: LEGAL_LAST_SPEC,
+			use: { ...devices['Desktop Chrome'] }
 		},
 		{
 			name: 'visual',
