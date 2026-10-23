@@ -8,9 +8,9 @@ import {
 	accessFor,
 	closeOtherSession,
 	reportDenial,
+	sessionDtoOf,
 	sessionsOf
 } from '$lib/server/features/accounts';
-import { civilDateOf } from '$lib/shared/dates';
 import { toEpochMs } from '$lib/shared/time';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -42,14 +42,7 @@ export const load: PageServerLoad = async ({ locals, setHeaders, url, request })
 	const sessions = sessionsOf(composition.db, access.user.id, toEpochMs(composition.clock.now()));
 	return {
 		closed: url.searchParams.get('aviso') === 'session_closed',
-		sessions: sessions.map((item) => ({
-			id: item.id,
-			current: item.id === currentId,
-			createdOn: civilDateOf(item.createdAt),
-			lastUsedOn: item.lastUsedAt === null ? null : civilDateOf(toEpochMs(item.lastUsedAt)),
-			deviceName: item.deviceName ?? '',
-			approxIp: item.approxIp ?? ''
-		}))
+		sessions: sessions.map((item) => sessionDtoOf(item, currentId))
 	};
 };
 
