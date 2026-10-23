@@ -526,3 +526,19 @@ for (const scheme of ['light', 'dark'] as const) {
 		});
 	}
 }
+
+// Administración en móvil (T322; 16.8 mobile-first): las páginas clave entran en 390×844 sin desbordamiento horizontal.
+test.describe('administración en móvil', () => {
+	for (const route of ['/admin', '/admin/usuarios', '/admin/facturacion']) {
+		test(`@UX-13 ${route} entra en 390×844 sin desbordamiento horizontal`, async ({ page }) => {
+			await page.setViewportSize({ width: 390, height: 844 });
+			await loginAsAdmin(page);
+			await page.goto(route);
+
+			const overflow = await page.evaluate(
+				() => document.documentElement.scrollWidth > document.documentElement.clientWidth
+			);
+			expect(overflow).toBe(false);
+		});
+	}
+});
