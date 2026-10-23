@@ -74,9 +74,10 @@ export default defineConfig({
 		}
 	],
 	// Contra un despliegue no se levanta servidor local: el smoke solo lee la URL indicada.
-	webServer:
-		process.env.E2E_BASE_URL === undefined
-			? {
+	// `webServer` solo existe sin E2E_BASE_URL: con exactOptionalPropertyTypes no se admite `undefined` explícito.
+	...(process.env.E2E_BASE_URL === undefined
+		? {
+				webServer: {
 					// Requiere `pnpm build` antes (la cadena `validate` lo hace). El captcha va al simulador de Turnstile del global setup (`MOCK_TURNSTILE_URL`).
 					command: 'node build/index.js',
 					url: `${WEB_ORIGIN}/api/v1/health`,
@@ -103,5 +104,6 @@ export default defineConfig({
 						E2E_LOGINS_PER_IP_15MIN: '500'
 					}
 				}
-			: undefined
+			}
+		: {})
 });
