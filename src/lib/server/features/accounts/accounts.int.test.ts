@@ -49,7 +49,7 @@ async function bearerOf(address: string): Promise<string> {
 }
 
 describe('registro (W08)', () => {
-	it('un registro válido crea la cuenta sin verificar, guarda las aceptaciones y envía el enlace', async () => {
+	it('[BE-FR-01/CA4] un registro válido crea la cuenta sin verificar, guarda las aceptaciones y envía el enlace', async () => {
 		const result = await fixture.accounts.register(registration({ appSlug: 'secretario' }));
 
 		expect(result.sentTo).toBe(EMAIL);
@@ -78,7 +78,7 @@ describe('registro (W08)', () => {
 		expect(eventsNamed(fixture.logger, 'accounts.signup.completed')).toHaveLength(1);
 	});
 
-	it('el alta guarda la app de origen y la versión y fecha de cada aceptación', async () => {
+	it('[BE-FR-01/CA2] [BE-FR-64/CA1] el alta guarda la app de origen y la versión y fecha de cada aceptación', async () => {
 		await fixture.accounts.register(registration({ appSlug: 'secretario' }));
 
 		const row = db().select().from(user).where(eq(user.email, EMAIL)).get();
@@ -96,7 +96,7 @@ describe('registro (W08)', () => {
 		}
 	});
 
-	it('sin captcha válido no se crea nada', async () => {
+	it('[BE-FR-01/CA3] sin captcha válido no se crea nada', async () => {
 		fixture.captcha.outcome('invalid');
 
 		expect(await codeOf(() => fixture.accounts.register(registration()))).toBe('CAPTCHA_INVALID');
@@ -181,7 +181,7 @@ describe('verificación (W09) e inicio de sesión (W11)', () => {
 		}
 	});
 
-	it('una cuenta bloqueada no entra y se dice como cuenta bloqueada', async () => {
+	it('[BE-FR-03/CA2] una cuenta bloqueada no entra y se dice como cuenta bloqueada', async () => {
 		await registerAndVerify(EMAIL);
 		db().update(user).set({ banned: true }).where(eq(user.email, EMAIL)).run();
 
@@ -290,7 +290,7 @@ describe('sesiones', () => {
 		expect(await fixture.accounts.readSession(new Headers())).toBeNull();
 	});
 
-	it('cerrar sesión la revoca al momento: la siguiente lectura ya no la ve', async () => {
+	it('[BE-FR-04/CA2] cerrar sesión la revoca al momento: la siguiente lectura ya no la ve', async () => {
 		await registerAndVerify(EMAIL);
 		const headers = new Headers({ authorization: `Bearer ${await bearerOf(EMAIL)}` });
 		expect(await fixture.accounts.readSession(headers)).not.toBeNull();
@@ -300,7 +300,7 @@ describe('sesiones', () => {
 		expect(await fixture.accounts.readSession(headers)).toBeNull();
 	});
 
-	it('la sesión se renueva al usarla y caduca tras 30 días sin uso', async () => {
+	it('[BE-FR-04/CA1] la sesión se renueva al usarla y caduca tras 30 días sin uso', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		try {
 			vi.setSystemTime(new Date('2026-10-11T08:00:00Z'));

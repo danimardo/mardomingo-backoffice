@@ -144,7 +144,7 @@ describe('Better Auth con SQLite real', () => {
 });
 
 describe('revocación de sesiones', () => {
-	it('revocar todas las sesiones deja sin sesión a la cuenta en la siguiente petición', async () => {
+	it('[BE-FR-04/CA2] revocar todas las sesiones deja sin sesión a la cuenta en la siguiente petición', async () => {
 		await register();
 		await auth.api.sendVerificationEmail({ body: { email: EMAIL } });
 		await auth.api.verifyEmail({ query: { token: sent[0]?.token ?? '' } });

@@ -54,7 +54,7 @@ const request = (
 	});
 
 describe('cambio de email (T265)', () => {
-	it('con la contraseña correcta envía el enlace de 24 h a la dirección nueva', async () => {
+	it('[BE-FR-66/CA1] con la contraseña correcta envía el enlace de 24 h a la dirección nueva', async () => {
 		expect(await request()).toBe('sent');
 
 		const sent = f.mail.sent.find((item) => item.to === NEW_EMAIL);
@@ -68,7 +68,7 @@ describe('cambio de email (T265)', () => {
 		expect(f.mail.sent.some((item) => item.to === NEW_EMAIL)).toBe(false);
 	});
 
-	it('una dirección de otra cuenta responde igual que una libre, sin email (CA3)', async () => {
+	it('[BE-FR-66/CA3] una dirección de otra cuenta responde igual que una libre, sin email (CA3)', async () => {
 		await f.accounts.register(registration({ email: 'ocupada@ejemplo.es' }));
 		await f.accounts.verifyEmail(verificationTokenFor(f.mail, 'ocupada@ejemplo.es'));
 
@@ -80,7 +80,7 @@ describe('cambio de email (T265)', () => {
 		).toBe(false);
 	});
 
-	it('aplicar el enlace cambia el email, cierra las sesiones, avisa a la anterior y no admite segundo uso', async () => {
+	it('[BE-FR-66/CA1] [BE-FR-66/CA2] [BE-FR-66/CA5] aplicar el enlace cambia el email, cierra las sesiones, avisa a la anterior y no admite segundo uso', async () => {
 		await request();
 		const token = changeTokenFrom(NEW_EMAIL);
 
