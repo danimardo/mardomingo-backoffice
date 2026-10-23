@@ -38,6 +38,17 @@ test.describe('compra con sesión de usuario', () => {
 		);
 		expect(overflow).toBe(false);
 	});
+	test('@BE-FR-25 la confirmación de compra en 1366×768 sin desbordamiento horizontal', async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: 1366, height: 768 });
+		await page.goto('/panel/comprar?paquete=pck_seed_5eur');
+
+		const overflow = await page.evaluate(
+			() => document.documentElement.scrollWidth > document.documentElement.clientWidth
+		);
+		expect(overflow).toBe(false);
+	});
 });
 
 test.describe('compra sin JavaScript (crítico 10)', () => {
