@@ -9,6 +9,8 @@ import type { TestProject } from 'vitest/node';
 import { send } from '../http/client';
 import { startOpenRouterMock } from '../mock-servers/openrouter';
 import { startMistralMock } from '../mock-servers/mistral';
+import { startResendMock } from '../mock-servers/resend';
+import { startTurnstileMock } from '../mock-servers/turnstile';
 import { prepareMediaOperations } from '../builders/media-account';
 import { openDatabase } from '$lib/server/db/client';
 import { createSystemClock } from '$lib/server/adapters/clock/clock';
@@ -93,6 +95,8 @@ export default async function setup(project: TestProject): Promise<() => Promise
 
 	const openrouter = await startOpenRouterMock();
 	const mistral = await startMistralMock();
+	const turnstile = await startTurnstileMock();
+	const resend = await startResendMock();
 	const child: ChildProcess = spawn(process.execPath, [join('build', 'index.js')], {
 		env: {
 			APP_ENV: 'test',
@@ -107,6 +111,9 @@ export default async function setup(project: TestProject): Promise<() => Promise
 			LOG_LEVEL: 'debug',
 			MOCK_OPENROUTER_URL: openrouter.url,
 			MOCK_MISTRAL_URL: mistral.url,
+			// Captcha y email del registro y de la recuperación contra sus simuladores (R12; T109).
+			MOCK_TURNSTILE_URL: turnstile.url,
+			MOCK_RESEND_URL: resend.url,
 			BODY_SIZE_LIMIT: '10M',
 			// Como detrás del proxy de producción: la IP del cliente es la de X-Forwarded-For, a un salto (T208, T209).
 			ADDRESS_HEADER: 'x-forwarded-for',
@@ -165,6 +172,8 @@ export default async function setup(project: TestProject): Promise<() => Promise
 		});
 		await openrouter.close();
 		await mistral.close();
+		await turnstile.close();
+		await resend.close();
 		rmSync(DIR, { recursive: true, force: true });
 	};
 }
