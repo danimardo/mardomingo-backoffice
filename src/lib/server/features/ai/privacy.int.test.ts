@@ -4,31 +4,24 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runChat } from './service';
 import { chatBody, chatFixture, type ChatFixture } from '../../../../../tests/builders/chat';
+import {
+	markerInDatabase,
+	markerInLogs,
+	privacyMarker
+} from '../../../../../tests/fixtures/privacy-marker';
 
-const MARKER = 'PRIVADO-MARCADOR-9f3c2a7e-no-debe-aparecer';
+let MARKER = '';
 
 let f: ChatFixture;
 
 beforeEach(() => {
 	f = chatFixture();
+	MARKER = privacyMarker();
 });
 
 afterEach(() => {
 	f.close();
 });
-
-/** Todo el contenido de todas las tablas, serializado, para buscar el marcador. */
-function everyTableText(): string {
-	const sqlite = f.base.database.sqlite;
-	const tables = sqlite
-		.prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-		.pluck()
-		.all()
-		.map(String);
-	return tables
-		.map((name) => JSON.stringify(sqlite.prepare(`SELECT * FROM "${name}"`).all()))
-		.join('\n');
-}
 
 describe('marcador de privacidad (BE-FR-38)', () => {
 	it('el texto del mensaje no aparece en ninguna tabla ni en los eventos tras los cuatro desenlaces', async () => {
@@ -57,7 +50,7 @@ describe('marcador de privacidad (BE-FR-38)', () => {
 		expect(f.gateway.chatCalls.some((call) => JSON.stringify(call.messages).includes(MARKER))).toBe(
 			true
 		);
-		expect(everyTableText()).not.toContain(MARKER);
-		expect(JSON.stringify(f.base.logger.events)).not.toContain(MARKER);
+		expect(markerInDatabase(f.base.database, MARKER)).toBe(false);
+		expect(markerInLogs(f.base.logger, MARKER)).toBe(false);
 	});
 });
