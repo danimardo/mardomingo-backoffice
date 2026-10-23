@@ -10,7 +10,7 @@ import { paymentsFixture, type PaymentsFixture } from '../../../../../tests/buil
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
 import { adminAudit } from '$lib/server/features/audit/schema';
 import { creditMovements, userBalances } from '$lib/server/features/credits/schema';
-import { user } from '$lib/server/features/accounts/schema';
+import { session, user } from '$lib/server/features/accounts/schema';
 import { termsAcceptances } from '$lib/server/features/legal/schema';
 import { payments } from './schema';
 
@@ -157,6 +157,17 @@ describe('contracargo (BE-FR-28)', () => {
 		if (!reserved.ok) throw new Error('la reserva debía caber');
 		f.base.credits.chargeAndRelease({ holdId: reserved.holdId, realCostMicro: 8000 * CREDIT });
 		const providerRef = `fake_${paymentId}`;
+		f.base.db
+			.insert(session)
+			.values({
+				id: 'ses_contracargo',
+				userId,
+				token: 'tok_contracargo',
+				expiresAt: new Date(f.base.clock.now() + 86_400_000),
+				createdAt: new Date(f.base.clock.now()),
+				updatedAt: new Date(f.base.clock.now())
+			})
+			.run();
 
 		f.payments.handleProviderEvents({ type: 'chargeback_opened', providerRef });
 		f.payments.handleProviderEvents({ type: 'chargeback_opened', providerRef });
@@ -173,6 +184,9 @@ describe('contracargo (BE-FR-28)', () => {
 		expect(
 			f.base.db.select().from(creditMovements).where(eq(creditMovements.type, 'chargeback')).all()
 		).toHaveLength(2);
+		expect(f.base.db.select().from(session).where(eq(session.userId, userId)).all()).toHaveLength(
+			0
+		);
 		expect(eventsNamed(f.base.logger, 'payments.chargeback.applied')).toHaveLength(1);
 		expect(eventsNamed(f.base.logger, 'payments.webhook.duplicate')).toHaveLength(1);
 	});
