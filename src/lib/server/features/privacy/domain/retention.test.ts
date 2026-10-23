@@ -21,7 +21,7 @@ describe('addMonths', () => {
 describe('retentionCutoffs', () => {
 	const NOW = toEpochMs(Date.UTC(2026, 9, 19, 9, 30, 0));
 
-	it('sesiones: 30 días después de caducar', () => {
+	it('[BE-FR-04/CA6] sesiones: 30 días después de caducar', () => {
 		expect(retentionCutoffs(NOW).sessionsExpiredBefore).toBe(NOW - 30 * DAY_MS);
 	});
 

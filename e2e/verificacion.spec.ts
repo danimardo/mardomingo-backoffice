@@ -52,6 +52,8 @@ test('@critical registro, verificación y bienvenida con el enlace del email', a
 	await expect(
 		page.getByText('Inicia sesión con tu email en la app que quieras usar.')
 	).toBeVisible();
+	// [BE-FR-64/CA2] Tras verificar, la bienvenida lleva los pasos genéricos. El texto propio de la app de origen llega con
+	// `apps.post_verify_text` (L04/L05) y entonces se añade su comprobación.
 	// La bienvenida: 1.000 créditos gratuitos (1 €), con su día de caducidad.
 	await expect(
 		page.getByText(/Te hemos concedido 1000 créditos gratuitos\. Caducan el /)

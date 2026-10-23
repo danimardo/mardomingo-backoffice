@@ -103,6 +103,20 @@ describe('cambio de email (T265)', () => {
 		expect(await f.accounts.confirmEmailChange(token)).toMatchObject({ outcome: 'invalid' });
 	});
 
+	it('[BE-FR-66/CA4] el cambio recalcula email_normalized con la regla de gmail (sin puntos ni +etiqueta)', async () => {
+		const gmail = 'juan.perez+compras@gmail.com';
+		await request({ newEmail: gmail });
+		const token = changeTokenFrom(gmail);
+
+		await f.accounts.confirmEmailChange(token);
+		const row = f.database.db
+			.select({ email: user.email, normalized: user.emailNormalized })
+			.from(user)
+			.where(eq(user.id, userId))
+			.get();
+		expect(row).toMatchObject({ email: gmail, normalized: 'juanperez@gmail.com' });
+	});
+
 	it('un enlace caducado a las 24 h responde expired y no cambia el email', async () => {
 		await request();
 		const token = changeTokenFrom(NEW_EMAIL);

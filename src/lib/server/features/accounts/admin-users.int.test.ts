@@ -87,7 +87,7 @@ describe('búsqueda de usuarios (BE-FR-50)', () => {
 });
 
 describe('bloqueo y desbloqueo (BE-FR-50)', () => {
-	it('bloquea con motivo, revoca las sesiones y deja auditoría con antes y después', () => {
+	it('[BE-FR-04/CA4] bloquea con motivo, revoca las sesiones y deja auditoría con antes y después', () => {
 		expect(sessionsOf(targetId)).toBe(2);
 
 		blockUser(deps, { adminId, userId: targetId, reason: 'fraude en pagos' });

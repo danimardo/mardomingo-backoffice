@@ -151,7 +151,7 @@ describe('sesión de la API', () => {
 		expect(errorOf(result.text).code).toBe('UNAUTHENTICATED');
 	});
 
-	it('una cookie de la web no autentica en la API', async () => {
+	it('[BE-FR-65/CA1] una cookie de la web no autentica en la API', async () => {
 		const result = await send(baseUrl, '/api/v1/auth/logout', {
 			method: 'POST',
 			host: apiHost,

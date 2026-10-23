@@ -28,7 +28,7 @@ describe('email de verificación', () => {
 		expect(mail.html).toContain(escapeHtml(LINK));
 	});
 
-	it('si el email se refiere a una app, lo dice por su nombre visible', () => {
+	it('[BE-FR-64/CA3] si el email se refiere a una app, lo dice por su nombre visible', () => {
 		const mail = verificationEmail({ link: LINK, appName: 'Secretario AI', supportEmail: SUPPORT });
 
 		expect(mail.text).toContain('Secretario AI');
