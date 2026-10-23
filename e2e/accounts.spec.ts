@@ -3,7 +3,8 @@
 import { expect, test } from './fixtures';
 
 // Las respuestas 400 y 401 de estas pruebas son el resultado esperado (validación y credenciales), no un fallo.
-test.use({ guardAllow: [/status of 400|status of 401/] });
+// Una petición de datos de SvelteKit (`__data.json`) puede quedar abortada al navegar (ver `privacy.spec.ts`): no es un fallo.
+test.use({ guardAllow: [/status of 400|status of 401|__data\.json.*ERR_ABORTED/] });
 
 test('@critical el panel sin sesión manda al inicio de sesión con el destino guardado', async ({
 	page

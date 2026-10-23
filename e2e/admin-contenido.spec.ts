@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { request as playwrightRequest, type Page } from '@playwright/test';
+import { E2E_ADMIN_EMAIL } from './constants';
 import { expect, test } from './fixtures';
 import { checkAccessibility } from './fixtures/axe';
 import {
@@ -16,23 +17,35 @@ import {
 } from './outbox';
 
 test.describe.configure({ mode: 'serial' });
+// Una petición de datos de SvelteKit (`__data.json`) puede quedar abortada al navegar entre páginas: no es un fallo (ver `privacy.spec.ts`).
+test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
 
-let email = '';
+/**
+ * Cuenta administradora de este spec: fija dentro de la base de la ejecución (cada ejecución E2E tiene la suya). Los grupos
+ * del spec pueden correr en workers distintos, y cada uno ejecuta su `beforeAll`: por eso la preparación es idempotente.
+ * Si el usuario ya existe no se registra de nuevo, y solo se quita el rol de administrador a otras cuentas si la nuestra no lo
+ * tiene: así un segundo worker no degrada al administrador del primero (índice `one_admin`, T314).
+ */
+const email = E2E_ADMIN_EMAIL;
 
 test.beforeAll(async ({ baseURL }) => {
 	const base = baseURL ?? 'http://localhost:7390';
-	email = uniqueGmail('admin-contenido');
-	const request = await playwrightRequest.newContext({ baseURL: base });
-	try {
-		await registerThroughForm(request, base, email);
-		await verifyThroughForm(request, base, verificationTokenFor(email));
-	} finally {
-		await request.dispose();
+	const dbPath = readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8');
+	const existing = new Database(dbPath);
+	const known = existing.prepare('SELECT 1 FROM user WHERE email = ?').get(email) !== undefined;
+	existing.close();
+	if (!known) {
+		const request = await playwrightRequest.newContext({ baseURL: base });
+		try {
+			await registerThroughForm(request, base, email);
+			await verifyThroughForm(request, base, verificationTokenFor(email));
+		} finally {
+			await request.dispose();
+		}
 	}
-	const db = new Database(readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8'));
+	const db = new Database(dbPath);
 	try {
-		// Un reintento crea otra cuenta: se quita el rol antes para no violar el índice de un solo administrador.
-		db.prepare("UPDATE user SET role = 'user' WHERE role = 'admin'").run();
+		db.prepare("UPDATE user SET role = 'user' WHERE role = 'admin' AND email <> ?").run(email);
 		db.prepare("UPDATE user SET role = 'admin' WHERE email = ?").run(email);
 	} finally {
 		db.close();
@@ -132,7 +145,8 @@ test('@BE-FR-76 la facturación filtra un periodo y descarga el CSV de ventas co
 	page
 }) => {
 	await loginAsAdmin(page);
-	await page.goto('/admin/facturacion?desde=2026-10-01&hasta=2026-10-31');
+	// Septiembre: la cuenta sembrada para el panel compra en octubre, así que este periodo debe quedar vacío y en cero.
+	await page.goto('/admin/facturacion?desde=2026-09-01&hasta=2026-09-30');
 	await page.waitForLoadState('networkidle');
 
 	await expect(page.getByText('Ventas en el periodo: 0')).toBeVisible();

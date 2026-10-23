@@ -10,7 +10,7 @@ let paymentPath = '';
 
 test.beforeAll(async ({ browser, baseURL }) => {
 	const context = await browser.newContext({
-		baseURL,
+		baseURL: baseURL ?? 'http://localhost:7390',
 		storageState: 'e2e/.auth/user.json'
 	});
 	try {

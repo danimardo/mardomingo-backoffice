@@ -81,6 +81,16 @@ export default defineConfig({
 			},
 			{
 				test: {
+					// Siembra de la base del E2E con los servicios (T250). Solo corre con `E2E_SEED_DB` definida.
+					name: 'e2e-seed',
+					environment: 'node',
+					include: ['tests/e2e-seed/**/*.test.ts'],
+					globalSetup: ['tests/setup/integration.global-setup.ts'],
+					css: { include: [/tokens\.css(\?raw)?$/] }
+				}
+			},
+			{
+				test: {
 					name: 'http',
 					environment: 'node',
 					include: ['tests/http/**/*.test.ts'],

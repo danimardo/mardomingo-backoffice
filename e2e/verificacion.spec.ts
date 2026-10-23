@@ -3,13 +3,11 @@
 // Turnstile del global setup; el alta va por la acción del formulario con su Origin, como la haría el navegador.
 // Tras verificar, la cookie de sesión es HttpOnly y SameSite=Lax, y el panel no se guarda en caché (T111).
 import { expect, test } from './fixtures';
-import { PASSWORD, uniqueEmail, verificationTokenFor } from './outbox';
+import { PASSWORD, registerAttempt, uniqueEmail, verificationTokenFor } from './outbox';
 
 // Una petición de datos de SvelteKit (`__data.json`) puede quedar abortada al cerrar la página, una vez terminada la
 // prueba. No es un fallo de la página: las aserciones verifican el comportamiento. Solo se admite ese caso.
 test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
-
-const PROVISIONAL_LEGAL_VERSION = '2026-10-11';
 
 test('@critical registro, verificación y bienvenida con el enlace del email', async ({
 	page,
@@ -20,26 +18,10 @@ test('@critical registro, verificación y bienvenida con el enlace del email', a
 	const email = uniqueEmail('persona');
 	const origin = new URL(baseURL ?? 'http://localhost:7390').origin;
 
-	const registration = await request.post('/registro?/registrar', {
-		headers: { origin },
-		form: {
-			email,
-			password: PASSWORD,
-			acceptTerms: 'on',
-			acceptPrivacy: 'on',
-			acceptAup: 'on',
-			ageDeclaration: 'on',
-			'cf-turnstile-response': 'token-del-simulador',
-			app: 'secretario',
-			versionTerms: PROVISIONAL_LEGAL_VERSION,
-			versionPrivacy: PROVISIONAL_LEGAL_VERSION,
-			versionAup: PROVISIONAL_LEGAL_VERSION
-		}
-	});
-	expect(registration.status()).toBe(200);
 	// La acción responde con su resultado: éxito y la dirección a la que se envió (la página no vuelve a mostrar la contraseña).
-	expect(await registration.text()).toContain(email);
-	expect(await registration.text()).not.toContain(PASSWORD);
+	const body = await registerAttempt(request, origin, email);
+	expect(body).toContain(email);
+	expect(body).not.toContain(PASSWORD);
 
 	await page.goto(`/verificar?token=${encodeURIComponent(verificationTokenFor(email))}`);
 	await page.getByRole('button', { name: 'Confirmar mi email' }).click();

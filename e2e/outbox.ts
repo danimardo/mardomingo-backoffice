@@ -26,8 +26,13 @@ function isOutboxEmail(value: unknown): value is OutboxEmail {
 	);
 }
 
-/** Token del último email dirigido a esa dirección cuyo texto contiene `marker`. */
-function tokenInLatestMail(address: string, marker: string): string {
+/** Espera síncrona de `ms` milisegundos (los helpers son síncronos y los llaman muchos specs). */
+function sleepSync(ms: number): void {
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Token del último email dirigido a esa dirección cuyo texto contiene `marker`, o `undefined` si aún no está. */
+function findToken(address: string, marker: string): string | undefined {
 	const files = readdirSync(OUTBOX)
 		.filter((name) => name.endsWith('.json'))
 		.sort();
@@ -40,8 +45,22 @@ function tokenInLatestMail(address: string, marker: string): string {
 		.filter((mail) => mail.to === address && mail.text.includes(marker));
 	const last = mine[mine.length - 1];
 	const match = /token=([^\s&]+)/.exec(last?.text ?? '');
-	if (match?.[1] === undefined) throw new Error(`no hay enlace (${marker}) para ${address}`);
-	return decodeURIComponent(match[1]);
+	return match?.[1] === undefined ? undefined : decodeURIComponent(match[1]);
+}
+
+/**
+ * Token del último email de esa dirección. El servidor escribe el email de forma asíncrona, después de responder al
+ * registro: con carga, la lectura inmediata llega antes que el fichero (T288, flakiness de la pasada completa). Por eso
+ * reintenta durante hasta 10 s antes de fallar.
+ */
+function tokenInLatestMail(address: string, marker: string): string {
+	const deadline = Date.now() + 10_000;
+	for (;;) {
+		const token = findToken(address, marker);
+		if (token !== undefined) return token;
+		if (Date.now() >= deadline) throw new Error(`no hay enlace (${marker}) para ${address}`);
+		sleepSync(100);
+	}
 }
 
 export function verificationTokenFor(address: string): string {
@@ -65,29 +84,69 @@ export function uniqueGmail(prefix: string): string {
 	return `${prefix}.${String(Date.now())}.${randomUUID().slice(0, 8)}@gmail.com`;
 }
 
-/** Alta por el formulario de registro (acción `registrar`), con el captcha del simulador y el origen propio. */
+/**
+ * Versiones vigentes de los documentos, tal como las lleva el formulario de registro en campos ocultos. Otras pruebas
+ * publican versiones nuevas en la misma base; por eso el alta usa las vigentes del momento y no una fija (T288).
+ */
+async function currentRegisterVersions(
+	request: APIRequestContext
+): Promise<Record<string, string>> {
+	const html = await (await request.get('/registro')).text();
+	const versions: Record<string, string> = {};
+	for (const name of ['versionTerms', 'versionPrivacy', 'versionAup']) {
+		const match = new RegExp(`name="${name}" value="([^"]*)"`).exec(html);
+		versions[name] = match?.[1] ?? LEGAL_VERSION;
+	}
+	return versions;
+}
+
+/**
+ * Alta por el formulario de registro (acción `registrar`), con el captcha del simulador y el origen propio. Si el
+ * servidor rechaza el alta porque la versión cambió justo antes (`legal_version_changed`), la página no muestra la
+ * dirección: se vuelve a leer la versión vigente y se reintenta, hasta tres veces.
+ */
 export async function registerThroughForm(
 	request: APIRequestContext,
 	baseURL: string,
 	email: string
 ): Promise<void> {
-	const response = await request.post('/registro?/registrar', {
-		headers: { origin: new URL(baseURL).origin },
-		form: {
-			email,
-			password: PASSWORD,
-			acceptTerms: 'on',
-			acceptPrivacy: 'on',
-			acceptAup: 'on',
-			ageDeclaration: 'on',
-			'cf-turnstile-response': 'token-del-simulador',
-			app: 'secretario',
-			versionTerms: LEGAL_VERSION,
-			versionPrivacy: LEGAL_VERSION,
-			versionAup: LEGAL_VERSION
-		}
-	});
-	expect(response.status()).toBe(200);
+	await registerAttempt(request, baseURL, email);
+}
+
+/** Como `registerThroughForm`, pero devuelve el HTML de la respuesta (la prueba de verificación lo inspecciona). */
+export async function registerAttempt(
+	request: APIRequestContext,
+	baseURL: string,
+	email: string
+): Promise<string> {
+	let lastBody = '';
+	for (let attempt = 1; attempt <= 3; attempt += 1) {
+		const versions = await currentRegisterVersions(request);
+		const response = await request.post('/registro?/registrar', {
+			headers: { origin: new URL(baseURL).origin },
+			form: {
+				email,
+				password: PASSWORD,
+				acceptTerms: 'on',
+				acceptPrivacy: 'on',
+				acceptAup: 'on',
+				ageDeclaration: 'on',
+				'cf-turnstile-response': 'token-del-simulador',
+				app: 'secretario',
+				versionTerms: versions.versionTerms ?? LEGAL_VERSION,
+				versionPrivacy: versions.versionPrivacy ?? LEGAL_VERSION,
+				versionAup: versions.versionAup ?? LEGAL_VERSION
+			}
+		});
+		expect(response.status()).toBe(200);
+		const body = await response.text();
+		lastBody = body;
+		// El fallo también repite la dirección en el formulario: el éxito se reconoce por su resultado, no por el email.
+		if (/"type":"success"|"success":true/.test(body)) return body;
+	}
+	throw new Error(
+		`el registro de ${email} no se aceptó tras tres intentos: ${lastBody.slice(0, 400)}`
+	);
 }
 
 /** Verificación por la acción del botón de `/verificar`, con el token del email. */

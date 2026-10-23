@@ -2,6 +2,7 @@
 // sin `.env` ni sintaxis de shell, base de datos temporal y secretos aleatorios generados al cargar esta
 // configuración. La web y la API se sirven desde el mismo proceso, en hosts distintos (localhost y 127.0.0.1),
 // para que la separación por host se ejerza igual que en producción.
+import { execFileSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +21,15 @@ if (process.env.TEST_WORKER_INDEX === undefined) {
 	writeFileSync(E2E_DB_FILE, join(E2E_DIR, `app-${randomUUID()}.db`));
 }
 const e2eDbPath = readFileSync(E2E_DB_FILE, 'utf8');
+// Siembra de la cuenta del panel (T250) con los servicios, antes de arrancar el servidor: la hace Vitest en su proyecto
+// `e2e-seed`. Contra un despliegue (`E2E_BASE_URL`) no se siembra: no hay base local que preparar.
+if (process.env.TEST_WORKER_INDEX === undefined && process.env.E2E_BASE_URL === undefined) {
+	writeFileSync(join(E2E_DIR, 'seed-pending.txt'), e2eDbPath);
+	execFileSync('pnpm', ['exec', 'vitest', 'run', '--project', 'e2e-seed'], {
+		stdio: 'inherit',
+		shell: true
+	});
+}
 
 const nightly = process.env.E2E_NIGHTLY === '1';
 

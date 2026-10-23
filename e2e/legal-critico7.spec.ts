@@ -6,14 +6,9 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { request as playwrightRequest, type APIRequestContext } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { E2E_ADMIN_EMAIL } from './constants';
 import { checkAccessibility } from './fixtures/axe';
-import {
-	PASSWORD,
-	registerThroughForm,
-	uniqueGmail,
-	verificationTokenFor,
-	verifyThroughForm
-} from './outbox';
+import { PASSWORD, registerThroughForm, verificationTokenFor, verifyThroughForm } from './outbox';
 
 const DB_POINTER = join('test-results', 'e2e', 'db-path.txt');
 const USER_EMAIL = 'usuario.e2e@ejemplo.es';
@@ -79,25 +74,31 @@ async function appTokenFor(api: APIRequestContext, origin: string): Promise<stri
 
 test.beforeAll(async ({ baseURL }) => {
 	const base = baseURL ?? 'http://localhost:7390';
-	adminEmail = uniqueGmail('critico7-admin');
-	const request = await playwrightRequest.newContext({ baseURL: base });
-	try {
-		await registerThroughForm(request, base, adminEmail);
-		await verifyThroughForm(request, base, verificationTokenFor(adminEmail));
-	} finally {
-		await request.dispose();
+	adminEmail = E2E_ADMIN_EMAIL;
+	const dbPath = readFileSync(DB_POINTER, 'utf8');
+	const known = new Database(dbPath);
+	const exists = known.prepare('SELECT 1 FROM user WHERE email = ?').get(adminEmail) !== undefined;
+	known.close();
+	if (!exists) {
+		const request = await playwrightRequest.newContext({ baseURL: base });
+		try {
+			await registerThroughForm(request, base, adminEmail);
+			await verifyThroughForm(request, base, verificationTokenFor(adminEmail));
+		} finally {
+			await request.dispose();
+		}
 	}
 	const db = openDatabase();
 	try {
-		// Un solo administrador por base (índice `one_admin`): se quita el rol a los anteriores.
-		db.prepare("UPDATE user SET role = 'user' WHERE role = 'admin'").run();
+		// Solo un administrador por base: se quita el rol a las demás cuentas y se mantiene el de la cuenta compartida.
+		db.prepare("UPDATE user SET role = 'user' WHERE role = 'admin' AND email <> ?").run(adminEmail);
 		db.prepare("UPDATE user SET role = 'admin' WHERE email = ?").run(adminEmail);
 	} finally {
 		db.close();
 	}
 });
 
-test('@BE-FR-70 @BE-FR-07 una versión legal que exige aceptación bloquea la API hasta que el usuario acepta', async ({
+test('@BE-FR-70 @BE-FR-07 @UX-11 una versión legal que exige aceptación bloquea la API hasta que el usuario acepta', async ({
 	browser,
 	baseURL
 }, testInfo) => {
@@ -157,6 +158,21 @@ test('@BE-FR-70 @BE-FR-07 una versión legal que exige aceptación bloquea la AP
 	try {
 		await page.goto('/panel');
 		await expect(page.getByText('Hay documentos legales pendientes de aceptar.')).toBeVisible();
+		// UX-11: el aviso explica qué deja de funcionar y enlaza cada documento, que responde con 200 y se abre en una pestaña nueva.
+		await expect(
+			page.getByText(
+				'Hasta que los aceptes, las apps no atenderán nuevas peticiones que usen tus créditos ni tu documento.'
+			)
+		).toBeVisible();
+		const reads = page.getByRole('link', { name: /\(se abre en una pestaña nueva\)$/ });
+		await expect(reads).toHaveCount(3);
+		for (const link of await reads.all()) {
+			await expect(link).toHaveAttribute('target', '_blank');
+			const href = await link.getAttribute('href');
+			expect(href, 'el enlace del documento no tiene destino').not.toBeNull();
+			const response = await page.request.get(href ?? '/');
+			expect(response.status(), `el documento ${String(href)} debe responder 200`).toBe(200);
+		}
 		// T289: el aviso con documentos pendientes también debe ser accesible en ambos temas.
 		for (const scheme of ['light', 'dark'] as const) {
 			await page.emulateMedia({ colorScheme: scheme });
