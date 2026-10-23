@@ -542,3 +542,92 @@ test.describe('administración en móvil', () => {
 		});
 	}
 });
+
+// Matriz de UX de estadísticas (T323; 16.8 página clave de administración; 16.11): claro y oscuro × efectos normales y
+// reducidos × 320, 390 y 1366 px, sin desbordamiento horizontal y con axe sin violaciones serious o critical.
+test.describe('matriz de UX de estadísticas (administración)', () => {
+	for (const scheme of ['light', 'dark'] as const) {
+		for (const effects of ['normales', 'reducidos'] as const) {
+			for (const width of [320, 390, 1366]) {
+				test(`@UX-16 /admin/estadisticas sin desbordamiento y sin violaciones: ${scheme}, efectos ${effects}, ${String(width)} px`, async ({
+					page
+				}, testInfo) => {
+					await page.setViewportSize({ width, height: 800 });
+					await page.emulateMedia({
+						colorScheme: scheme,
+						reducedMotion: effects === 'reducidos' ? 'reduce' : 'no-preference'
+					});
+					await loginAsAdmin(page);
+					await page.goto('/admin/estadisticas');
+					if (effects === 'reducidos') {
+						await page.evaluate(() => {
+							document.documentElement.setAttribute('data-effects', 'reduced');
+						});
+					}
+
+					const overflow = await page.evaluate(
+						() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+					);
+					expect(
+						overflow,
+						`desbordamiento horizontal de ${String(overflow)} px`
+					).toBeLessThanOrEqual(0);
+
+					await checkAccessibility(page, testInfo);
+				});
+			}
+		}
+	}
+});
+
+// Web Vitals de laboratorio de W45 `/admin/estadisticas` (T323): mismo presupuesto que la landing (LCP ≤ 2,5 s, CLS ≤ 0,1)
+// con CPU ×4 y red lenta. Se mide dentro de este spec porque necesita la sesión de administración.
+test.describe('Web Vitals de laboratorio de estadísticas', () => {
+	test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+	test('@UX-16 /admin/estadisticas: LCP ≤ 2,5 s y CLS ≤ 0,1 con CPU ×4 y red lenta', async ({
+		page,
+		browserName
+	}, testInfo) => {
+		test.skip(browserName !== 'chromium', 'la medición por CDP es de Chromium');
+		await loginAsAdmin(page);
+		const session = await page.context().newCDPSession(page);
+		await session.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+		await session.send('Network.enable');
+		await session.send('Network.emulateNetworkConditions', {
+			offline: false,
+			latency: 150,
+			downloadThroughput: (1.6 * 1024 * 1024) / 8,
+			uploadThroughput: (750 * 1024) / 8
+		});
+
+		await page.goto('/admin/estadisticas', { waitUntil: 'load' });
+		await page.waitForTimeout(1500);
+
+		const vitals = await page.evaluate(
+			() =>
+				new Promise<{ lcp: number; cls: number }>((resolve) => {
+					let lcp = 0;
+					let cls = 0;
+					new PerformanceObserver((list) => {
+						for (const entry of list.getEntries()) lcp = entry.startTime;
+					}).observe({ type: 'largest-contentful-paint', buffered: true });
+					new PerformanceObserver((list) => {
+						for (const entry of list.getEntries()) {
+							if ('hadRecentInput' in entry && entry.hadRecentInput === false && 'value' in entry) {
+								cls += Number(entry.value);
+							}
+						}
+					}).observe({ type: 'layout-shift', buffered: true });
+					setTimeout(() => {
+						resolve({ lcp, cls });
+					}, 300);
+				})
+		);
+
+		testInfo.annotations.push({ type: 'lcp-ms', description: String(Math.round(vitals.lcp)) });
+		testInfo.annotations.push({ type: 'cls', description: vitals.cls.toFixed(3) });
+		expect(vitals.lcp, 'LCP en ms').toBeLessThanOrEqual(2500);
+		expect(vitals.cls, 'CLS').toBeLessThanOrEqual(0.1);
+	});
+});
