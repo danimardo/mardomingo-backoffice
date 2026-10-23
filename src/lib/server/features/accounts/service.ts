@@ -24,11 +24,7 @@ import type { IdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import type { Auth } from './auth';
 import { DISPOSABLE_DOMAINS_V1 } from './disposable-domains';
-import {
-	isLoginLocked,
-	minutesUntilUnlock,
-	signupIpLimitReached
-} from './domain/abuse';
+import { isLoginLocked, minutesUntilUnlock, signupIpLimitReached } from './domain/abuse';
 import { normalizeEmail } from './domain/email';
 import { safeRedirect } from './domain/redirect';
 import { hashNormalizedEmail } from './email-hash';
@@ -131,7 +127,6 @@ function emailDomain(email: string): string {
 	const at = email.lastIndexOf('@');
 	return at === -1 ? '' : email.slice(at + 1).toLowerCase();
 }
-
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Alta y verificación (W08–W10)

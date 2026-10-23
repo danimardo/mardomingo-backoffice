@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toEpochMs } from '$lib/shared/time';
-import {
-	isLoginLocked,
-	minutesUntilUnlock,
-	nextLoginAttempt,
-	signupIpLimitReached
-} from './abuse';
+import { isLoginLocked, minutesUntilUnlock, nextLoginAttempt, signupIpLimitReached } from './abuse';
 
 const MINUTE = 60_000;
 const NOW = toEpochMs(1_000_000_000);

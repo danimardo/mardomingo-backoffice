@@ -48,22 +48,30 @@ export default defineConfig({
 		},
 		{
 			name: 'chromium',
+			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
+			dependencies: ['setup'],
 			use: { ...devices['Desktop Chrome'] },
 			testIgnore: /.*\.setup\.ts/
 		},
 		{
 			name: 'firefox',
+			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
+			dependencies: ['setup'],
 			use: { ...devices['Desktop Firefox'] },
 			// Un solo administrador por base (índice one_admin): este spec corre solo en chromium (ver ADMIN_SPEC).
 			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
 		},
 		{
 			name: 'webkit',
+			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
+			dependencies: ['setup'],
 			use: { ...devices['Desktop Safari'] },
 			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
 		},
 		{
 			name: 'mobile-webkit',
+			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
+			dependencies: ['setup'],
 			use: { ...devices['iPhone 13'] },
 			testIgnore: [/.*\.setup\.ts/, ADMIN_SPEC]
 		},

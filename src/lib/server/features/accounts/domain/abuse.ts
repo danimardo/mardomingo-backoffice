@@ -23,7 +23,11 @@ export interface LoginAttemptResult {
 export function nextLoginAttempt(
 	current: LoginAttemptWindow | undefined,
 	now: EpochMs,
-	options: { readonly maxFailures: number; readonly lockMinutes: number; readonly windowMinutes: number }
+	options: {
+		readonly maxFailures: number;
+		readonly lockMinutes: number;
+		readonly windowMinutes: number;
+	}
 ): LoginAttemptResult {
 	const inWindow =
 		current !== undefined && current.windowStart > now - options.windowMinutes * MINUTE_MS;
