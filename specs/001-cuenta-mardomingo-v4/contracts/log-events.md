@@ -63,8 +63,8 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 - **A** — el evento corresponde a una **alerta por email al administrador** de `Historias.md` 5.13: la
   funcionalidad dueña llama a `notifications`, que envía el email una sola vez por cruce de umbral
   (`alerts_state`) y emite `notifications.alert.triggered`.
-- **V** — evento de **vigilancia** en OpenObserve (nivel `error`/`fatal` o señal de abuso). No genera email
-  propio; el propietario lo consulta a través del Gateway (fase posterior).
+- **V** — evento de **vigilancia** (nivel `error`/`fatal` o señal de abuso). No genera email propio; se consulta
+  en la salida de stdout o en los registros de Docker.
 - «—» — sin alerta.
 
 ---
@@ -104,17 +104,7 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 | `http.cors.rejected`     | info                               | `Origen no permitido para la app`    | `reason` (`origin_not_allowed`), `errorCode` (`ORIGIN_NOT_ALLOWED`)                                                 | Host de la API: petición con `Origin` fuera de la lista de la app de `X-App-Id` (`403`), o _preflight_ con un origen que no figura en ninguna app activa (D-19)       | —      |
 | `http.origin.rejected`   | info                               | `Formulario rechazado por su origen` | `reason` {`origin_missing`, `origin_mismatch`}, `httpStatus` (403)                                                  | Host web: POST/PUT/PATCH/DELETE con tipo de contenido de formulario sin `Origin` o con un origen distinto de `PUBLIC_WEB_URL` (comprobación propia de `handle`, D-01) | —      |
 
-### 2.3 `log.*` — transporte de logs (`$lib/server/logging/events.ts`)
-
-**Nota (fase posterior, enmienda 2.2.0).** Esta sección es el catálogo del envío al Log Gateway, aplazado a una fase posterior (D-06). En la v4 no hay envío remoto: los logs van solo a stdout en JSON y estos eventos no se emiten; se conservan como catálogo de esa fase.
-
-| Código                  | Nivel | `msg`                                          | Campos propios                      | Cuándo                                                                      | Alerta         |
-| ----------------------- | ----- | ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------- | -------------- |
-| `log.gateway.dropped`   | warn  | `Eventos descartados por el búfer del Gateway` | `count`                             | El Gateway falla y el búfer acotado descarta los más antiguos (solo stdout) | fase posterior |
-| `log.gateway.failed`    | warn  | `Fallo al enviar un lote al Gateway`           | `attempt`, `httpStatus`, `err`      | Un envío de lote falla (stdout)                                             | fase posterior |
-| `log.gateway.recovered` | info  | `Envío al Gateway restablecido`                | `count` (lotes pendientes enviados) | Tras un periodo de fallos                                                   | fase posterior |
-
-### 2.4 `client.*` — navegador (`src/lib/logging/`) y su recepción
+### 2.3 `client.*` — navegador (`src/lib/logging/`) y su recepción
 
 | Código                             | Dónde                                    | Nivel | `msg`                                   | Campos                                                                                                                 | Cuándo                                                                         | Alerta |
 | ---------------------------------- | ---------------------------------------- | ----- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------ |
@@ -368,7 +358,6 @@ cruce) o `notifications.alert.suppressed` (repetición sin normalizar).
 | --------------- | ------- |
 | `app.*`         | 9       |
 | `http.*`        | 5       |
-| `log.*`         | 3       |
 | `client.*`      | 4       |
 | `audit`         | 1       |
 | `notifications` | 5       |
@@ -384,6 +373,6 @@ cruce) o `notifications.alert.suppressed` (repetición sin normalizar).
 | `ai`            | 23      |
 | `privacy`       | 6       |
 | `stats`         | 2       |
-| **Total**       | **149** |
+| **Total**       | **146** |
 
-Eventos que originan alertas por email (A): 8, más `notifications.alert.triggered`, que registra el envío. Eventos de vigilancia (V): 22 (`log.gateway.dropped` pasa a la fase posterior).
+Eventos que originan alertas por email (A): 8, más `notifications.alert.triggered`, que registra el envío. Eventos de vigilancia (V): 22.
