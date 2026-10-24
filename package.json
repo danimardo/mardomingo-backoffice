@@ -26,6 +26,7 @@
 		"test:coverage": "vitest run --coverage --project unit --project component --project integration",
 		"test:trace": "node scripts/test-trace.mjs",
 		"test:e2e": "playwright test --project chromium",
+		"test:e2e:validate": "playwright test --project chromium --workers=1",
 		"test:e2e:smoke": "playwright test --project chromium --grep @smoke",
 		"test:e2e:critical": "playwright test --project chromium --grep @critical",
 		"test:e2e:a11y": "playwright test --project chromium --grep @a11y",
@@ -37,7 +38,7 @@
 		"test:mutation": "stryker run",
 		"perf:seed": "node scripts/perf-seed.mjs",
 		"perf:load": "node scripts/perf-load.mjs",
-		"validate": "pnpm check && pnpm lint && pnpm test:coverage && pnpm build && pnpm test:e2e",
+		"validate": "pnpm check && pnpm lint && pnpm test:coverage && pnpm build && pnpm test:e2e:validate",
 		"db:generate": "drizzle-kit generate",
 		"docs:api": "node scripts/docs-api.mjs",
 		"db:check": "drizzle-kit check"
