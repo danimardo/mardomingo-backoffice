@@ -18,7 +18,7 @@ import {
 
 test.describe.configure({ mode: 'serial' });
 // Una petición de datos de SvelteKit (`__data.json`) puede quedar abortada al navegar entre páginas: no es un fallo (ver `privacy.spec.ts`).
-test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
+test.use({ guardAllow: [/status of 400 \(Bad Request\)|__data\.json.*ERR_ABORTED/] });
 
 /**
  * Cuenta administradora de este spec: fija dentro de la base de la ejecución (cada ejecución E2E tiene la suya). Los grupos
@@ -381,7 +381,7 @@ test('@BE-FR-18 un reenvío del mismo formulario no aplica el ajuste dos veces (
 });
 
 // El 400 es la respuesta esperada al aplicar sin confirmar: el navegador lo registra y el fixture lo admite solo aquí.
-test.use({ guardAllow: [/status of 400 \(Bad Request\)/] });
+test.use({ guardAllow: [/status of 400 \(Bad Request\)|__data\.json.*ERR_ABORTED/] });
 
 test('@BE-FR-18 aplicar sin la casilla de confirmación no cambia nada y lo dice', async ({
 	page,
@@ -417,7 +417,7 @@ function roleOf(userId: string): string {
 }
 
 // El primer envío sin confirmar responde 400 a propósito: el fixture lo admite solo en este test.
-test.use({ guardAllow: [/status of 400 \(Bad Request\)/] });
+test.use({ guardAllow: [/status of 400 \(Bad Request\)|__data\.json.*ERR_ABORTED/] });
 
 test('@BE-FR-50 marcar tester exige confirmación y motivo, y solo entonces cambia el rol', async ({
 	page,

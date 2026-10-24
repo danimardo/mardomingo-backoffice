@@ -13,6 +13,10 @@ import {
 	PANEL_E2E_EMAIL,
 	PANEL_E2E_PASSWORD
 } from '../../e2e/constants';
+import { recordEntry } from '$lib/server/features/audit';
+import { immediateTransaction } from '$lib/server/db/tx';
+import { createIdGenerator } from '$lib/server/shared/ids';
+import { seededRandomBytes } from '../builders/ids';
 import { panelAccountFixture } from '../builders/panel-account';
 
 const REQUEST_FILE = join('test-results', 'e2e', 'seed-pending.txt');
@@ -21,7 +25,26 @@ describe.skipIf(!existsSync(REQUEST_FILE))('siembra del panel para el E2E (T250)
 	it('guarda la cuenta del panel con email y contraseña conocidos en la base del servidor', async () => {
 		const target = readFileSync(REQUEST_FILE, 'utf8');
 		const account = panelAccountFixture();
-		const { database } = account.fixture.base;
+		const base = account.fixture.base;
+		// Una entrada de auditoría con el servicio, para que la ficha `/admin/auditoria/[entryId]` tenga una a la que ir
+		// aunque la prueba corra aislada (T314). El administrador que la registra no tiene rol: solo es una referencia.
+		const auditor = base.addUser('usr_auditoria_e2e', 'user');
+		immediateTransaction(base.db, (tx) =>
+			recordEntry(
+				tx,
+				{
+					adminId: auditor,
+					action: 'credits.adjust',
+					entity: 'user',
+					entityId: account.userId,
+					before: null,
+					after: null,
+					reason: 'Entrada de prueba E2E'
+				},
+				{ clock: base.clock, ids: createIdGenerator(seededRandomBytes(67)), logger: base.logger }
+			)
+		);
+		const { database } = base;
 		try {
 			// La copia de seguridad de SQLite deja una base migrada y sembrada con los datos del fixture.
 			await database.sqlite.backup(target);
