@@ -28,6 +28,8 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
       - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
       - run: pnpm install --frozen-lockfile
+      # Puerta 8 (T375): sin vulnerabilidades altas ni críticas en las dependencias de producción. No se rebaja el nivel.
+      - run: pnpm audit --prod --audit-level=high
       - run: pnpm check
       - run: pnpm lint
       - run: pnpm test:coverage

@@ -52,7 +52,7 @@
 		"loglevel": "1.9.2",
 		"pino": "10.4.0",
 		"resend": "6.32.1",
-		"zod": "4.6.5",
+		"zod": "4.6.6",
 		"zod-openapi": "6.0.2"
 	},
 	"devDependencies": {
