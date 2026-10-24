@@ -26,7 +26,9 @@ test('@critical el registro muestra los campos y ninguna casilla premarcada', as
 	}
 });
 
-test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ page }) => {
+test('@critical [UX-01] el registro sin captcha no crea la cuenta, conserva el email y lleva el foco al resumen', async ({
+	page
+}) => {
 	await page.goto('/registro');
 	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill('nueva.persona@ejemplo.es');
@@ -41,6 +43,9 @@ test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ p
 	await expect(page.getByRole('alert')).toContainText(
 		'No hemos podido comprobar que eres una persona'
 	);
+	await expect(page.getByRole('alert')).toBeFocused();
+	await expect(page.getByLabel('Email')).toHaveValue('nueva.persona@ejemplo.es');
+	await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
 	await expect(page.getByRole('heading', { name: 'Revisa tu email' })).toHaveCount(0);
 });
 
