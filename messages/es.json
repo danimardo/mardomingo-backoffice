@@ -29,6 +29,7 @@
 	"errors_operation_too_expensive": "Esta operación supera el coste máximo permitido.",
 	"errors_upgrade_required": "Necesitas actualizar la aplicación para continuar.",
 	"errors_rate_limited": "Has hecho demasiadas peticiones. Espera un momento.",
+	"errors_rate_limited_minutes": "Has hecho demasiadas peticiones. Vuelve a intentarlo en {minutes} minutos.",
 	"errors_login_temporarily_locked": "Demasiados intentos fallidos. Espera antes de volver a intentarlo.",
 	"errors_internal_error": "Algo no ha funcionado. Inténtalo de nuevo más tarde.",
 	"errors_provider_error": "El servicio de IA no ha respondido correctamente. Inténtalo de nuevo.",
