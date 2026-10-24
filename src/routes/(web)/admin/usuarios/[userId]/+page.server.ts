@@ -6,6 +6,10 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { consumptionPage } from '$lib/server/features/ai';
+import { parsePanelFilters } from '$lib/schemas/common/filters';
+import { addDays, madridMidnight } from '$lib/shared/dates';
+import { fetchLimit, pageNumber, sliceOf } from '$lib/shared/paging';
+import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import { bucketsForAdmin } from '$lib/server/features/credits';
 import { billingProfileOf, invoicesFor } from '$lib/server/features/invoicing';
 import { paymentsForAdmin } from '$lib/server/features/payments';
@@ -37,6 +41,33 @@ function reasonOf(form: FormData): string {
 	return typeof value === 'string' ? value : '';
 }
 
+/** Claves de página de cada lista en la URL (UX-09). */
+const PAGE_KEYS = Object.freeze([
+	'pag_bolsas',
+	'pag_facturas',
+	'pag_pagos',
+	'pag_consumo',
+	'pag_movimientos'
+]);
+
+/** Rango de fechas (días de Madrid) de los filtros de movimientos y consumo; sin rango si el filtro no es válido. */
+function rangeOf(params: URLSearchParams): {
+	readonly desde: string;
+	readonly hasta: string;
+	readonly fromMs: EpochMs | null;
+	readonly toMs: EpochMs | null;
+} {
+	const parsed = parsePanelFilters(Object.fromEntries(params));
+	if (!parsed.ok) return { desde: '', hasta: '', fromMs: null, toMs: null };
+	const { desde, hasta } = parsed.value;
+	return {
+		desde: desde === null ? '' : String(desde),
+		hasta: hasta === null ? '' : String(hasta),
+		fromMs: desde === null ? null : madridMidnight(desde),
+		toMs: hasta === null ? null : toEpochMs(madridMidnight(addDays(hasta, 1)) - 1)
+	};
+}
+
 export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 	adminOrThrow(locals);
 	setHeaders({ 'cache-control': 'private, no-store' });
@@ -44,22 +75,64 @@ export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 	const account = accountView(composition.adminUsers, params.userId);
 	if (account === null) error(404);
 	const balance = composition.credits.getBalance(params.userId);
-	const movements = composition.credits.movements({
-		userId: params.userId,
-		fromMs: null,
-		toMs: null,
-		appId: null,
-		page: 1
-	});
 	// Aviso tras una acción aplicada: enlaza con su entrada de auditoría (UX-13). Solo si el id tiene forma de id.
 	const auditId = url.searchParams.get('auditoria') ?? '';
 	const saved =
 		url.searchParams.get('aviso') === 'saved' && /^[A-Za-z0-9_-]{1,64}$/.test(auditId)
 			? auditId
 			: null;
+
+	// UX-09: rango de fechas para movimientos y consumo, y una página propia por lista, todo en la URL.
+	const range = rangeOf(url.searchParams);
+	const page = (key: string): number => pageNumber(url.searchParams.get(key));
+	const userId = params.userId;
+	const movements = composition.credits.movements({
+		userId,
+		fromMs: range.fromMs,
+		toMs: range.toMs,
+		appId: null,
+		page: page('pag_movimientos')
+	});
+	const consumption = consumptionPage(composition.db, {
+		userId,
+		fromMs: range.fromMs,
+		toMs: range.toMs,
+		appId: null,
+		page: page('pag_consumo')
+	});
+	const buckets = sliceOf(
+		bucketsForAdmin(composition.db, userId, fetchLimit(page('pag_bolsas'))),
+		page('pag_bolsas')
+	);
+	const payments = sliceOf(
+		paymentsForAdmin(composition.db, userId, fetchLimit(page('pag_pagos'))),
+		page('pag_pagos')
+	);
+	const invoices = sliceOf(
+		invoicesFor({ db: composition.db }, composition.payments.paymentIdsOf(userId)).map((row) => ({
+			id: row.id,
+			kind: row.kind,
+			number: `${row.series}-${row.number}`,
+			amountEurCents: row.amountEurCents,
+			issuedAt: new Date(row.issuedAt).toISOString()
+		})),
+		page('pag_facturas')
+	);
+
+	// Parámetros que se conservan al cambiar de página: el rango y las páginas de las demás listas.
+	const keep: Record<string, string> = {};
+	if (range.desde !== '') keep.desde = range.desde;
+	if (range.hasta !== '') keep.hasta = range.hasta;
+	for (const key of PAGE_KEYS) {
+		const value = url.searchParams.get(key);
+		if (value !== null && value !== '') keep[key] = value;
+	}
+
 	return {
 		saved,
 		account,
+		filters: { desde: range.desde, hasta: range.hasta },
+		keep,
 		balance: {
 			totalMicro: balance.totalMicro,
 			availableMicro: balance.availableMicro,
@@ -70,7 +143,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 			amountMicro: row.amountMicro,
 			createdAt: new Date(row.createdAt).toISOString()
 		})),
-		buckets: bucketsForAdmin(composition.db, params.userId, 50).map((row) => ({
+		buckets: buckets.items.map((row) => ({
 			kind: row.kind,
 			source: row.source,
 			initialMicro: row.initialMicro,
@@ -79,37 +152,29 @@ export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 			simulated: row.simulated,
 			createdAt: new Date(row.createdAt).toISOString()
 		})),
-		invoices: invoicesFor(
-			{ db: composition.db },
-			composition.payments.paymentIdsOf(params.userId)
-		).map((row) => ({
-			id: row.id,
-			kind: row.kind,
-			number: `${row.series}-${row.number}`,
-			amountEurCents: row.amountEurCents,
-			issuedAt: new Date(row.issuedAt).toISOString()
-		})),
-		fiscalProfile: billingProfileOf(composition.db, params.userId) !== undefined,
-		payments: paymentsForAdmin(composition.db, params.userId, 20).map((row) => ({
+		invoices: invoices.items,
+		fiscalProfile: billingProfileOf(composition.db, userId) !== undefined,
+		payments: payments.items.map((row) => ({
 			id: row.id,
 			status: row.status,
 			amountEurCents: row.amountEurCents,
 			simulated: row.simulated,
 			createdAt: new Date(row.createdAt).toISOString()
 		})),
-		consumption: consumptionPage(composition.db, {
-			userId: params.userId,
-			fromMs: null,
-			toMs: null,
-			appId: null,
-			page: 1
-		}).rows.map((row) => ({
+		consumption: consumption.rows.map((row) => ({
 			appId: row.appId,
 			operation: row.operation,
 			status: row.status,
 			chargedMicro: row.chargedMicro,
 			createdAt: new Date(row.createdAt).toISOString()
-		}))
+		})),
+		paging: {
+			bolsas: buckets,
+			facturas: invoices,
+			pagos: payments,
+			consumo: consumption.pagination,
+			movimientos: movements.pagination
+		}
 	};
 };
 

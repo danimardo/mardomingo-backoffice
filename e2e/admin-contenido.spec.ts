@@ -661,3 +661,18 @@ test.describe('Web Vitals de laboratorio de estadísticas', () => {
 		expect(vitals.cls, 'CLS').toBeLessThanOrEqual(0.1);
 	});
 });
+
+test('la ficha de la cuenta conserva el rango de fechas en la URL y en el formulario', async ({
+	page,
+	baseURL
+}) => {
+	const address = await createTarget(baseURL, 'ficha-rango');
+	const userId = userIdOf(address);
+	await loginAsAdmin(page);
+	await page.goto(`/admin/usuarios/${userId}?desde=2026-01-01&hasta=2026-01-31`);
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.locator('#ficha-desde')).toHaveValue('2026-01-01');
+	await expect(page.locator('#ficha-hasta')).toHaveValue('2026-01-31');
+	await expect(page.getByRole('heading', { name: 'Últimos movimientos' })).toBeVisible();
+});
