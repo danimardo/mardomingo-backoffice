@@ -14,6 +14,7 @@ import { runOpenRouterBalance } from './openrouter-balance';
 import { runHoldsCleanup } from './holds-cleanup';
 import { runFreeCreditsExpiry } from './free-credits-expiry';
 import { runDisposableDomains } from './disposable-domains';
+import { runTombstonesCleanup } from './sync-tombstones-cleanup';
 
 /** Las claves de los ajustes se conservan 400 días: después no hay formulario abierto que pueda reenviarlas (T307). */
 const ADJUSTMENT_KEY_RETENTION_MS = 400 * 24 * 60 * 60 * 1000;
@@ -25,7 +26,7 @@ export { SCHEDULE, type ScheduledTaskName, type TaskSchedule } from './schedule'
 
 /** Lo que hace cada tarea. Cada una devuelve cuántos elementos trató. */
 function runners(composition: Composition): Record<ScheduledTaskName, Task['run']> {
-	const { privacy, accounts, credits, apps } = composition;
+	const { privacy, accounts, credits, apps, sync } = composition;
 	return {
 		retention: () => {
 			const report = privacy.applyRetention();
@@ -45,6 +46,7 @@ function runners(composition: Composition): Record<ScheduledTaskName, Task['run'
 				warningDays: Number(getSetting(apps, 'free_expiry_warning_days') ?? 7)
 			}),
 		'holds-cleanup': () => runHoldsCleanup(credits),
+		'sync-tombstones-cleanup': () => runTombstonesCleanup(sync),
 		'openrouter-balance': async () =>
 			(await runOpenRouterBalance({
 				gateway: composition.ai.gateway,

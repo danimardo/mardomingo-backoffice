@@ -33,6 +33,8 @@ import {
 	writeDefaults
 } from './repository';
 import { cachedSyncSchema, storeSyncSchema } from './document-schema.cache';
+import { pruneTombstones } from './domain/tombstones';
+import { allDocuments } from './repository';
 
 export interface SyncDeps {
 	readonly db: Db;
@@ -136,6 +138,38 @@ export function putSyncDocument(
 		}
 		return { revision: current.revision + 1 };
 	});
+}
+
+/**
+ * Elimina las marcas de borrado caducadas de cada documento (FR-064, H-27; T338). Solo escribe los documentos que cambian,
+ * con la escritura condicional de siempre: si la revisión cambió mientras tanto, se omite y la siguiente ejecución lo
+ * retoma. Cada documento que cambia sube su `revision`, para que ningún cliente sobrescriba sin releer. Devuelve cuántos
+ * documentos han cambiado.
+ */
+export function purgeTombstones(deps: SyncDeps): number {
+	const now = toEpochMs(deps.clock.now());
+	const rows = immediateTransaction(deps.db, (tx) => allDocuments(tx));
+	let changed = 0;
+	for (const row of rows) {
+		if (!isRecord(row.data)) continue;
+		const { schema } = schemaAndLimit(deps, row.appId);
+		const pruned = pruneTombstones(schema, row.data, now);
+		if (pruned.removed === 0) continue;
+		const written = immediateTransaction(deps.db, (tx) =>
+			replaceIfRevision(tx, {
+				userId: row.userId,
+				appId: row.appId,
+				expectedRevision: row.revision,
+				data: pruned.data,
+				now
+			})
+		);
+		if (written) {
+			changed += 1;
+			deps.logger.emit('sync.tombstones.purged', { removed: pruned.removed });
+		}
+	}
+	return changed;
 }
 
 export function getDefaults(deps: SyncDeps, appId: string): SyncData {
