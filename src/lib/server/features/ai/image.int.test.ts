@@ -48,7 +48,7 @@ describe('imagen (E09)', () => {
 		]);
 	});
 
-	it('la imagen no se guarda: ni la data URL ni sus bytes aparecen en ninguna tabla ni en los eventos', async () => {
+	it('[BE-FR-81/CA1] [BE-FR-78/CA4] la imagen no se guarda: ni la data URL ni sus bytes aparecen en ninguna tabla ni en los eventos', async () => {
 		f.chat.gateway.answerNext({ ...FAKE_OK, imageDataUrl: IMAGE_URL });
 
 		await runImage(f.chat.deps, f.chat.context(), { operation: IMAGE_KEY, prompt: 'Un gato' });
@@ -106,7 +106,7 @@ describe('imagen (E09)', () => {
 		expect(f.chat.gateway.chatCalls).toHaveLength(0);
 	});
 
-	it('si el cliente se va durante la generación, se cancela sin cobro', async () => {
+	it('[BE-FR-37/CA1] si el cliente se va durante la generación, se cancela sin cobro', async () => {
 		f.chat.gateway.holdNext();
 		const controller = new AbortController();
 		const pending = runImage(f.chat.deps, f.chat.context({ signal: controller.signal }), {

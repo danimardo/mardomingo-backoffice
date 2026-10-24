@@ -115,7 +115,7 @@ describe('GET /api/v1/sync (E10)', () => {
 		expect(isRecord(body.data)).toBe(true);
 	});
 
-	it('sin cabecera de versión responde 426 UPGRADE_REQUIRED', async () => {
+	it('[BE-FR-48/CA1] sin cabecera de versión responde 426 UPGRADE_REQUIRED', async () => {
 		const result = await get('/api/v1/sync', { 'x-app-version': '3.0.0' });
 
 		expect(result.status).toBe(426);

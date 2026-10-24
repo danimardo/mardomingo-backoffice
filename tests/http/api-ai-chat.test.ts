@@ -76,7 +76,7 @@ afterEach(async () => {
 });
 
 describe('POST /api/v1/ai/chat', () => {
-	it('un chat válido cobra 776.480 µc y responde con el texto y el saldo, sin modelo ni proveedor', async () => {
+	it('[BE-FR-80/CA1] un chat válido cobra 776.480 µc y responde con el texto y el saldo, sin modelo ni proveedor', async () => {
 		const result = await send(baseUrl, '/api/v1/ai/chat', {
 			method: 'POST',
 			host: apiHost,
@@ -252,7 +252,7 @@ describe('POST /api/v1/ai/chat', () => {
 		balance -= CHARGE_MICRO;
 	});
 
-	it('si el cliente cierra la conexión mientras el proveedor responde, la operación se cancela sin cobro (D-05)', async () => {
+	it('[BE-FR-37/CA1] si el cliente cierra la conexión mientras el proveedor responde, la operación se cancela sin cobro (D-05)', async () => {
 		await scenario('timeout');
 		const before = await chatCalls();
 		await new Promise<void>((resolve) => {

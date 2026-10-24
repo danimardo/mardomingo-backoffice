@@ -339,7 +339,7 @@ describe('configuración efectiva (BE-FR-61 CA2, BE-FR-31)', () => {
 });
 
 describe('altas sin redesplegar (BE-FR-62 CA2)', () => {
-	it('una app nueva y su operación sirven en cuanto se dan de alta', () => {
+	it('[BE-FR-62/CA3] una app nueva y su operación sirven en cuanto se dan de alta', () => {
 		const appId = addSecondApp(ctx);
 		addOperation(ctx, appId, chatOperation('fix'));
 
@@ -410,7 +410,7 @@ describe('JSON corrupto al leer (BE-FR-61 CA5)', () => {
 });
 
 describe('plantillas inmutables por versión (BE-FR-78, BE-FR-79)', () => {
-	it('cada publicación crea una versión nueva y la anterior se conserva', () => {
+	it('[BE-FR-78/CA2] cada publicación crea una versión nueva y la anterior se conserva', () => {
 		const appId = addSecondApp(ctx);
 		const operationId = addOperation(ctx, appId, chatOperation('plantilla', { mode: 'plantilla' }));
 		const body = {

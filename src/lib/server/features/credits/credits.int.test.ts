@@ -78,7 +78,7 @@ describe('bienvenida (BE-FR-12, BE-FR-11.5, D10)', () => {
 		});
 	});
 
-	it('una cuenta que ya tiene bienvenida no recibe otra', () => {
+	it('[BE-FR-63/CA1] una cuenta que ya tiene bienvenida no recibe otra', () => {
 		const userId = fixture.addUser('usr_a');
 		fixture.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-uno' });
 

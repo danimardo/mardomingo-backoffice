@@ -112,7 +112,7 @@ describe('idempotencia (BE-FR-25 CA4, BE-FR-24 CA1)', () => {
 		expect(eventsNamed(f.base.logger, 'payments.purchase.duplicate')).toHaveLength(1);
 	});
 
-	it('un evento de webhook entregado dos veces acredita una sola vez', () => {
+	it('[BE-FR-24/CA1] un evento de webhook entregado dos veces acredita una sola vez', () => {
 		const { userId, waiverId } = f.addAccount('usr_webhook');
 		const outcome = purchase(userId, waiverId, 'att_webhook');
 		if (outcome.status !== 'completed') throw new Error('la compra debía completarse');

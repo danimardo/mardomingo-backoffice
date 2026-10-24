@@ -21,7 +21,7 @@ describe('BillingProfile', () => {
 		expect(BillingProfile.safeParse({ ...VALID, iban: 'ES00' }).success).toBe(false);
 	});
 
-	it('rechaza un identificador fiscal con control incorrecto', () => {
+	it('[BE-FR-74/CA2] rechaza un identificador fiscal con control incorrecto', () => {
 		const result = BillingProfile.safeParse({ ...VALID, taxId: '12345678A' });
 		expect(result.success).toBe(false);
 		expect(result.error?.issues[0]?.message).toBe('invoicing_tax_id_invalid');

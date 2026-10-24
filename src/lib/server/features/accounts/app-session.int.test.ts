@@ -56,7 +56,7 @@ function movingClock(start: number) {
 }
 
 describe('login de app', () => {
-	it('[BE-FR-03/CA3] la sesión queda ligada a la app, al equipo y a la versión', async () => {
+	it('[BE-FR-65/CA3] [BE-FR-03/CA3] la sesión queda ligada a la app, al equipo y a la versión', async () => {
 		await verifiedAccount(fixture);
 
 		const result = await fixture.accounts.loginFromApp(appLogin());

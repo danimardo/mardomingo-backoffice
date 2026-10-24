@@ -107,7 +107,7 @@ describe('aviso (BE-FR-86)', () => {
 });
 
 describe('borrado y cancelación (BE-FR-86 CA2, CA3)', () => {
-	it('sin actividad durante el aviso, borra la cuenta y pierde los créditos gratuitos con forfeit', async () => {
+	it('[BE-FR-86/CA3] sin actividad durante el aviso, borra la cuenta y pierde los créditos gratuitos con forfeit', async () => {
 		const id = addAccount('usr_borrar');
 		base().credits.grantWelcome({ userId: id, emailNormalizedHash: 'hash-borrar' });
 		await f.privacy.processInactive();
@@ -139,7 +139,7 @@ describe('borrado y cancelación (BE-FR-86 CA2, CA3)', () => {
 		});
 	});
 
-	it('cualquier actividad durante el plazo de aviso cancela el borrado', async () => {
+	it('[BE-FR-86/CA2] cualquier actividad durante el plazo de aviso cancela el borrado', async () => {
 		const id = addAccount('usr_vuelve');
 		await f.privacy.processInactive();
 
@@ -159,7 +159,7 @@ describe('borrado y cancelación (BE-FR-86 CA2, CA3)', () => {
 });
 
 describe('exenciones (BE-FR-86 CA1)', () => {
-	it('una cuenta con compra real nunca se avisa ni se borra, tenga o no saldo', async () => {
+	it('[BE-FR-86/CA1] una cuenta con compra real nunca se avisa ni se borra, tenga o no saldo', async () => {
 		const id = addAccount('usr_compradora');
 		base().credits.grantWelcome({ userId: id, emailNormalizedHash: 'hash-compradora' });
 		markRealPurchase(db(), id);

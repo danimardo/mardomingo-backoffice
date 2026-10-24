@@ -64,7 +64,7 @@ describe('consumptionPage (BE-FR-49.4)', () => {
 		expect(second.pagination).toEqual({ page: 2, hasPrevious: true, hasNext: false });
 	});
 
-	it('filtra por app', () => {
+	it('[BE-FR-63/CA2] filtra por app', () => {
 		operation(userId, 'ok', 1_000);
 
 		expect(

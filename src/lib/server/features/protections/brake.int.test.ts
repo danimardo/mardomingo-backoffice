@@ -71,7 +71,7 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 		expect(harness.sender.sent).toHaveLength(1);
 	});
 
-	it('el coste de las cuentas con compra real no cuenta para el freno (BE-FR-46 CA1)', async () => {
+	it('[BE-FR-46/CA1] el coste de las cuentas con compra real no cuenta para el freno (BE-FR-46 CA1)', async () => {
 		const deps = harness.deps;
 		fixture.credits.grantWelcome({
 			userId: fixture.addUser('usr_pagadora'),

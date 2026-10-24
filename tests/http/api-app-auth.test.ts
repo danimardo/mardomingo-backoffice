@@ -56,7 +56,7 @@ describe('cabecera X-App-Id', () => {
 });
 
 describe('origen de la API', () => {
-	it('un _preflight_ de un origen que ninguna app permite responde 403 ORIGIN_NOT_ALLOWED', async () => {
+	it('[BE-FR-65/CA2] un _preflight_ de un origen que ninguna app permite responde 403 ORIGIN_NOT_ALLOWED', async () => {
 		const result = await send(baseUrl, '/api/v1/auth/login', {
 			method: 'OPTIONS',
 			host: apiHost,

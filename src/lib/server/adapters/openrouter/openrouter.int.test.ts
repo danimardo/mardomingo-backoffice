@@ -216,6 +216,17 @@ describe('catálogo de modelos', () => {
 		]);
 	});
 
+	it('[BE-FR-77/CA3] pide el catálogo con todas las salidas y guarda las modalidades de entrada y de salida con los parámetros de cada modelo', async () => {
+		const models = await gateway().listModels(new AbortController().signal);
+
+		expect(mock.requests.at(-1)?.query).toBe('?output_modalities=all');
+		expect(models?.[0]).toMatchObject({
+			inputModalities: ['text'],
+			outputModalities: ['text'],
+			supportedParameters: ['max_tokens', 'temperature', 'response_format', 'tools']
+		});
+	});
+
 	it('si el catálogo no responde, devuelve null', async () => {
 		const down = createOpenRouterGateway({
 			baseUrl: 'http://127.0.0.1:9',

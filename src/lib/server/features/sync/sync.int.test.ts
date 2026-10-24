@@ -97,7 +97,7 @@ describe('siembra del documento (BE-FR-40)', () => {
 });
 
 describe('escritura con If-Match (BE-FR-41)', () => {
-	it('dos clientes con la misma revisión: uno gana, el otro recibe SYNC_CONFLICT, relee y reintenta sin perder nada', () => {
+	it('[BE-FR-41/CA1] dos clientes con la misma revisión: uno gana, el otro recibe SYNC_CONFLICT, relee y reintenta sin perder nada', () => {
 		const first = syncClient(deps, userId, secondAppId);
 		const second = syncClient(deps, userId, secondAppId);
 		first.read();
@@ -173,7 +173,7 @@ describe('aislamiento entre apps de la misma cuenta', () => {
 });
 
 describe('predeterminados (BE-FR-42)', () => {
-	it('cambiar los predeterminados no modifica las cuentas existentes (CA1)', () => {
+	it('[BE-FR-42/CA1] cambiar los predeterminados no modifica las cuentas existentes (CA1)', () => {
 		const existing = getSyncDocument(deps, { userId, appId: SECRETARIO_APP_ID });
 
 		updateDefaults(deps, {
@@ -188,7 +188,14 @@ describe('predeterminados (BE-FR-42)', () => {
 		});
 	});
 
-	it('la copia de datos propios toma solo lo seleccionado y deja auditoría (CA3–CA4)', () => {
+	it('[BE-FR-42/CA2] los predeterminados vigentes son los que devuelve la lectura tras cambiarlos', () => {
+		const data = { quickTexts: { value: ['hola'], updatedAt: 9 } };
+		updateDefaults(deps, { adminId: ctx.adminId, appId: SECRETARIO_APP_ID, data });
+
+		expect(getDefaults(deps, SECRETARIO_APP_ID)).toEqual(data);
+	});
+
+	it('[BE-FR-42/CA3] [BE-FR-42/CA4] la copia de datos propios toma solo lo seleccionado y deja auditoría (CA3–CA4)', () => {
 		putSyncDocument(deps, {
 			userId,
 			appId: secondAppId,
@@ -217,7 +224,7 @@ describe('predeterminados (BE-FR-42)', () => {
 });
 
 describe('validación del documento (BE-FR-39, BE-FR-41)', () => {
-	it('una categoría no declarada se rechaza con VALIDATION_ERROR y el campo', () => {
+	it('[BE-FR-41/CA2] una categoría no declarada se rechaza con VALIDATION_ERROR y el campo', () => {
 		const code = codeOf(() =>
 			putSyncDocument(deps, {
 				userId,
