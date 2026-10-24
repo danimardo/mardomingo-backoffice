@@ -20,6 +20,9 @@
 {#if data.closed}
 	<Banner level="info">{m.sessions_closed_notice()}</Banner>
 {/if}
+{#if data.allClosed}
+	<Banner level="info">{m.sessions_all_closed_notice()}</Banner>
+{/if}
 {#if form?.errors.sessionId}
 	<Banner level="critical">{m.sessions_close_error()}</Banner>
 {/if}
@@ -54,6 +57,12 @@
 			</li>
 		{/each}
 	</ul>
+	{#if data.sessions.some((item) => !item.current)}
+		<form method="POST" action="?/cerrarTodas">
+			<p>{m.sessions_close_all_hint()}</p>
+			<Button type="submit" variant="secondary">{m.sessions_close_all()}</Button>
+		</form>
+	{/if}
 {/if}
 
 <style>

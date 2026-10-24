@@ -274,7 +274,9 @@ for (const scheme of ['light', 'dark'] as const) {
 
 // Cambio de contraseña desde el perfil (T266): cambia y la devuelve a la original para no alterar
 // a las demás pruebas que usan la misma cuenta.
-test('@critical el perfil cambia la contraseña y la devuelve a la original', async ({ page }) => {
+test('@critical [UX-18] el perfil cambia la contraseña y la devuelve a la original', async ({
+	page
+}) => {
 	const NUEVA = 'contraseña-nueva-456';
 	await login(page);
 	await page.goto('/panel/perfil');
@@ -286,6 +288,7 @@ test('@critical el perfil cambia la contraseña y la devuelve a la original', as
 
 	await expect(page).toHaveURL(/\/panel\/perfil\?aviso=password_changed$/);
 	await expect(page.getByText('Tu contraseña se ha cambiado')).toBeVisible();
+	await expect(page.getByText('Hemos cerrado tus otras sesiones abiertas.')).toBeVisible();
 
 	await page.goto('/panel/perfil');
 	await page.waitForLoadState('networkidle');
@@ -316,6 +319,29 @@ test('@critical cierra desde el panel otra sesión abierta de la misma cuenta', 
 
 		await expect(page).toHaveURL(/\/panel\/sesiones\?aviso=session_closed$/);
 		await expect(page.getByText('Sesión cerrada.')).toBeVisible();
+	} finally {
+		await otra.close();
+	}
+});
+
+test('[UX-10] «Cerrar las demás sesiones» mantiene la actual y cierra la otra', async ({
+	page,
+	browser
+}) => {
+	const otra = await browser.newContext();
+	try {
+		const segunda = await otra.newPage();
+		await login(segunda);
+		await login(page);
+		await page.goto('/panel/sesiones');
+		await page.waitForLoadState('networkidle');
+
+		await page.getByRole('button', { name: 'Cerrar las demás sesiones' }).click();
+
+		await expect(page.getByText('Se han cerrado las demás sesiones.')).toBeVisible();
+		await expect(page.getByText('(esta sesión)')).toHaveCount(1);
+		await segunda.goto('/panel');
+		await expect(segunda).toHaveURL(/\/login/);
 	} finally {
 		await otra.close();
 	}

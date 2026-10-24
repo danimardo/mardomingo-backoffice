@@ -123,7 +123,7 @@ describe('registro (W08)', () => {
 });
 
 describe('verificación (W09) e inicio de sesión (W11)', () => {
-	it('sin verificar no se puede entrar; tras verificar, sí, y el destino queda saneado', async () => {
+	it('[UX-04] sin verificar no se puede entrar; tras verificar, sí, y el destino queda saneado', async () => {
 		await fixture.accounts.register(registration());
 		expect(
 			await codeOf(() =>

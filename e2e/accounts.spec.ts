@@ -44,7 +44,9 @@ test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ p
 	await expect(page.getByRole('heading', { name: 'Revisa tu email' })).toHaveCount(0);
 });
 
-test('@critical el inicio de sesión con datos erróneos da un error genérico', async ({ page }) => {
+test('@critical [UX-04] el inicio de sesión con datos erróneos da un error genérico', async ({
+	page
+}) => {
 	await page.goto('/login');
 	// Esperar a que la página esté lista antes de rellenar: si no, el envío puede ir antes de hidratar y no aparece el error.
 	await page.waitForLoadState('networkidle');

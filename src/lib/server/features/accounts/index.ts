@@ -68,7 +68,7 @@ import {
 export type { InactivityCandidate } from './retention';
 export { sessionsOf, type SessionView } from './sessions';
 export { sessionDtoOf, type SessionDto } from './presenters';
-export { closeOtherSession } from './close-session';
+export { closeOtherSession, closeOtherSessions } from './close-session';
 export { emailOfUser } from './user-email';
 export { appsUsedBy } from './apps-used';
 export { touchActivity } from './activity';

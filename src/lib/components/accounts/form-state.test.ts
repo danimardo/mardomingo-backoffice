@@ -29,7 +29,7 @@ describe('formStateOf', () => {
 		expect(state.formError).toBe('Email o contraseña incorrectos.');
 	});
 
-	it('el bloqueo por intentos lleva el tiempo de espera a su texto', () => {
+	it('[UX-04] el bloqueo por intentos lleva el tiempo de espera a su texto', () => {
 		const state = formStateOf({ formError: 'LOGIN_TEMPORARILY_LOCKED', retryAfterMinutes: 3 });
 
 		expect(state.formError).toBe('Demasiados intentos fallidos. Vuelve a intentarlo en 3 minutos.');

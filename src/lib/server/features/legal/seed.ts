@@ -16,7 +16,7 @@ export const PROVISIONAL_VERSION = '2026-10-11';
 const BANNER =
 	'BORRADOR PROVISIONAL, SIN VALOR LEGAL. Pendiente de la revisión y aprobación del propietario (T092). Los datos entre corchetes son huecos por completar.';
 
-const PROVISIONAL_TEXTS: Readonly<Record<LegalDocument, string>> = Object.freeze({
+export const PROVISIONAL_TEXTS: Readonly<Record<LegalDocument, string>> = Object.freeze({
 	terms: [
 		BANNER,
 		'Condiciones de uso de Cuenta Mardomingo',
@@ -32,7 +32,8 @@ const PROVISIONAL_TEXTS: Readonly<Record<LegalDocument, string>> = Object.freeze
 		'2. Datos que tratamos. Datos de la cuenta, de la sesión y del uso de las apps. [pendiente: categorías completas].',
 		'3. Finalidades y base jurídica. [pendiente: finalidades y base jurídica de cada tratamiento].',
 		'4. Conservación. [pendiente: plazos de conservación por categoría de dato].',
-		'5. Derechos. Puedes acceder, rectificar, suprimir y limitar tus datos desde el panel. [pendiente: procedimiento completo].'
+		'5. Derechos. Puedes acceder, rectificar, suprimir y limitar tus datos desde el panel. [pendiente: procedimiento completo].',
+		'6. Apps y proveedores. Las apps que tratan tus datos son Secretario AI. Los proveedores que los procesan son OpenRouter (modelos de IA), Mistral (transcripción de audio), Resend (envío de emails) y Cloudflare Turnstile (verificación anti-bots en el registro). [pendiente: finalidad y datos por cada proveedor].'
 	].join('\n\n'),
 	cookies: [
 		BANNER,
