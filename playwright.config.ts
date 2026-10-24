@@ -97,6 +97,8 @@ export default defineConfig({
 		},
 		{
 			name: 'visual',
+			// Las capturas con sesión necesitan los estados de `e2e/.auth/`, que crea el proyecto `setup` (T112).
+			dependencies: ['setup'],
 			testMatch: /.*\.visual\.ts/,
 			use: { ...devices['Desktop Chrome'] }
 		}
