@@ -2,6 +2,7 @@
 // comprueba por HTTP contra el build, leyendo los datos que SvelteKit sirve en `__data.json`. Son la forma real que recibe la
 // página: cualquier clave de más o de menos rompe la prueba. Desviación documentada respecto a `makeRequestEvent` (ver T109).
 import { describe, expect, inject, it } from 'vitest';
+import Database from 'better-sqlite3';
 import { loginAsUser } from './admin-session';
 import { send } from './client';
 
@@ -63,6 +64,21 @@ function recordsAt(parent: Json, key: string): Json[] {
 }
 
 const sorted = (value: Json): string[] => Object.keys(value).sort();
+
+async function userWithChange(id: string, sql: string): Promise<string> {
+	const session = await loginAsUser(baseUrl, databasePath, {
+		id,
+		email: `${id}@ejemplo.es`,
+		password: `contraseña-${id}-123`
+	});
+	const db = new Database(databasePath);
+	try {
+		db.prepare(sql).run(id);
+	} finally {
+		db.close();
+	}
+	return session.cookie;
+}
 
 describe('modelos de vista del panel con claves exactas (T270)', () => {
 	it('/panel: el resumen expone exactamente sus claves y las del saldo', async () => {
@@ -128,5 +144,30 @@ describe('modelos de vista del panel con claves exactas (T270)', () => {
 				'lastUsedOn'
 			]);
 		}
+	});
+	it('sin verificar: el panel manda a reenviar la verificación', async () => {
+		const cookie = await userWithChange(
+			'usr_panel_sin_verificar',
+			'UPDATE user SET email_verified = 0 WHERE id = ?'
+		);
+		const result = await send(baseUrl, '/panel', {
+			host: webHost,
+			headers: { cookie, accept: 'text/html' }
+		});
+		expect(result.status).toBe(303);
+		expect(String(result.headers.location)).toContain('/verificar/reenviar');
+	});
+
+	it('bloqueado: el panel manda al login y no muestra datos', async () => {
+		const cookie = await userWithChange(
+			'usr_panel_bloqueado',
+			'UPDATE user SET banned = 1 WHERE id = ?'
+		);
+		const result = await send(baseUrl, '/panel', {
+			host: webHost,
+			headers: { cookie, accept: 'text/html' }
+		});
+		expect(result.status).toBe(303);
+		expect(String(result.headers.location)).toContain('/login');
 	});
 });

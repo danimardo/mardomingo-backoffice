@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 // con el formulario sin JavaScript cuando falta la renuncia. La compra completa con el simulador de pago va en el E2E de
 // compra (T247).
 import { describe, expect, inject, it } from 'vitest';
-import { loginAsUser, FORM_HEADERS } from './admin-session';
+import { loginAsAdmin, loginAsUser, FORM_HEADERS } from './admin-session';
 import { send, type HttpResult } from './client';
 
 const baseUrl = inject('httpBaseUrl');
@@ -165,6 +165,37 @@ describe('compra completa por HTTP (BE-FR-25, BE-FR-26)', () => {
 		} finally {
 			db.close();
 		}
+
+		const result = await get(COMPRAR, session.cookie);
+
+		expect(result.status).toBe(200);
+	});
+	it('sin verificar: la compra manda a reenviar la verificación', async () => {
+		const session = await loginAsUser(baseUrl, databasePath, {
+			id: 'usr_comprar_sin_verificar',
+			email: 'sin.verificar.comprar@ejemplo.es',
+			password: 'contraseña-compra-sinverificar-123'
+		});
+		const db = new Database(databasePath);
+		try {
+			db.prepare('UPDATE user SET email_verified = 0 WHERE id = ?').run(
+				'usr_comprar_sin_verificar'
+			);
+		} finally {
+			db.close();
+		}
+
+		const result = await get(COMPRAR, session.cookie);
+
+		expect(sentTo(result, '/verificar/reenviar')).toBe(true);
+	});
+
+	it('admin: puede abrir la compra (matriz de roles de L10)', async () => {
+		const session = await loginAsAdmin(baseUrl, databasePath, {
+			id: 'usr_comprar_admin',
+			email: 'admin.comprar@ejemplo.es',
+			password: 'contraseña-compra-admin-123'
+		});
 
 		const result = await get(COMPRAR, session.cookie);
 
