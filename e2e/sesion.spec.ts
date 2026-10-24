@@ -308,6 +308,7 @@ test('@critical cierra desde el panel otra sesión abierta de la misma cuenta', 
 		await login(page);
 		await page.goto('/panel/sesiones');
 		await page.waitForLoadState('networkidle');
+		await expect(page.getByText('(esta sesión)')).toHaveCount(1);
 		await page
 			.getByRole('button', { name: /Cerrar la sesión de/ })
 			.first()

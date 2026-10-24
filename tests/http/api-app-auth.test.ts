@@ -24,6 +24,21 @@ function errorOf(text: string): { code: string; details: Record<string, unknown>
 }
 
 describe('cabecera X-App-Id', () => {
+	it('[BE-FR-62/CA2] X-App-Id identifica y no autentica: con una app válida, un Bearer inventado se rechaza con 401', async () => {
+		const result = await send(baseUrl, '/api/v1/me', {
+			host: apiHost,
+			headers: {
+				'x-app-id': SECRETARIO,
+				'x-app-version': '4.0.0',
+				accept: 'application/json',
+				authorization: 'Bearer token-inventado-no-real'
+			}
+		});
+
+		expect(result.status).toBe(401);
+		expect(result.text).not.toContain('token-inventado-no-real');
+	});
+
 	it('sin X-App-Id, una ruta de la API responde 400 UNKNOWN_APP con su formato y X-Request-Id', async () => {
 		const result = await send(baseUrl, '/api/v1/auth/login', {
 			method: 'POST',

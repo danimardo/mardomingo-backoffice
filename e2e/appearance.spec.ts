@@ -13,7 +13,7 @@ const WIDTHS = [320, 390, 1366];
 test.describe('tema sin JavaScript (UX-TEMA CA1 y CA3)', () => {
 	test.use({ javaScriptEnabled: false, colorScheme: 'light', guardAllow: [PRELOAD_CSP] });
 
-	test('sin cookie, el HTML no lleva data-theme: el sistema decide desde la primera pintura', async ({
+	test('[UX-TEMA/CA1] sin cookie, el HTML no lleva data-theme: el sistema decide desde la primera pintura', async ({
 		page
 	}) => {
 		const response = await page.goto('/');
@@ -23,7 +23,7 @@ test.describe('tema sin JavaScript (UX-TEMA CA1 y CA3)', () => {
 		expect(html).toContain('<html lang="es"');
 	});
 
-	test('con la cookie «oscuro», el servidor pinta data-theme="dark" en la primera respuesta', async ({
+	test('[UX-TEMA/CA3] con la cookie «oscuro», el servidor pinta data-theme="dark" en la primera respuesta', async ({
 		page,
 		context
 	}) => {
@@ -36,7 +36,7 @@ test.describe('tema sin JavaScript (UX-TEMA CA1 y CA3)', () => {
 });
 
 test.describe('elegir tema y efectos con JavaScript', () => {
-	test('«Oscuro» guarda la cookie y la página cambia sin recargar', async ({
+	test('[UX-TEMA/CA3] «Oscuro» guarda la cookie y la página cambia sin recargar', async ({
 		page,
 		browserName
 	}, testInfo) => {
@@ -70,7 +70,9 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 		recordUx(testInfo, 'tema elegido sin recargar', 'comprobado');
 	});
 
-	test('con «Sistema», cambiar el sistema en /login no borra lo escrito', async ({ page }) => {
+	test('[UX-TEMA/CA2] con «Sistema», cambiar el sistema en /login no borra lo escrito', async ({
+		page
+	}) => {
 		await emulate(page, { colorScheme: 'light' });
 		await page.goto('/login');
 		await page.getByLabel('Email').fill('texto que no se pierde');
@@ -87,7 +89,9 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 		expect(await page.evaluate(() => window.__sinRecarga === true)).toBe(true);
 	});
 
-	test('con «Sistema», cambiar el sistema cambia la página sin recargar', async ({ page }) => {
+	test('[UX-TEMA/CA2] con «Sistema», cambiar el sistema cambia la página sin recargar', async ({
+		page
+	}) => {
 		await emulate(page, { colorScheme: 'light' });
 		await page.goto('/preferencias');
 		await page.evaluate(() => {
@@ -103,7 +107,9 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 		expect(kept).toBe(true);
 	});
 
-	test('efectos reducidos hacen opacas las superficies de cristal', async ({ page }) => {
+	test('[UX-EFECTOS/CA2] efectos reducidos hacen opacas las superficies de cristal', async ({
+		page
+	}) => {
 		await page
 			.context()
 			.addCookies([{ name: 'mdm_effects', value: 'reduced', url: 'http://localhost:7390' }]);
@@ -139,7 +145,7 @@ test.describe('formularios sin JavaScript (UX-TEMA CA y mejora progresiva)', () 
 	test.use({ javaScriptEnabled: false, guardAllow: [PRELOAD_CSP] });
 
 	// WebKit no acepta una cookie `Secure` en http://localhost (la app va por https en producción): la prueba queda fuera de WebKit.
-	test('«Claro» sin JavaScript guarda la cookie y vuelve a la página', async ({
+	test('[UX-TEMA/CA4] «Claro» sin JavaScript guarda la cookie y vuelve a la página', async ({
 		page,
 		browserName
 	}) => {

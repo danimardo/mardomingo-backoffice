@@ -90,4 +90,18 @@ describe('GET /api/v1/app/status', () => {
 
 		expect(result.status).toBe(405);
 	});
+
+	it('[BE-FR-48/CA3] la versión va en la ruta: /api/v1 responde y /api/v2 no existe todavía', async () => {
+		const current = await send(baseUrl, '/api/v1/app/status', {
+			host: apiHost,
+			headers: { 'x-app-id': 'secretario', accept: 'application/json' }
+		});
+		const next = await send(baseUrl, '/api/v2/app/status', {
+			host: apiHost,
+			headers: { 'x-app-id': 'secretario', accept: 'application/json' }
+		});
+
+		expect(current.status).toBe(200);
+		expect(next.status).toBe(404);
+	});
 });

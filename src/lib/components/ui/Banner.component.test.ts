@@ -9,7 +9,7 @@ function text(value: string) {
 }
 
 describe('Banner', () => {
-	it('escribe el nivel como texto además del color', () => {
+	it('[UX-12] escribe el nivel como texto además del color', () => {
 		render(Banner, { props: { level: 'warning', children: text('El saldo es bajo.') } });
 
 		expect(screen.getByText('Aviso:')).toBeTruthy();

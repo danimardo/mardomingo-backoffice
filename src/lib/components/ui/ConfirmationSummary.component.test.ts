@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import ConfirmationSummary from './ConfirmationSummary.svelte';
 
 describe('ConfirmationSummary', () => {
-	it('muestra el usuario, el importe, el cambio y el alcance', () => {
+	it('[UX-14] muestra el usuario, el importe, el cambio y el alcance', () => {
 		render(ConfirmationSummary, {
 			props: {
 				subject: 'ana@ejemplo.es',
