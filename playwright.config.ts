@@ -44,6 +44,9 @@ export default defineConfig({
 	globalSetup: './e2e/global-setup.ts',
 	outputDir: join(E2E_DIR, 'artifacts'),
 	fullyParallel: true,
+	// Dos workers: con más, la red local satura las peticiones de `__data.json` y aparecen fallos de contención (ERR_ABORTED,
+	// ERR_NO_BUFFER_SPACE) que no son regresiones. Se mide el tiempo total en la validación; no se rebaja ningún umbral.
+	workers: 2,
 	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 1 : 0,
 	reporter: [['list'], ['html', { open: 'never', outputFolder: join(E2E_DIR, 'report') }]],
