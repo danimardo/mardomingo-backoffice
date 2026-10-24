@@ -88,6 +88,15 @@ export function readAppBySlug(db: Db, logger: Logger, slug: string): AppRow | un
 	return validatedApp(row, logger);
 }
 
+/** App por su id, con sus datos validados (BE-FR-64 CA2: texto de pasos siguientes de la app de origen). */
+export function readAppById(db: Db, logger: Logger, appId: string): AppRow | undefined {
+	const row = readGuarded(logger, 'apps', () =>
+		db.select().from(apps).where(eq(apps.id, appId)).get()
+	);
+	if (row === undefined) return undefined;
+	return validatedApp(row, logger);
+}
+
 /** Todas las apps con sus sobrescrituras validadas (para comprobar los topes frente al global). */
 export function listAppOverrides(db: Db, logger: Logger): SettingsOverrides[] {
 	const rows = readGuarded(logger, 'apps', () => db.select().from(apps).all());

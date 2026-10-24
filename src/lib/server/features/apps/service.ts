@@ -55,6 +55,7 @@ import {
 	listApps,
 	listAnnouncementCandidates,
 	listOperations,
+	readAppById,
 	readAppBySlug,
 	readAppUpdatedAt,
 	readOperation,
@@ -859,6 +860,16 @@ export function getSetting(deps: AppsDeps, key: SettingKey): SettingValue | unde
 }
 
 /** App activa por su slug (`X-App-Id`, `?app=`). Una app desactivada se trata como desconocida (BE-FR-62). */
+/** Nombre y texto propio de pasos siguientes de una app, o `undefined` si la app no existe (BE-FR-64 CA2). */
+export function postVerifyTextOf(
+	deps: AppsDeps,
+	appId: string
+): { readonly name: string; readonly postVerifyText: string | null } | undefined {
+	const app = readAppById(deps.db, deps.logger, appId);
+	if (app === undefined) return undefined;
+	return { name: app.name, postVerifyText: app.postVerifyText };
+}
+
 export function findActiveAppBySlug(
 	deps: AppsDeps,
 	slug: string

@@ -69,7 +69,7 @@ export type { InactivityCandidate } from './retention';
 export { sessionsOf, type SessionView } from './sessions';
 export { sessionDtoOf, type SessionDto } from './presenters';
 export { closeOtherSession, closeOtherSessions } from './close-session';
-export { emailOfUser } from './user-email';
+export { emailOfUser, signupAppIdOf } from './user-email';
 export { appsUsedBy } from './apps-used';
 export { touchActivity } from './activity';
 export type { EmailChangeConfirmOutcome, EmailChangeRequestOutcome } from './email-change';

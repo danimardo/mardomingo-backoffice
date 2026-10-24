@@ -20,6 +20,7 @@ export {
 	createTemplateVersion,
 	activeAppOrigins,
 	findActiveAppBySlug,
+	postVerifyTextOf,
 	getEffectiveConfig,
 	getSetting,
 	resolveAppBySlug,
