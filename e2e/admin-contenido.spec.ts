@@ -194,6 +194,22 @@ test('@BE-FR-50 la lista encuentra la cuenta por email y su ficha muestra bolsas
 	await expect(page.getByText('No tiene datos fiscales registrados.')).toBeVisible();
 });
 
+test('[UX-15] la búsqueda sin resultados dice que no hay cuentas y conserva la consulta', async ({
+	page
+}) => {
+	await loginAsAdmin(page);
+	await page.goto('/admin/usuarios');
+	await page.waitForLoadState('networkidle');
+
+	await page.locator('#busqueda').fill('no-existe-usuario-ux15@example.invalid');
+	await page.getByRole('button', { name: 'Buscar' }).click();
+	await page.waitForURL(/[?&]q=/);
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByText('No hay cuentas que coincidan con la búsqueda.')).toBeVisible();
+	await expect(page.locator('#busqueda')).toHaveValue('no-existe-usuario-ux15@example.invalid');
+});
+
 test('@BE-FR-50 previsualizar un bloqueo muestra el paso de confirmación y no bloquea nada', async ({
 	page
 }) => {
