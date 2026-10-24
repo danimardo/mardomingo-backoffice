@@ -1,7 +1,8 @@
 // Web Vitals de laboratorio (T355, T275, T371; constitución, «Rendimiento percibido»): LCP ≤ 2,5 s y CLS ≤ 0,1 sobre el build
 // con CPU y red limitadas (perfil móvil), con efectos normales y reducidos (cookie `mdm_effects`). INP necesita una interacción
-// medida: queda «pendiente» aquí. Son medidas de laboratorio, no datos de campo. Cubre las cinco páginas de 16.8: landing,
-// login, saldo del panel, compra y estadísticas (esta última con la cuenta `admin`). Además, el presupuesto del cristal: CLS
+// medida: queda «pendiente» aquí. Son medidas de laboratorio, no datos de campo. Cubre landing, login, saldo del panel y compra;
+// las estadísticas de administración tienen su propia medición en `admin-contenido.spec.ts` (con la cuenta `admin`, para no
+// duplicar la sesión de administración en este spec). Además, el presupuesto del cristal: CLS
 // tras desplazar, redimensionar y abrir el menú de cuenta en perfil móvil.
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from '../fixtures';
@@ -50,7 +51,12 @@ async function observe(page: Page, settleMs: number): Promise<Vitals> {
 }
 
 /** Mide LCP y CLS de la página ya cargada, con CPU ×4 y red lenta (perfil móvil de Lighthouse). */
-async function measure(page: Page, route: string, effects: Effects, testInfo: TestInfo): Promise<Vitals> {
+async function measure(
+	page: Page,
+	route: string,
+	effects: Effects,
+	testInfo: TestInfo
+): Promise<Vitals> {
 	const session = await page.context().newCDPSession(page);
 	await session.send('Emulation.setCPUThrottlingRate', { rate: 4 });
 	await session.send('Network.enable');
@@ -82,7 +88,7 @@ async function measure(page: Page, route: string, effects: Effects, testInfo: Te
 
 const PUBLIC_ROUTES = ['/', '/apps/secretario', '/login'] as const;
 const PANEL_ROUTES = ['/panel', '/panel/comprar?paquete=pck_seed_5eur'] as const;
-const ADMIN_ROUTES = ['/admin/estadisticas'] as const;
+
 const EFFECTS: readonly Effects[] = ['normal', 'reduced'];
 
 test.describe('Web Vitals de laboratorio (perfil móvil)', () => {
@@ -122,27 +128,6 @@ test.describe('Web Vitals de laboratorio con sesión (saldo y compra)', () => {
 	}
 });
 
-test.describe('Web Vitals de laboratorio con sesión de administración (estadísticas)', () => {
-	test.use({
-		viewport: { width: 390, height: 844 },
-		isMobile: true,
-		hasTouch: true,
-		storageState: 'e2e/.auth/admin.json'
-	});
-
-	for (const effects of EFFECTS) {
-		for (const route of ADMIN_ROUTES) {
-			test(`@UX-16 ${route} (${effects}): LCP ≤ 2,5 s y CLS ≤ 0,1 con CPU ×4 y red lenta`, async ({
-				page,
-				browserName
-			}, testInfo) => {
-				test.skip(browserName !== 'chromium', 'la medición por CDP es de Chromium');
-				await measure(page, route, effects, testInfo);
-			});
-		}
-	}
-});
-
 // Presupuesto del cristal (T371): desplazar, redimensionar y abrir el menú de cuenta no deben desplazar el contenido (CLS).
 test.describe('presupuesto del cristal en perfil móvil (T371)', () => {
 	test.use({
@@ -162,7 +147,9 @@ test.describe('presupuesto del cristal en perfil móvil (T371)', () => {
 			await page.goto('/panel', { waitUntil: 'load' });
 			await page.waitForTimeout(1500);
 
-			await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+			await page.evaluate(() => {
+				window.scrollTo(0, document.body.scrollHeight);
+			});
 			await page.waitForTimeout(200);
 			await page.setViewportSize({ width: 320, height: 700 });
 			await page.waitForTimeout(200);
