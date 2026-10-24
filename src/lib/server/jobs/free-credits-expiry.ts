@@ -1,25 +1,29 @@
 // Tarea `free-credits-expiry` (BE-FR-16, FR-026; T330): primero avisa por email de las bolsas gratuitas que caducan dentro de
 // `free_expiry_warning_days` y después aplica las caducidades vencidas. El aviso sale una sola vez por bolsa (la marca lo hace
-// `credits`); un fallo de envío no detiene la caducidad.
+// `credits`); un fallo de envío no detiene la caducidad. Recibe funciones ya enlazadas (`emailOf`, `sendWarning`), no la base.
 import { randomUUID } from 'node:crypto';
-import type { Db } from '$lib/server/db/client';
-import { emailOfUser } from '$lib/server/features/accounts';
 import type { Credits } from '$lib/server/features/credits';
-import { sendAccountEmail, type NotificationsDeps } from '$lib/server/features/notifications';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+export interface ExpiryWarning {
+	readonly reason: 'free_expiry_warning';
+	readonly to: string;
+	readonly expiry: { readonly days: number };
+	readonly idempotencyKey: string;
+}
+
 /** Devuelve cuántas bolsas caducaron en esta ejecución. */
 export async function runFreeCreditsExpiry(deps: {
-	readonly db: Db;
 	readonly credits: Pick<Credits, 'warnExpiringBuckets' | 'expireBuckets'>;
-	readonly notifications: NotificationsDeps;
+	readonly emailOf: (userId: string) => string | null;
+	readonly sendWarning: (warning: ExpiryWarning) => Promise<boolean>;
 	readonly warningDays: number;
 }): Promise<number> {
 	for (const userId of deps.credits.warnExpiringBuckets(deps.warningDays * DAY_MS)) {
-		const to = emailOfUser(deps.db, userId);
+		const to = deps.emailOf(userId);
 		if (to === null) continue;
-		await sendAccountEmail(deps.notifications, {
+		await deps.sendWarning({
 			reason: 'free_expiry_warning',
 			to,
 			expiry: { days: deps.warningDays },

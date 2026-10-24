@@ -2,6 +2,8 @@
 // ya está probado con reloj falso; aquí solo se enlaza con su horario (`schedule.ts`) y se programa con croner.
 import type { Composition } from '$lib/server/composition';
 import { getSetting } from '$lib/server/features/apps';
+import { emailOfUser } from '$lib/server/features/accounts';
+import { sendAccountEmail } from '$lib/server/features/notifications';
 import { refreshModelCache } from '$lib/server/features/ai';
 import { refreshFxFromEcb } from '$lib/server/features/pricing';
 import { runDownloads, runPrices } from '$lib/server/features/stats';
@@ -37,9 +39,9 @@ function runners(composition: Composition): Record<ScheduledTaskName, Task['run'
 		},
 		'free-credits-expiry': () =>
 			runFreeCreditsExpiry({
-				db: composition.db,
 				credits,
-				notifications: composition.notifications,
+				emailOf: (userId) => emailOfUser(composition.db, userId),
+				sendWarning: (warning) => sendAccountEmail(composition.notifications, warning),
 				warningDays: Number(getSetting(apps, 'free_expiry_warning_days') ?? 7)
 			}),
 		'holds-cleanup': () => runHoldsCleanup(credits),

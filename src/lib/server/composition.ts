@@ -267,7 +267,7 @@ export function createComposition(
 			savePriceReference({ db }, input);
 		},
 		priceWindowDays: () => Number(getSetting(apps, 'price_reference_window_days') ?? 30),
-		priceMinSamples: () => Number(getSetting(apps, 'price_reference_min_samples') ?? 3)
+		priceMinSamples: () => Number(getSetting(apps, 'price_reference_min_samples') ?? 50)
 	};
 
 	const media: MediaDeps = {
