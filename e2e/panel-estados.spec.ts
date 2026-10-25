@@ -56,3 +56,24 @@ test('@BE-FR-54 el consumo muestra las operaciones en sus estados', async ({ pag
 	await page.waitForLoadState('networkidle');
 	await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 });
+
+test('[UX-09] movimientos y consumo ordenan por fecha desde el formulario y conservan el orden en la URL', async ({
+	page
+}) => {
+	for (const [path, select] of [
+		['/panel/movimientos', '#filtro-orden'],
+		['/panel/consumo', '#consumo-orden']
+	] as const) {
+		await page.goto(path);
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator(select)).toHaveValue('desc');
+
+		await page.locator(select).selectOption('asc');
+		await page.getByRole('button', { name: 'Aplicar filtros' }).click();
+		await page.waitForURL(/[?&]orden=asc/);
+		await page.waitForLoadState('networkidle');
+
+		expect(new URL(page.url()).searchParams.get('orden')).toBe('asc');
+		await expect(page.locator(select)).toHaveValue('asc');
+	}
+});
