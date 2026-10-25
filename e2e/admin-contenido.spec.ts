@@ -676,3 +676,25 @@ test('la ficha de la cuenta conserva el rango de fechas en la URL y en el formul
 	await expect(page.locator('#ficha-hasta')).toHaveValue('2026-01-31');
 	await expect(page.getByRole('heading', { name: 'Últimos movimientos' })).toBeVisible();
 });
+
+test('la copia a predeterminados muestra la vista previa sin nada preseleccionado y exige elegir algo (T322)', async ({
+	page
+}) => {
+	await loginAsAdmin(page);
+	await page.goto('/admin/apps/secretario/predeterminados/copiar?usuario=usr_panel');
+	await page.waitForLoadState('networkidle');
+
+	const groups = page.getByRole('group').filter({ has: page.getByRole('checkbox') });
+	await expect(groups.first()).toBeVisible();
+	const boxes = groups.getByRole('checkbox');
+	expect(await boxes.count()).toBeGreaterThan(0);
+	for (const box of await boxes.all()) {
+		await expect(box).not.toBeChecked();
+	}
+
+	// Sin marcar nada, la copia se rechaza y no sustituye ningún predeterminado.
+	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
+	await page.getByRole('button', { name: 'Copiar los elementos marcados' }).click();
+	await page.waitForLoadState('networkidle');
+	await expect(page.getByRole('alert')).toContainText('No has marcado ningún elemento.');
+});

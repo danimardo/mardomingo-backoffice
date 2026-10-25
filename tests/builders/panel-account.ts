@@ -9,6 +9,8 @@ import { SEEDED_APP_ID } from '../setup/integration.global-setup';
 import { toEpochMs } from '$lib/shared/time';
 import { markRealPurchase } from './purchases';
 import { paymentsFixture, type PaymentsFixture } from './payments';
+import { syncClient } from './sync-clients';
+import type { SyncDeps } from '$lib/server/features/sync';
 
 export const PANEL_USER = {
 	kind: 'individual',
@@ -92,6 +94,32 @@ export function panelAccountFixture(): PanelAccount {
 	const saved = fixture.deps.invoicing.saveBillingProfile({ userId, profile: PANEL_USER });
 	if (saved.status !== 'saved')
 		throw new Error(`el perfil fiscal debía guardarse: ${saved.reason}`);
+
+	// Documento de sincronización de secretario: la copia a predeterminados del admin (T322) necesita categorías que mostrar.
+	const base = fixture.base;
+	const sync: SyncDeps = {
+		db,
+		clock: base.clock,
+		logger: base.logger,
+		apps: base.deps.apps,
+		audit: { clock: base.clock, ids: base.deps.ids, logger: base.logger }
+	};
+	const client = syncClient(sync, userId, SEEDED_APP_ID);
+	client.read();
+	// Forma del esquema de secretario: listas con `items`/`tombstones` y bloques `{ value, updatedAt }`.
+	const stamp = base.clock.now();
+	const written = client.write({
+		customReplacements: {
+			items: [{ from: 'hola', to: 'buenas', updatedAt: stamp }],
+			tombstones: []
+		},
+		coreReplacements: { value: 'base', updatedAt: stamp },
+		quickTexts: { value: [], updatedAt: stamp },
+		prompts: { value: [], updatedAt: stamp },
+		preferences: { language: { value: 'es', updatedAt: stamp } }
+	});
+	if (!written.ok)
+		throw new Error(`el documento de sincronización debía guardarse: ${written.code}`);
 
 	return { fixture, userId, paymentId: real.paymentId, simulatedPaymentId: simulated.paymentId };
 }
