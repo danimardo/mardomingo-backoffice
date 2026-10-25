@@ -159,12 +159,18 @@ test.describe('presupuesto del cristal en perfil móvil (T371)', () => {
 			// INP (T371): la mayor duración de las interacciones de tipo `event` desde que se instala el observador.
 			await page.evaluate(() => {
 				window.__inp = 0;
+				// `durationThreshold` es válido en Chromium pero no está en los tipos DOM de TypeScript: se tipa la opción sin `as`.
+				const options: PerformanceObserverInit & { durationThreshold: number } = {
+					type: 'event',
+					durationThreshold: 16,
+					buffered: true
+				};
 				new PerformanceObserver((list) => {
 					for (const entry of list.getEntries()) {
 						const id = 'interactionId' in entry ? Number(entry.interactionId) : 0;
 						if (id > 0) window.__inp = Math.max(window.__inp ?? 0, entry.duration);
 					}
-				}).observe({ type: 'event', durationThreshold: 16, buffered: true });
+				}).observe(options);
 			});
 
 			// El menú de cuenta es un `<details>` con su `<summary>` (`AccountMenu.svelte`).
