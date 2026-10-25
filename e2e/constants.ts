@@ -15,4 +15,6 @@ export const E2E_LOGINS_PER_IP_15MIN = 500;
  * Única cuenta administradora de las pruebas E2E de la base de una ejecución (índice `one_admin`). Los specs que la
  * necesitan la comparten y no se degradan entre sí (T288, T314).
  */
+// Administrador que crea el setup de autenticación (e2e/setup/auth.setup.ts): existe en cualquier orden de ejecución.
+export const SETUP_ADMIN_EMAIL = 'admin.e2e@ejemplo.es';
 export const E2E_ADMIN_EMAIL = 'admin-contenido.e2e@gmail.com';

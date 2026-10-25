@@ -1,7 +1,7 @@
 // Flujos públicos sin JavaScript (T360; UX-16; constitución «Mejora progresiva»). Las páginas se leen y sus formularios se envían
 // sin JavaScript. El captcha del registro es la única excepción permitida: sin él, el registro se rechaza y lo dice.
 import { expect, test } from './fixtures';
-import { E2E_ADMIN_EMAIL, PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD } from './constants';
+import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD, SETUP_ADMIN_EMAIL } from './constants';
 import { PASSWORD } from './outbox';
 
 test.use({ javaScriptEnabled: false });
@@ -121,7 +121,7 @@ test.describe('administración sin JavaScript (cuenta de administración por for
 		page
 	}) => {
 		await page.goto('/login');
-		await page.getByLabel('Email').fill(E2E_ADMIN_EMAIL);
+		await page.getByLabel('Email').fill(SETUP_ADMIN_EMAIL);
 		await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
 		await page.getByRole('button', { name: 'Entrar' }).click();
 		await expect(page).toHaveURL(/\/panel$/);

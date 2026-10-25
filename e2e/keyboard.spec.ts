@@ -2,7 +2,8 @@
 // foco a `#contenido`; el selector de tema se maneja con Enter y Espacio. Los diálogos y el menú de cuenta se prueban en el
 // flujo de sesión (pendiente: no hay un diálogo público con el que probarlos aquí).
 import { expect, test } from './fixtures';
-import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD } from './constants';
+import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD, SETUP_ADMIN_EMAIL } from './constants';
+import { PASSWORD } from './outbox';
 
 test('@UX-16 el primer Tab llega a «saltar al contenido» y Enter lleva el foco al contenido', async ({
 	page
@@ -142,6 +143,13 @@ test('@UX-16 la navegación del panel se recorre con Tab y Mayús+Tab, con foco 
 	await page.waitForURL(/\/panel$/);
 	await page.waitForLoadState('networkidle');
 
+	// La página actual se marca en la navegación (16.5): aria-current="page" además de la señal visual.
+	await expect(
+		page
+			.getByRole('navigation', { name: 'Navegación del panel' })
+			.getByRole('link', { name: 'Resumen' })
+	).toHaveAttribute('aria-current', 'page');
+
 	const insideNav = (): Promise<boolean> =>
 		page.evaluate(
 			() => document.activeElement?.closest('nav[aria-label="Navegación del panel"]') !== null
@@ -152,6 +160,38 @@ test('@UX-16 la navegación del panel se recorre con Tab y Mayús+Tab, con foco 
 		entered = await insideNav();
 	}
 	expect(entered, 'Tab llega a la navegación del panel').toBe(true);
+
+	const outline = await page.evaluate(
+		() => getComputedStyle(document.activeElement ?? document.body).outlineStyle
+	);
+	expect(outline, 'el foco de la navegación es visible').not.toBe('none');
+
+	await page.keyboard.press('Shift+Tab');
+	await page.keyboard.press('Shift+Tab');
+	expect(await insideNav(), 'Mayús+Tab sale de la navegación').toBe(false);
+});
+
+// Navegación de administración con teclado (T361; `PanelNav` del sistema de diseño, usado por `/admin`): Tab entra, Mayús+Tab sale.
+test('@UX-16 la navegación de administración se recorre con Tab y Mayús+Tab, con foco visible', async ({
+	page
+}) => {
+	await page.goto('/login');
+	await page.getByLabel('Email').fill(SETUP_ADMIN_EMAIL);
+	await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+	await page.getByRole('button', { name: 'Entrar' }).click();
+	await page.waitForURL((url) => !url.pathname.startsWith('/login'));
+	await page.goto('/admin');
+	await page.waitForLoadState('networkidle');
+
+	const navSelector = 'nav[aria-label="Navegación de administración"]';
+	const insideNav = (): Promise<boolean> =>
+		page.evaluate((selector) => document.activeElement?.closest(selector) !== null, navSelector);
+	let entered = false;
+	for (let step = 0; step < 40 && !entered; step += 1) {
+		await page.keyboard.press('Tab');
+		entered = await insideNav();
+	}
+	expect(entered, 'Tab llega a la navegación de administración').toBe(true);
 
 	const outline = await page.evaluate(
 		() => getComputedStyle(document.activeElement ?? document.body).outlineStyle
