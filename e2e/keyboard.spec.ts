@@ -2,6 +2,7 @@
 // foco a `#contenido`; el selector de tema se maneja con Enter y Espacio. Los diálogos y el menú de cuenta se prueban en el
 // flujo de sesión (pendiente: no hay un diálogo público con el que probarlos aquí).
 import { expect, test } from './fixtures';
+import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD } from './constants';
 
 test('@UX-16 el primer Tab llega a «saltar al contenido» y Enter lleva el foco al contenido', async ({
 	page
@@ -128,3 +129,36 @@ for (const route of ['/login', '/registro', '/precios', '/recuperar']) {
 		expect(beforeBrand).toBe(heading);
 	});
 }
+
+// Navegación del panel con teclado (T361; 16.5): Tab entra en la navegación, Mayús+Tab sale de ella y el foco es visible.
+test('@UX-16 la navegación del panel se recorre con Tab y Mayús+Tab, con foco visible', async ({
+	page
+}) => {
+	await page.goto('/login');
+	await page.waitForLoadState('networkidle');
+	await page.getByLabel('Email').fill(PANEL_E2E_EMAIL);
+	await page.getByLabel('Contraseña', { exact: true }).fill(PANEL_E2E_PASSWORD);
+	await page.getByRole('button', { name: 'Entrar' }).click();
+	await page.waitForURL(/\/panel$/);
+	await page.waitForLoadState('networkidle');
+
+	const insideNav = (): Promise<boolean> =>
+		page.evaluate(
+			() => document.activeElement?.closest('nav[aria-label="Navegación del panel"]') !== null
+		);
+	let entered = false;
+	for (let step = 0; step < 40 && !entered; step += 1) {
+		await page.keyboard.press('Tab');
+		entered = await insideNav();
+	}
+	expect(entered, 'Tab llega a la navegación del panel').toBe(true);
+
+	const outline = await page.evaluate(
+		() => getComputedStyle(document.activeElement ?? document.body).outlineStyle
+	);
+	expect(outline, 'el foco de la navegación es visible').not.toBe('none');
+
+	await page.keyboard.press('Shift+Tab');
+	await page.keyboard.press('Shift+Tab');
+	expect(await insideNav(), 'Mayús+Tab sale de la navegación').toBe(false);
+});
