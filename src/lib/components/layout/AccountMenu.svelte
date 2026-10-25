@@ -4,7 +4,8 @@
 	// (T361). Temas: tokens en claro y oscuro. Efectos reducidos: fondo sólido, sin cristal ni transiciones.
 	// Menú de cuenta de la cabecera (T044; 16.5). Sin sesión, «Entrar» y «Crear cuenta»; con sesión, un menú con el panel, la
 	// administración (solo a quien pasa su guarda) y «Salir». Es un `<details>`: abre y cierra sin JavaScript y el teclado
-	// lo maneja el navegador. «Salir» lleva a la página de cierre de sesión (W15), que lo hace por formulario.
+	// lo maneja el navegador. «Salir» lleva a la página de cierre de sesión (W15), que lo hace por formulario. Los enlaces en
+	// reposo van subrayados: excepción aprobada por el propietario a DS-10 (2026-10-25), porque el color solo no basta (WCAG 1.4.1).
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 

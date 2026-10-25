@@ -3,7 +3,8 @@
 	// menú nativos, con foco visible. Temas: tokens en claro y oscuro. Efectos reducidos: el cristal se anula con
 	// `data-effects="reduced"` y con `prefers-reduced-transparency`, y pasa a fondo opaco.
 	// Cabecera con marca, navegación y menú de cuenta. Material de cristal con alternativa opaca (DS-05, §16.10). El enlace
-	// de la página actual lleva `aria-current="page"` (16.5).
+	// de la página actual lleva `aria-current="page"` (16.5). Los enlaces en reposo van subrayados: excepción aprobada por el
+	// propietario a DS-10 (2026-10-25), porque el color solo no distingue el enlace (WCAG 1.4.1).
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
