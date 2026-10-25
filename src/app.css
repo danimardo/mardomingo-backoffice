@@ -19,6 +19,20 @@
 }
 
 @layer base {
+	/* Zona táctil de 44 px (T361; 16.5): enlaces y botones amplían su área de pulsación con un pseudo-elemento invisible
+	   que no cambia la maquetación ni el aspecto. */
+	a,
+	button {
+		position: relative;
+	}
+
+	a::before,
+	button::before {
+		content: '';
+		position: absolute;
+		inset: -12px 0;
+	}
+
 	html {
 		font-size: 100%;
 	}

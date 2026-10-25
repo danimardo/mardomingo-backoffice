@@ -42,6 +42,12 @@
 </div>
 
 <style>
+	/* La etiqueta es la zona de pulsación: 44 px de alto sin mover la maquetación (T361; 16.5). */
+	label {
+		padding-block: 12px;
+		margin-block: -12px;
+	}
+
 	.checkbox {
 		display: grid;
 		grid-template-columns: auto 1fr;

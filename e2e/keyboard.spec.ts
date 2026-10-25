@@ -79,3 +79,35 @@ for (const route of ['/', '/login', '/registro', '/precios']) {
 		expect(overflow, `desbordamiento de ${String(overflow)} px al 200 %`).toBeLessThanOrEqual(0);
 	});
 }
+
+// Zona táctil de 44 px a 390 px (T361; 16.5). Enlaces y botones: altura de la caja más el pseudo-elemento que amplía su área.
+// Casillas: su etiqueta es la zona de pulsación. Medido en el DOM real; sin cambiar la maquetación.
+for (const route of ['/', '/login', '/registro', '/precios']) {
+	test(`@UX-16 ${route} a 390 px, los enlaces, botones y casillas miden al menos 44 px de alto`, async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: 390, height: 844 });
+		await page.goto(route);
+		await page.waitForLoadState('networkidle');
+
+		const small = await page.evaluate(() => {
+			const bad: string[] = [];
+			const hit = (el: Element, name: string): void => {
+				const box = el.getBoundingClientRect();
+				if (box.width === 0 || box.height === 0) return;
+				const pseudo = getComputedStyle(el, '::before');
+				const extra = pseudo.content !== 'none' && pseudo.position === 'absolute' ? 24 : 0;
+				if (box.height + extra < 44)
+					bad.push(`${name} ${String(Math.round(box.height + extra))}px`);
+			};
+			for (const el of document.querySelectorAll('a[href], button'))
+				hit(el, el.tagName.toLowerCase());
+			for (const box of document.querySelectorAll('input[type="checkbox"]')) {
+				const label = document.querySelector(`label[for="${box.id}"]`);
+				if (label !== null) hit(label, 'label de casilla');
+			}
+			return bad;
+		});
+		expect(small, small.join(' | ')).toEqual([]);
+	});
+}
