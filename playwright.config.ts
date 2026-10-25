@@ -42,10 +42,14 @@ const LEGAL_LAST_SPEC = /legal-critico7\.spec\.ts/;
 /** Mantenimiento, copia de predeterminados, cierre de sesiones y reembolso: corre el último, en su proyecto (T322). */
 const ADMIN_FINAL_SPEC = /admin-cierre\.spec\.ts/;
 
+/**
+ * Matriz completa de UX (T357): solo en la nocturna. Va en el `testIgnore` de cada proyecto, porque el de un proyecto
+ * sustituye al global: un `testIgnore` solo en la raíz no la excluiría.
+ */
+const NIGHTLY_ONLY = nightly ? [] : [/ux-matrix-nocturna\.spec\.ts/];
+
 export default defineConfig({
 	testDir: 'e2e',
-	// La matriz completa de 16.11 (T357) corre solo en la nocturna; la validación diaria no la ejecuta.
-	testIgnore: nightly ? [] : [/ux-matrix-nocturna\.spec\.ts/],
 	globalSetup: './e2e/global-setup.ts',
 	outputDir: join(E2E_DIR, 'artifacts'),
 	fullyParallel: true,
@@ -72,7 +76,7 @@ export default defineConfig({
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Chrome'] },
-			testIgnore: [/.*\.setup\.ts/, ADMIN_FINAL_SPEC]
+			testIgnore: [/.*\.setup\.ts/, ADMIN_FINAL_SPEC, ...NIGHTLY_ONLY]
 		},
 		{
 			name: 'firefox',
@@ -80,21 +84,21 @@ export default defineConfig({
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Firefox'] },
 			// Un solo administrador por base (índice one_admin): este spec corre solo en chromium (ver ADMIN_SPEC).
-			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC, ...NIGHTLY_ONLY]
 		},
 		{
 			name: 'webkit',
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Safari'] },
-			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC, ...NIGHTLY_ONLY]
 		},
 		{
 			name: 'mobile-webkit',
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['iPhone 13'] },
-			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC, ...NIGHTLY_ONLY]
 		},
 		{
 			name: 'legal-critico7',

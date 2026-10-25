@@ -16,3 +16,11 @@ export const E2E_LOGINS_PER_IP_15MIN = 500;
  * necesitan la comparten y no se degradan entre sí (T288, T314).
  */
 export const E2E_ADMIN_EMAIL = 'admin-contenido.e2e@gmail.com';
+
+/**
+ * Motivo de saltar en WebKit las pruebas que escriben el tema o los efectos y los comprueban tras recargar. La cookie es
+ * `Secure` (decisión de seguridad, `tests/http/security-headers.test.ts`) y WebKit no la envía sobre `http://localhost`, que es
+ * el origen de las pruebas: la persistencia se verifica en Chromium y Firefox; en producción la web es https.
+ */
+export const WEBKIT_SECURE_COOKIE_SKIP =
+	'WebKit no envía cookies Secure sobre http://localhost: la persistencia se prueba en Chromium y Firefox';

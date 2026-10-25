@@ -2,13 +2,20 @@
 // foco a `#contenido`; el selector de tema se maneja con Enter y Espacio. Los diálogos y el menú de cuenta se prueban en el
 // flujo de sesión (pendiente: no hay un diálogo público con el que probarlos aquí).
 import { expect, test } from './fixtures';
-import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD } from './constants';
+import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD, WEBKIT_SECURE_COOKIE_SKIP } from './constants';
 
+// WebKit no recorre los enlaces con Tab por defecto (la opción «Tab to links» de Safari): ahí el foco se pone por script,
+// y el Tab real se verifica en Chromium y Firefox.
 test('@UX-16 el primer Tab llega a «saltar al contenido» y Enter lleva el foco al contenido', async ({
-	page
+	page,
+	browserName
 }) => {
 	await page.goto('/');
-	await page.keyboard.press('Tab');
+	if (browserName === 'webkit') {
+		await page.getByRole('link', { name: /saltar al contenido|ir al contenido/i }).focus();
+	} else {
+		await page.keyboard.press('Tab');
+	}
 
 	const skip = page.getByRole('link', { name: /saltar al contenido|ir al contenido/i });
 	await expect(skip).toBeFocused();
@@ -16,7 +23,11 @@ test('@UX-16 el primer Tab llega a «saltar al contenido» y Enter lleva el foco
 	await expect(page.locator('#contenido')).toBeVisible();
 });
 
-test('@UX-16 el selector de tema se maneja con teclado y cambia el tema', async ({ page }) => {
+test('@UX-16 el selector de tema se maneja con teclado y cambia el tema', async ({
+	page,
+	browserName
+}) => {
+	test.skip(browserName === 'webkit', WEBKIT_SECURE_COOKIE_SKIP);
 	await page.goto('/');
 	const dark = page.getByRole('button', { name: 'Oscuro' }).first();
 	await dark.focus();
@@ -132,7 +143,8 @@ for (const route of ['/login', '/registro', '/precios', '/recuperar']) {
 
 // Navegación del panel con teclado (T361; 16.5): Tab entra en la navegación, Mayús+Tab sale de ella y el foco es visible.
 test('@UX-16 la navegación del panel se recorre con Tab y Mayús+Tab, con foco visible', async ({
-	page
+	page,
+	browserName
 }) => {
 	await page.goto('/login');
 	await page.waitForLoadState('networkidle');
@@ -153,17 +165,29 @@ test('@UX-16 la navegación del panel se recorre con Tab y Mayús+Tab, con foco 
 		page.evaluate(
 			() => document.activeElement?.closest('nav[aria-label="Navegación del panel"]') !== null
 		);
+	// En WebKit el Tab no recorre los enlaces (ver la prueba del primer Tab): el foco entra por script y se comprueba lo demás.
 	let entered = false;
-	for (let step = 0; step < 40 && !entered; step += 1) {
-		await page.keyboard.press('Tab');
+	if (browserName === 'webkit') {
+		await page
+			.getByRole('navigation', { name: 'Navegación del panel' })
+			.getByRole('link', { name: 'Resumen' })
+			.focus();
 		entered = await insideNav();
+	} else {
+		for (let step = 0; step < 40 && !entered; step += 1) {
+			await page.keyboard.press('Tab');
+			entered = await insideNav();
+		}
 	}
 	expect(entered, 'Tab llega a la navegación del panel').toBe(true);
 
-	const outline = await page.evaluate(
-		() => getComputedStyle(document.activeElement ?? document.body).outlineStyle
-	);
-	expect(outline, 'el foco de la navegación es visible').not.toBe('none');
+	// `:focus-visible` no se aplica en WebKit a un foco puesto por script (ver arriba): ahí no se mide el contorno.
+	if (browserName !== 'webkit') {
+		const outline = await page.evaluate(
+			() => getComputedStyle(document.activeElement ?? document.body).outlineStyle
+		);
+		expect(outline, 'el foco de la navegación es visible').not.toBe('none');
+	}
 
 	await page.keyboard.press('Shift+Tab');
 	await page.keyboard.press('Shift+Tab');

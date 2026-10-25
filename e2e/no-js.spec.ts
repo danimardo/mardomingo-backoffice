@@ -1,7 +1,7 @@
 // Flujos públicos sin JavaScript (T360; UX-16; constitución «Mejora progresiva»). Las páginas se leen y sus formularios se envían
 // sin JavaScript. El captcha del registro es la única excepción permitida: sin él, el registro se rechaza y lo dice.
 import { expect, test } from './fixtures';
-import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD } from './constants';
+import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD, WEBKIT_SECURE_COOKIE_SKIP } from './constants';
 
 test.use({ javaScriptEnabled: false });
 test.use({ guardAllow: [/requestfailed: .*\(csp\)|status of 400|status of 401/] });
@@ -83,8 +83,10 @@ test.describe('panel sin JavaScript', () => {
 	});
 
 	test('@critical @UX-16 el selector de tema sin JavaScript aplica el tema oscuro', async ({
-		page
+		page,
+		browserName
 	}) => {
+		test.skip(browserName === 'webkit', WEBKIT_SECURE_COOKIE_SKIP);
 		await signInPanelWithoutJs(page);
 		await page.goto('/panel');
 		await page
@@ -96,8 +98,10 @@ test.describe('panel sin JavaScript', () => {
 	});
 
 	test('@UX-16 el ajuste de efectos se guarda sin JavaScript y sobrevive a recargar', async ({
-		page
+		page,
+		browserName
 	}) => {
+		test.skip(browserName === 'webkit', WEBKIT_SECURE_COOKIE_SKIP);
 		await signInPanelWithoutJs(page);
 		await page.goto('/panel');
 		const form = page.locator('form[action="/preferencias?/efectos"]').first();
