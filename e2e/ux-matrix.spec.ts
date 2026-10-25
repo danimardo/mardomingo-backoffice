@@ -20,6 +20,31 @@ async function applyEffects(
 	}, effects);
 }
 
+/** Elementos con transición o animación de duración positiva, según los estilos calculados (T358). */
+async function movingElements(page: import('@playwright/test').Page): Promise<string[]> {
+	return page.evaluate(() => {
+		const positive = (list: string): boolean =>
+			list.split(',').some((time) => parseFloat(time) > 0);
+		const found: string[] = [];
+		for (const element of document.querySelectorAll('*')) {
+			const style = getComputedStyle(element);
+			const transition = positive(style.transitionDuration);
+			const animation = style.animationName !== 'none' && positive(style.animationDuration);
+			if (transition || animation) {
+				found.push(`${element.tagName.toLowerCase()}.${element.getAttribute('class') ?? ''}`);
+			}
+		}
+		return found;
+	});
+}
+
+/** Valor del token del borde de campo tal como lo declara la hoja de estilos (T358; contraste reforzado). */
+async function borderTokenOf(page: import('@playwright/test').Page): Promise<string> {
+	return page.evaluate(() =>
+		getComputedStyle(document.documentElement).getPropertyValue('--border-field').trim()
+	);
+}
+
 for (const scheme of ['light', 'dark'] as const) {
 	for (const effects of EFFECTS) {
 		for (const width of WIDTHS) {
@@ -66,6 +91,62 @@ for (const route of KEY_PAGES) {
 		await page.goto(route);
 		const applied = await emulateReducedTransparency(page, testInfo);
 		if (applied) recordUx(testInfo, 'prefers-reduced-transparency', 'comprobado', route);
+	});
+
+	// Movimiento (T358; UX-EFECTOS CA3–CA4): con `prefers-reduced-motion: reduce` la página no tiene transiciones ni
+	// animaciones, comprobado con los estilos calculados de cada elemento.
+	test(`@UX-16 ${route} con movimiento reducido por el sistema no tiene transiciones ni animaciones`, async ({
+		page
+	}, testInfo) => {
+		await emulate(page, { reducedMotion: 'reduce' });
+		await page.goto(route);
+		await page.waitForLoadState('networkidle');
+
+		expect(await movingElements(page), 'elementos con transición o animación').toEqual([]);
+		recordUx(testInfo, 'reduced-motion', 'comprobado', route);
+	});
+
+	// El ajuste propio solo reduce: con «normales» el sistema sigue mandando y el movimiento no vuelve (T358; CA4).
+	test(`@UX-16 ${route} con el ajuste «normales» no reactiva el movimiento que pide el sistema`, async ({
+		page
+	}, testInfo) => {
+		await emulate(page, { reducedMotion: 'reduce' });
+		await page.goto(route);
+		await page.waitForLoadState('networkidle');
+		await applyEffects(page, 'normales');
+
+		expect(await movingElements(page), 'elementos con transición o animación').toEqual([]);
+		recordUx(testInfo, 'reduced-motion-propio', 'comprobado', route);
+	});
+
+	test(`@UX-16 ${route} con forced-colors, el foco del teclado sigue visible`, async ({
+		page
+	}, testInfo) => {
+		await emulate(page, { forcedColors: 'active' });
+		await page.goto(route);
+		await page.waitForLoadState('networkidle');
+		await page.keyboard.press('Tab');
+
+		const outline = await page.evaluate(
+			() => getComputedStyle(document.activeElement ?? document.body).outlineStyle
+		);
+		expect(outline, 'el foco con colores del sistema es visible').not.toBe('none');
+		recordUx(testInfo, 'forced-colors-foco', 'comprobado', route);
+	});
+
+	test(`@UX-16 ${route} con contraste reforzado cambia los bordes del sistema de diseño`, async ({
+		page
+	}, testInfo) => {
+		await emulate(page, { contrast: 'no-preference' });
+		await page.goto(route);
+		const normal = await borderTokenOf(page);
+
+		await emulate(page, { contrast: 'more' });
+		await page.reload();
+		const reinforced = await borderTokenOf(page);
+
+		expect(reinforced, 'el borde de campo cambia con contraste reforzado').not.toBe(normal);
+		recordUx(testInfo, 'contrast-more-bordes', 'comprobado', route);
 	});
 }
 
