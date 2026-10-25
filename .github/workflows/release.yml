@@ -91,7 +91,12 @@ jobs:
         run: |
           SECRET=$(openssl rand -hex 32)
           HASH=$(openssl rand -hex 32)
-          docker run --detach --name app -p 3000:3000 \n            --env APP_ENV=test --env DATABASE_PATH=/data/app.db \n            --env BETTER_AUTH_SECRET="$SECRET" --env EMAIL_HASH_KEY="$HASH" \n            --env BETTER_AUTH_URL=http://127.0.0.1:3000 --env PUBLIC_WEB_URL=http://127.0.0.1:3000 \n            --env PUBLIC_API_URL=http://127.0.0.1:3000 \n            mardomingo-backoffice:release
+          docker run --detach --name app -p 3000:3000 \
+            --env APP_ENV=test --env DATABASE_PATH=/data/app.db \
+            --env BETTER_AUTH_SECRET="$SECRET" --env EMAIL_HASH_KEY="$HASH" \
+            --env BETTER_AUTH_URL=http://127.0.0.1:3000 --env PUBLIC_WEB_URL=http://127.0.0.1:3000 \
+            --env PUBLIC_API_URL=http://127.0.0.1:3000 \
+            mardomingo-backoffice:release
       - name: Carga de laboratorio
         run: |
           sleep 20

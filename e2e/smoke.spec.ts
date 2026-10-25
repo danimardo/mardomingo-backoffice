@@ -30,7 +30,19 @@ test('@smoke la navegación cliente vuelve a la portada sin recargar la página'
 	expect(kept).toBe(true);
 });
 
+// Contra un despliegue (`E2E_BASE_URL`) no hay cuentas de prueba: el humo solo lee la portada y el health.
+test('@smoke GET /api/v1/health responde 200 con estado ok', async ({ request }) => {
+	const response = await request.get('/api/v1/health');
+
+	expect(response.status()).toBe(200);
+	expect(await response.json()).toEqual({ status: 'ok' });
+});
+
 test.describe('humo con sesión de usuario', () => {
+	test.skip(
+		process.env.E2E_BASE_URL !== undefined,
+		'sin cuentas de prueba en un despliegue: el humo con sesión corre solo en local'
+	);
 	test.use({ storageState: 'e2e/.auth/user.json' });
 
 	test('@smoke el usuario verificado entra al panel con su sesión ya iniciada', async ({

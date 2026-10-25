@@ -72,6 +72,12 @@ export default defineConfig({
 			testMatch: /.*\.setup\.ts/
 		},
 		{
+			// Humo contra un despliegue (T374): solo lectura, sin `setup` ni cuentas de prueba, para no tocar la base de producción.
+			name: 'smoke-desplegado',
+			testMatch: /smoke\.spec\.ts/,
+			use: { ...devices['Desktop Chrome'] }
+		},
+		{
 			name: 'chromium',
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],

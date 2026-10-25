@@ -1,0 +1,52 @@
+# Humo tras cada despliegue (T374; constitución, «Despliegue»): solo lectura contra la URL desplegada, sin crear datos.
+# Un fallo bloquea la promoción a producción. Se llama desde el pipeline de despliegue (`workflow_call`) o a mano.
+name: deploy-smoke
+
+on:
+  workflow_call:
+    inputs:
+      url:
+        description: URL pública de la web desplegada (https://...)
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      url:
+        description: URL pública de la web desplegada (https://...)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.21.0
+  PNPM_VERSION: 12.8.1
+
+jobs:
+  smoke:
+    name: humo contra ${{ inputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Health del despliegue
+        run: curl --fail --silent --show-error --max-time 20 "${{ inputs.url }}/api/v1/health"
+      - name: Humo de la web desplegada
+        run: pnpm exec playwright test --project=smoke-desplegado
+        env:
+          E2E_BASE_URL: ${{ inputs.url }}
+      - name: Informe (siempre)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-smoke
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
