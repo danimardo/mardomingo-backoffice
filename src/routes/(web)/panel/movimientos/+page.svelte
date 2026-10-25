@@ -94,6 +94,17 @@
 				{/each}
 			</select>
 		</div>
+		<div class="field">
+			<label for="filtro-orden">{m.movements_order_label()}</label>
+			<select id="filtro-orden" name="orden">
+				<option value="desc" selected={data.filters?.orden !== 'asc'}
+					>{m.movements_order_desc()}</option
+				>
+				<option value="asc" selected={data.filters?.orden === 'asc'}
+					>{m.movements_order_asc()}</option
+				>
+			</select>
+		</div>
 		<Button type="submit" variant="primary">{m.movements_apply()}</Button>
 	</fieldset>
 </form>

@@ -1,6 +1,6 @@
 // Lectura paginada del consumo del panel (BE-FR-49.4; T263). Solo lee `ai_operations` (su dueña): el nombre de la app lo resuelve
 // la ruta con `apps`. Sin contenido de los mensajes ni datos del proveedor.
-import { and, desc, eq, gte, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { EpochMs } from '$lib/shared/time';
 import { aiOperations } from './schema';
@@ -32,12 +32,14 @@ export function consumptionPage(
 		readonly toMs: EpochMs | null;
 		readonly appId: string | null;
 		readonly page: number;
+		readonly order?: 'asc' | 'desc';
 	}
 ): ConsumptionPage {
 	const conditions = [eq(aiOperations.userId, input.userId)];
 	if (input.fromMs !== null) conditions.push(gte(aiOperations.createdAt, input.fromMs));
 	if (input.toMs !== null) conditions.push(lte(aiOperations.createdAt, input.toMs));
 	if (input.appId !== null) conditions.push(eq(aiOperations.appId, input.appId));
+	const byDate = input.order === 'asc' ? asc : desc;
 	const found = db
 		.select({
 			createdAt: aiOperations.createdAt,
@@ -48,7 +50,7 @@ export function consumptionPage(
 		})
 		.from(aiOperations)
 		.where(and(...conditions))
-		.orderBy(desc(aiOperations.createdAt), desc(aiOperations.id))
+		.orderBy(byDate(aiOperations.createdAt), byDate(aiOperations.id))
 		.limit(CONSUMPTION_PAGE_SIZE + 1)
 		.offset((input.page - 1) * CONSUMPTION_PAGE_SIZE)
 		.all();

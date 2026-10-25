@@ -82,6 +82,17 @@
 			label={m.movements_to_label()}
 			value={data.filters.hasta}
 		/>
+		<div class="field">
+			<label for="ficha-orden">{m.movements_order_label()}</label>
+			<select id="ficha-orden" name="orden">
+				<option value="desc" selected={data.filters.orden !== 'asc'}
+					>{m.movements_order_desc()}</option
+				>
+				<option value="asc" selected={data.filters.orden === 'asc'}
+					>{m.movements_order_asc()}</option
+				>
+			</select>
+		</div>
 		<Button type="submit" variant="secondary">{m.movements_apply()}</Button>
 	</fieldset>
 </form>

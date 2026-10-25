@@ -1,10 +1,13 @@
 // Filtros de las listas del panel (UX-09, BE-FR-49.8; T251). Las fechas van en `dd/mm/aaaa` o ISO; la página es un entero ≥ 1
-// escrito solo con dígitos (sin coerción implícita, que convertiría «2x» o «» sin avisar); el periodo solo admite 30 o 90.
+// escrito solo con dígitos (sin coerción implícita, que convertiría «2x» o «» sin avisar); el periodo solo admite 30 o 90;
+// el orden por fecha solo admite `asc` o `desc` (por defecto, el más reciente primero).
 import type { CivilDate } from '$lib/shared/time';
 import { parseDateEs } from './date-es';
 
 const MESSAGE = 'validation_invalid';
 const WHOLE_PAGE = /^[1-9]\d*$/;
+
+export type DateOrder = 'asc' | 'desc';
 
 export interface PanelFilters {
 	readonly desde: CivilDate | null;
@@ -12,6 +15,7 @@ export interface PanelFilters {
 	readonly app: string | null;
 	readonly pagina: number;
 	readonly periodo: 30 | 90 | null;
+	readonly orden: DateOrder;
 }
 
 export type FilterResult =
@@ -28,9 +32,10 @@ export function parsePanelFilters(
 	if (desde !== null && hasta !== null && desde > hasta) errors.hasta = MESSAGE;
 	const pagina = pageOf(input.pagina, errors);
 	const periodo = periodOf(input.periodo, errors);
+	const orden = orderOf(input.orden, errors);
 	if (Object.keys(errors).length > 0) return { ok: false, errors };
 	const app = input.app === undefined || input.app === '' ? null : input.app;
-	return { ok: true, value: { desde, hasta, app, pagina, periodo } };
+	return { ok: true, value: { desde, hasta, app, pagina, periodo, orden } };
 }
 
 function dateOf(
@@ -64,6 +69,13 @@ function periodOf(text: string | undefined, errors: Record<string, string>): 30 
 	return null;
 }
 
+function orderOf(text: string | undefined, errors: Record<string, string>): DateOrder {
+	if (text === undefined || text === '' || text === 'desc') return 'desc';
+	if (text === 'asc') return 'asc';
+	errors.orden = MESSAGE;
+	return 'desc';
+}
+
 /** `aaaa-mm-dd` → `dd/mm/aaaa`, el formato que escribe la persona en el formulario. */
 function formatEs(day: string): string {
 	const [year = '', month = '', date = ''] = day.split('-');
@@ -76,6 +88,7 @@ export function queryOfFilters(filters: PanelFilters, page: number | null): stri
 	if (filters.desde !== null) params.set('desde', formatEs(filters.desde));
 	if (filters.hasta !== null) params.set('hasta', formatEs(filters.hasta));
 	if (filters.app !== null) params.set('app', filters.app);
+	if (filters.orden === 'asc') params.set('orden', 'asc');
 	if (page !== null && page > 1) params.set('pagina', String(page));
 	const query = params.toString();
 	return query === '' ? '' : `?${query}`;

@@ -729,8 +729,9 @@ export interface MovementsPage {
 }
 
 /**
- * Movimientos de una cuenta, más recientes primero, de 25 en 25 (BE-FR-49.3). Sin motivos del administrador ni ids de bolsa:
- * el panel no los muestra. El rango se da en milisegundos (el llamador lo calcula con el día de Madrid).
+ * Movimientos de una cuenta por fecha, de 25 en 25 (BE-FR-49.3; UX-09). Por defecto, los más recientes primero. Sin motivos
+ * del administrador ni ids de bolsa: el panel no los muestra. El rango se da en milisegundos (el llamador lo calcula con el
+ * día de Madrid).
  */
 export function movementsPage(
 	deps: CreditsDeps,
@@ -740,12 +741,14 @@ export function movementsPage(
 		readonly toMs: EpochMs | null;
 		readonly appId: string | null;
 		readonly page: number;
+		readonly order?: 'asc' | 'desc';
 	}
 ): MovementsPage {
 	const conditions = [eq(creditMovements.userId, input.userId)];
 	if (input.fromMs !== null) conditions.push(gte(creditMovements.createdAt, input.fromMs));
 	if (input.toMs !== null) conditions.push(lte(creditMovements.createdAt, input.toMs));
 	if (input.appId !== null) conditions.push(eq(creditMovements.appId, input.appId));
+	const byDate = input.order === 'asc' ? asc : desc;
 	const found = deps.db
 		.select({
 			createdAt: creditMovements.createdAt,
@@ -755,7 +758,7 @@ export function movementsPage(
 		})
 		.from(creditMovements)
 		.where(and(...conditions))
-		.orderBy(desc(creditMovements.createdAt), desc(creditMovements.id))
+		.orderBy(byDate(creditMovements.createdAt), byDate(creditMovements.id))
 		.limit(MOVEMENTS_PAGE_SIZE + 1)
 		.offset((input.page - 1) * MOVEMENTS_PAGE_SIZE)
 		.all();

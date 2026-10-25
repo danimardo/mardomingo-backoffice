@@ -62,7 +62,8 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 		fromMs,
 		toMs,
 		appId: parsed.value.app,
-		page: parsed.value.pagina
+		page: parsed.value.pagina,
+		order: parsed.value.orden
 	});
 	const appNames = appNamesOf(
 		composition.apps,

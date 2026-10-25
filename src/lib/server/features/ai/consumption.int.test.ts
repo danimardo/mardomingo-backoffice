@@ -49,6 +49,22 @@ describe('consumptionPage (BE-FR-49.4)', () => {
 		expect(page.pagination).toEqual({ page: 1, hasPrevious: false, hasNext: false });
 	});
 
+	it('[UX-09] ordena por fecha ascendente cuando se pide', () => {
+		operation(userId, 'ok', 776_480);
+		operation(userId, 'provider_error', 0);
+
+		const ascending = consumptionPage(f.db, {
+			userId,
+			fromMs: null,
+			toMs: null,
+			appId: null,
+			page: 1,
+			order: 'asc'
+		});
+
+		expect(ascending.rows.map((row) => row.status)).toEqual(['ok', 'provider_error']);
+	});
+
 	it('pagina de veinticinco en veinticinco', () => {
 		for (let index = 0; index < 26; index += 1) operation(userId, 'ok', 1_000);
 

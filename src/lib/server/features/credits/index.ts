@@ -176,6 +176,7 @@ export interface Credits {
 		readonly toMs: EpochMs | null;
 		readonly appId: string | null;
 		readonly page: number;
+		readonly order?: 'asc' | 'desc';
 	}): MovementsPage;
 	/** Bolsa de bienvenida de la cuenta, para W19. */
 	welcomeOf(

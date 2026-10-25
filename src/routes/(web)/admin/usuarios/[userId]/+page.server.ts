@@ -6,7 +6,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { consumptionPage } from '$lib/server/features/ai';
-import { parsePanelFilters } from '$lib/schemas/common/filters';
+import { parsePanelFilters, type DateOrder } from '$lib/schemas/common/filters';
 import { addDays, madridMidnight } from '$lib/shared/dates';
 import { fetchLimit, pageNumber, sliceOf } from '$lib/shared/paging';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
@@ -54,15 +54,17 @@ const PAGE_KEYS = Object.freeze([
 function rangeOf(params: URLSearchParams): {
 	readonly desde: string;
 	readonly hasta: string;
+	readonly orden: DateOrder;
 	readonly fromMs: EpochMs | null;
 	readonly toMs: EpochMs | null;
 } {
 	const parsed = parsePanelFilters(Object.fromEntries(params));
-	if (!parsed.ok) return { desde: '', hasta: '', fromMs: null, toMs: null };
-	const { desde, hasta } = parsed.value;
+	if (!parsed.ok) return { desde: '', hasta: '', orden: 'desc', fromMs: null, toMs: null };
+	const { desde, hasta, orden } = parsed.value;
 	return {
 		desde: desde === null ? '' : String(desde),
 		hasta: hasta === null ? '' : String(hasta),
+		orden,
 		fromMs: desde === null ? null : madridMidnight(desde),
 		toMs: hasta === null ? null : toEpochMs(madridMidnight(addDays(hasta, 1)) - 1)
 	};
@@ -91,14 +93,16 @@ export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 		fromMs: range.fromMs,
 		toMs: range.toMs,
 		appId: null,
-		page: page('pag_movimientos')
+		page: page('pag_movimientos'),
+		order: range.orden
 	});
 	const consumption = consumptionPage(composition.db, {
 		userId,
 		fromMs: range.fromMs,
 		toMs: range.toMs,
 		appId: null,
-		page: page('pag_consumo')
+		page: page('pag_consumo'),
+		order: range.orden
 	});
 	const buckets = sliceOf(
 		bucketsForAdmin(composition.db, userId, fetchLimit(page('pag_bolsas'))),
@@ -123,6 +127,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 	const keep: Record<string, string> = {};
 	if (range.desde !== '') keep.desde = range.desde;
 	if (range.hasta !== '') keep.hasta = range.hasta;
+	if (range.orden === 'asc') keep.orden = 'asc';
 	for (const key of PAGE_KEYS) {
 		const value = url.searchParams.get(key);
 		if (value !== null && value !== '') keep[key] = value;
@@ -131,7 +136,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 	return {
 		saved,
 		account,
-		filters: { desde: range.desde, hasta: range.hasta },
+		filters: { desde: range.desde, hasta: range.hasta, orden: range.orden },
 		keep,
 		balance: {
 			totalMicro: balance.totalMicro,
