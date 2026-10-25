@@ -1,4 +1,7 @@
 <script lang="ts">
+	// Estados: orden activo anunciado con `aria-sort`; sin filas, el llamador muestra `EmptyState`. Teclado: los encabezados de
+	// orden son enlaces GET enfocables y el contenedor con desplazamiento también. Temas: colores de tokens en claro y oscuro.
+	// Efectos reducidos: sin transiciones ni cristal propios.
 	// Tabla de datos del panel (DS-06; T255). Encabezados `th scope="col"` con `aria-sort`; el orden es un enlace GET (sin
 	// JavaScript). En pantallas estrechas la tabla se desplaza dentro de su contenedor, que es enfocable y tiene nombre.
 	interface Column {

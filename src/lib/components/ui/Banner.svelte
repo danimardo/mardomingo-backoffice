@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Estados: «Información», «Aviso» y «Crítico», con texto, color e icono. Teclado: solo los enlaces que contenga, nativos.
+	// Temas: colores de tokens en claro y oscuro. Efectos reducidos: sin transiciones ni cristal propios.
 	// Banner de estado (DS-06; T255). El nivel se escribe como texto además del color y del icono: «Información», «Aviso» o
 	// «Crítico». `critical` se anuncia con `role="alert"`, por el componente `Notice`.
 	import type { Snippet } from 'svelte';

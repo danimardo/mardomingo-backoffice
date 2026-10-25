@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Estados: el selector de tema y el de efectos (`ThemeToggle` y `EffectsToggle`) muestran la elección actual. Teclado: son
+	// formularios, sin JavaScript. Temas y efectos reducidos: sus colores son tokens.
 	// Pie: texto de la marca, enlaces a los documentos legales y soporte, y los controles de apariencia, que vuelven a la
 	// página actual tras enviarse. Los documentos legales están siempre a un enlace (BE-FR-60, BE-FR-70 CA2).
 	import { resolve } from '$app/paths';

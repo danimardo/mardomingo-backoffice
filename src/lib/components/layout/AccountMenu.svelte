@@ -1,4 +1,7 @@
 <script lang="ts">
+	// Estados: sin sesión (enlaces de entrada y registro) o con sesión (menú cerrado o abierto, con «Administración» solo para
+	// administradores). Teclado: Enter o Espacio abren el `<summary>` y los enlaces son nativos; sin JavaScript no hay Escape
+	// (T361). Temas: tokens en claro y oscuro. Efectos reducidos: fondo sólido, sin cristal ni transiciones.
 	// Menú de cuenta de la cabecera (T044; 16.5). Sin sesión, «Entrar» y «Crear cuenta»; con sesión, un menú con el panel, la
 	// administración (solo a quien pasa su guarda) y «Salir». Es un `<details>`: abre y cierra sin JavaScript y el teclado
 	// lo maneja el navegador. «Salir» lleva a la página de cierre de sesión (W15), que lo hace por formulario.
@@ -53,6 +56,10 @@
 		color: var(--color-text-primary);
 		text-decoration: none;
 		cursor: pointer;
+	}
+
+	a {
+		text-decoration: underline;
 	}
 
 	a:hover,

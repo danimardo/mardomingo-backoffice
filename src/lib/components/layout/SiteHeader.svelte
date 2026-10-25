@@ -1,4 +1,7 @@
 <script lang="ts">
+	// Estados: página actual con `aria-current="page"`; el menú de cuenta cambia según la sesión. Teclado: enlaces y
+	// menú nativos, con foco visible. Temas: tokens en claro y oscuro. Efectos reducidos: el cristal se anula con
+	// `data-effects="reduced"` y con `prefers-reduced-transparency`, y pasa a fondo opaco.
 	// Cabecera con marca, navegación y menú de cuenta. Material de cristal con alternativa opaca (DS-05, §16.10). El enlace
 	// de la página actual lleva `aria-current="page"` (16.5).
 	import { page } from '$app/state';
@@ -52,7 +55,7 @@
 		font-size: var(--font-size-lg);
 		font-weight: var(--font-weight-title);
 		color: var(--color-text-primary);
-		text-decoration: none;
+		text-decoration: underline;
 	}
 
 	nav {
@@ -68,16 +71,11 @@
 		min-height: 44px;
 		padding: 0 var(--space-3);
 		color: var(--color-text-primary);
-		text-decoration: none;
-	}
-
-	nav > a:hover {
 		text-decoration: underline;
 	}
 
 	nav > a[aria-current='page'] {
 		font-weight: var(--font-weight-control);
-		text-decoration: underline;
 	}
 
 	nav > a:focus-visible,
