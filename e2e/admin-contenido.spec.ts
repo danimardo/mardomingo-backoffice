@@ -6,10 +6,10 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { request as playwrightRequest, type Page } from '@playwright/test';
 import { E2E_ADMIN_EMAIL } from './constants';
+import { ensureAdminAccount, loginAsAdmin } from './admin-account';
 import { expect, test } from './fixtures';
 import { checkAccessibility } from './fixtures/axe';
 import {
-	PASSWORD,
 	registerThroughForm,
 	uniqueGmail,
 	verificationTokenFor,
@@ -29,38 +29,8 @@ test.use({ guardAllow: [/status of 400 \(Bad Request\)|__data\.json.*ERR_ABORTED
 const email = E2E_ADMIN_EMAIL;
 
 test.beforeAll(async ({ baseURL }) => {
-	const base = baseURL ?? 'http://localhost:7390';
-	const dbPath = readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8');
-	const existing = new Database(dbPath);
-	const known = existing.prepare('SELECT 1 FROM user WHERE email = ?').get(email) !== undefined;
-	existing.close();
-	if (!known) {
-		const request = await playwrightRequest.newContext({ baseURL: base });
-		try {
-			await registerThroughForm(request, base, email);
-			await verifyThroughForm(request, base, verificationTokenFor(email));
-		} finally {
-			await request.dispose();
-		}
-	}
-	const db = new Database(dbPath);
-	try {
-		db.prepare("UPDATE user SET role = 'user' WHERE role = 'admin' AND email <> ?").run(email);
-		db.prepare("UPDATE user SET role = 'admin' WHERE email = ?").run(email);
-	} finally {
-		db.close();
-	}
+	await ensureAdminAccount(baseURL);
 });
-
-async function loginAsAdmin(page: Page): Promise<void> {
-	await page.goto('/login');
-	await page.waitForLoadState('networkidle');
-	await page.getByLabel('Email').fill(email);
-	await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
-	await page.getByRole('button', { name: 'Entrar' }).click();
-	await page.waitForLoadState('networkidle');
-	await expect(page).toHaveURL(/\/panel$/);
-}
 
 // --- Documentos legales (W48) ---
 

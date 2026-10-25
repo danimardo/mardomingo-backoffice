@@ -39,6 +39,9 @@ const ADMIN_SPEC = /admin-contenido\.spec\.ts/;
 /** Publica una versión legal con reaceptación para todas las cuentas: corre el último, en su proyecto (T288). */
 const LEGAL_LAST_SPEC = /legal-critico7\.spec\.ts/;
 
+/** Mantenimiento, copia de predeterminados, cierre de sesiones y reembolso: corre el último, en su proyecto (T322). */
+const ADMIN_FINAL_SPEC = /admin-cierre\.spec\.ts/;
+
 export default defineConfig({
 	testDir: 'e2e',
 	// La matriz completa de 16.11 (T357) corre solo en la nocturna; la validación diaria no la ejecuta.
@@ -69,7 +72,7 @@ export default defineConfig({
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Chrome'] },
-			testIgnore: /.*\.setup\.ts/
+			testIgnore: [/.*\.setup\.ts/, ADMIN_FINAL_SPEC]
 		},
 		{
 			name: 'firefox',
@@ -77,27 +80,34 @@ export default defineConfig({
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Firefox'] },
 			// Un solo administrador por base (índice one_admin): este spec corre solo en chromium (ver ADMIN_SPEC).
-			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC]
 		},
 		{
 			name: 'webkit',
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Safari'] },
-			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC]
 		},
 		{
 			name: 'mobile-webkit',
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['iPhone 13'] },
-			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC]
+			testIgnore: [/.*.setup.ts/, ADMIN_SPEC, LEGAL_LAST_SPEC, ADMIN_FINAL_SPEC]
 		},
 		{
 			name: 'legal-critico7',
 			// Corre después de todos los navegadores: publicar una versión legal afecta a todas las cuentas de la base (T288).
 			dependencies: ['setup', 'chromium', 'firefox', 'webkit', 'mobile-webkit'],
 			testMatch: LEGAL_LAST_SPEC,
+			use: { ...devices['Desktop Chrome'] }
+		},
+		{
+			name: 'admin-cierre',
+			// Corre el último: el mantenimiento corta el chat de todas las cuentas y el reembolso cambia el saldo de la cuenta del E2E (T322).
+			dependencies: ['setup', 'chromium', 'firefox', 'webkit', 'mobile-webkit', 'legal-critico7'],
+			testMatch: ADMIN_FINAL_SPEC,
 			use: { ...devices['Desktop Chrome'] }
 		},
 		{
