@@ -1,6 +1,7 @@
 // Crítico 7 (T288, BE-FR-70, BE-FR-07): una versión legal que exige aceptación publicada por el administrador avisa en el
-// panel, y la API de app responde `TERMS_ACCEPTANCE_REQUIRED` hasta que el usuario acepta. Publicar cambia la base para
-// todas las cuentas, así que este spec corre en su propio proyecto (`legal-critico7`), después de todos los demás.
+// panel, y la API de app responde `TERMS_ACCEPTANCE_REQUIRED` hasta que el usuario acepta. Crítico 10 en su parte legal: la
+// aceptación se envía sin JavaScript. Publicar cambia la base para todas las cuentas, así que este spec corre en su propio
+// proyecto (`legal-critico7`), después de todos los demás, y sus pruebas van en serie.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -10,10 +11,14 @@ import { E2E_ADMIN_EMAIL } from './constants';
 import { checkAccessibility } from './fixtures/axe';
 import { PASSWORD, registerThroughForm, verificationTokenFor, verifyThroughForm } from './outbox';
 
+test.describe.configure({ mode: 'serial' });
+
 const DB_POINTER = join('test-results', 'e2e', 'db-path.txt');
 const USER_EMAIL = 'usuario.e2e@ejemplo.es';
 /** Versión nueva del documento: posterior a la sembrada y única en cada ejecución (la base es nueva en cada una). */
 const NEW_VERSION = '2090-01-01';
+/** Segunda versión, solo de términos, para la prueba sin JavaScript: los demás documentos ya están aceptados. */
+const NEW_VERSION_SIN_JS = '2090-01-02';
 const CHAT_BODY = JSON.stringify({
 	operation: 'improve',
 	messages: [{ role: 'user', content: 'Revisa este párrafo, por favor.' }]
@@ -72,6 +77,41 @@ async function appTokenFor(api: APIRequestContext, origin: string): Promise<stri
 	return token;
 }
 
+/** Publica una versión de los términos con reaceptación como administrador, por formulario (W-admin `publicar`). */
+async function publicarTerminos(origin: string, version: string): Promise<void> {
+	const admin = await playwrightRequest.newContext({ baseURL: origin });
+	try {
+		const login = await admin.post('/login?/entrar', {
+			headers: {
+				'content-type': 'application/x-www-form-urlencoded',
+				accept: 'text/html',
+				origin
+			},
+			form: { email: adminEmail, password: PASSWORD, redirectTo: '/admin' },
+			maxRedirects: 0
+		});
+		expect(login.status()).toBeLessThan(400);
+		const published = await admin.post('/admin/legal?/publicar', {
+			headers: {
+				'content-type': 'application/x-www-form-urlencoded',
+				accept: 'text/html',
+				origin
+			},
+			form: {
+				documento: 'terms',
+				version,
+				contenido: 'Términos de prueba E2E con reaceptación.',
+				requiereReaceptacion: 'true',
+				confirmado: 'true'
+			},
+			maxRedirects: 0
+		});
+		expect(published.status()).toBe(303);
+	} finally {
+		await admin.dispose();
+	}
+}
+
 test.beforeAll(async ({ baseURL }) => {
 	const base = baseURL ?? 'http://localhost:7390';
 	adminEmail = E2E_ADMIN_EMAIL;
@@ -105,38 +145,8 @@ test('@BE-FR-70 @BE-FR-07 @UX-11 una versión legal que exige aceptación bloque
 	const origin = baseURL ?? 'http://localhost:7390';
 	const apiOrigin = origin.replace('localhost', '127.0.0.1');
 
-	// 1. El administrador publica la nueva versión de los términos con reaceptación (W-admin `publicar`).
-	const admin = await playwrightRequest.newContext({ baseURL: origin });
-	try {
-		const login = await admin.post('/login?/entrar', {
-			headers: {
-				'content-type': 'application/x-www-form-urlencoded',
-				accept: 'text/html',
-				origin
-			},
-			form: { email: adminEmail, password: PASSWORD, redirectTo: '/admin' },
-			maxRedirects: 0
-		});
-		expect(login.status()).toBeLessThan(400);
-		const published = await admin.post('/admin/legal?/publicar', {
-			headers: {
-				'content-type': 'application/x-www-form-urlencoded',
-				accept: 'text/html',
-				origin
-			},
-			form: {
-				documento: 'terms',
-				version: NEW_VERSION,
-				contenido: 'Términos de prueba E2E con reaceptación.',
-				requiereReaceptacion: 'true',
-				confirmado: 'true'
-			},
-			maxRedirects: 0
-		});
-		expect(published.status()).toBe(303);
-	} finally {
-		await admin.dispose();
-	}
+	// 1. El administrador publica la nueva versión de los términos con reaceptación.
+	await publicarTerminos(origin, NEW_VERSION);
 
 	// 2. La API de app, con el token del usuario, responde TERMS_ACCEPTANCE_REQUIRED.
 	const api = await playwrightRequest.newContext({ baseURL: apiOrigin });
@@ -199,4 +209,38 @@ test('@BE-FR-70 @BE-FR-07 @UX-11 una versión legal que exige aceptación bloque
 	} finally {
 		await after.dispose();
 	}
+});
+
+// Crítico 10 (T288, sin JavaScript): la aceptación de un documento pendiente se envía con el formulario del panel y el aviso desaparece.
+test.describe('sin JavaScript', () => {
+	test.use({
+		javaScriptEnabled: false,
+		guardAllow: [
+			/__data\.json.*ERR_ABORTED|requestfailed: .*\(csp\)|status of 400|Load request cancelled/
+		]
+	});
+
+	test('@critical @BE-FR-70 @BE-FR-07 @UX-11 aceptar un documento pendiente se envía sin JavaScript', async ({
+		page,
+		baseURL
+	}) => {
+		const origin = baseURL ?? 'http://localhost:7390';
+		await publicarTerminos(origin, NEW_VERSION_SIN_JS);
+
+		await page.goto('/login');
+		await page.getByLabel('Email').fill(USER_EMAIL);
+		await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+		await page.getByRole('button', { name: 'Entrar' }).click();
+		await expect(page).toHaveURL(/\/panel$/);
+
+		await expect(page.getByText('Hay documentos legales pendientes de aceptar.')).toBeVisible();
+		const form = page.locator('form[action="?/aceptarDocumentos"]');
+		// Solo los términos cambian de versión: el aviso pide aceptar uno, no los tres.
+		await expect(form.getByRole('checkbox')).toHaveCount(1);
+		await form.getByRole('checkbox').check();
+		await form.getByRole('button', { name: 'Aceptar documentos' }).click();
+
+		await expect(page).toHaveURL(/\/panel\?aviso=terms_accepted$/);
+		await expect(page.getByText('Hay documentos legales pendientes de aceptar.')).toHaveCount(0);
+	});
 });
