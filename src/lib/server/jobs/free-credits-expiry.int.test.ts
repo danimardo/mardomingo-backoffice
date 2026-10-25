@@ -21,9 +21,9 @@ function run(): Promise<number> {
 	return runFreeCreditsExpiry({
 		credits: fixture.credits,
 		emailOf: () => 'cuenta@ejemplo.es',
-		sendWarning: async (warning) => {
+		sendWarning: (warning) => {
 			sent.push(warning);
-			return sendOk;
+			return Promise.resolve(sendOk);
 		},
 		warningDays: WARNING_DAYS
 	});
