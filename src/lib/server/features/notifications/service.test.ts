@@ -85,4 +85,20 @@ describe('sendAccountEmail', () => {
 		expect(JSON.stringify(failed)).toContain('rate_limit_exceeded');
 		expect(JSON.stringify(logger)).not.toContain(ADDRESS);
 	});
+
+	it('[T329] un rechazo por validación se registra en error, y no en warn como los demás fallos', async () => {
+		const { deps, sender, logger } = depsWith();
+		sender.fail('validation_error');
+
+		await sendAccountEmail(deps, {
+			reason: 'verification',
+			to: ADDRESS,
+			link: 'https://cuenta.mardomingo.com/verificar?token=abc',
+			idempotencyKey: 'verification-validation'
+		});
+
+		expect(eventsNamed(logger, 'notifications.email.rejected')).toHaveLength(1);
+		expect(eventsNamed(logger, 'notifications.email.failed')).toHaveLength(0);
+		expect(JSON.stringify(logger)).not.toContain(ADDRESS);
+	});
 });

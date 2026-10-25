@@ -29,6 +29,7 @@ export type AlertType =
 export interface NotificationsLogFields {
 	'notifications.email.sent': { reason: EmailReason };
 	'notifications.email.failed': { reason: EmailReason; provider: string; errorCode: string };
+	'notifications.email.rejected': { reason: EmailReason; provider: string; errorCode: string };
 	'notifications.alert.triggered': { type: AlertType };
 	'notifications.alert.suppressed': { type: AlertType };
 	'notifications.alert.rearmed': { type: AlertType };
@@ -37,6 +38,10 @@ export interface NotificationsLogFields {
 export const NOTIFICATIONS_LOG_EVENTS = Object.freeze({
 	'notifications.email.sent': { level: 'info', msg: 'Email enviado' },
 	'notifications.email.failed': { level: 'warn', msg: 'Email no enviado' },
+	'notifications.email.rejected': {
+		level: 'error',
+		msg: 'Email rechazado por validación del proveedor'
+	},
 	'notifications.alert.triggered': { level: 'warn', msg: 'Alerta al administrador disparada' },
 	'notifications.alert.suppressed': { level: 'debug', msg: 'Alerta ya activa: no se repite' },
 	'notifications.alert.rearmed': {

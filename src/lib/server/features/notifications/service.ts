@@ -92,7 +92,12 @@ export async function sendAccountEmail(
 		deps.logger.emit('notifications.email.sent', { reason: email.reason });
 		return true;
 	}
-	deps.logger.emit('notifications.email.failed', {
+	// Un rechazo por validación del proveedor es un error de nuestro lado (T329): va en su propio evento, a nivel error.
+	const event =
+		result.errorCode === 'validation_error'
+			? 'notifications.email.rejected'
+			: 'notifications.email.failed';
+	deps.logger.emit(event, {
 		reason: email.reason,
 		provider: PROVIDER,
 		errorCode: result.errorCode
