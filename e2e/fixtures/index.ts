@@ -7,6 +7,8 @@ import { test as base, expect } from '@playwright/test';
 declare global {
 	interface Window {
 		__sinRecarga?: boolean;
+		/** INP de laboratorio medido por `e2e/perf/web-vitals.spec.ts` (T371). */
+		__inp?: number;
 	}
 }
 

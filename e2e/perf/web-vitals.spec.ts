@@ -156,12 +156,41 @@ test.describe('presupuesto del cristal en perfil móvil (T371)', () => {
 			await page.setViewportSize({ width: 390, height: 844 });
 			await page.waitForTimeout(200);
 
+			// INP (T371): la mayor duración de las interacciones de tipo `event` desde que se instala el observador.
+			await page.evaluate(() => {
+				window.__inp = 0;
+				new PerformanceObserver((list) => {
+					for (const entry of list.getEntries()) {
+						const id = 'interactionId' in entry ? Number(entry.interactionId) : 0;
+						if (id > 0) window.__inp = Math.max(window.__inp ?? 0, entry.duration);
+					}
+				}).observe({ type: 'event', durationThreshold: 16, buffered: true });
+			});
+
 			// El menú de cuenta es un `<details>` con su `<summary>` (`AccountMenu.svelte`).
 			const menu = page.locator('details > summary', { hasText: 'Cuenta' }).first();
 			const menuOpened = (await menu.count()) > 0;
 			if (menuOpened) {
 				await menu.click();
 				await page.waitForTimeout(300);
+			}
+			const inp = await page.evaluate(() => window.__inp ?? 0);
+			testInfo.annotations.push({ type: 'inp-ms', description: String(Math.round(inp)) });
+			if (menuOpened) {
+				expect(inp, `INP tras abrir el menú (${effects})`).toBeLessThanOrEqual(200);
+				recordUx(
+					testInfo,
+					'web-vitals-inp',
+					'comprobado',
+					`/panel (${effects}): INP ${String(Math.round(inp))} ms (laboratorio)`
+				);
+			} else {
+				recordUx(
+					testInfo,
+					'web-vitals-inp',
+					'pendiente',
+					'no hay menú de cuenta con ese nombre para medir INP'
+				);
 			}
 
 			const vitals = await observe(page, 300);
