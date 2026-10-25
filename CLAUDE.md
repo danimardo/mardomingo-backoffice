@@ -81,6 +81,13 @@ arquitectura se ejecuta siempre al cerrar un lote: `test:related` no lo seleccio
 
 Gestor de paquetes: **pnpm** (no uses npm ni yarn). Node 24.21.0 y pnpm 12.8.1.
 
+### Operaciones y smoke tras despliegue
+
+- Procedimientos de operación en `docs/operaciones/`: `restauracion.md` (simulacro de restauración de Litestream, T372) y
+  `verificacion-staging.md` (proxy e IP real, T373, y verificaciones manuales de staging).
+- Tras cada despliegue, `e2e/smoke.spec.ts` contra la URL desplegada (solo lectura, sin crear datos en producción) más
+  `GET /api/v1/health` (T374). En local, `pnpm test:e2e:smoke` contra el build.
+
 ## Reglas de trabajo
 
 - **No ejecutes check, lint y tests a la vez.** Encadénalos y anota cuánto tarda cada uno.

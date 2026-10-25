@@ -34,6 +34,15 @@ jobs:
       - run: pnpm exec playwright install --with-deps ${{ matrix.project == 'mobile-webkit' && 'webkit' || matrix.project }}
       - run: pnpm build
       - run: pnpm exec playwright test --project=${{ matrix.project }}
+      # Estado de la matriz de UX (16.11) en cada noche, también en verde (T365). Lo escribe `e2e/fixtures/ux-emulation.ts`.
+      - name: Estado de UX (siempre)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ux-status-${{ matrix.project }}
+          path: test-results/ux-status.jsonl
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Artefactos (vídeo y trazas)
         if: failure()
         uses: actions/upload-artifact@v4
