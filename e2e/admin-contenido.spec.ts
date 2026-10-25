@@ -698,3 +698,49 @@ test('la copia a predeterminados muestra la vista previa sin nada preseleccionad
 	await page.waitForLoadState('networkidle');
 	await expect(page.getByRole('alert')).toContainText('No has marcado ningún elemento.');
 });
+
+// Teclado y sin JavaScript en administración (T361; T322). Usan la cuenta de `beforeAll` de este fichero, que es la única
+// que garantiza el rol de administrador en cualquier orden de ejecución.
+test('@UX-16 la navegación de administración se recorre con Tab y Mayús+Tab, con foco visible', async ({
+	page
+}) => {
+	await loginAsAdmin(page);
+	await page.goto('/admin');
+	await page.waitForLoadState('networkidle');
+
+	const navSelector = 'nav[aria-label="Navegación de administración"]';
+	const insideNav = (): Promise<boolean> =>
+		page.evaluate((selector) => document.activeElement?.closest(selector) !== null, navSelector);
+	let entered = false;
+	for (let step = 0; step < 40 && !entered; step += 1) {
+		await page.keyboard.press('Tab');
+		entered = await insideNav();
+	}
+	expect(entered, 'Tab llega a la navegación de administración').toBe(true);
+
+	const outline = await page.evaluate(
+		() => getComputedStyle(document.activeElement ?? document.body).outlineStyle
+	);
+	expect(outline, 'el foco de la navegación es visible').not.toBe('none');
+
+	await page.keyboard.press('Shift+Tab');
+	await page.keyboard.press('Shift+Tab');
+	expect(await insideNav(), 'Mayús+Tab sale de la navegación').toBe(false);
+});
+
+test.describe('administración sin JavaScript', () => {
+	test.use({ javaScriptEnabled: false, guardAllow: [/requestfailed: .*\(csp\)/] });
+
+	test('@critical @UX-16 el filtro de usuarios por GET muestra la búsqueda en la URL sin JavaScript', async ({
+		page
+	}) => {
+		await loginAsAdmin(page);
+
+		await page.goto('/admin/usuarios');
+		await page.locator('#busqueda').fill('usuario.e2e');
+		await page.getByRole('button', { name: 'Buscar' }).click();
+
+		await expect(page).toHaveURL(/q=usuario\.e2e/);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+	});
+});

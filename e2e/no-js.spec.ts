@@ -1,8 +1,7 @@
 // Flujos públicos sin JavaScript (T360; UX-16; constitución «Mejora progresiva»). Las páginas se leen y sus formularios se envían
 // sin JavaScript. El captcha del registro es la única excepción permitida: sin él, el registro se rechaza y lo dice.
 import { expect, test } from './fixtures';
-import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD, SETUP_ADMIN_EMAIL } from './constants';
-import { PASSWORD } from './outbox';
+import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD } from './constants';
 
 test.use({ javaScriptEnabled: false });
 test.use({ guardAllow: [/requestfailed: .*\(csp\)|status of 400|status of 401/] });
@@ -113,24 +112,5 @@ test.describe('panel sin JavaScript', () => {
 		).toBeChecked({
 			checked: !before
 		});
-	});
-});
-
-test.describe('administración sin JavaScript (cuenta de administración por formulario)', () => {
-	test('@critical @UX-16 el filtro de usuarios por GET muestra la búsqueda en la URL sin JavaScript', async ({
-		page
-	}) => {
-		await page.goto('/login');
-		await page.getByLabel('Email').fill(SETUP_ADMIN_EMAIL);
-		await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
-		await page.getByRole('button', { name: 'Entrar' }).click();
-		await expect(page).toHaveURL(/\/panel$/);
-
-		await page.goto('/admin/usuarios');
-		await page.locator('#busqueda').fill('usuario.e2e');
-		await page.getByRole('button', { name: 'Buscar' }).click();
-
-		await expect(page).toHaveURL(/q=usuario\.e2e/);
-		await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 	});
 });
