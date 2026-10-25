@@ -41,6 +41,8 @@ const LEGAL_LAST_SPEC = /legal-critico7\.spec\.ts/;
 
 export default defineConfig({
 	testDir: 'e2e',
+	// La matriz completa de 16.11 (T357) corre solo en la nocturna; la validación diaria no la ejecuta.
+	testIgnore: nightly ? [] : [/ux-matrix-nocturna\.spec\.ts/],
 	globalSetup: './e2e/global-setup.ts',
 	outputDir: join(E2E_DIR, 'artifacts'),
 	fullyParallel: true,
