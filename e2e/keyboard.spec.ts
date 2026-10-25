@@ -111,3 +111,20 @@ for (const route of ['/', '/login', '/registro', '/precios']) {
 		expect(small, small.join(' | ')).toEqual([]);
 	});
 }
+
+// Título y encabezado (16.5; WCAG 2.4.2): el `h1` coincide con la parte del `<title>` antes de un separador de marca, si la
+// hay. El texto del enlace de navegación no se compara: puede ser más corto que el `h1` («Precios» frente a «Precios orientativos»).
+
+for (const route of ['/login', '/registro', '/precios', '/recuperar']) {
+	test(`@UX-16 ${route} el h1 coincide con la parte del título antes de la marca`, async ({
+		page
+	}) => {
+		await page.goto(route);
+		await page.waitForLoadState('networkidle');
+
+		const title = await page.title();
+		const heading = (await page.getByRole('heading', { level: 1 }).textContent())?.trim() ?? '';
+		const beforeBrand = title.split(' · ')[0]?.split(' — ')[0]?.split(' | ')[0]?.trim() ?? '';
+		expect(beforeBrand).toBe(heading);
+	});
+}
