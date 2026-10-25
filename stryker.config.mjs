@@ -3,7 +3,9 @@
 // fija una línea base y después el umbral que bloquea la release.
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 const config = {
-	plugins: ['@stryker-mutator/vitest-runner'],
+	// Stryker y su runner viven en tools/mutacion (Vitest 4.x, T368): el proyecto usa Vitest 5 y el runner
+	// de Stryker 10 no lo soporta. Ruta relativa al cwd (la raíz del proyecto).
+	plugins: ['./tools/mutacion/node_modules/@stryker-mutator/vitest-runner/dist/src/index.js'],
 	testRunner: 'vitest',
 	vitest: { configFile: 'vite.config.ts', related: true },
 	mutate: [

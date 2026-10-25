@@ -7,6 +7,7 @@
 /test-results/
 /e2e/.auth/
 /.stryker-tmp/
+/tools/mutacion/node_modules/
 /reports/
 /.outbox/
 
