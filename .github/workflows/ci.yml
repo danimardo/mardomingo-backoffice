@@ -121,6 +121,14 @@ jobs:
         continue-on-error: true
         run: pnpm exec playwright test --project=webkit --project=mobile-webkit
 
+      # Specs que cambian la base entera: cada uno en su paso, con base nueva (publicar una versión legal y activar el
+      # mantenimiento afectan a todas las cuentas). Incluyen el `@critical` de la aceptación legal sin JavaScript (T288, T322).
+      - name: 6. E2E de aceptación legal (crítico 7 y 10)
+        run: pnpm exec playwright test --project=setup --project=legal-critico7 --no-deps
+
+      - name: 6. E2E de cierre de administración
+        run: pnpm exec playwright test --project=setup --project=admin-cierre --no-deps
+
       - name: 6. Artefactos de fallo
         if: failure() || steps.webkit.outcome == 'failure'
         uses: actions/upload-artifact@v4

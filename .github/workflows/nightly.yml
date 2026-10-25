@@ -52,3 +52,33 @@ jobs:
             test-results/
             playwright-report/
           retention-days: 14
+
+  # Specs que cambian la base entera (publicar una versión legal, mantenimiento, reembolso): cada uno en su trabajo, con base
+  # nueva y solo su proyecto y el de `setup` (`--no-deps`), como se verifica en local (T288, T322).
+  final:
+    name: E2E ${{ matrix.project }} (final)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [legal-critico7, admin-cierre]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm exec playwright test --project=setup --project=${{ matrix.project }} --no-deps
+      - name: Artefactos (vídeo y trazas)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nocturna-final-${{ matrix.project }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
