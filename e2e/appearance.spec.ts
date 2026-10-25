@@ -185,3 +185,66 @@ test.describe('anchos de pantalla (16.5)', () => {
 		});
 	}
 });
+
+// Completa UX-TEMA de T359: la cookie del tema dura un año (CA3), el perfil conserva lo escrito al cambiar el sistema (CA2) y
+// el selector aparece en las páginas públicas sin sesión y sin JavaScript (CA4).
+test.describe('tema: caducidad, perfil y páginas públicas (T359)', () => {
+	test('[UX-TEMA/CA3] «Oscuro» deja la cookie del tema con caducidad de unos 365 días', async ({
+		page,
+		browserName
+	}, testInfo) => {
+		test.skip(browserName === 'webkit', 'WebKit no guarda cookies Secure sobre http (ver arriba)');
+		await page.goto('/preferencias');
+		await page.locator('#contenido').getByRole('button', { name: 'Oscuro' }).click();
+		await page.waitForLoadState('networkidle');
+
+		const cookie = (await page.context().cookies()).find((c) => c.name === 'mdm_theme');
+		expect(cookie?.value).toBe('dark');
+		const days = ((cookie?.expires ?? 0) * 1000 - Date.now()) / 86_400_000;
+		expect(days, `caducidad de ${days.toFixed(1)} días`).toBeGreaterThan(360);
+		expect(days).toBeLessThan(370);
+		recordUx(testInfo, 'cookie del tema con un año', 'comprobado');
+	});
+
+	test.describe('perfil con sesión', () => {
+		test.use({ storageState: 'e2e/.auth/user.json' });
+
+		test('[UX-TEMA/CA2] con «Sistema», cambiar el sistema en /panel/perfil conserva lo escrito y la posición', async ({
+			page
+		}) => {
+			await emulate(page, { colorScheme: 'light' });
+			await page.goto('/panel/perfil');
+			const city = page.getByLabel('Ciudad');
+			await city.fill('texto que no se pierde');
+			await page.evaluate(() => {
+				window.__sinRecarga = true;
+				window.scrollTo(0, 120);
+			});
+			const scrollBefore = await page.evaluate(() => window.scrollY);
+			const before = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+
+			await emulate(page, { colorScheme: 'dark' });
+
+			const after = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+			expect(after).not.toBe(before);
+			await expect(city).toHaveValue('texto que no se pierde');
+			expect(await page.evaluate(() => window.__sinRecarga === true)).toBe(true);
+			expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+		});
+	});
+
+	test.describe('páginas públicas sin JavaScript', () => {
+		test.use({ javaScriptEnabled: false, guardAllow: [PRELOAD_CSP] });
+
+		for (const route of ['/', '/login', '/registro', '/precios']) {
+			test(`[UX-TEMA/CA4] ${route} muestra las tres opciones de tema sin JavaScript`, async ({
+				page
+			}) => {
+				await page.goto(route);
+				for (const name of ['Sistema', 'Claro', 'Oscuro']) {
+					await expect(page.getByRole('button', { name })).toBeVisible();
+				}
+			});
+		}
+	});
+});
