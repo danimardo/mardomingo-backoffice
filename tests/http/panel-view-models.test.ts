@@ -131,7 +131,8 @@ describe('modelos de vista del panel con claves exactas (T270)', () => {
 
 		const data = await pageDataWith('/panel/sesiones', session.cookie, 'sessions');
 
-		expect(sorted(data)).toStrictEqual(['closed', 'sessions']);
+		// `allClosed` es el aviso de UX-10 tras «Cerrar las demás sesiones».
+		expect(sorted(data)).toStrictEqual(['allClosed', 'closed', 'sessions']);
 		const sessions = recordsAt(data, 'sessions');
 		expect(sessions.length).toBeGreaterThan(0);
 		for (const item of sessions) {

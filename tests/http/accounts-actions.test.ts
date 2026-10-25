@@ -132,3 +132,25 @@ describe('recuperación de contraseña (W15)', () => {
 		expect(emailVerifiedOf('nadie.recupera@ejemplo.es')).toBeUndefined();
 	});
 });
+
+describe('login (W11) con entradas inválidas (T109)', () => {
+	it('sin contraseña responde 400 y no deja cookie de sesión', async () => {
+		const result = await post(
+			'/login?/entrar',
+			`email=${encodeURIComponent(ACCOUNT.email)}&redirectTo=%2Fpanel`
+		);
+
+		expect(result.status).toBe(400);
+		expect(cookieOf(result)).toBe('');
+	});
+
+	it('con un email mal formado responde 400 y no deja cookie de sesión', async () => {
+		const result = await post(
+			'/login?/entrar',
+			`email=${encodeURIComponent('no-es-un-email')}&password=${encodeURIComponent(ACCOUNT.password)}&redirectTo=%2Fpanel`
+		);
+
+		expect(result.status).toBe(400);
+		expect(cookieOf(result)).toBe('');
+	});
+});
