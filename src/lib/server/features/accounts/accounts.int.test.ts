@@ -1,7 +1,7 @@
 // Cuentas de punta a punta contra SQLite real (T108; BE-FR-01, 02, 03, 05, 10, 11, 64, 67, 69): registro, aceptaciones,
 // verificación, inicio de sesión y su cuenta bloqueada, recuperación, promoción de ADMIN_EMAIL y sesiones. El antiabuso
 // (dominios desechables, altas por IP, bloqueo por intentos y antienumeración) está en `abuse.int.test.ts` (T095).
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import {
@@ -347,5 +347,25 @@ describe('bienvenida al verificar (BE-FR-02 CA1, BE-FR-11 CA1)', () => {
 		expect(fixture.config.credits.getBalance(idOf(base)).totalMicro).toBe(1_000_000_000);
 		expect(fixture.config.credits.getBalance(idOf(plus)).totalMicro).toBe(0);
 		expect(fixture.config.credits.welcomeOf(idOf(plus))).toBeNull();
+	});
+});
+
+describe('registro con fallo de persistencia (T109)', () => {
+	it('si la base rechaza el alta, el registro falla sin dejar cuenta ni aceptaciones a medias', async () => {
+		const before = db().select().from(user).all().length;
+		// Un trigger real de SQLite hace fallar el alta: así el fallo llega por la misma transacción que usa el servicio.
+		db().run(
+			sql`CREATE TRIGGER fallo_alta BEFORE INSERT ON user BEGIN SELECT RAISE(ABORT, 'fallo simulado'); END`
+		);
+		try {
+			await expect(
+				fixture.accounts.register(registration({ email: 'fallo.persistencia@ejemplo.es' }))
+			).rejects.toThrow();
+		} finally {
+			db().run(sql`DROP TRIGGER fallo_alta`);
+		}
+
+		expect(db().select().from(user).all().length).toBe(before);
+		expect(db().select().from(termsAcceptances).all()).toHaveLength(0);
 	});
 });
