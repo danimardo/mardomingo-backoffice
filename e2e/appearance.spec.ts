@@ -229,7 +229,9 @@ test.describe('tema: caducidad, perfil y páginas públicas (T359)', () => {
 			expect(after).not.toBe(before);
 			await expect(city).toHaveValue('texto que no se pierde');
 			expect(await page.evaluate(() => window.__sinRecarga === true)).toBe(true);
-			expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+			// Firefox restaura el desplazamiento con redondeo subpíxel (1 px de diferencia observada el 2026-10-26): tolerancia de 2 px.
+			const scrollAfter = await page.evaluate(() => window.scrollY);
+			expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThanOrEqual(2);
 		});
 	});
 
@@ -247,4 +249,68 @@ test.describe('tema: caducidad, perfil y páginas públicas (T359)', () => {
 			});
 		}
 	});
+});
+
+// Tema desde la primera pintura con JavaScript (T359, UX-TEMA/CA1). Aproximación medible: el fondo calculado en DOMContentLoaded,
+// antes de que la hidratación cambie nada, debe coincidir con el fondo final. La captura del primer fotograma sigue pendiente.
+for (const scheme of ['light', 'dark'] as const) {
+	test.describe(`primera pintura con sistema ${scheme} (T359)`, () => {
+		test.use({ colorScheme: scheme });
+
+		test(`[UX-TEMA/CA1] sin cookie, el fondo antes de hidratar ya es el del sistema (${scheme})`, async ({
+			page
+		}) => {
+			await page.addInitScript(() => {
+				document.addEventListener(
+					'DOMContentLoaded',
+					() => {
+						sessionStorage.setItem(
+							'fondoAntesDeHidratar',
+							getComputedStyle(document.body).backgroundColor
+						);
+					},
+					{ once: true }
+				);
+			});
+
+			await page.goto('/');
+			await page.waitForLoadState('networkidle');
+
+			const antes = await page.evaluate(() => sessionStorage.getItem('fondoAntesDeHidratar'));
+			const despues = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+			expect(antes).toBe(despues);
+		});
+	});
+}
+
+// Cristal opaco en todas las superficies con efectos reducidos (T357, UX-EFECTOS/CA2): ninguna superficie `data-surface="glass"`
+// desenfoca el fondo ni es translúcida. Amplía la prueba de la cabecera a todas las que la página pinte.
+test.describe('cristal opaco en todas las superficies con efectos reducidos (T357)', () => {
+	test.use({ guardAllow: [PRELOAD_CSP] });
+
+	for (const route of ['/', '/login', '/precios']) {
+		test(`[UX-EFECTOS/CA2] ${route}: las superficies de cristal son opacas con efectos reducidos`, async ({
+			page
+		}) => {
+			await page
+				.context()
+				.addCookies([{ name: 'mdm_effects', value: 'reduced', url: 'http://localhost:7390' }]);
+			await page.goto(route);
+			await page.waitForLoadState('networkidle');
+
+			const surfaces = await page.locator('[data-surface="glass"]').evaluateAll((els) =>
+				els.map((el) => {
+					const style = getComputedStyle(el);
+					return { backdrop: style.backdropFilter, background: style.backgroundColor };
+				})
+			);
+			expect(surfaces.length, 'la página pinta al menos una superficie de cristal').toBeGreaterThan(
+				0
+			);
+			for (const surface of surfaces) {
+				expect(surface.backdrop === 'none' || /blur\(0(px)?\)/.test(surface.backdrop)).toBe(true);
+				expect(surface.background).not.toMatch(/rgba\(.*,\s*0?\.\d+\)/);
+			}
+		});
+	}
 });

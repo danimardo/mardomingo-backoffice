@@ -3,6 +3,9 @@
 import { expect, test } from './fixtures';
 import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD, WEBKIT_SECURE_COOKIE_SKIP } from './constants';
 
+// Referencias (T360, decisión 2026-10-26): las pruebas sin JavaScript de compra (crítico 10), aceptación legal (crítico 7) y
+// filtro de administración por GET se ejecutan en sus specs, porque dependen de su orden y de sus cuentas:
+// `e2e/purchase.spec.ts` (compra), `e2e/legal-critico7.spec.ts` (aceptación legal) y `e2e/admin-contenido.spec.ts` (filtro).
 test.use({ javaScriptEnabled: false });
 test.use({ guardAllow: [/requestfailed: .*\(csp\)|status of 400|status of 401/] });
 

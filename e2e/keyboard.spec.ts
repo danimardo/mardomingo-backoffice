@@ -193,3 +193,31 @@ test('@UX-16 la navegación del panel se recorre con Tab y Mayús+Tab, con foco 
 	await page.keyboard.press('Shift+Tab');
 	expect(await insideNav(), 'Mayús+Tab sale de la navegación').toBe(false);
 });
+
+// Menú de cuenta con teclado (T361; 16.5): `<details>` nativo. Enter abre el `<summary>`, Tab recorre sus enlaces y, al salir
+// del menú, el foco sigue en la página sin quedar atrapado.
+test.describe('menú de cuenta con teclado', () => {
+	test.use({ storageState: 'e2e/.auth/user.json' });
+
+	test('@UX-16 el menú de cuenta se abre con Enter, recorre sus enlaces con Tab y no atrapa el foco', async ({
+		page,
+		browserName
+	}) => {
+		// WebKit no recorre los enlaces con Tab por defecto (ver el primer test de este fichero): se prueba en Chromium y Firefox.
+		test.skip(browserName === 'webkit', 'WebKit no recorre enlaces con Tab por defecto');
+		await page.goto('/panel');
+		const menu = page.locator('details.menu');
+		await menu.locator('summary').focus();
+		await page.keyboard.press('Enter');
+		await expect(menu).toHaveAttribute('open', '');
+
+		const inside: boolean[] = [];
+		for (let press = 0; press < 6; press += 1) {
+			await page.keyboard.press('Tab');
+			inside.push(await menu.evaluate((el) => el.contains(document.activeElement)));
+		}
+
+		expect(inside[0], 'el primer Tab entra en el menú').toBe(true);
+		expect(inside.at(-1), 'el foco sale del menú y no queda atrapado').toBe(false);
+	});
+});
