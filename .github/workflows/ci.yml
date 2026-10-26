@@ -162,3 +162,13 @@ jobs:
       # 10. Sin colores literales fuera de los tokens.
       - name: 10. Tokens
         run: pnpm lint:tokens
+
+  # Humo tras el despliegue de staging (T374): el humo está en `deploy-smoke.yml`, y `workflow_run` no sirve porque GitHub
+  # solo lo dispara desde el workflow del branch por defecto (`main`). Aquí se llama como reutilizable, solo en `staging`.
+  humo-staging:
+    name: humo tras el despliegue de staging
+    needs: gates
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    uses: ./.github/workflows/deploy-smoke.yml
+    with:
+      url: https://cuenta-staging.mardomingo.com
