@@ -113,7 +113,11 @@ for (const route of ['/', '/login', '/registro', '/precios']) {
 					bad.push(`${name} ${String(Math.round(box.height + extra))}px`);
 			};
 			for (const el of document.querySelectorAll('a[href], button'))
-				hit(el, el.tagName.toLowerCase());
+				// Diagnóstico (2026-10-26): el fallo de CI en Firefox decía solo «a 43px»; se nombra el elemento por su texto y destino.
+				hit(
+					el,
+					`${el.tagName.toLowerCase()} "${el.textContent.trim().slice(0, 40)}" → ${el.getAttribute('href') ?? '(sin href)'}`
+				);
 			for (const box of document.querySelectorAll('input[type="checkbox"]')) {
 				const label = document.querySelector(`label[for="${box.id}"]`);
 				if (label !== null) hit(label, 'label de casilla');
