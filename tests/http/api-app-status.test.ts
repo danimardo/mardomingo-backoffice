@@ -16,7 +16,7 @@ function parse(text: string): Record<string, unknown> {
 }
 
 describe('GET /api/v1/app/status', () => {
-	it('devuelve el estado de la app sin sesión y sin cabecera de versión, con no-store', async () => {
+	it('[BE-FR-48/CA2] devuelve el estado de la app sin sesión y sin cabecera de versión, con no-store', async () => {
 		const result = await send(baseUrl, '/api/v1/app/status', {
 			host: apiHost,
 			headers: { 'x-app-id': 'secretario', accept: 'application/json' }
@@ -43,6 +43,23 @@ describe('GET /api/v1/app/status', () => {
 		expect(parse(result.text)).toMatchObject({ minAppVersion: '4.0.0' });
 	});
 
+	it('[BE-FR-77/CA4] publica en operations el tiempo máximo total de cada operación activa', async () => {
+		const result = await send(baseUrl, '/api/v1/app/status', {
+			host: apiHost,
+			headers: { 'x-app-id': 'secretario', accept: 'application/json' }
+		});
+
+		const operations = parse(result.text).operations;
+		expect(isRecord(operations)).toBe(true);
+		const improve = isRecord(operations) ? operations.improve : undefined;
+		expect(isRecord(improve)).toBe(true);
+		const timeoutMs = isRecord(improve) ? improve.timeoutMs : undefined;
+		// El cálculo exacto (intentos, esperas y respaldos) está probado en `apps/domain/operation-timing.test.ts`.
+		expect(typeof timeoutMs === 'number' && Number.isInteger(timeoutMs) && timeoutMs > 0).toBe(
+			true
+		);
+	});
+
 	it('una query desconocida responde 400 VALIDATION_ERROR', async () => {
 		const result = await send(baseUrl, '/api/v1/app/status?x=1', {
 			host: apiHost,
@@ -53,7 +70,7 @@ describe('GET /api/v1/app/status', () => {
 		expect(parse(result.text)).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
 	});
 
-	it('sin X-App-Id responde 400 UNKNOWN_APP', async () => {
+	it('[BE-FR-62/CA1] sin X-App-Id responde 400 UNKNOWN_APP', async () => {
 		const result = await send(baseUrl, '/api/v1/app/status', {
 			host: apiHost,
 			headers: { accept: 'application/json' }
@@ -72,5 +89,19 @@ describe('GET /api/v1/app/status', () => {
 		});
 
 		expect(result.status).toBe(405);
+	});
+
+	it('[BE-FR-48/CA3] la versión va en la ruta: /api/v1 responde y /api/v2 no existe todavía', async () => {
+		const current = await send(baseUrl, '/api/v1/app/status', {
+			host: apiHost,
+			headers: { 'x-app-id': 'secretario', accept: 'application/json' }
+		});
+		const next = await send(baseUrl, '/api/v2/app/status', {
+			host: apiHost,
+			headers: { 'x-app-id': 'secretario', accept: 'application/json' }
+		});
+
+		expect(current.status).toBe(200);
+		expect(next.status).toBe(404);
 	});
 });

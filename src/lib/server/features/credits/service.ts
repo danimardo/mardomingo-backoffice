@@ -32,7 +32,7 @@ import {
 	type LedgerState,
 	type LineType
 } from './domain/ledger';
-import { creditBuckets, creditMovements } from './schema';
+import { adjustmentKeys, creditBuckets, creditMovements } from './schema';
 import {
 	accountHasWelcome,
 	closeHold,
@@ -49,6 +49,8 @@ import {
 	persistState,
 	reservedOf,
 	type ReleaseReason,
+	usersWithBucketMismatch,
+	usersWithDebtMismatch,
 	insertMovements,
 	usageSince,
 	bucketOfPayment,
@@ -57,7 +59,9 @@ import {
 	setRealPurchase,
 	lowBalanceStateOf,
 	setLowBalanceNotified,
-	setLowBalanceThreshold as writeLowBalanceThreshold
+	setLowBalanceThreshold as writeLowBalanceThreshold,
+	freeBucketsExpiringSoon,
+	markExpiryWarned
 } from './repository';
 
 export interface CreditsDeps {
@@ -306,7 +310,8 @@ export function expireHolds(deps: CreditsDeps): number {
 // Ajustes manuales (BE-FR-18, D-16)
 
 export type AdjustOutcome =
-	{ readonly ok: true } | { readonly ok: false; readonly reason: 'exceeds_available' };
+	| { readonly ok: true; readonly auditId: string }
+	| { readonly ok: false; readonly reason: 'exceeds_available' | 'repeated' };
 
 /**
  * Ajuste del administrador (BE-FR-18): suma (liquidando primero la deuda) o resta (nunca más que el disponible, D-16).
@@ -322,10 +327,17 @@ export function adjust(
 		readonly amountMicro: number;
 		readonly expiresAt?: EpochMs | null | undefined;
 		readonly reason: string;
+		/** Clave del formulario: un envío repetido con la misma clave no vuelve a aplicar el ajuste (T307, 15.12). */
+		readonly idempotencyKey: string;
 	}
 ): AdjustOutcome {
-	return immediateTransaction(deps.db, (tx) => {
+	return immediateTransaction(deps.db, (tx): AdjustOutcome => {
 		const now = deps.clock.now();
+		if (
+			tx.select().from(adjustmentKeys).where(eq(adjustmentKeys.key, input.idempotencyKey)).get() !==
+			undefined
+		)
+			return { ok: false, reason: 'repeated' };
 		const before = loadState(tx, input.userId);
 		const snapshot = (state: LedgerState) => ({
 			balanceMicro: balanceOf(state),
@@ -361,7 +373,7 @@ export function adjust(
 			if (result.lines.some((line) => line.type === 'debt_settlement'))
 				deps.logger.emit('credits.debt.settled', {});
 			deps.logger.emit('credits.adjustment.applied', { direction: 'credit', kind: input.kind });
-			recordEntry(
+			const auditId = recordEntry(
 				tx,
 				{
 					adminId: input.adminId,
@@ -374,7 +386,8 @@ export function adjust(
 				},
 				deps.auditDeps
 			);
-			return { ok: true };
+			tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
+			return { ok: true, auditId };
 		}
 
 		const available = balanceOf(before) - reservedOf(tx, input.userId);
@@ -399,7 +412,7 @@ export function adjust(
 			now
 		);
 		deps.logger.emit('credits.adjustment.applied', { direction: 'debit', kind: input.kind });
-		recordEntry(
+		const auditId = recordEntry(
 			tx,
 			{
 				adminId: input.adminId,
@@ -412,7 +425,8 @@ export function adjust(
 			},
 			deps.auditDeps
 		);
-		return { ok: true };
+		tx.insert(adjustmentKeys).values({ key: input.idempotencyKey, createdAt: now }).run();
+		return { ok: true, auditId };
 	});
 }
 
@@ -438,6 +452,24 @@ export function expireBuckets(deps: CreditsDeps): number {
 	return touched;
 }
 
+/**
+ * Usuarios con una bolsa gratuita que caduca en la ventana `windowMs` y que aún no han recibido el aviso (T330). Marca cada
+ * bolsa antes de devolver el usuario, así que el aviso sale una sola vez aunque la tarea se repita.
+ */
+export function warnExpiringBuckets(
+	deps: CreditsDeps,
+	input: { readonly windowMs: number }
+): string[] {
+	const now = deps.clock.now();
+	const users = immediateTransaction(deps.db, (tx) => {
+		const buckets = freeBucketsExpiringSoon(tx, now, now + input.windowMs);
+		for (const bucket of buckets) markExpiryWarned(tx, bucket.id, now);
+		return [...new Set(buckets.map((bucket) => bucket.userId))];
+	});
+	if (users.length > 0) deps.logger.emit('credits.expiry.warned', { count: users.length });
+	return users;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Borrado de la cuenta (BE-FR-07 CA4, D-15)
 
@@ -448,7 +480,8 @@ export function expireBuckets(deps: CreditsDeps): number {
  */
 export function forfeitAll(
 	deps: CreditsDeps,
-	userId: string
+	userId: string,
+	reason: 'user' | 'inactivity' = 'user'
 ): { readonly forfeitedMicro: number; readonly buckets: number } {
 	return immediateTransaction(deps.db, (tx) => {
 		const now = deps.clock.now();
@@ -457,7 +490,7 @@ export function forfeitAll(
 		if (result.lines.length > 0) {
 			persistState(tx, userId, before, result.state, now);
 			insertMovements(tx, movementRows(userId, result.lines), idsOf(deps, 'mov'), now);
-			deps.logger.emit('credits.balance.forfeited', { count: result.lines.length });
+			deps.logger.emit('credits.balance.forfeited', { reason, count: result.lines.length });
 		}
 		writeLowBalanceThreshold(tx, userId, null, now);
 		return {
@@ -696,8 +729,9 @@ export interface MovementsPage {
 }
 
 /**
- * Movimientos de una cuenta, más recientes primero, de 25 en 25 (BE-FR-49.3). Sin motivos del administrador ni ids de bolsa:
- * el panel no los muestra. El rango se da en milisegundos (el llamador lo calcula con el día de Madrid).
+ * Movimientos de una cuenta por fecha, de 25 en 25 (BE-FR-49.3; UX-09). Por defecto, los más recientes primero. Sin motivos
+ * del administrador ni ids de bolsa: el panel no los muestra. El rango se da en milisegundos (el llamador lo calcula con el
+ * día de Madrid).
  */
 export function movementsPage(
 	deps: CreditsDeps,
@@ -707,12 +741,14 @@ export function movementsPage(
 		readonly toMs: EpochMs | null;
 		readonly appId: string | null;
 		readonly page: number;
+		readonly order?: 'asc' | 'desc';
 	}
 ): MovementsPage {
 	const conditions = [eq(creditMovements.userId, input.userId)];
 	if (input.fromMs !== null) conditions.push(gte(creditMovements.createdAt, input.fromMs));
 	if (input.toMs !== null) conditions.push(lte(creditMovements.createdAt, input.toMs));
 	if (input.appId !== null) conditions.push(eq(creditMovements.appId, input.appId));
+	const byDate = input.order === 'asc' ? asc : desc;
 	const found = deps.db
 		.select({
 			createdAt: creditMovements.createdAt,
@@ -722,7 +758,7 @@ export function movementsPage(
 		})
 		.from(creditMovements)
 		.where(and(...conditions))
-		.orderBy(desc(creditMovements.createdAt), desc(creditMovements.id))
+		.orderBy(byDate(creditMovements.createdAt), byDate(creditMovements.id))
 		.limit(MOVEMENTS_PAGE_SIZE + 1)
 		.offset((input.page - 1) * MOVEMENTS_PAGE_SIZE)
 		.all();
@@ -814,4 +850,21 @@ export function lowBalanceView(
 		thresholdMicro: state.thresholdMicro,
 		isBelow: state.thresholdMicro !== null && total < state.thresholdMicro
 	};
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Comprobación del ledger (BE-FR-15 CA1, SC-003)
+
+/**
+ * Comprueba que el saldo materializado de cada cuenta se puede reconstruir a partir de los movimientos: el resto de cada bolsa
+ * es la suma de sus movimientos y la deuda es la suma cambiada de signo de las líneas sin bolsa. Devuelve las cuentas con
+ * discrepancia y registra un único `credits.ledger.mismatch` con su recuento (nunca las identidades). No escribe nada.
+ */
+export function checkLedger(deps: Pick<CreditsDeps, 'db' | 'logger'>): string[] {
+	const affected = new Set([
+		...usersWithBucketMismatch(deps.db),
+		...usersWithDebtMismatch(deps.db)
+	]);
+	if (affected.size > 0) deps.logger.emit('credits.ledger.mismatch', { count: affected.size });
+	return [...affected].sort();
 }

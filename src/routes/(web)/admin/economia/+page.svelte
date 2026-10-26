@@ -25,7 +25,7 @@
 <section aria-labelledby="parametros">
 	<h2 id="parametros">{m.admin_economy_parameters()}</h2>
 	{#each data.settings as setting (setting.key)}
-		<form method="POST" action="?/guardarParametro">
+		<form method="POST" action="?/guardarParametros">
 			<input type="hidden" name="clave" value={setting.key} />
 			<TextField
 				id={`valor-${setting.key}`}
@@ -34,6 +34,10 @@
 				value={setting.value}
 				required
 			/>
+			<p>
+				{m.admin_economy_default_label()}: {setting.defaultValue} · {m.admin_economy_scope_global()}
+			</p>
+			<p>{setting.explanation}</p>
 			<TextField
 				id={`motivo-${setting.key}`}
 				name="motivo"
@@ -44,7 +48,7 @@
 				>{m.admin_economy_confirm()}</Checkbox
 			>
 			<p>
-				<Button type="submit" formaction="?/previsualizarParametro" variant="secondary"
+				<Button type="submit" formaction="?/previsualizarParametros" variant="secondary"
 					>{m.admin_economy_preview()}</Button
 				>
 			</p>
@@ -58,7 +62,7 @@
 				<p>
 					{form.preview.key}: {form.preview.before ?? ''} → {form.preview.after ?? ''} ({m.admin_economy_scope_global()})
 				</p>
-				<form method="POST" action="?/guardarParametro">
+				<form method="POST" action="?/guardarParametros">
 					<input type="hidden" name="clave" value={form.preview.key} />
 					<input type="hidden" name="valor" value={form.preview.after ?? ''} />
 					<TextField
@@ -109,7 +113,7 @@
 	<p>
 		{m.admin_economy_fx_current()}: {data.fx.usdEurPpm} ppm · {data.fx.source}
 	</p>
-	<form method="POST" action="?/fijarTipoCambio">
+	<form method="POST" action="?/fijarTipoCambioManual">
 		<TextField
 			id="usdEurPpm"
 			name="usdEurPpm"
@@ -123,7 +127,7 @@
 		>
 		<p><Button type="submit" variant="primary">{m.admin_economy_fx_set()}</Button></p>
 	</form>
-	<form method="POST" action="?/quitarTipoCambio">
+	<form method="POST" action="?/quitarTipoCambioManual">
 		<TextField id="motivo-quitar-fx" name="motivo" label={m.admin_economy_reason()} required />
 		<Checkbox id="confirmado-quitar-fx" name="confirmado" value="true"
 			>{m.admin_economy_confirm()}</Checkbox
@@ -134,7 +138,7 @@
 
 <section aria-labelledby="precio-manual">
 	<h2 id="precio-manual">{m.admin_economy_price()}</h2>
-	<form method="POST" action="?/precioManual">
+	<form method="POST" action="?/guardarPrecioOrientativo">
 		<TextField id="operacion" name="operacion" label={m.admin_economy_operation()} required />
 		<TextField
 			id="microUsd"

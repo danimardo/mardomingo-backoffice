@@ -24,6 +24,7 @@ import type { IdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import type { Auth } from './auth';
 import { DISPOSABLE_DOMAINS_V1 } from './disposable-domains';
+import { isLoginLocked, minutesUntilUnlock, signupIpLimitReached } from './domain/abuse';
 import { normalizeEmail } from './domain/email';
 import { safeRedirect } from './domain/redirect';
 import { hashNormalizedEmail } from './email-hash';
@@ -127,10 +128,6 @@ function emailDomain(email: string): string {
 	return at === -1 ? '' : email.slice(at + 1).toLowerCase();
 }
 
-function minutesLeft(lockedUntil: EpochMs, now: EpochMs): number {
-	return Math.max(1, Math.ceil((lockedUntil - now) / 60_000));
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // Alta y verificación (W08–W10)
 
@@ -164,8 +161,10 @@ export async function register(
 
 	if (
 		input.remoteIp !== null &&
-		countSignupsFromIp(deps.db, input.remoteIp, now) >=
+		signupIpLimitReached(
+			countSignupsFromIp(deps.db, input.remoteIp, now),
 			numberSetting(deps, 'registrations_per_ip_24h')
+		)
 	) {
 		return reject('ip_limit', 'REGISTRATION_IP_LIMIT');
 	}
@@ -355,13 +354,13 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 	}
 	const hash = hashNormalizedEmail(normalizeEmail(input.email), deps.emailHashKey);
 	const state = readLoginAttempt(deps.db, hash);
-	if (state?.lockedUntil !== null && state?.lockedUntil !== undefined && state.lockedUntil > now) {
+	if (state !== undefined && isLoginLocked(state.lockedUntil, now)) {
 		deps.logger.emit('accounts.login.locked', {
 			reason: 'too_many_failures',
 			count: state.failures
 		});
 		throw new AppError('LOGIN_TEMPORARILY_LOCKED', {
-			retryAfterMinutes: minutesLeft(state.lockedUntil, now)
+			retryAfterMinutes: minutesUntilUnlock(state.lockedUntil, now)
 		});
 	}
 
@@ -398,13 +397,13 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 			reason: 'invalid_credentials',
 			errorCode: 'INVALID_CREDENTIALS'
 		});
-		if (after.lockedUntil !== null && after.lockedUntil > now) {
+		if (isLoginLocked(after.lockedUntil, now)) {
 			deps.logger.emit('accounts.login.locked', {
 				reason: 'too_many_failures',
 				count: after.failures
 			});
 			throw new AppError('LOGIN_TEMPORARILY_LOCKED', {
-				retryAfterMinutes: minutesLeft(after.lockedUntil, now)
+				retryAfterMinutes: minutesUntilUnlock(after.lockedUntil, now)
 			});
 		}
 		throw new AppError('INVALID_CREDENTIALS');
@@ -644,7 +643,7 @@ export function resetTokenStateOf(deps: AccountsBase, token: string): 'valid' | 
 		.from(verification)
 		.where(eq(verification.identifier, `reset-password:${token}`))
 		.get();
-	if (row === undefined || row.expiresAt.getTime() <= Date.now()) return 'invalid';
+	if (row === undefined || row.expiresAt.getTime() <= deps.clock.now()) return 'invalid';
 	return 'valid';
 }
 

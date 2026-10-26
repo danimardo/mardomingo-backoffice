@@ -87,7 +87,7 @@ describe('búsqueda de usuarios (BE-FR-50)', () => {
 });
 
 describe('bloqueo y desbloqueo (BE-FR-50)', () => {
-	it('bloquea con motivo, revoca las sesiones y deja auditoría con antes y después', () => {
+	it('[BE-FR-04/CA4] bloquea con motivo, revoca las sesiones y deja auditoría con antes y después', () => {
 		expect(sessionsOf(targetId)).toBe(2);
 
 		blockUser(deps, { adminId, userId: targetId, reason: 'fraude en pagos' });
@@ -157,12 +157,12 @@ describe('rol tester (BE-FR-18)', () => {
 	it('marca y desmarca tester con auditoría anterior → nuevo, sin tocar otros roles', () => {
 		f.db.update(user).set({ role: 'user,editor' }).where(eq(user.id, targetId)).run();
 
-		setTester(deps, { adminId, userId: targetId, on: true, reason: null });
+		setTester(deps, { adminId, userId: targetId, on: true, reason: 'Motivo de prueba' });
 		expect(f.db.select().from(user).where(eq(user.id, targetId)).get()?.role).toBe(
 			'user,editor,tester'
 		);
 
-		setTester(deps, { adminId, userId: targetId, on: false, reason: null });
+		setTester(deps, { adminId, userId: targetId, on: false, reason: 'Motivo de prueba' });
 		expect(f.db.select().from(user).where(eq(user.id, targetId)).get()?.role).toBe('user,editor');
 		expect(auditRows().map((row) => row.before)).toEqual([{ tester: false }, { tester: true }]);
 		expect(eventsNamed(f.logger, 'accounts.role.changed').map((event) => event.fields)).toEqual([
@@ -172,9 +172,11 @@ describe('rol tester (BE-FR-18)', () => {
 	});
 
 	it('marcar lo que ya estaba marcado no escribe ni audita', () => {
-		setTester(deps, { adminId, userId: targetId, on: true, reason: null });
+		setTester(deps, { adminId, userId: targetId, on: true, reason: 'Motivo de prueba' });
 
-		expect(setTester(deps, { adminId, userId: targetId, on: true, reason: null })).toBeNull();
+		expect(
+			setTester(deps, { adminId, userId: targetId, on: true, reason: 'Motivo de prueba' })
+		).toBeNull();
 		expect(auditRows()).toHaveLength(1);
 	});
 });

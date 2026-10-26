@@ -43,8 +43,8 @@ describe('descargas de releases del periodo (W45, T318)', () => {
 		const facts = releaseDownloadsBetween(f.db, period);
 
 		expect(facts).toEqual([
-			{ appId: SEEDED_APP_ID, downloads: 5 },
-			{ appId: SEEDED_APP_ID, downloads: 7 }
+			{ appId: SEEDED_APP_ID, day: '2026-10-01', downloads: 5 },
+			{ appId: SEEDED_APP_ID, day: '2026-10-05', downloads: 7 }
 		]);
 	});
 

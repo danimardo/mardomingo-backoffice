@@ -3,11 +3,11 @@
 // y sembrar en cada prueba (`tests/builders/database.ts`).
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { createSystemClock } from '$lib/server/adapters/clock/clock';
 import { openDatabase } from '$lib/server/db/client';
 import { migrateDatabase } from '$lib/server/db/migrate';
 import { seedDefaults } from '$lib/server/seed';
 import { createIdGenerator } from '$lib/server/shared/ids';
+import { fixedClock } from '../builders/apps';
 import { createFakeLogger } from '../builders/fake-logger';
 
 export const TEMPLATE_DIR = join('tests', '.tmp', 'integration');
@@ -16,8 +16,13 @@ export const TEMPLATE_DB = join(TEMPLATE_DIR, 'template.db');
 /** Identificador fijo de la app `secretario` que siembra el _seed_ (T080). */
 export const SEEDED_APP_ID = 'app_secretario';
 
+// En Windows el borrado puede chocar con un handle recién cerrado (EPERM/EBUSY); se reintenta antes de fallar.
+function removeTemplateDir(): void {
+	rmSync(TEMPLATE_DIR, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+}
+
 export default async function setup(): Promise<() => void> {
-	rmSync(TEMPLATE_DIR, { recursive: true, force: true });
+	removeTemplateDir();
 	mkdirSync(TEMPLATE_DIR, { recursive: true });
 	const { sqlite, db } = openDatabase(TEMPLATE_DB);
 	await migrateDatabase({
@@ -30,10 +35,12 @@ export default async function setup(): Promise<() => void> {
 		version: 'integration',
 		logger: createFakeLogger()
 	});
-	seedDefaults(db, createSystemClock(), createIdGenerator());
+	// La plantilla se siembra con el reloj de las pruebas (TEST_NOW): las versiones legales quedan vigentes en ese instante.
+	// Con el reloj real, cualquier fecha fija de las pruebas anterior a hoy dejaba la versión sin publicar (LEGAL_VERSION_CHANGED).
+	seedDefaults(db, fixedClock(), createIdGenerator());
 	sqlite.pragma('wal_checkpoint(TRUNCATE)');
 	sqlite.close();
 	return () => {
-		rmSync(TEMPLATE_DIR, { recursive: true, force: true });
+		removeTemplateDir();
 	};
 }

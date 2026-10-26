@@ -39,6 +39,12 @@ describe('formErrorText', () => {
 		);
 	});
 
+	it('[UX-02] el límite de reenvío dice en cuántos minutos se puede volver a intentar', () => {
+		expect(formErrorText('RATE_LIMITED', 5)).toBe(
+			'Has hecho demasiadas peticiones. Vuelve a intentarlo en 5 minutos.'
+		);
+	});
+
 	it('da el texto de los enlaces de verificación', () => {
 		expect(formErrorText('TOKEN_EXPIRED')).toBe('Este enlace ha caducado. Pide uno nuevo.');
 		expect(formErrorText('TOKEN_USED')).toBe(

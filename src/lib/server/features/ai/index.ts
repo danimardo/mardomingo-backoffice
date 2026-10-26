@@ -11,6 +11,7 @@ export {
 } from './service';
 export { ChatRequestBody, idempotencyKeyOf, type ChatResponseBody } from './contract';
 export { consumptionPage, type ConsumptionPage, type ConsumptionRow } from './consumption';
+export { anonymizeOperationsBefore } from './retention';
 export { exportOperations, type OperationExport } from './export';
 export { AI_LOG_EVENTS, type AiLogFields } from './events';
 export {
@@ -39,3 +40,4 @@ export { operationCostFactsBetween, type OperationCostFact } from './cost-facts'
 // Comprobación de activación de operaciones contra el catálogo guardado (W41; T311).
 export { checkOperationActivatable } from './activation';
 export type { ActivationCheck, ActivationNeeds } from './domain/activation';
+export { openInFlightOperation, type OpenOperationInput } from './open-operation';

@@ -5,6 +5,7 @@
 	import EmptyState from '$lib/components/ui/EmptyState.svelte';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import type { ActionData, PageData } from './$types';
 	import { resolve } from '$app/paths';
 	import { formatEuros } from '$lib/components/payments/format';
@@ -54,8 +55,47 @@
 	</Banner>
 {/if}
 
+<form method="GET" action={resolve('/panel/facturas')}>
+	<fieldset>
+		<legend>{m.invoices_filters_legend()}</legend>
+		<div class="campo">
+			<label for="filtro-tipo">{m.invoices_kind_filter()}</label>
+			<select id="filtro-tipo" name="tipo">
+				<option value="" selected={data.filters.tipo === ''}>{m.invoices_kind_all()}</option>
+				<option value="full" selected={data.filters.tipo === 'full'}
+					>{m.invoices_kind_full()}</option
+				>
+				<option value="simplified" selected={data.filters.tipo === 'simplified'}
+					>{m.invoices_kind_simplified()}</option
+				>
+				<option value="corrective" selected={data.filters.tipo === 'corrective'}
+					>{m.invoices_kind_corrective()}</option
+				>
+			</select>
+		</div>
+		<div class="campo">
+			<label for="filtro-orden">{m.invoices_order()}</label>
+			<select id="filtro-orden" name="orden">
+				<option value="desc" selected={data.filters.orden === 'desc'}
+					>{m.invoices_order_desc()}</option
+				>
+				<option value="asc" selected={data.filters.orden === 'asc'}>{m.invoices_order_asc()}</option
+				>
+			</select>
+		</div>
+		<Button type="submit" variant="primary">{m.invoices_apply()}</Button>
+	</fieldset>
+</form>
+
 {#if rows.length > 0}
 	<DataTable caption={m.invoices_caption()} {columns} {rows} />
+	<Pagination
+		current={data.pagination.page}
+		total={data.pagination.pages}
+		hrefFor={(page) => data.pagination.pageHrefs[page - 1] ?? ''}
+	/>
+{:else if data.filters.tipo !== ''}
+	<p>{m.invoices_no_match()}</p>
 {:else}
 	<EmptyState variant="empty" />
 {/if}

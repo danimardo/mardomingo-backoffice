@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Estados: «empty» (todavía no hay datos) y «no-match» (ningún resultado con el filtro). Teclado: sin controles; el anuncio
+	// llega con `aria-live`. Temas: colores de tokens en claro y oscuro. Efectos reducidos: sin transiciones.
 	// Estado vacío (DS-06; T255). Distingue «todavía no hay datos» de «ningún resultado con este filtro», y el segundo muestra el
 	// filtro activo para que el usuario sepa por qué no ve nada.
 	import * as m from '$lib/paraglide/messages.js';

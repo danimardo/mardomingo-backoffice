@@ -63,8 +63,8 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 - **A** — el evento corresponde a una **alerta por email al administrador** de `Historias.md` 5.13: la
   funcionalidad dueña llama a `notifications`, que envía el email una sola vez por cruce de umbral
   (`alerts_state`) y emite `notifications.alert.triggered`.
-- **V** — evento de **vigilancia** en OpenObserve (nivel `error`/`fatal` o señal de abuso). No genera email
-  propio; el propietario lo consulta a través del Gateway (fase posterior).
+- **V** — evento de **vigilancia** (nivel `error`/`fatal` o señal de abuso). No genera email propio; se consulta
+  en la salida de stdout o en los registros de Docker.
 - «—» — sin alerta.
 
 ---
@@ -84,6 +84,7 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 | `app.task.started`                 | debug | `Tarea iniciada`                                       | `task`                                                                                                                                   | Inicio de cada tarea programada                                                                                                     | —      |
 | `app.task.completed`               | info  | `Tarea completada`                                     | `task`, `durationMs`, `count`                                                                                                            | Fin correcto                                                                                                                        | —      |
 | `app.task.failed`                  | error | `Tarea fallida`                                        | `task`, `durationMs`, `err`                                                                                                              | Excepción no controlada en una tarea (registrada por el envoltorio)                                                                 | V      |
+| `app.task.overlapped`              | debug | `Tarea omitida: la anterior sigue en marcha`           | `task`                                                                                                                                   | `protect` de croner: la ejecución anterior de la misma tarea no ha terminado                                                        | —      |
 
 **Nota (D-22).** `app.started` solo usa campos permitidos por el principio XI: los de base (`version`, `env`,
 `service`…) y `count`. No se amplía la lista de campos permitidos.
@@ -91,7 +92,7 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 **Tareas** (valores de `task`, Historias 11): `openrouter-balance` (cada hora), `free-credits-expiry`,
 `ledger-check`, `models-refresh`, `price-references`, `sync-tombstones-cleanup`,
 `unverified-accounts-cleanup`, `retention`, `holds-cleanup`, `fx-ecb`, `inactive-accounts`,
-`release-downloads` (diarias) y `disposable-domains` (semanal).
+`release-downloads` y `adjustment-keys-cleanup` (diarias) y `disposable-domains` (semanal).
 
 ### 2.2 `http.*` — peticiones (`$lib/server/logging/events.ts`)
 
@@ -103,17 +104,7 @@ estas reglas; no pueden añadir campos fuera de la lista permitida sin enmendar 
 | `http.cors.rejected`     | info                               | `Origen no permitido para la app`    | `reason` (`origin_not_allowed`), `errorCode` (`ORIGIN_NOT_ALLOWED`)                                                 | Host de la API: petición con `Origin` fuera de la lista de la app de `X-App-Id` (`403`), o _preflight_ con un origen que no figura en ninguna app activa (D-19)       | —      |
 | `http.origin.rejected`   | info                               | `Formulario rechazado por su origen` | `reason` {`origin_missing`, `origin_mismatch`}, `httpStatus` (403)                                                  | Host web: POST/PUT/PATCH/DELETE con tipo de contenido de formulario sin `Origin` o con un origen distinto de `PUBLIC_WEB_URL` (comprobación propia de `handle`, D-01) | —      |
 
-### 2.3 `log.*` — transporte de logs (`$lib/server/logging/events.ts`)
-
-**Nota (fase posterior, enmienda 2.2.0).** Esta sección es el catálogo del envío al Log Gateway, aplazado a una fase posterior (D-06). En la v4 no hay envío remoto: los logs van solo a stdout en JSON y estos eventos no se emiten; se conservan como catálogo de esa fase.
-
-| Código                  | Nivel | `msg`                                          | Campos propios                      | Cuándo                                                                      | Alerta         |
-| ----------------------- | ----- | ---------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------- | -------------- |
-| `log.gateway.dropped`   | warn  | `Eventos descartados por el búfer del Gateway` | `count`                             | El Gateway falla y el búfer acotado descarta los más antiguos (solo stdout) | fase posterior |
-| `log.gateway.failed`    | warn  | `Fallo al enviar un lote al Gateway`           | `attempt`, `httpStatus`, `err`      | Un envío de lote falla (stdout)                                             | fase posterior |
-| `log.gateway.recovered` | info  | `Envío al Gateway restablecido`                | `count` (lotes pendientes enviados) | Tras un periodo de fallos                                                   | fase posterior |
-
-### 2.4 `client.*` — navegador (`src/lib/logging/`) y su recepción
+### 2.3 `client.*` — navegador (`src/lib/logging/`) y su recepción
 
 | Código                             | Dónde                                    | Nivel | `msg`                                   | Campos                                                                                                                 | Cuándo                                                                         | Alerta |
 | ---------------------------------- | ---------------------------------------- | ----- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------ |
@@ -140,13 +131,14 @@ valores permitidos de `reason`, `status` u `operation`.
 
 ### 3.2 `notifications`
 
-| Código                           | Nivel | `msg`                               | Campos propios                                                                                                                                                                                                                                                     | Cuándo                                                             | Alerta |
-| -------------------------------- | ----- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ------ |
-| `notifications.email.sent`       | info  | `Email enviado`                     | `reason` {`verification`, `password_reset`, `password_changed`, `email_change_verify`, `email_changed_notice`, `low_balance`, `free_expiry_warning`, `legal_update`, `invoice_available`, `inactivity_notice`, `admin_alert`}, `provider` (`resend`), `durationMs` | Envío aceptado por el proveedor (o escrito en el _outbox_ en test) | —      |
-| `notifications.email.failed`     | warn  | `Email no enviado`                  | `reason` (plantilla, como arriba), `provider`, `errorCode`, `err`                                                                                                                                                                                                  | El proveedor rechaza o no responde; sin reintento infinito         | V      |
-| `notifications.alert.triggered`  | warn  | `Alerta enviada al administrador`   | `reason` {`global_brake`, `openrouter_balance_low`, `mistral_billing_error`, `model_retired`, `model_price_changed`, `flagged_ops`, `ledger_mismatch`, `fx_stale`}                                                                                                 | Primer cruce de un umbral (`alerts_state.active` pasa a `true`)    | A      |
-| `notifications.alert.suppressed` | debug | `Alerta ya enviada para este cruce` | `reason` (como arriba)                                                                                                                                                                                                                                             | Se repite la condición sin haberse normalizado                     | —      |
-| `notifications.alert.rearmed`    | info  | `Alerta rearmada`                   | `reason` (como arriba)                                                                                                                                                                                                                                             | La condición se normaliza y el umbral vuelve a poder dispararse    | —      |
+| Código                           | Nivel | `msg`                                          | Campos propios                                                                                                                                                                                                                                                     | Cuándo                                                                 | Alerta |
+| -------------------------------- | ----- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------ |
+| `notifications.email.sent`       | info  | `Email enviado`                                | `reason` {`verification`, `password_reset`, `password_changed`, `email_change_verify`, `email_changed_notice`, `low_balance`, `free_expiry_warning`, `legal_update`, `invoice_available`, `inactivity_notice`, `admin_alert`}, `provider` (`resend`), `durationMs` | Envío aceptado por el proveedor (o escrito en el _outbox_ en test)     | —      |
+| `notifications.email.failed`     | warn  | `Email no enviado`                             | `reason` (plantilla, como arriba), `provider`, `errorCode`, `err`                                                                                                                                                                                                  | El proveedor rechaza o no responde; sin reintento infinito             | V      |
+| `notifications.email.rejected`   | error | `Email rechazado por validación del proveedor` | `reason` (plantilla, como arriba), `provider`, `errorCode` (`validation_error`)                                                                                                                                                                                    | El proveedor rechaza el contenido por validación (T329); sin reintento | V      |
+| `notifications.alert.triggered`  | warn  | `Alerta enviada al administrador`              | `reason` {`global_brake`, `openrouter_balance_low`, `mistral_billing_error`, `model_retired`, `model_price_changed`, `flagged_ops`, `ledger_mismatch`, `fx_stale`}                                                                                                 | Primer cruce de un umbral (`alerts_state.active` pasa a `true`)        | A      |
+| `notifications.alert.suppressed` | debug | `Alerta ya enviada para este cruce`            | `reason` (como arriba)                                                                                                                                                                                                                                             | Se repite la condición sin haberse normalizado                         | —      |
+| `notifications.alert.rearmed`    | info  | `Alerta rearmada`                              | `reason` (como arriba)                                                                                                                                                                                                                                             | La condición se normaliza y el umbral vuelve a poder dispararse        | —      |
 
 ### 3.3 `apps`
 
@@ -245,23 +237,24 @@ valores permitidos de `reason`, `status` u `operation`.
 | `accounts.admin.promotion_refused`           | error | `Promoción de administrador rechazada`                   | `reason` (`admin_exists`)                                                                                                                                | Ya existe otra cuenta `admin` (constitución, «Variables»)                                                                     | V      |
 | `accounts.guard.denied`                      | info  | `Acceso denegado por el guard`                           | `reason` {`anonymous`, `unverified`, `not_admin`}, `httpStatus`                                                                                          | Un _guard_ rechaza un `load`, _action_ o descarga                                                                             | —      |
 | `accounts.unverified.purged`                 | info  | `Cuentas sin verificar eliminadas`                       | `count`                                                                                                                                                  | Tarea `unverified-accounts-cleanup`                                                                                           | —      |
+| `accounts.unverified.purge_skipped`          | warn  | `Cuenta sin verificar conservada`                        | `err`                                                                                                                                                    | Una cuenta sin verificar tiene datos que impiden borrarla                                                                     | —      |
 | `accounts.disposable_domains.refreshed`      | info  | `Lista de dominios desechables actualizada`              | `count` (dominios)                                                                                                                                       | Tarea `disposable-domains`                                                                                                    | —      |
 | `accounts.disposable_domains.refresh_failed` | warn  | `No se pudo actualizar la lista de dominios desechables` | `httpStatus`, `err`                                                                                                                                      | Fallo de la descarga; se mantiene la lista anterior                                                                           | —      |
 
 ### 3.9 `payments`
 
-| Código                        | Nivel | `msg`                          | Campos propios                                                                                        | Cuándo                                                              | Alerta |
-| ----------------------------- | ----- | ------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------ |
-| `payments.purchase.completed` | info  | `Compra completada`            | `provider` {`simulated`, `stripe`}, `status` {`simulated`, `real`}                                    | Acreditación correcta                                               | —      |
-| `payments.purchase.duplicate` | info  | `Compra repetida`              | `reason` (`intent_already_used`)                                                                      | Doble clic, reenvío o «atrás» con el mismo identificador de intento | —      |
-| `payments.purchase.rejected`  | info  | `Compra rechazada`             | `reason` {`not_available`, `waiver_missing`, `pack_inactive`, `intent_invalid`, `billing_incomplete`} | Rechazo de negocio                                                  | —      |
-| `payments.purchase.failed`    | warn  | `Error del proveedor de pagos` | `provider`, `errorCode`, `err`                                                                        | El proveedor falla (no se cobra)                                    | V      |
-| `payments.webhook.received`   | info  | `Webhook de pago recibido`     | `provider`, `status` {`payment_completed`, `payment_refunded`, `chargeback_opened`}                   | Fase Stripe (sin uso en la v4)                                      | —      |
-| `payments.webhook.duplicate`  | info  | `Webhook repetido ignorado`    | `provider`, `status`                                                                                  | Evento ya procesado (idempotente)                                   | —      |
-| `payments.webhook.rejected`   | warn  | `Webhook rechazado`            | `provider`, `reason` {`signature_invalid`, `schema_invalid`}                                          | Firma o esquema inválidos                                           | V      |
-| `payments.refund.applied`     | info  | `Reembolso aplicado`           | `provider`                                                                                            | Reembolso manual del administrador                                  | —      |
-| `payments.chargeback.applied` | warn  | `Contracargo aplicado`         | `provider`                                                                                            | Contracargo (retira saldo, deuda sin tope y bloquea la cuenta)      | V      |
-| `payments.pack.updated`       | info  | `Paquete guardado`             | `status` {`created`, `updated`}                                                                       | El administrador crea o edita un paquete                            | —      |
+| Código                        | Nivel | `msg`                          | Campos propios                                                                                        | Cuándo                                                                  | Alerta |
+| ----------------------------- | ----- | ------------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------ |
+| `payments.purchase.completed` | info  | `Compra completada`            | `provider` {`simulated`, `stripe`}, `status` {`simulated`, `real`}                                    | Acreditación correcta                                                   | —      |
+| `payments.purchase.duplicate` | info  | `Compra repetida`              | `reason` (`intent_already_used`)                                                                      | Doble clic, reenvío o «atrás» con el mismo identificador de intento     | —      |
+| `payments.purchase.rejected`  | info  | `Compra rechazada`             | `reason` {`not_available`, `waiver_missing`, `pack_inactive`, `intent_invalid`, `billing_incomplete`} | Rechazo de negocio                                                      | —      |
+| `payments.purchase.failed`    | warn  | `Error del proveedor de pagos` | `provider`, `errorCode`, `err`                                                                        | El proveedor falla (no se cobra)                                        | V      |
+| `payments.webhook.received`   | info  | `Webhook de pago recibido`     | `provider`, `status` {`payment_completed`, `payment_refunded`, `chargeback_opened`}                   | Fase Stripe (sin uso en la v4)                                          | —      |
+| `payments.webhook.duplicate`  | info  | `Webhook repetido ignorado`    | `provider`, `status`                                                                                  | Evento ya procesado (idempotente)                                       | —      |
+| `payments.webhook.rejected`   | warn  | `Webhook rechazado`            | `provider`, `reason` {`signature_invalid`, `schema_invalid`, `not_completed`}                         | Firma o esquema inválidos, o contracargo sobre una compra no acreditada | V      |
+| `payments.refund.applied`     | info  | `Reembolso aplicado`           | `provider`                                                                                            | Reembolso manual del administrador                                      | —      |
+| `payments.chargeback.applied` | warn  | `Contracargo aplicado`         | `provider`                                                                                            | Contracargo (retira saldo, deuda sin tope y bloquea la cuenta)          | V      |
+| `payments.pack.updated`       | info  | `Paquete guardado`             | `status` {`created`, `updated`}                                                                       | El administrador crea o edita un paquete                                | —      |
 
 ### 3.10 `sync`
 
@@ -366,7 +359,6 @@ cruce) o `notifications.alert.suppressed` (repetición sin normalizar).
 | --------------- | ------- |
 | `app.*`         | 9       |
 | `http.*`        | 5       |
-| `log.*`         | 3       |
 | `client.*`      | 4       |
 | `audit`         | 1       |
 | `notifications` | 5       |
@@ -382,6 +374,6 @@ cruce) o `notifications.alert.suppressed` (repetición sin normalizar).
 | `ai`            | 23      |
 | `privacy`       | 6       |
 | `stats`         | 2       |
-| **Total**       | **149** |
+| **Total**       | **146** |
 
-Eventos que originan alertas por email (A): 8, más `notifications.alert.triggered`, que registra el envío. Eventos de vigilancia (V): 22 (`log.gateway.dropped` pasa a la fase posterior).
+Eventos que originan alertas por email (A): 8, más `notifications.alert.triggered`, que registra el envío. Eventos de vigilancia (V): 22.

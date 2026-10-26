@@ -186,7 +186,7 @@ describe('flujo de chat (§8)', () => {
 		expect(f.gateway.chatCalls).toHaveLength(0);
 	});
 
-	it('un coste máximo estimado por encima del tope responde OPERATION_TOO_EXPENSIVE, sin llamar al proveedor', async () => {
+	it('[BE-FR-72/CA1] un coste máximo estimado por encima del tope responde OPERATION_TOO_EXPENSIVE, sin llamar al proveedor', async () => {
 		priceModel('mistralai/mistral-small', 2_000_000, 4_000_000);
 		priceModel('openai/gpt-5.6-luna', 2_000_000, 4_000_000);
 		priceModel('anthropic/claude-haiku-5.5', 1_000_000_000, 1_000_000_000);
@@ -197,6 +197,37 @@ describe('flujo de chat (§8)', () => {
 		});
 		expect(f.gateway.chatCalls).toHaveLength(0);
 		expect(rowsOf()).toEqual([expect.objectContaining({ status: 'rejected', holdMicro: null })]);
+	});
+
+	it('[BE-FR-38/CA1] el texto enviado no aparece en ninguna tabla ni en los eventos de log', async () => {
+		const secret = 'frase-confidencial-de-prueba-7431';
+		await runChat(f.deps, f.context(), chatBody({ messages: [{ role: 'user', content: secret }] }));
+
+		const sqlite = f.base.database.sqlite;
+		const names = sqlite
+			.prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+			.pluck()
+			.all()
+			.map(String);
+		const everything = names
+			.map((name) => JSON.stringify(sqlite.prepare(`SELECT * FROM "${name}"`).all()))
+			.join('\n');
+		expect(everything).not.toContain(secret);
+		expect(JSON.stringify(f.base.logger.events)).not.toContain(secret);
+	});
+
+	it('[BE-FR-77/CA1] un cambio del catálogo se aplica a la siguiente petición, sin reiniciar ni redesplegar', async () => {
+		const first = completed(await runChat(f.deps, f.context(), chatBody()));
+		expect(first.chargedMicro).toBe(CHARGE_MICRO);
+
+		priceModel('mistralai/mistral-small', 2_000_000, 4_000_000);
+		priceModel('openai/gpt-5.6-luna', 2_000_000, 4_000_000);
+		priceModel('anthropic/claude-haiku-5.5', 1_000_000_000, 1_000_000_000);
+		f.setOperationMaxCost(1_000_000);
+
+		await expect(runChat(f.deps, f.context(), chatBody())).rejects.toMatchObject({
+			code: 'OPERATION_TOO_EXPENSIVE'
+		});
 	});
 
 	it('si todos los intentos fallan, responde PROVIDER_ERROR sin cobro y libera la reserva', async () => {
@@ -257,7 +288,7 @@ describe('flujo de chat (§8)', () => {
 		}
 	});
 
-	it('una respuesta truncada se entrega y se registra el motivo', async () => {
+	it('[BE-FR-72/CA2] una respuesta truncada se entrega y se registra el motivo', async () => {
 		f.gateway.answerNext({ ...FAKE_OK, truncated: true });
 
 		const response = completed(await runChat(f.deps, f.context(), chatBody()));
@@ -305,7 +336,7 @@ describe('flujo de chat (§8)', () => {
 		expect(eventsNamed(f.base.logger, 'ai.cost.estimated')).toHaveLength(1);
 	});
 
-	it('con esquema de salida, un JSON válido se devuelve y uno inválido se cobra igual (BE-FR-79)', async () => {
+	it('[BE-FR-79/CA1] con esquema de salida, un JSON válido se devuelve y uno inválido se cobra igual (BE-FR-79)', async () => {
 		setCapabilities({ image_input: false, structured_output: true, tools: false });
 		const body = {
 			...chatBody(),

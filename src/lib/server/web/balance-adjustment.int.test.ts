@@ -1,6 +1,7 @@
 // Ajuste de saldo del administrador (W36; BE-FR-18, D-16; T307) contra SQLite real: la vista previa calcula el saldo final que el
 // ajuste deja de verdad; una resta por encima del disponible se rechaza en la vista previa y en el servicio sin movimiento; y el ajuste
 // aplicado deja el saldo previsto con su entrada de auditoría.
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { creditsFixture, type CreditsFixture } from '../../../../tests/builders/credits';
 import { adminAudit } from '../features/audit/schema';
@@ -34,6 +35,7 @@ describe('ajuste de saldo del administrador (W36, T307)', () => {
 		expect(preview.ok).toBe(true);
 
 		f.credits.adjust({
+			idempotencyKey: randomUUID(),
 			adminId,
 			userId,
 			direction: 'credit',
@@ -59,6 +61,7 @@ describe('ajuste de saldo del administrador (W36, T307)', () => {
 			reason: 'exceeds_available'
 		});
 		const outcome = f.credits.adjust({
+			idempotencyKey: randomUUID(),
 			adminId,
 			userId,
 			direction: 'debit',

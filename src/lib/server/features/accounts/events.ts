@@ -60,6 +60,7 @@ export interface AccountsLogFields {
 	'accounts.admin.promotion_refused': { reason: 'admin_exists' };
 	'accounts.guard.denied': { reason: 'anonymous' | 'unverified' | 'not_admin'; httpStatus: number };
 	'accounts.unverified.purged': { count: number };
+	'accounts.unverified.purge_skipped': { err: unknown };
 	'accounts.disposable_domains.refreshed': { count: number };
 	'accounts.disposable_domains.refresh_failed': { httpStatus: number };
 }
@@ -98,6 +99,10 @@ export const ACCOUNTS_LOG_EVENTS = Object.freeze({
 	},
 	'accounts.guard.denied': { level: 'info', msg: 'Acceso denegado por el guard' },
 	'accounts.unverified.purged': { level: 'info', msg: 'Cuentas sin verificar eliminadas' },
+	'accounts.unverified.purge_skipped': {
+		level: 'warn',
+		msg: 'Cuenta sin verificar conservada: tiene datos que la retienen'
+	},
 	'accounts.disposable_domains.refreshed': {
 		level: 'info',
 		msg: 'Lista de dominios desechables actualizada'

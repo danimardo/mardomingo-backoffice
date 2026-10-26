@@ -19,7 +19,7 @@
 		/** Slug de la app de origen (`?app=`), o `null`. Viaja como campo oculto. */
 		originSlug: string | null;
 		/** Versiones vigentes de los documentos legales, por tipo (`terms`, `privacy`, `aup`). */
-		legal: readonly { readonly kind: string; readonly version: string }[];
+		legal: readonly { readonly kind: string; readonly version: string; readonly url: string }[];
 		minAge: number;
 		passwordRule: { readonly min: number; readonly max: number };
 		/** Clave pública de Turnstile; vacía cuando el captcha no se carga (pruebas). */
@@ -36,6 +36,11 @@
 
 	const versionOf = (kind: string): string =>
 		legal.find((item) => item.kind === kind)?.version ?? '';
+	const LABELS: Readonly<Record<string, () => string>> = {
+		terms: m.legal_terms_title,
+		privacy: m.legal_privacy_title,
+		aup: m.legal_aup_title
+	};
 </script>
 
 <ErrorSummary {errors} {formError} />
@@ -84,6 +89,18 @@
 		<Checkbox id="ageDeclaration" name="ageDeclaration" error={errors.ageDeclaration ?? ''}>
 			{m.accounts_age_declaration({ age: String(minAge) })}
 		</Checkbox>
+		<!-- Enlaces a los textos que se aceptan (BE-FR-70 CA2). Pestaña nueva: así no se pierde lo escrito, ni sin JavaScript. -->
+		<p>{m.legal_register_read()}</p>
+		<ul>
+			{#each legal as item (item.kind)}
+				<li>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- la ruta llega ya resuelta desde el servidor -->
+					<a href={item.url} target="_blank" rel="noopener"
+						>{m.legal_register_new_tab({ label: LABELS[item.kind]?.() ?? item.kind })}</a
+					>
+				</li>
+			{/each}
+		</ul>
 	</fieldset>
 
 	<noscript>

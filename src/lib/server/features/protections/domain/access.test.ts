@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ENDPOINT_CHECKS, maintenanceVerdict, versionVerdict } from './access';
 
 describe('ENDPOINT_CHECKS (api-v1 1.8, D-19)', () => {
-	it('logout y /app/status no exigen versión mínima ni mantenimiento', () => {
+	it('[BE-FR-48/CA1] logout y /app/status no exigen versión mínima ni mantenimiento', () => {
 		expect(ENDPOINT_CHECKS['auth.logout']).toEqual({ version: false, maintenance: false });
 		expect(ENDPOINT_CHECKS['app.status']).toEqual({ version: false, maintenance: false });
 	});

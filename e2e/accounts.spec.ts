@@ -3,7 +3,8 @@
 import { expect, test } from './fixtures';
 
 // Las respuestas 400 y 401 de estas pruebas son el resultado esperado (validación y credenciales), no un fallo.
-test.use({ guardAllow: [/status of 400|status of 401/] });
+// Una petición de datos de SvelteKit (`__data.json`) puede quedar abortada al navegar (ver `privacy.spec.ts`): no es un fallo.
+test.use({ guardAllow: [/status of 400|status of 401|__data\.json.*ERR_ABORTED/] });
 
 test('@critical el panel sin sesión manda al inicio de sesión con el destino guardado', async ({
 	page
@@ -25,7 +26,9 @@ test('@critical el registro muestra los campos y ninguna casilla premarcada', as
 	}
 });
 
-test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ page }) => {
+test('@critical [UX-01] el registro sin captcha no crea la cuenta, conserva el email y lleva el foco al resumen', async ({
+	page
+}) => {
 	await page.goto('/registro');
 	await page.waitForLoadState('networkidle');
 	await page.getByLabel('Email').fill('nueva.persona@ejemplo.es');
@@ -40,10 +43,15 @@ test('@critical el registro sin captcha no crea la cuenta y lo dice', async ({ p
 	await expect(page.getByRole('alert')).toContainText(
 		'No hemos podido comprobar que eres una persona'
 	);
+	await expect(page.getByRole('alert')).toBeFocused();
+	await expect(page.getByLabel('Email')).toHaveValue('nueva.persona@ejemplo.es');
+	await expect(page.getByLabel('Contraseña', { exact: true })).toHaveValue('');
 	await expect(page.getByRole('heading', { name: 'Revisa tu email' })).toHaveCount(0);
 });
 
-test('@critical el inicio de sesión con datos erróneos da un error genérico', async ({ page }) => {
+test('@critical [UX-04] el inicio de sesión con datos erróneos da un error genérico', async ({
+	page
+}) => {
 	await page.goto('/login');
 	// Esperar a que la página esté lista antes de rellenar: si no, el envío puede ir antes de hidratar y no aparece el error.
 	await page.waitForLoadState('networkidle');

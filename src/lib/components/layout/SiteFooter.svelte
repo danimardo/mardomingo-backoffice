@@ -1,5 +1,9 @@
 <script lang="ts">
-	// Pie: texto de la marca y los controles de apariencia, que vuelven a la página actual tras enviarse.
+	// Estados: el selector de tema y el de efectos (`ThemeToggle` y `EffectsToggle`) muestran la elección actual. Teclado: son
+	// formularios, sin JavaScript. Temas y efectos reducidos: sus colores son tokens.
+	// Pie: texto de la marca, enlaces a los documentos legales y soporte, y los controles de apariencia, que vuelven a la
+	// página actual tras enviarse. Los documentos legales están siempre a un enlace (BE-FR-60, BE-FR-70 CA2).
+	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import EffectsToggle from './EffectsToggle.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
@@ -9,13 +13,27 @@
 		redirectTo: string;
 		theme: Theme;
 		effects: Effects;
+		supportEmail?: string | null;
 	}
 
-	let { redirectTo, theme, effects }: Props = $props();
+	let { redirectTo, theme, effects, supportEmail = null }: Props = $props();
 </script>
 
 <footer class="footer">
-	<p>{m.layout_footer_text()}</p>
+	<div class="info">
+		<p>{m.layout_footer_text()}</p>
+		<nav aria-label={m.layout_footer_nav_label()}>
+			<ul>
+				<li><a href={resolve('/terminos')}>{m.layout_footer_terms()}</a></li>
+				<li><a href={resolve('/privacidad')}>{m.layout_footer_privacy()}</a></li>
+				<li><a href={resolve('/cookies')}>{m.layout_footer_cookies()}</a></li>
+				<li><a href={resolve('/uso-aceptable')}>{m.layout_footer_aup()}</a></li>
+			</ul>
+		</nav>
+		{#if supportEmail !== null && supportEmail !== ''}
+			<p>{m.layout_footer_support({ email: supportEmail })}</p>
+		{/if}
+	</div>
 	<div class="controls">
 		<ThemeToggle current={theme} {redirectTo} />
 		<EffectsToggle current={effects} {redirectTo} />
@@ -38,6 +56,32 @@
 
 	.footer p {
 		margin: 0;
+	}
+
+	.info {
+		display: grid;
+		gap: var(--space-3);
+	}
+
+	.info ul {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.info a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		color: inherit;
+	}
+
+	.info a:focus-visible {
+		outline: 2px solid var(--color-focus-ring);
+		outline-offset: 2px;
 	}
 
 	.controls {

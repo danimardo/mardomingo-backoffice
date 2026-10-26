@@ -52,6 +52,11 @@ export const GET: RequestHandler = ({ locals, url }) => {
 		if (!result.pagination.hasNext) break;
 	}
 	const names = appNamesOf(composition.apps, [...appIds]);
+	// UX-09: el nombre del fichero lleva el rango y la app filtrada, para saber qué contiene sin abrirlo.
+	const appLabel =
+		filters.app === null
+			? null
+			: (appNamesOf(composition.apps, [filters.app]).get(filters.app) ?? null);
 	const facts = found.map((fact) => ({
 		...fact,
 		appName: typeof fact.appId === 'string' ? (names.get(fact.appId) ?? null) : null
@@ -60,11 +65,20 @@ export const GET: RequestHandler = ({ locals, url }) => {
 	return new Response(toCsv(movementRowsOf(facts), { header: HEADER, bom: true }), {
 		headers: {
 			'content-type': 'text/csv; charset=utf-8',
-			'content-disposition': `attachment; filename="movimientos-${bound(filters.desde, 'inicio')}_${bound(filters.hasta, 'fin')}.csv"`,
+			'content-disposition': `attachment; filename="${fileNameOf(filters, appLabel)}"`,
 			'cache-control': 'private, no-store'
 		}
 	});
 };
+
+/** Nombre del fichero con el rango de fechas y, si hay filtro de app, su nombre (sin caracteres problemáticos). */
+function fileNameOf(
+	filters: { readonly desde: CivilDate | null; readonly hasta: CivilDate | null },
+	appLabel: string | null
+): string {
+	const app = appLabel === null ? '' : `-${appLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+	return `movimientos-${bound(filters.desde, 'inicio')}_${bound(filters.hasta, 'fin')}${app}.csv`;
+}
 
 function bound(day: CivilDate | null, fallback: string): string {
 	return day === null ? fallback : String(day);

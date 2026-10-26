@@ -18,6 +18,7 @@ import {
 	usdMicroToEurCents,
 	type FunnelStage
 } from './domain/metrics';
+import { funnelByWeek, type FunnelMode, type FunnelWeek } from './domain/funnel-series';
 
 export interface StatsPeriod {
 	readonly fromMs: number;
@@ -43,8 +44,35 @@ export interface DayStats {
 	readonly marginEurCents: number | null;
 }
 
+/** Cómo se agrupan las operaciones de IA del periodo (W45, `agrupacion`); `dia` usa la serie diaria. */
+export type StatsGrouping = 'dia' | 'app' | 'operacion' | 'usuario';
+
+/**
+ * Filtros y agrupación de W45. `appId` y `operationKey` filtran las operaciones de IA; los ingresos de compra no tienen app ni
+ * operación y no se filtran. Con algún filtro el margen se muestra sin datos, porque ingresos y costes ya no son el mismo conjunto.
+ */
+export interface StatsOptions {
+	readonly grouping?: StatsGrouping;
+	/** Embudo por semanas: `semanal` (recuento) o `acumulado` (suma). Por defecto, semanal. */
+	readonly embudo?: FunnelMode | undefined;
+	readonly appId?: string | undefined;
+	readonly operationKey?: string | undefined;
+}
+
+export interface StatsGroup {
+	readonly key: string;
+	readonly operations: number;
+	/** Coste en euros de las operaciones con tipo conocido; nulo si ninguna lo tiene. */
+	readonly costEurCents: number | null;
+	readonly unconverted: number;
+}
+
 export interface PeriodStats {
 	readonly days: readonly DayStats[];
+	/** Embudo de alta por semanas (W45, `embudo`). Una etapa sin datos es nula, no cero. */
+	readonly funnelWeeks: readonly FunnelWeek[];
+	/** Agrupación de las operaciones de IA cuando no es `dia`; vacía en otro caso. */
+	readonly groups: readonly StatsGroup[];
 	readonly totals: {
 		readonly revenueEurCents: number | null;
 		readonly costEurCents: number | null;
@@ -70,24 +98,56 @@ export interface PeriodStats {
 }
 
 const SIN_APP = 'sin_app';
+const SIN_USUARIO = 'sin_usuario';
 
-export function statsForPeriod(deps: StatsDeps, period: StatsPeriod): PeriodStats {
+export function statsForPeriod(
+	deps: StatsDeps,
+	period: StatsPeriod,
+	options: StatsOptions = {}
+): PeriodStats {
 	const payments = deps.paymentFacts(period);
 	const purchases = payments.filter((fact) => !fact.simulated);
 	const simulated = payments.filter((fact) => fact.simulated);
-	const operations = deps.operationFacts(period);
+	const filtered = options.appId !== undefined || options.operationKey !== undefined;
+	const operations = deps
+		.operationFacts(period)
+		.filter(
+			(operation) =>
+				(options.appId === undefined || operation.appId === options.appId) &&
+				(options.operationKey === undefined || operation.operationKey === options.operationKey)
+		);
+	const keyOf = (operation: OperationStatsFact): string => {
+		switch (options.grouping) {
+			case 'app':
+				return operation.appId;
+			case 'operacion':
+				return operation.operationKey;
+			case 'usuario':
+				return operation.userId ?? SIN_USUARIO;
+			default:
+				return operation.date;
+		}
+	};
 
 	// Coste de IA en euros por día; las operaciones sin tipo conocido no suman euros y se cuentan aparte.
 	let unconverted = 0;
-	const costRows: { day: string; cents: number; cancelled: boolean }[] = [];
+	const costRows: {
+		day: string;
+		key: string;
+		cents: number;
+		cancelled: boolean;
+		converted: boolean;
+	}[] = [];
 	for (const operation of operations) {
 		if (operation.costMicroUsd <= 0) continue;
 		const ppm = operation.fxRateId === null ? null : deps.usdEurPpmOf(operation.fxRateId);
 		if (ppm === null) unconverted += 1;
 		costRows.push({
 			day: operation.date,
+			key: keyOf(operation),
 			cents: ppm === null ? 0 : usdMicroToEurCents(operation.costMicroUsd, ppm),
-			cancelled: operation.status === 'cancelled' && operation.chargedMicro === 0
+			cancelled: operation.status === 'cancelled' && operation.chargedMicro === 0,
+			converted: ppm !== null
 		});
 	}
 	const revenueByDay = groupSum(
@@ -108,9 +168,24 @@ export function statsForPeriod(deps: StatsDeps, period: StatsPeriod): PeriodStat
 			day,
 			revenueEurCents: revenue,
 			costEurCents: cost,
-			marginEurCents: grossMargin(revenue, cost)
+			marginEurCents: filtered ? null : grossMargin(revenue, cost)
 		};
 	});
+
+	const groups: StatsGroup[] =
+		options.grouping === undefined || options.grouping === 'dia'
+			? []
+			: [...groupSum(operations, keyOf, () => 1).keys()].sort().map((key) => {
+					const rows = costRows.filter((row) => row.key === key);
+					const converted = rows.filter((row) => row.converted);
+					return {
+						key,
+						operations: operations.filter((operation) => keyOf(operation) === key).length,
+						costEurCents:
+							converted.length === 0 ? null : converted.reduce((sum, row) => sum + row.cents, 0),
+						unconverted: rows.length - converted.length
+					};
+				});
 
 	const revenueTotal =
 		purchases.length === 0 ? null : purchases.reduce((sum, fact) => sum + fact.baseEurCents, 0);
@@ -147,20 +222,38 @@ export function statsForPeriod(deps: StatsDeps, period: StatsPeriod): PeriodStat
 	const downloadTotal =
 		downloadRows.length === 0 ? null : downloadRows.reduce((sum, row) => sum + row.downloads, 0);
 	const verifiedCount = signupsList.filter((row) => row.verified).length;
+	const firstOperationRows = deps.firstOperations(period);
 	const stages = funnel([
 		{ stage: 'descargas', count: downloadTotal },
 		{ stage: 'altas', count: signupsList.length },
 		{ stage: 'verificadas', count: verifiedCount },
 		{ stage: 'primer_login', count: firstLogins.length },
-		{ stage: 'primera_operacion', count: deps.firstOperations(period).length }
+		{ stage: 'primera_operacion', count: firstOperationRows.length }
 	]);
+	const funnelWeeks = funnelByWeek(
+		{
+			descargas:
+				downloadRows.length === 0
+					? null
+					: downloadRows.map((row) => ({ date: row.day, count: row.downloads })),
+			altas: signupsList.map((row) => ({ date: row.date, count: 1 })),
+			verificadas: signupsList
+				.filter((row) => row.verified)
+				.map((row) => ({ date: row.date, count: 1 })),
+			primer_login: firstLogins.map((row) => ({ date: row.date, count: 1 })),
+			primera_operacion: firstOperationRows.map((row) => ({ date: row.date, count: 1 }))
+		},
+		options.embudo ?? 'semanal'
+	);
 
 	return {
 		days,
+		funnelWeeks,
+		groups,
 		totals: {
 			revenueEurCents: revenueTotal,
 			costEurCents: costTotal,
-			marginEurCents: grossMargin(revenueTotal, costTotal),
+			marginEurCents: filtered ? null : grossMargin(revenueTotal, costTotal),
 			cancellationCostEurCents: cancellationTotal,
 			realPurchases: purchases.length,
 			simulatedPurchases: simulated.length,

@@ -1,7 +1,7 @@
 // Cuentas de punta a punta contra SQLite real (T108; BE-FR-01, 02, 03, 05, 10, 11, 64, 67, 69): registro, aceptaciones,
 // verificación, inicio de sesión y su cuenta bloqueada, recuperación, promoción de ADMIN_EMAIL y sesiones. El antiabuso
 // (dominios desechables, altas por IP, bloqueo por intentos y antienumeración) está en `abuse.int.test.ts` (T095).
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import {
@@ -49,7 +49,7 @@ async function bearerOf(address: string): Promise<string> {
 }
 
 describe('registro (W08)', () => {
-	it('un registro válido crea la cuenta sin verificar, guarda las aceptaciones y envía el enlace', async () => {
+	it('[BE-FR-01/CA4] un registro válido crea la cuenta sin verificar, guarda las aceptaciones y envía el enlace', async () => {
 		const result = await fixture.accounts.register(registration({ appSlug: 'secretario' }));
 
 		expect(result.sentTo).toBe(EMAIL);
@@ -78,7 +78,7 @@ describe('registro (W08)', () => {
 		expect(eventsNamed(fixture.logger, 'accounts.signup.completed')).toHaveLength(1);
 	});
 
-	it('el alta guarda la app de origen y la versión y fecha de cada aceptación', async () => {
+	it('[BE-FR-01/CA2] [BE-FR-64/CA1] el alta guarda la app de origen y la versión y fecha de cada aceptación', async () => {
 		await fixture.accounts.register(registration({ appSlug: 'secretario' }));
 
 		const row = db().select().from(user).where(eq(user.email, EMAIL)).get();
@@ -96,7 +96,7 @@ describe('registro (W08)', () => {
 		}
 	});
 
-	it('sin captcha válido no se crea nada', async () => {
+	it('[BE-FR-01/CA3] sin captcha válido no se crea nada', async () => {
 		fixture.captcha.outcome('invalid');
 
 		expect(await codeOf(() => fixture.accounts.register(registration()))).toBe('CAPTCHA_INVALID');
@@ -123,7 +123,7 @@ describe('registro (W08)', () => {
 });
 
 describe('verificación (W09) e inicio de sesión (W11)', () => {
-	it('sin verificar no se puede entrar; tras verificar, sí, y el destino queda saneado', async () => {
+	it('[UX-04] sin verificar no se puede entrar; tras verificar, sí, y el destino queda saneado', async () => {
 		await fixture.accounts.register(registration());
 		expect(
 			await codeOf(() =>
@@ -181,7 +181,7 @@ describe('verificación (W09) e inicio de sesión (W11)', () => {
 		}
 	});
 
-	it('una cuenta bloqueada no entra y se dice como cuenta bloqueada', async () => {
+	it('[BE-FR-03/CA2] una cuenta bloqueada no entra y se dice como cuenta bloqueada', async () => {
 		await registerAndVerify(EMAIL);
 		db().update(user).set({ banned: true }).where(eq(user.email, EMAIL)).run();
 
@@ -290,7 +290,7 @@ describe('sesiones', () => {
 		expect(await fixture.accounts.readSession(new Headers())).toBeNull();
 	});
 
-	it('cerrar sesión la revoca al momento: la siguiente lectura ya no la ve', async () => {
+	it('[BE-FR-04/CA2] cerrar sesión la revoca al momento: la siguiente lectura ya no la ve', async () => {
 		await registerAndVerify(EMAIL);
 		const headers = new Headers({ authorization: `Bearer ${await bearerOf(EMAIL)}` });
 		expect(await fixture.accounts.readSession(headers)).not.toBeNull();
@@ -300,7 +300,7 @@ describe('sesiones', () => {
 		expect(await fixture.accounts.readSession(headers)).toBeNull();
 	});
 
-	it('la sesión se renueva al usarla y caduca tras 30 días sin uso', async () => {
+	it('[BE-FR-04/CA1] la sesión se renueva al usarla y caduca tras 30 días sin uso', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		try {
 			vi.setSystemTime(new Date('2026-10-11T08:00:00Z'));
@@ -347,5 +347,25 @@ describe('bienvenida al verificar (BE-FR-02 CA1, BE-FR-11 CA1)', () => {
 		expect(fixture.config.credits.getBalance(idOf(base)).totalMicro).toBe(1_000_000_000);
 		expect(fixture.config.credits.getBalance(idOf(plus)).totalMicro).toBe(0);
 		expect(fixture.config.credits.welcomeOf(idOf(plus))).toBeNull();
+	});
+});
+
+describe('registro con fallo de persistencia (T109)', () => {
+	it('si la base rechaza el alta, el registro falla sin dejar cuenta ni aceptaciones a medias', async () => {
+		const before = db().select().from(user).all().length;
+		// Un trigger real de SQLite hace fallar el alta: así el fallo llega por la misma transacción que usa el servicio.
+		db().run(
+			sql`CREATE TRIGGER fallo_alta BEFORE INSERT ON user BEGIN SELECT RAISE(ABORT, 'fallo simulado'); END`
+		);
+		try {
+			await expect(
+				fixture.accounts.register(registration({ email: 'fallo.persistencia@ejemplo.es' }))
+			).rejects.toThrow();
+		} finally {
+			db().run(sql`DROP TRIGGER fallo_alta`);
+		}
+
+		expect(db().select().from(user).all().length).toBe(before);
+		expect(db().select().from(termsAcceptances).all()).toHaveLength(0);
 	});
 });

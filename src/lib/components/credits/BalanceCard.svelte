@@ -35,11 +35,13 @@
 <style>
 	.balance {
 		display: grid;
-		grid-template-columns: max-content 1fr;
+		grid-template-columns: auto minmax(0, 1fr);
 		gap: 0.4rem 1rem;
 		font-variant-numeric: tabular-nums;
 	}
+	.balance dt,
 	.balance dd {
 		margin: 0;
+		overflow-wrap: anywhere;
 	}
 </style>

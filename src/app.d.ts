@@ -15,7 +15,7 @@ declare global {
 			requestId: string;
 			log: Logger;
 			appearance: Appearance;
-			/** App de `X-App-Id` en la API (paso «app», L04); `null` en la web y en `/api/v1/health` y `openapi.json`. */
+			/** App de `X-App-Id` en la API (paso «app», L04); `null` en la web y en `/api/v1/health`. */
 			app: {
 				readonly id: string;
 				readonly slug: string;

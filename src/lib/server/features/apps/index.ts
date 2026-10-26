@@ -5,6 +5,7 @@ export {
 	appAccessOf,
 	appNamesOf,
 	operationNamesOf,
+	operationKeysOf,
 	activeAppsForPanel,
 	type PanelApp,
 	announcementsFor,
@@ -19,10 +20,14 @@ export {
 	createTemplateVersion,
 	activeAppOrigins,
 	findActiveAppBySlug,
+	postVerifyTextOf,
 	getEffectiveConfig,
 	getSetting,
 	resolveAppBySlug,
 	supportEmail,
+	setAppMaintenance,
+	updateAppDetails,
+	updateAppVersions,
 	updateAppOverrides,
 	updateSetting,
 	type AppsDeps,
@@ -60,7 +65,28 @@ export {
 	type AnnouncementsAdminDeps
 } from './announcements-admin';
 
-export { appForAdmin, listAppsForAdmin, type AdminAppRow } from './admin-apps';
+// Landings públicas (T346; W01 y W02).
+export {
+	activeOperationsForPrices,
+	landingRows,
+	landingRowBySlug,
+	type PricedOperationRow
+} from './landings';
+export {
+	appPageOf,
+	landingListOf,
+	type AppPage,
+	type LandingAppRow,
+	type LandingListItem
+} from './presenters';
+
+export {
+	appForAdmin,
+	appDetailsForAdmin,
+	listAppsForAdmin,
+	type AdminAppDetails,
+	type AdminAppRow
+} from './admin-apps';
 
 // Activación de operaciones de IA (W41; T311). La comprobación del modelo vive en `ai`.
 export {
@@ -78,3 +104,6 @@ export {
 
 // Previsualización de cambios de parámetros económicos (W38; T309). No escribe.
 export { previewSettingChange, type SettingPreview } from './setting-preview';
+
+// Modelos asignados a operaciones activas, para la vigilancia de `ai` (T335).
+export { assignedModelsOf, type AssignedModelRow } from './assigned-models';

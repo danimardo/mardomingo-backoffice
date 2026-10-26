@@ -3,8 +3,9 @@
 // bienvenida sale con su importe y su caducidad, o con la explicación si la forma del email ya la recibió.
 import { redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
-import { accessFor, reportDenial } from '$lib/server/features/accounts';
+import { accessFor, reportDenial, signupAppIdOf } from '$lib/server/features/accounts';
 import { getComposition } from '$lib/server/composition.cache';
+import { postVerifyTextOf } from '$lib/server/features/apps';
 import { welcomeDto } from '$lib/server/features/credits';
 import type { PageServerLoad } from './$types';
 
@@ -24,10 +25,14 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 		const login = resolve('/login');
 		redirect(303, login);
 	}
-	const welcome = getComposition().credits.welcomeOf(access.user.id);
+	const composition = getComposition();
+	const welcome = composition.credits.welcomeOf(access.user.id);
+	// BE-FR-64 CA2: el paso siguiente es el texto propio de la app de origen, si la tiene.
+	const signupAppId = signupAppIdOf(composition.db, access.user.id);
+	const origin = signupAppId === null ? undefined : postVerifyTextOf(composition.apps, signupAppId);
 	return {
 		email: access.user.email,
-		nextSteps: { appName: null, customText: null },
+		nextSteps: { appName: origin?.name ?? null, customText: origin?.postVerifyText ?? null },
 		welcome: welcomeDto({
 			amountMicro: welcome?.amountMicro ?? null,
 			expiresAt: welcome?.expiresAt ?? null

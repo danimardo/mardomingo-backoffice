@@ -86,8 +86,13 @@ function seedAccountData(
 		db.insert(userAppActivity)
 			.values({ userId, appId, firstLoginAt: toEpochMs(now), lastUsedAt: toEpochMs(now) })
 			.run();
+		// Upsert: la cuenta del panel ya trae su documento de secretario (T322); aquí se fija el de privacidad.
 		db.insert(syncDocuments)
 			.values({ userId, appId, revision: 3, data: { nota: `dato de ${userId} en ${appId}` } })
+			.onConflictDoUpdate({
+				target: [syncDocuments.userId, syncDocuments.appId],
+				set: { revision: 3, data: { nota: `dato de ${userId} en ${appId}` } }
+			})
 			.run();
 	}
 	db.insert(verification)
@@ -206,7 +211,9 @@ export async function privacyFixture(): Promise<PrivacyFixture> {
 		sync,
 		legal,
 		invoicing: panel.fixture.deps.invoicing,
-		payments: panel.fixture.payments
+		payments: panel.fixture.payments,
+		notifications: { sender: mail, logger, supportEmail: () => 'soporte@mardomingo.com' },
+		publicWebUrl: 'https://cuenta.mardomingo.test'
 	};
 	return {
 		panel,

@@ -1,6 +1,6 @@
 <script lang="ts">
 	// W36 · `/admin/usuarios/[userId]/ajuste`: ajuste de saldo con vista previa y confirmación (T307; BE-FR-18, D-16). La vista previa no
-	// cambia nada; aplicar exige la casilla de confirmación. Sin JavaScript funciona igual.
+	// cambia nada; ajustarSaldo exige la casilla de confirmación. Sin JavaScript funciona igual.
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
@@ -11,6 +11,10 @@
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+	// La página se recarga entera tras cada acción: se vuelven a pintar los valores enviados para no pedirlos otra vez.
+	const values = $derived<Readonly<Record<string, string>>>(
+		form && 'values' in form ? form.values : { tipo: 'credit', bolsa: 'free' }
+	);
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
 </script>
 
@@ -45,16 +49,19 @@
 {/if}
 
 <form method="POST">
+	<input type="hidden" name="clave" value={data.adjustmentKey} />
 	<TextField
 		id="cantidad"
 		name="cantidad"
+		value={values.cantidad ?? ''}
 		label={m.admin_adjust_amount()}
-		error={errors.cantidad ?? ''}
+		error={errors.amountCredits ?? ''}
 		required
 	/>
 	<Select
 		id="tipo"
 		name="tipo"
+		value={values.tipo ?? 'credit'}
 		label={m.admin_adjust_type()}
 		options={[
 			{ value: 'credit', label: m.admin_adjust_credit() },
@@ -64,6 +71,7 @@
 	<Select
 		id="bolsa"
 		name="bolsa"
+		value={values.bolsa ?? 'free'}
 		label={m.admin_adjust_kind()}
 		options={[
 			{ value: 'free', label: m.admin_adjust_free() },
@@ -73,6 +81,7 @@
 	<TextField
 		id="vence"
 		name="vence"
+		value={values.vence ?? ''}
 		label={m.admin_adjust_expires()}
 		hint="AAAA-MM-DD"
 		error={errors.vence ?? ''}
@@ -80,16 +89,17 @@
 	<TextField
 		id="motivo"
 		name="motivo"
+		value={values.motivo ?? ''}
 		label={m.admin_adjust_reason()}
 		error={errors.motivo ?? ''}
 		required
 	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_adjust_confirm()}</Checkbox>
 	<p>
-		<Button type="submit" formaction="?/previsualizar" variant="secondary"
+		<Button type="submit" formaction="?/previsualizarAjuste" variant="secondary"
 			>{m.admin_adjust_preview_submit()}</Button
 		>
-		<Button type="submit" formaction="?/aplicar" variant="primary"
+		<Button type="submit" formaction="?/ajustarSaldo" variant="primary"
 			>{m.admin_adjust_apply_submit()}</Button
 		>
 	</p>

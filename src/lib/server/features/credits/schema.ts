@@ -225,3 +225,10 @@ export const welcomeGrants = sqliteTable('welcome_grants', {
 	emailNormalizedHash: text('email_normalized_hash').primaryKey(),
 	grantedAt: epochMs('granted_at').notNull().default(nowMs)
 });
+
+// Claves de los ajustes de saldo ya aplicados (T307, 15.12): un doble envío del mismo formulario no vuelve a aplicar el ajuste.
+// Solo guarda la clave y su fecha, sin cuenta ni administrador, para que no dependa del borrado de cuentas (RGPD).
+export const adjustmentKeys = sqliteTable('adjustment_keys', {
+	key: text('key').primaryKey(),
+	createdAt: epochMs('created_at').notNull().default(nowMs)
+});

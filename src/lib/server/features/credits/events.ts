@@ -20,7 +20,9 @@ export interface CreditsLogFields {
 	'credits.adjustment.applied': { direction: 'credit' | 'debit'; kind: 'free' | 'paid' };
 	'credits.adjustment.rejected': { reason: 'exceeds_available' };
 	'credits.expiry.applied': { count: number };
-	'credits.balance.forfeited': { count: number };
+	'credits.expiry.warned': { count: number };
+	'credits.balance.forfeited': { reason: 'user' | 'inactivity'; count: number };
+	'credits.ledger.mismatch': { count: number };
 	'credits.refund.applied': Record<string, never>;
 	'credits.low_balance.crossed': { status: 'notified' | 'rearmed' };
 	'credits.chargeback.applied': Record<string, never>;
@@ -44,7 +46,9 @@ export const CREDITS_LOG_EVENTS = Object.freeze({
 	'credits.adjustment.applied': { level: 'info', msg: 'Ajuste manual aplicado' },
 	'credits.adjustment.rejected': { level: 'info', msg: 'Ajuste manual rechazado' },
 	'credits.expiry.applied': { level: 'info', msg: 'Caducidad de saldo aplicada' },
+	'credits.expiry.warned': { level: 'info', msg: 'Avisos de caducidad enviados' },
 	'credits.balance.forfeited': { level: 'info', msg: 'Saldo anulado por el borrado de la cuenta' },
+	'credits.ledger.mismatch': { level: 'error', msg: 'Discrepancia entre saldo y ledger' },
 	'credits.refund.applied': {
 		level: 'info',
 		msg: 'Reembolso aplicado sobre la bolsa de la compra'

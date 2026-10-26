@@ -7,7 +7,29 @@ describe('parsePanelFilters', () => {
 	it('acepta fechas en dd/mm/aaaa y en ISO y las devuelve como fecha de calendario', () => {
 		expect(parsePanelFilters({ desde: '01/10/2026', hasta: '2026-10-31' })).toEqual({
 			ok: true,
-			value: { desde: '2026-10-01', hasta: '2026-10-31', app: null, pagina: 1, periodo: null }
+			value: {
+				desde: '2026-10-01',
+				hasta: '2026-10-31',
+				app: null,
+				pagina: 1,
+				periodo: null,
+				orden: 'desc'
+			}
+		});
+	});
+
+	it('[UX-09] el orden por fecha es «desc» por defecto y solo admite «asc» o «desc»', () => {
+		expect(parsePanelFilters({ orden: 'asc' })).toMatchObject({
+			ok: true,
+			value: { orden: 'asc' }
+		});
+		expect(parsePanelFilters({ orden: 'desc' })).toMatchObject({
+			ok: true,
+			value: { orden: 'desc' }
+		});
+		expect(parsePanelFilters({ orden: 'fecha' })).toEqual({
+			ok: false,
+			errors: { orden: 'validation_invalid' }
 		});
 	});
 
@@ -68,6 +90,9 @@ describe('queryOfFilters', () => {
 
 		expect(queryOfFilters(parsed.value, 2)).toBe('?desde=01%2F10%2F2026&app=secretario&pagina=2');
 		expect(queryOfFilters(parsed.value, 1)).toBe('?desde=01%2F10%2F2026&app=secretario');
+		const ascending = parsePanelFilters({ orden: 'asc' });
+		if (!ascending.ok) throw new Error('el orden de prueba debe ser válido');
+		expect(queryOfFilters(ascending.value, null)).toBe('?orden=asc');
 		const empty = parsePanelFilters({});
 		if (!empty.ok) throw new Error('sin filtros debe ser válido');
 		expect(queryOfFilters(empty.value, null)).toBe('');

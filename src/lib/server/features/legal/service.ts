@@ -7,7 +7,9 @@ import type { Db } from '$lib/server/db/client';
 import type { Logger } from '$lib/server/logging/logger';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import type { EpochMs } from '$lib/shared/time';
+import { legalDocumentView, type LegalDocumentView } from './presenters';
 import {
+	readCurrentDocument,
 	readCurrentVersion,
 	insertAcceptance,
 	type AcceptableDocument,
@@ -38,6 +40,16 @@ export function currentVersions(
 		if (current !== undefined) result.set(document, current);
 	}
 	return result;
+}
+
+/** Versión vigente de un documento con su texto para mostrarla (W04–W07), o `undefined` si aún no hay ninguna. */
+export function currentDocument(
+	deps: Pick<LegalDeps, 'db'>,
+	now: EpochMs,
+	document: LegalDocumentName
+): LegalDocumentView | undefined {
+	const published = readCurrentDocument(deps.db, document, now);
+	return published === undefined ? undefined : legalDocumentView(published);
 }
 
 /**

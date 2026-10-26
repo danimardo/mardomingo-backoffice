@@ -7,6 +7,10 @@ const config = {
 	},
 	kit: {
 		adapter: adapter(),
+		// Rutas absolutas también al renderizar en el servidor: con `relative: true` (valor por defecto), `resolve()` en un `load`
+		// devuelve `./ruta` relativa a la página de esa petición, y los enlaces que viajan en los datos de un layout o de una
+		// página quedan rotos al reutilizarlos desde otra profundidad. La aplicación cuelga siempre de la raíz del dominio.
+		paths: { relative: false },
 		// D-01: la comprobación de origen de SvelteKit rechaza los POST multipart sin
 		// cabecera Origin (apps de escritorio). La protección CSRF la hace `handle`,
 		// solo en el host web (constitución, principio III).

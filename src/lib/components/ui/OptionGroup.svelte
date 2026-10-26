@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Estados: la opción de `value` aparece marcada; sin valor, ninguna. Teclado: radios nativos (Tab entra y las flechas
+	// cambian la opción), sin JavaScript. Temas: colores de tokens en claro y oscuro. Efectos reducidos: sin transiciones.
 	// Grupo de opciones nativo (DS-06; T255): `fieldset` con `legend` y radios reales, navegables con teclado sin JavaScript.
 	let {
 		name,

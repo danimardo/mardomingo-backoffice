@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { creditsFixture, type CreditsFixture } from '../../../../../tests/builders/credits';
 import { session } from './schema';
-import { closeOtherSession } from './close-session';
+import { closeOtherSession, closeOtherSessions } from './close-session';
 
 const NOW = Date.UTC(2026, 9, 11, 8, 0, 0);
 let f: CreditsFixture;
@@ -75,5 +75,30 @@ describe('closeOtherSession (T264)', () => {
 		expect(
 			closeOtherSession(f.db, { userId, sessionId: 'no_existe', currentSessionId: null })
 		).toBe('not_found');
+	});
+});
+
+describe('closeOtherSessions (UX-10)', () => {
+	it('[UX-10] cierra todas las sesiones de la cuenta menos la actual y no toca otras cuentas', () => {
+		const otra = f.addUser('usr_ajena');
+		addSession('ses_actual', userId);
+		addSession('ses_b', userId);
+		addSession('ses_c', userId);
+		addSession('ses_ajena', otra);
+
+		const closed = closeOtherSessions(f.db, { userId, currentSessionId: 'ses_actual' });
+
+		expect(closed).toBe(2);
+		expect(exists('ses_actual')).toBe(true);
+		expect(exists('ses_b')).toBe(false);
+		expect(exists('ses_c')).toBe(false);
+		expect(exists('ses_ajena')).toBe(true);
+	});
+
+	it('sin sesión actual legible no cierra nada', () => {
+		addSession('ses_b', userId);
+
+		expect(closeOtherSessions(f.db, { userId, currentSessionId: null })).toBe(0);
+		expect(exists('ses_b')).toBe(true);
 	});
 });

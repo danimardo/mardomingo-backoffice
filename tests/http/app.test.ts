@@ -4,6 +4,7 @@ import { describe, expect, inject, it } from 'vitest';
 import { jsonOf, send } from './client';
 
 const baseUrl = inject('httpBaseUrl');
+const token = inject('httpChatToken');
 const port = new URL(baseUrl).port;
 const webHost = `localhost:${port}`;
 const webOrigin = `http://localhost:${port}`;
@@ -41,7 +42,9 @@ describe('API /api/v1', () => {
 	});
 
 	it('el documento OpenAPI declara la versión 3.1', async () => {
-		const result = await send(baseUrl, '/api/v1/openapi.json');
+		const result = await send(baseUrl, '/api/v1/openapi.json', {
+			headers: { 'x-app-id': 'secretario', authorization: `Bearer ${token}` }
+		});
 
 		expect(result.status).toBe(200);
 		expect(jsonOf(result)).toMatchObject({ openapi: '3.1.0' });

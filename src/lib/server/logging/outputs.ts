@@ -1,7 +1,7 @@
 // Destinos de los logs (constitución, principio XI; contracts/log-events.md; T026 en su parte de la v4).
 // Todos los entornos escriben JSON en stdout (Docker lo conserva con rotación). En desarrollo, además,
 // stdout pasa a pino-pretty con hora de Madrid y el JSON se guarda en `.logs/app.log`, vaciado en cada
-// arranque. El envío al Log Gateway queda para una fase posterior (enmienda 2.2.0).
+// arranque. Los logs son solo locales: no hay envío remoto (decisión del propietario, 2026-10-21).
 import { createWriteStream, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 

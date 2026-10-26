@@ -65,7 +65,7 @@ describe('registro: dominios desechables y altas por IP', () => {
 		});
 	});
 
-	it('un email ya registrado da la misma respuesta y no envía nada', async () => {
+	it('[BE-FR-01/CA5] un email ya registrado da la misma respuesta y no envía nada', async () => {
 		await fixture.accounts.register(registration());
 		const sentBefore = fixture.mail.sent.length;
 
@@ -89,7 +89,7 @@ describe('bloqueo por intentos fallidos', () => {
 		expect(await codeOf(() => fixture.accounts.login(wrong))).toBe('LOGIN_TEMPORARILY_LOCKED');
 	});
 
-	it('el contador usa el email normalizado: las mayúsculas cuentan igual que la minúscula', async () => {
+	it('[BE-FR-67/CA1] el contador usa el email normalizado: las mayúsculas cuentan igual que la minúscula', async () => {
 		for (let index = 0; index < 5; index += 1) {
 			await codeOf(() => fixture.accounts.login(login('JUAN@ejemplo.es', 'mal')));
 		}
@@ -102,7 +102,7 @@ describe('bloqueo por intentos fallidos', () => {
 		);
 	});
 
-	it('acertar la contraseña reinicia el contador', async () => {
+	it('[BE-FR-67/CA2] acertar la contraseña reinicia el contador', async () => {
 		await registerAndVerify(EMAIL);
 		for (let index = 0; index < 9; index += 1) {
 			await codeOf(() => fixture.accounts.login(login(EMAIL, 'mal')));
@@ -116,7 +116,7 @@ describe('bloqueo por intentos fallidos', () => {
 		}
 	});
 
-	it('recuperar la contraseña también quita el bloqueo', async () => {
+	it('[BE-FR-67/CA2] recuperar la contraseña también quita el bloqueo', async () => {
 		await registerAndVerify(EMAIL);
 		for (let index = 0; index < 10; index += 1) {
 			await codeOf(() => fixture.accounts.login(login(EMAIL, 'mal')));

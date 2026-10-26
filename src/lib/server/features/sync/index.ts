@@ -16,6 +16,7 @@ export {
 	getDefaults,
 	getSyncDocument,
 	previewCopyAsDefaults,
+	purgeTombstones,
 	putSyncDocument,
 	updateDefaults,
 	type SyncDeps

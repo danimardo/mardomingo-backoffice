@@ -42,7 +42,7 @@
 	<a
 		class="button {variant}"
 		class:busy
-		{href}
+		href={disabled ? undefined : href}
 		aria-disabled={disabled ? 'true' : undefined}
 		aria-busy={busy ? 'true' : undefined}
 		tabindex={disabled ? -1 : undefined}

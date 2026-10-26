@@ -440,4 +440,6 @@
 :root {
 	--email-action-bg: #3f6b5a;
 	--email-action-text: #ffffff;
+	--email-dark-bg: #1b1f1d;
+	--email-dark-text: #e8ece9;
 }

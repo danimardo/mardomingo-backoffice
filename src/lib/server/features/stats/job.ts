@@ -1,14 +1,13 @@
-// Tarea diaria (L14; BE-FR-54, BE-FR-73, BE-FR-16, BE-FR-71). Un día civil de Madrid corre una sola vez: la clave primaria de
-// `daily_job_runs` es el bloqueo. Cada paso va aislado: si uno falla, se registra y los demás siguen; la ejecución queda `partial`.
-// Pasos: (1) descargas de los releases de cada app, (2) precios de referencia, (3) caducidad de saldo y reservas abiertas.
+// Tareas de estadísticas (L14; BE-FR-54, BE-FR-73): descargas diarias de los instaladores y precios orientativos. Las programa
+// `jobs/` con croner; cada una es idempotente por día (la clave primaria de `release_downloads` y el recálculo del precio no
+// duplican nada), así que repetirla tras un reinicio es seguro.
 import { and, eq } from 'drizzle-orm';
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
-import { immediateTransaction } from '$lib/server/db/tx';
 import type { Logger } from '$lib/server/logging/logger';
 import { civilDateOf } from '$lib/shared/dates';
-import { toEpochMs, type CivilDate, type EpochMs } from '$lib/shared/time';
-import { dailyJobRuns, releaseDownloads } from './schema';
+import { toEpochMs, type CivilDate } from '$lib/shared/time';
+import { releaseDownloads } from './schema';
 import { downloadsSinceYesterday, priceReference, totalReleaseDownloads } from './domain/daily-job';
 
 export interface ReleaseSource {
@@ -20,7 +19,7 @@ export interface Release {
 	readonly assets: readonly { readonly download_count: number }[];
 }
 
-export interface DailyJobDeps {
+export interface StatsTasksDeps {
 	readonly db: Db;
 	readonly logger: Logger;
 	readonly clock: Clock;
@@ -41,74 +40,29 @@ export interface DailyJobDeps {
 	}) => void;
 	readonly priceWindowDays: () => number;
 	readonly priceMinSamples: () => number;
-	readonly expireBuckets: () => number;
-	readonly expireHolds: () => number;
 }
-
-export type DailyJobOutcome = 'ran' | 'already_ran';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Abre la ejecución del día. Si ya existe (la clave primaria choca), otro proceso la tiene o ya terminó: no se repite. */
-function claimDay(deps: DailyJobDeps, day: CivilDate, now: EpochMs): boolean {
-	try {
-		immediateTransaction(deps.db, (tx) => {
-			tx.insert(dailyJobRuns).values({ day, startedAt: now }).run();
-		});
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-function finishDay(deps: DailyJobDeps, day: CivilDate, outcome: 'ok' | 'partial'): void {
-	immediateTransaction(deps.db, (tx) => {
-		tx.update(dailyJobRuns)
-			.set({ finishedAt: toEpochMs(deps.clock.now()), outcome })
-			.where(eq(dailyJobRuns.day, day))
-			.run();
-	});
-}
-
-/** Ejecuta la tarea del día actual si aún no corrió. Devuelve si corrió o si ya estaba hecha. Nunca lanza por un paso fallido. */
-export async function runDailyJob(deps: DailyJobDeps): Promise<DailyJobOutcome> {
+/**
+ * Descargas del día de cada app con release: acumulado de GitHub y diferencia con el día anterior (la primera lectura no tiene
+ * diferencia). Un repositorio que falla no impide consultar los demás: se registra y la tarea sigue. Devuelve cuántas apps se
+ * consultaron con éxito.
+ */
+export async function runDownloads(deps: StatsTasksDeps): Promise<number> {
 	const now = toEpochMs(deps.clock.now());
-	const day = civilDateOf(now);
-	if (!claimDay(deps, day, now)) return 'already_ran';
-	deps.logger.emit('stats.daily_job.started', {});
-
-	let failed = 0;
-	const step = async (name: string, run: () => void | Promise<void>): Promise<void> => {
-		try {
-			await run();
-		} catch (error) {
-			failed += 1;
-			deps.logger.emit('stats.daily_job.step_failed', { step: name, err: error });
-		}
-	};
-
-	await step('descargas', async () => {
-		await recordDownloads(deps, day, now);
-	});
-	await step('precios', () => {
-		recordPrices(deps, now);
-	});
-	await step('caducidades', () => {
-		deps.expireBuckets();
-		deps.expireHolds();
-	});
-
-	finishDay(deps, day, failed === 0 ? 'ok' : 'partial');
-	deps.logger.emit('stats.daily_job.finished', { failed });
-	return 'ran';
-}
-
-/** Descargas del día de cada app con release: acumulado de GitHub y diferencia con el día anterior. */
-async function recordDownloads(deps: DailyJobDeps, day: CivilDate, now: EpochMs): Promise<void> {
+	const day: CivilDate = civilDateOf(now);
+	let fetched = 0;
 	for (const source of deps.releaseSources) {
 		const appId = deps.appIdOfSlug(source.slug);
 		if (appId === null) continue;
-		const releases = await deps.fetchReleases(source.repo);
+		let releases: readonly Release[];
+		try {
+			releases = await deps.fetchReleases(source.repo);
+		} catch (error) {
+			deps.logger.emit('stats.downloads.fetch_failed', { provider: 'github', err: error });
+			continue;
+		}
 		const cumulative = totalReleaseDownloads(releases);
 		const yesterday = toEpochMs(now - DAY_MS);
 		const previous = deps.db
@@ -129,11 +83,16 @@ async function recordDownloads(deps: DailyJobDeps, day: CivilDate, now: EpochMs)
 			})
 			.onConflictDoNothing()
 			.run();
+		fetched += 1;
 	}
+	if (fetched > 0)
+		deps.logger.emit('stats.downloads.fetched', { provider: 'github', count: fetched });
+	return fetched;
 }
 
 /** Precio de referencia de cada operación con muestras en la ventana (BE-FR-73): mediana, mínimo de muestras, valor manual manda. */
-function recordPrices(deps: DailyJobDeps, now: EpochMs): void {
+export function runPrices(deps: StatsTasksDeps): number {
+	const now = toEpochMs(deps.clock.now());
 	const windowStart = now - deps.priceWindowDays() * DAY_MS;
 	const samples = deps.priceSamples({ fromMs: windowStart, toMs: now });
 	const byOperation = new Map<string, number[]>();
@@ -155,5 +114,11 @@ function recordPrices(deps: DailyJobDeps, now: EpochMs): void {
 			sampleSize: costs.length,
 			computedAt: now
 		});
+		if (price !== null)
+			deps.logger.emit('pricing.reference.recomputed', {
+				count: costs.length,
+				status: price.source
+			});
 	}
+	return byOperation.size;
 }

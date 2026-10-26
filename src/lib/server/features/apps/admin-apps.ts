@@ -12,6 +12,8 @@ export interface AdminAppRow {
 	readonly status: string;
 	readonly description: string | null;
 	readonly supportEmail: string | null;
+	readonly maintenanceActive: boolean;
+	readonly maintenanceMessage: string;
 }
 
 export function listAppsForAdmin(deps: { readonly db: Db }): AdminAppRow[] {
@@ -22,6 +24,8 @@ export function listAppsForAdmin(deps: { readonly db: Db }): AdminAppRow[] {
 			name: apps.name,
 			status: apps.status,
 			description: apps.description,
+			maintenanceActive: apps.maintenanceActive,
+			maintenanceMessage: apps.maintenanceMessage,
 			supportEmail: apps.supportEmail
 		})
 		.from(apps)
@@ -38,7 +42,9 @@ export function appForAdmin(deps: { readonly db: Db }, slug: string): AdminAppRo
 				name: apps.name,
 				status: apps.status,
 				description: apps.description,
-				supportEmail: apps.supportEmail
+				supportEmail: apps.supportEmail,
+				maintenanceActive: apps.maintenanceActive,
+				maintenanceMessage: apps.maintenanceMessage
 			})
 			.from(apps)
 			.where(eq(apps.slug, slug))
@@ -103,4 +109,44 @@ export function operationsInGroup(
 		.where(and(eq(appOperations.appId, appId), eq(appOperations.groupLabel, groupLabel)))
 		.orderBy(asc(appOperations.key))
 		.all();
+}
+
+/** Datos completos de una app para el formulario de la ficha (W40): los campos editables, en su forma guardada. */
+export interface AdminAppDetails {
+	readonly id: string;
+	readonly name: string;
+	readonly description: string;
+	readonly supportEmail: string | null;
+	readonly postVerifyText: string | null;
+	readonly links: unknown;
+	readonly allowedOrigins: unknown;
+	readonly syncSchema: unknown;
+	readonly minAppVersion: string | null;
+	readonly recommendedAppVersion: string | null;
+	readonly enforceVersion: boolean;
+}
+
+export function appDetailsForAdmin(
+	deps: { readonly db: Db },
+	slug: string
+): AdminAppDetails | null {
+	return (
+		deps.db
+			.select({
+				id: apps.id,
+				name: apps.name,
+				description: apps.description,
+				supportEmail: apps.supportEmail,
+				postVerifyText: apps.postVerifyText,
+				links: apps.links,
+				allowedOrigins: apps.allowedOrigins,
+				syncSchema: apps.syncSchema,
+				minAppVersion: apps.minAppVersion,
+				recommendedAppVersion: apps.recommendedAppVersion,
+				enforceVersion: apps.enforceVersion
+			})
+			.from(apps)
+			.where(eq(apps.slug, slug))
+			.get() ?? null
+	);
 }

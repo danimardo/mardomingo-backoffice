@@ -37,7 +37,7 @@
 
 <SkipLink />
 <AppBackground />
-<SiteHeader />
+<SiteHeader signedIn={data.account.signedIn} isAdmin={data.account.isAdmin} />
 <main id="contenido" tabindex="-1">
 	{@render children()}
 </main>
@@ -45,6 +45,7 @@
 	redirectTo={`${page.url.pathname}${page.url.search}`}
 	theme={appearance.theme}
 	effects={appearance.effects}
+	supportEmail={data.supportEmail}
 />
 
 <style>

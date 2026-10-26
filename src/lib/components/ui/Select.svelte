@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Estados: normal, con ayuda y con error (texto e icono, enlazados con `aria-describedby`). Teclado: el `<select>` del
+	// navegador, sin JavaScript. Temas: colores de tokens; el desplegable del navegador sigue su propio tema. Efectos: sin transiciones.
 	// Lista desplegable nativa (DS-06; T302). Usa `<select>` del navegador: teclado y lectores de pantalla ya funcionan. Etiqueta
 	// visible, ayuda o error enlazados con `aria-describedby`, y el error con texto e icono (§16.10).
 	import Icon from './Icon.svelte';

@@ -33,7 +33,9 @@ export function formErrorText(code: string, retryAfterMinutes?: number): string 
 		case 'WRONG_PASSWORD':
 			return m.errors_wrong_password();
 		case 'RATE_LIMITED':
-			return m.errors_rate_limited();
+			return retryAfterMinutes === undefined
+				? m.errors_rate_limited()
+				: m.errors_rate_limited_minutes({ minutes: String(retryAfterMinutes) });
 		case 'VALIDATION_ERROR':
 			return m.validation_invalid();
 		default:

@@ -24,6 +24,24 @@ export function findDocument(
 		.get();
 }
 
+/** Todos los documentos de todas las cuentas y apps, para la limpieza diaria de marcas de borrado (H-27). */
+export function allDocuments(db: Db | Tx): ReadonlyArray<{
+	readonly userId: string;
+	readonly appId: string;
+	readonly revision: number;
+	readonly data: unknown;
+}> {
+	return db
+		.select({
+			userId: syncDocuments.userId,
+			appId: syncDocuments.appId,
+			revision: syncDocuments.revision,
+			data: syncDocuments.data
+		})
+		.from(syncDocuments)
+		.all();
+}
+
 /** Todos los documentos de la cuenta, de cualquier app, por app (BE-FR-08). */
 export function documentsOfUser(db: Db | Tx, userId: string) {
 	return db

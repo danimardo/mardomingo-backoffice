@@ -25,7 +25,7 @@ import { priceSamplesBetween } from './features/ai';
 import { manualPriceFor, savePriceReference } from './features/pricing';
 import { RELEASE_SOURCES } from './features/stats/config';
 import { fetchPublicReleases } from './adapters/github/releases';
-import type { DailyJobDeps } from './features/stats/job';
+import type { StatsTasksDeps } from './features/stats';
 import type { PublishDeps as LegalPublishDeps } from './features/legal';
 import { createFakePaymentsProvider } from './adapters/payments/fake';
 import { createSimulatedProvider } from './adapters/payments/simulated';
@@ -79,7 +79,7 @@ export interface Composition {
 	readonly adminUsers: AdminUsersDeps;
 	readonly adminAnnouncements: AnnouncementsAdminDeps;
 	readonly brake: BrakeReleaseDeps;
-	readonly dailyJob: DailyJobDeps;
+	readonly statsTasks: StatsTasksDeps;
 	readonly legalPublish: LegalPublishDeps;
 	readonly notifications: NotificationsDeps;
 	readonly ai: AiDeps;
@@ -229,7 +229,9 @@ export function createComposition(
 		sync,
 		legal,
 		invoicing,
-		payments
+		payments,
+		notifications,
+		publicWebUrl: config.PUBLIC_WEB_URL
 	});
 
 	const adminUsers: AdminUsersDeps = {
@@ -252,7 +254,7 @@ export function createComposition(
 
 	const legalPublish: LegalPublishDeps = { db, logger, clock, ids, audit: auditDeps };
 
-	const dailyJob: DailyJobDeps = {
+	const statsTasks: StatsTasksDeps = {
 		db,
 		logger,
 		clock,
@@ -265,9 +267,7 @@ export function createComposition(
 			savePriceReference({ db }, input);
 		},
 		priceWindowDays: () => Number(getSetting(apps, 'price_reference_window_days') ?? 30),
-		priceMinSamples: () => Number(getSetting(apps, 'price_reference_min_samples') ?? 3),
-		expireBuckets: () => credits.expireBuckets(),
-		expireHolds: () => credits.expireHolds()
+		priceMinSamples: () => Number(getSetting(apps, 'price_reference_min_samples') ?? 50)
 	};
 
 	const media: MediaDeps = {
@@ -304,7 +304,7 @@ export function createComposition(
 		adminUsers,
 		adminAnnouncements,
 		brake,
-		dailyJob,
+		statsTasks,
 		legalPublish,
 		notifications,
 		ai,

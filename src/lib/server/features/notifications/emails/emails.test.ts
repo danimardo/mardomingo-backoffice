@@ -10,7 +10,7 @@ const SUPPORT = 'soporte@mardomingo.com';
 const LINK = 'https://cuenta.mardomingo.com/verificar?token=abc123';
 
 describe('email de verificación', () => {
-	it('el texto plano lleva el enlace visible y el soporte en el pie', () => {
+	it('[UX-17] el texto plano lleva el enlace visible y el soporte en el pie', () => {
 		const mail = verificationEmail({ link: LINK, appName: null, supportEmail: SUPPORT });
 
 		expect(mail.subject).toBe('Confirma tu email');
@@ -19,14 +19,17 @@ describe('email de verificación', () => {
 		expect(mail.text).toContain('Cuenta Mardomingo');
 	});
 
-	it('el HTML declara el esquema de color claro y oscuro y muestra el enlace como texto', () => {
+	it('[UX-17] el HTML declara el esquema de color claro y oscuro, muestra el enlace como texto y no usa imágenes', () => {
 		const mail = verificationEmail({ link: LINK, appName: null, supportEmail: SUPPORT });
 
 		expect(mail.html).toContain('<meta name="color-scheme" content="light dark">');
+		expect(mail.html).toContain('<meta name="supported-color-schemes" content="light dark">');
+		expect(mail.html).toContain('@media (prefers-color-scheme: dark)');
 		expect(mail.html).toContain(escapeHtml(LINK));
+		expect(mail.html).not.toContain('<img');
 	});
 
-	it('si el email se refiere a una app, lo dice por su nombre visible', () => {
+	it('[BE-FR-64/CA3] si el email se refiere a una app, lo dice por su nombre visible', () => {
 		const mail = verificationEmail({ link: LINK, appName: 'Secretario AI', supportEmail: SUPPORT });
 
 		expect(mail.text).toContain('Secretario AI');

@@ -81,7 +81,7 @@ describe('sin factura (BE-FR-75/CA1)', () => {
 		]);
 	});
 
-	it('una compra simulada nunca genera factura, aunque el proveedor emita', () => {
+	it('[BE-FR-75/CA1] una compra simulada nunca genera factura, aunque el proveedor emita', () => {
 		purchase('pay_sim', true);
 
 		const outcome = service(createFakeInvoicing()).issueForPayment({
@@ -125,7 +125,7 @@ describe('emisión idempotente (BE-FR-75/CA2)', () => {
 		]);
 	});
 
-	it('la misma clave de emisión no crea una segunda factura y lo registra', () => {
+	it('[BE-FR-75/CA2] la misma clave de emisión no crea una segunda factura y lo registra', () => {
 		purchase('pay_dup');
 		const invoicing = service(createFakeInvoicing());
 		const input = {
@@ -147,7 +147,7 @@ describe('emisión idempotente (BE-FR-75/CA2)', () => {
 });
 
 describe('factura completa y perfil fiscal (BE-FR-74/CA3)', () => {
-	it('sin perfil fiscal, la completa se rechaza y no se crea nada', () => {
+	it('[BE-FR-74/CA1] sin perfil fiscal, la completa se rechaza y no se crea nada', () => {
 		purchase('pay_sin_perfil');
 
 		const outcome = service(createFakeInvoicing()).issueForPayment({
@@ -163,7 +163,7 @@ describe('factura completa y perfil fiscal (BE-FR-74/CA3)', () => {
 		expect(invoicesOf('pay_sin_perfil')).toEqual([]);
 	});
 
-	it('la completa copia el perfil al emitir y no cambia al editar el perfil después', () => {
+	it('[BE-FR-74/CA3] la completa copia el perfil al emitir y no cambia al editar el perfil después', () => {
 		purchase('pay_completa');
 		const invoicing = service(createFakeInvoicing());
 		invoicing.saveBillingProfile({ userId, profile: PROFILE });

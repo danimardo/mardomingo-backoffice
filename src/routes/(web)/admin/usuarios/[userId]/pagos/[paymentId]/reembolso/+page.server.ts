@@ -54,7 +54,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 };
 
 export const actions: Actions = {
-	previsualizar: async ({ locals, params, request }) => {
+	previsualizarReembolso: async ({ locals, params, request }) => {
 		adminOrThrow(locals);
 		const form = await request.formData();
 		const purchase = purchaseOrThrow(params.userId, params.paymentId);
@@ -62,11 +62,17 @@ export const actions: Actions = {
 		if (cents === null) return fail(400, { errors: { importe: 'validation_invalid' } });
 		const reason = textOf(form, 'motivo').trim();
 		if (reason === '') return fail(400, { errors: { motivo: 'validation_required' } });
+		const { creditsToWithdrawMicro, refundableEurCents } = getComposition().payments.refundPreview({
+			paymentId: params.paymentId,
+			amountEurCents: cents
+		});
+		if (cents > refundableEurCents) return fail(409, { formError: 'PAYMENT_NOT_REFUNDABLE' });
 		return {
 			preview: {
 				packName: purchase.packName,
 				refundEurCents: cents,
 				priceCents: purchase.priceCents,
+				creditsToWithdrawMicro,
 				reason
 			}
 		};

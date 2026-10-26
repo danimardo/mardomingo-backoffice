@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Button from '$lib/components/ui/Button.svelte';
 	// W33 · `/admin`: resumen del administrador (T304; BE-FR-46). Alertas activas con su fecha y el estado del freno. Sin JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
@@ -36,7 +37,11 @@
 	<p>
 		{data.brake.active ? m.admin_protections_brake_active() : m.admin_protections_brake_inactive()}
 	</p>
-	<p><a href={resolve('/admin/protecciones')}>{m.admin_protections_title()}</a></p>
+	<p>
+		<Button href={resolve('/admin/protecciones')} variant="ghost"
+			>{m.admin_protections_title()}</Button
+		>
+	</p>
 </section>
 
 <section aria-labelledby="cuentas-resumen">

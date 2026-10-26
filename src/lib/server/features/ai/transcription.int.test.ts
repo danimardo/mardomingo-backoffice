@@ -8,6 +8,7 @@ import { FAKE_OK } from '$lib/server/adapters/openrouter/fake';
 import { FAKE_TRANSCRIPTION } from '$lib/server/adapters/mistral/fake';
 import { updateSetting } from '$lib/server/features/apps';
 import { appOperations } from '$lib/server/features/apps/schema';
+import { activeAlerts } from '$lib/server/features/notifications';
 import { chargeFor } from '$lib/server/features/pricing';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import {
@@ -69,7 +70,7 @@ async function until(condition: () => boolean): Promise<void> {
 }
 
 describe('transcripción (E08)', () => {
-	it('un audio corto se transcribe con Voxtral, se cobra lo que factura y no queda ningún temporal', async () => {
+	it('[BE-FR-38/CA2] un audio corto se transcribe con Voxtral, se cobra lo que factura y no queda ningún temporal', async () => {
 		const expected = chargeFor(f.chat.deps.pricing, {
 			appId: SEEDED_APP_ID,
 			operationKey: TRANSCRIPTION_KEY,
@@ -181,6 +182,7 @@ describe('transcripción (E08)', () => {
 		});
 		expect(f.transcriber.calls).toHaveLength(1);
 		expect(eventsNamed(f.chat.base.logger, 'ai.provider.billing_error')).toHaveLength(1);
+		expect(activeAlerts(f.chat.base.db).map((alert) => alert.key)).toContain('mistral_billing');
 		expect(f.chat.base.credits.getBalance(f.chat.userId).totalMicro).toBe(1_000_000_000);
 		expect(f.chat.base.db.select().from(aiOperations).all()).toEqual([
 			expect.objectContaining({
@@ -210,7 +212,7 @@ describe('transcripción (E08)', () => {
 		expect(await temporaries()).toEqual([]);
 	});
 
-	it('si el cliente se va durante Voxtral, la operación se cancela sin cobro y el temporal se borra', async () => {
+	it('[BE-FR-38/CA2] si el cliente se va durante Voxtral, la operación se cancela sin cobro y el temporal se borra', async () => {
 		f.transcriber.holdNext();
 		const controller = new AbortController();
 		const pending = runTranscription(

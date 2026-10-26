@@ -1,11 +1,14 @@
 // API pública de `legal` (ARCHITECTURE.md §4).
 export {
+	currentDocument,
 	currentVersions,
 	recordAcceptances,
 	recordWithdrawalWaiver,
 	type AcceptanceInput,
 	type LegalDeps
 } from './service';
+export type { LegalDocumentView } from './presenters';
+export { renderMarkdown } from './domain/markdown';
 export { pendingAcceptancesOf, type PendingAcceptance } from './pending';
 export { isOwnWithdrawalWaiver } from './repository';
 export { acceptDocuments } from './accept-documents';

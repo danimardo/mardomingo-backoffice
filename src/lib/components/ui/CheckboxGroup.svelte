@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Estados: sin marcar por defecto; con error, el texto del error va enlazado al grupo. Teclado: casillas nativas (Tab y
+	// Espacio). Temas: colores de tokens en claro y oscuro. Efectos reducidos: sin transiciones ni cristal propios.
 	// Grupo de casillas (DS-06; T302). Un `fieldset` con su `legend`; ninguna casilla viene marcada salvo que el llamador la marque.
 	// Cada casilla tiene su propia etiqueta. El error del grupo se anuncia con texto, nunca solo con color (§16.10).
 	import Icon from './Icon.svelte';

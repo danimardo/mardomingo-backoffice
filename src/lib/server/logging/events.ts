@@ -34,6 +34,10 @@ export interface InfraLogFields {
 	'app.db.migrated': { count: number; durationMs: number };
 	'app.db.migration_failed': { err: unknown };
 	'app.db.seed_failed': { err: unknown };
+	'app.task.started': { task: string };
+	'app.task.completed': { task: string; durationMs: number; count: number };
+	'app.task.failed': { task: string; durationMs: number; err: unknown };
+	'app.task.overlapped': { task: string };
 	'http.request.completed': {
 		route: string;
 		method: string;
@@ -59,6 +63,10 @@ export const INFRA_LOG_EVENTS = Object.freeze({
 	'app.db.migrated': { level: 'info', msg: 'Migraciones aplicadas' },
 	'app.db.migration_failed': { level: 'fatal', msg: 'Migración fallida' },
 	'app.db.seed_failed': { level: 'fatal', msg: 'Datos iniciales no aplicados' },
+	'app.task.started': { level: 'debug', msg: 'Tarea iniciada' },
+	'app.task.completed': { level: 'info', msg: 'Tarea completada' },
+	'app.task.failed': { level: 'error', msg: 'Tarea fallida' },
+	'app.task.overlapped': { level: 'debug', msg: 'Tarea omitida: la anterior sigue en marcha' },
 	'http.request.completed': { level: 'info', msg: 'Petición completada', downgradable: true },
 	'http.request.failed': { level: 'error', msg: 'Error inesperado en la petición' },
 	'http.host.rejected': { level: 'debug', msg: 'Host no corresponde a la ruta' },

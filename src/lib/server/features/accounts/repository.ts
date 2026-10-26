@@ -4,6 +4,7 @@ import { and, count, eq, gte, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
+import { nextLoginAttempt } from './domain/abuse';
 import {
 	authRateLimits,
 	disposableDomains,
@@ -15,7 +16,6 @@ import {
 
 export type AuthRateScope = (typeof AUTH_RATE_SCOPES)[number];
 
-const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 
 /** Altas registradas desde una IP en las últimas 24 h (BE-FR-11.4), contadas sobre `user.signup_ip`. */
@@ -119,20 +119,15 @@ export function recordLoginFailure(
 		.from(loginAttempts)
 		.where(eq(loginAttempts.emailNormalizedHash, emailHash))
 		.get();
-	const inWindow =
-		current !== undefined && current.windowStart > now - options.windowMinutes * MINUTE_MS;
-	const failures = current !== undefined && inWindow ? current.failures + 1 : 1;
-	const windowStart = current !== undefined && inWindow ? current.windowStart : now;
-	const lockedUntil =
-		failures >= options.maxFailures ? toEpochMs(now + options.lockMinutes * MINUTE_MS) : null;
+	const next = nextLoginAttempt(current, now, options);
 	tx.insert(loginAttempts)
-		.values({ emailNormalizedHash: emailHash, failures, windowStart, lockedUntil })
+		.values({ emailNormalizedHash: emailHash, ...next })
 		.onConflictDoUpdate({
 			target: loginAttempts.emailNormalizedHash,
-			set: { failures, windowStart, lockedUntil }
+			set: next
 		})
 		.run();
-	return { failures, lockedUntil };
+	return { failures: next.failures, lockedUntil: next.lockedUntil };
 }
 
 /** Un login correcto o una recuperación completada ponen el contador a cero (BE-FR-67 CA2). */

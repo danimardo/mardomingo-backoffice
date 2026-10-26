@@ -39,5 +39,9 @@
 	<p>{m.accounts_welcome_credits_not_granted()}</p>
 {/if}
 <h2>{m.accounts_welcome_next_title()}</h2>
-<p>{m.accounts_welcome_next_generic()}</p>
+{#if data.nextSteps.customText}
+	<p>{data.nextSteps.customText}</p>
+{:else}
+	<p>{m.accounts_welcome_next_generic()}</p>
+{/if}
 <p><a href={resolve('/panel')}>{m.panel_title()}</a></p>

@@ -6,11 +6,23 @@
 	import { formatCredits } from '$lib/components/payments/format';
 	import { resolve } from '$app/paths';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	// UX-09: cada lista tiene su página en la URL; los enlaces conservan el rango de fechas y las demás páginas.
+	function hrefFor(key: string, page: number): string {
+		const params = new SvelteURLSearchParams(data.keep);
+		params.set(key, String(page));
+		return `?${params.toString()}`;
+	}
+	function totalOf(paging: { readonly page: number; readonly hasNext: boolean }): number {
+		return paging.hasNext ? paging.page + 1 : paging.page;
+	}
 
 	type PreviewAction = 'bloquear' | 'desbloquear' | 'tester' | 'cerrarSesiones';
 	function isPreviewAction(value: string): value is PreviewAction {
@@ -31,6 +43,14 @@
 
 <h1>{m.admin_users_account_title()}</h1>
 <p>{data.account.email} · {data.account.role}</p>
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
 <section aria-labelledby="saldo-cuenta">
 	<h2 id="saldo-cuenta">{m.admin_account_balance_heading()}</h2>
 	<dl>
@@ -47,6 +67,35 @@
 		>
 	</p>
 </section>
+<form method="GET">
+	<fieldset>
+		<legend>{m.movements_filters_legend()}</legend>
+		<TextField
+			id="ficha-desde"
+			name="desde"
+			label={m.movements_from_label()}
+			value={data.filters.desde}
+		/>
+		<TextField
+			id="ficha-hasta"
+			name="hasta"
+			label={m.movements_to_label()}
+			value={data.filters.hasta}
+		/>
+		<div class="field">
+			<label for="ficha-orden">{m.movements_order_label()}</label>
+			<select id="ficha-orden" name="orden">
+				<option value="desc" selected={data.filters.orden !== 'asc'}
+					>{m.movements_order_desc()}</option
+				>
+				<option value="asc" selected={data.filters.orden === 'asc'}
+					>{m.movements_order_asc()}</option
+				>
+			</select>
+		</div>
+		<Button type="submit" variant="secondary">{m.movements_apply()}</Button>
+	</fieldset>
+</form>
 <section aria-labelledby="bolsas-cuenta">
 	<h2 id="bolsas-cuenta">{m.admin_account_buckets_heading()}</h2>
 	{#if data.buckets.length === 0}
@@ -64,6 +113,11 @@
 			{/each}
 		</ul>
 	{/if}
+	<Pagination
+		current={data.paging.bolsas.page}
+		total={totalOf(data.paging.bolsas)}
+		hrefFor={(page: number) => hrefFor('pag_bolsas', page)}
+	/>
 </section>
 <section aria-labelledby="facturas-cuenta">
 	<h2 id="facturas-cuenta">{m.admin_account_invoices_heading()}</h2>
@@ -78,6 +132,11 @@
 			{/each}
 		</ul>
 	{/if}
+	<Pagination
+		current={data.paging.facturas.page}
+		total={totalOf(data.paging.facturas)}
+		hrefFor={(page: number) => hrefFor('pag_facturas', page)}
+	/>
 </section>
 <section aria-labelledby="fiscal-cuenta">
 	<h2 id="fiscal-cuenta">{m.admin_account_fiscal_heading()}</h2>
@@ -98,6 +157,11 @@
 			{/each}
 		</ul>
 	{/if}
+	<Pagination
+		current={data.paging.pagos.page}
+		total={totalOf(data.paging.pagos)}
+		hrefFor={(page: number) => hrefFor('pag_pagos', page)}
+	/>
 </section>
 <section aria-labelledby="consumo-cuenta">
 	<h2 id="consumo-cuenta">{m.admin_account_consumption_heading()}</h2>
@@ -114,6 +178,11 @@
 			{/each}
 		</ul>
 	{/if}
+	<Pagination
+		current={data.paging.consumo.page}
+		total={totalOf(data.paging.consumo)}
+		hrefFor={(page: number) => hrefFor('pag_consumo', page)}
+	/>
 </section>
 <section aria-labelledby="movimientos-cuenta">
 	<h2 id="movimientos-cuenta">{m.admin_account_movements_heading()}</h2>
@@ -130,6 +199,11 @@
 			{/each}
 		</ul>
 	{/if}
+	<Pagination
+		current={data.paging.movimientos.page}
+		total={totalOf(data.paging.movimientos)}
+		hrefFor={(page: number) => hrefFor('pag_movimientos', page)}
+	/>
 </section>
 {#if data.account.banned}
 	<Banner level="warning">
@@ -246,4 +320,4 @@
 	</section>
 {/if}
 
-<p><a href={resolve('/admin/usuarios')}>{m.admin_users_title()}</a></p>
+<p><Button href={resolve('/admin/usuarios')} variant="ghost">{m.admin_users_title()}</Button></p>

@@ -116,6 +116,10 @@ export async function refreshFxFromEcb(deps: PricingDeps): Promise<RefreshOutcom
 	const usdEurPpm = fxUsdEurPpm({ bceRatePpm, bufferPpm });
 	const now = deps.clock.now();
 	immediateTransaction(deps.db, (tx) => {
+		// Con un valor manual vigente, la observación se guarda sin entrar en vigor (un instante antes que el manual):
+		// el manual rige hasta que se desactive (BE-FR-87 CA3) y al desactivarlo se vuelve al último valor del BCE.
+		const inForce = currentRowOf(fxRowsInForce(tx, now), now);
+		const effectiveFrom = inForce?.source === 'manual' ? inForce.effectiveFrom - 1 : now;
 		insertFxRecord(tx, {
 			id: deps.ids('fx'),
 			usdEurPpm,
@@ -123,7 +127,7 @@ export async function refreshFxFromEcb(deps: PricingDeps): Promise<RefreshOutcom
 			ecbRatePpm: bceRatePpm,
 			ecbDate: fetched.timePeriod,
 			bufferPpm,
-			effectiveFrom: now,
+			effectiveFrom,
 			createdBy: null,
 			createdAt: now
 		});
@@ -138,6 +142,8 @@ export function setManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly usdEurPpm: number; readonly reason: string }
 ): void {
+	const reason = input.reason.trim();
+	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
 	const now = deps.clock.now();
 	immediateTransaction(deps.db, (tx) => {
 		const before = getCurrentFxRate(deps).usdEurPpm;
@@ -178,6 +184,7 @@ export function clearManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly reason: string }
 ): { readonly ok: boolean } {
+	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
 	const now = deps.clock.now();
 	const outcome = immediateTransaction(deps.db, (tx) => {
 		const last = lastEcbRecord(tx);

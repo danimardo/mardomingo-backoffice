@@ -79,6 +79,11 @@ const ErrorBody = z.object({
 
 const GenerationBody = z.object({ data: z.object({ total_cost: z.number().nonnegative() }) });
 
+// Saldo de la cuenta (GET /api/v1/credits): créditos comprados y uso acumulado, en USD (T326).
+const CreditsBody = z.object({
+	data: z.object({ total_credits: z.number(), total_usage: z.number() })
+});
+
 const ModelsBody = z.object({
 	data: z.array(
 		z.object({
@@ -242,6 +247,20 @@ export function createOpenRouterGateway(config: OpenRouterConfig): AiGateway {
 					}
 				];
 			});
+		},
+
+		async creditsBalanceMicroUsd(signal: AbortSignal): Promise<number | null> {
+			const result = await request(
+				`${base}/api/v1/credits`,
+				{ method: 'GET', headers: { authorization } },
+				signal,
+				10_000
+			);
+			if (!result.ok || !result.ok2xx) return null;
+			const json = parseJson(result.text);
+			const parsed = json.ok ? CreditsBody.safeParse(json.value) : null;
+			if (!parsed?.success) return null;
+			return usdToMicroUsd(parsed.data.data.total_credits - parsed.data.data.total_usage);
 		}
 	};
 }

@@ -10,7 +10,7 @@ import { paymentsFixture, type PaymentsFixture } from '../../../../../tests/buil
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
 import { adminAudit } from '$lib/server/features/audit/schema';
 import { creditMovements, userBalances } from '$lib/server/features/credits/schema';
-import { user } from '$lib/server/features/accounts/schema';
+import { session, user } from '$lib/server/features/accounts/schema';
 import { termsAcceptances } from '$lib/server/features/legal/schema';
 import { payments } from './schema';
 
@@ -157,6 +157,17 @@ describe('contracargo (BE-FR-28)', () => {
 		if (!reserved.ok) throw new Error('la reserva debía caber');
 		f.base.credits.chargeAndRelease({ holdId: reserved.holdId, realCostMicro: 8000 * CREDIT });
 		const providerRef = `fake_${paymentId}`;
+		f.base.db
+			.insert(session)
+			.values({
+				id: 'ses_contracargo',
+				userId,
+				token: 'tok_contracargo',
+				expiresAt: new Date(f.base.clock.now() + 86_400_000),
+				createdAt: new Date(f.base.clock.now()),
+				updatedAt: new Date(f.base.clock.now())
+			})
+			.run();
 
 		f.payments.handleProviderEvents({ type: 'chargeback_opened', providerRef });
 		f.payments.handleProviderEvents({ type: 'chargeback_opened', providerRef });
@@ -173,7 +184,57 @@ describe('contracargo (BE-FR-28)', () => {
 		expect(
 			f.base.db.select().from(creditMovements).where(eq(creditMovements.type, 'chargeback')).all()
 		).toHaveLength(2);
+		expect(f.base.db.select().from(session).where(eq(session.userId, userId)).all()).toHaveLength(
+			0
+		);
 		expect(eventsNamed(f.base.logger, 'payments.chargeback.applied')).toHaveLength(1);
 		expect(eventsNamed(f.base.logger, 'payments.webhook.duplicate')).toHaveLength(1);
+	});
+
+	it('un contracargo sobre una compra sin acreditar no bloquea la cuenta ni cambia nada', () => {
+		const { userId } = f.addAccount('usr_contracargo_pendiente');
+		const paymentId = buy(userId, 'att_contracargo_pendiente');
+		f.base.db
+			.update(payments)
+			.set({ status: 'pending', completedAt: null })
+			.where(eq(payments.id, paymentId))
+			.run();
+
+		f.payments.handleProviderEvents({
+			type: 'chargeback_opened',
+			providerRef: `fake_${paymentId}`
+		});
+
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'pending' });
+		expect(f.base.db.select().from(user).where(eq(user.id, userId)).get()?.banned).toBe(false);
+		expect(eventsNamed(f.base.logger, 'payments.webhook.rejected')).toHaveLength(1);
+		expect(eventsNamed(f.base.logger, 'payments.chargeback.applied')).toHaveLength(0);
+	});
+});
+
+describe('vista previa del reembolso (T308)', () => {
+	it('calcula los créditos a retirar en proporción al importe, sin escribir nada', () => {
+		const { userId } = f.addAccount('usr_vista_previa');
+		const paymentId = buy(userId, 'att_vista_previa');
+		const creditsMicro = f.payments.purchaseOf(userId, paymentId)?.creditsMicro ?? 0;
+		const antes = f.base.credits.getBalance(userId).totalMicro;
+
+		const preview = f.payments.refundPreview({ paymentId, amountEurCents: 500 });
+
+		expect(preview.creditsToWithdrawMicro).toBe(Math.floor((creditsMicro * 500) / 1000));
+		expect(preview.refundableEurCents).toBe(1000);
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'completed', refundedEurCents: 0 });
+		expect(f.base.credits.getBalance(userId).totalMicro).toBe(antes);
+	});
+
+	it('descuenta lo ya reembolsado de lo reembolsable', () => {
+		const { userId } = f.addAccount('usr_vista_previa_parcial');
+		const adminId = f.addAccount('adm_vista_previa', 'admin').userId;
+		const paymentId = buy(userId, 'att_vista_previa_parcial');
+		f.payments.refund({ adminId, paymentId, amountEurCents: 300, reason: 'Parte' });
+
+		const preview = f.payments.refundPreview({ paymentId, amountEurCents: 100 });
+
+		expect(preview.refundableEurCents).toBe(700);
 	});
 });

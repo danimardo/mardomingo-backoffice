@@ -30,7 +30,7 @@ describe('RegisterSchema (W08, BE-FR-01)', () => {
 		);
 	});
 
-	it('limita la contraseña entre 8 y 128 caracteres', () => {
+	it('[BE-FR-01/CA1] limita la contraseña entre 8 y 128 caracteres', () => {
 		expect(RegisterSchema.safeParse({ ...VALID_REGISTER, password: 'abcdefg' }).success).toBe(
 			false
 		);

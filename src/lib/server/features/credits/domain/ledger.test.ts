@@ -136,6 +136,17 @@ describe('orden de consumo (BE-FR-14)', () => {
 			{ type: 'usage', amount: -5, bucketId: 'freeLater' }
 		]);
 	});
+
+	it('un cobro que agota una bolsa no reparte nada de la siguiente', () => {
+		const state = stateOf([
+			bucket({ id: 'b1', remaining: 5, expiresAt: NOW + 100 }),
+			bucket({ id: 'b2', remaining: 5, expiresAt: NOW + 200 })
+		]);
+
+		const result = applyUsage(state, { amount: 5, maxDebt: MAX_DEBT });
+
+		expect(result.takes).toEqual([{ bucketId: 'b1', amount: 5 }]);
+	});
 });
 
 describe('deuda (BE-FR-17, D2, D7, D8, D13, D14)', () => {
@@ -237,6 +248,32 @@ describe('reserva (BE-FR-71, D6)', () => {
 			requiredMicro: 210_000_001,
 			availableMicro: 10_000_000
 		});
+	});
+
+	it('una reserva que deja exactamente el mínimo de saldo pasa', () => {
+		expect(
+			canReserve({
+				balance: 10_000_000,
+				reserved: 5_000_000,
+				debt: 0,
+				maxDebt: MAX_DEBT,
+				minBalance: 5_000_000,
+				amount: 1
+			})
+		).toEqual({ ok: true });
+	});
+
+	it('una reserva que llega exactamente al disponible más el hueco de deuda pasa', () => {
+		expect(
+			canReserve({
+				balance: 10_000_000,
+				reserved: 0,
+				debt: 0,
+				maxDebt: MAX_DEBT,
+				minBalance: 0,
+				amount: 10_000_000 + MAX_DEBT
+			})
+		).toEqual({ ok: true });
 	});
 
 	it('por debajo de min_balance_to_operate no se reserva aunque quepa el importe', () => {

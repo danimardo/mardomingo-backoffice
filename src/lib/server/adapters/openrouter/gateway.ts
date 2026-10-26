@@ -84,4 +84,6 @@ export interface AiGateway {
 	generationCostMicroUsd(generationId: string, signal: AbortSignal): Promise<number | null>;
 	/** Catálogo de modelos con precios de texto; `null` si el proveedor no responde. */
 	listModels(signal: AbortSignal): Promise<readonly ModelCatalogEntry[] | null>;
+	/** Saldo disponible de la cuenta en micro-USD (créditos comprados menos uso); `null` si el proveedor no responde (T326). */
+	creditsBalanceMicroUsd(signal: AbortSignal): Promise<number | null>;
 }

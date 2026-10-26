@@ -73,3 +73,35 @@ describe('applyForfeit', () => {
 		expect(debtFromLines(result.lines)).toBe(0);
 	});
 });
+
+function makeBucket(id: string, remaining: number): Bucket {
+	return {
+		id,
+		kind: 'free',
+		source: 'welcome',
+		initial: remaining,
+		remaining,
+		expiresAt: null,
+		createdAt: 0
+	};
+}
+
+describe('anulación al borrar la cuenta: fronteras (BE-FR-07 CA4, mutación)', () => {
+	it('una bolsa con saldo de 1 µc sí se anula; una con 0 no genera línea', () => {
+		const state: LedgerState = { buckets: [makeBucket('b1', 1), makeBucket('b2', 0)], debt: 0 };
+
+		expect(applyForfeit(state).lines).toEqual([{ type: 'forfeit', amount: -1, bucketId: 'b1' }]);
+	});
+
+	it('sin nada que anular devuelve el mismo estado, sin copia', () => {
+		const state: LedgerState = { buckets: [makeBucket('b1', 0)], debt: 7 };
+
+		expect(applyForfeit(state).state).toBe(state);
+	});
+
+	it('la deuda sigue siendo la misma cifra tras anular', () => {
+		const state: LedgerState = { buckets: [makeBucket('b1', 5)], debt: 7 };
+
+		expect(applyForfeit(state).state.debt).toBe(7);
+	});
+});

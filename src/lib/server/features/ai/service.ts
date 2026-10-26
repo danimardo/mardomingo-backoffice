@@ -23,6 +23,7 @@ import {
 } from '$lib/server/features/pricing';
 import {
 	alertKeys,
+	clearAlert,
 	raiseAlert,
 	sendAccountEmail,
 	type AlertDeps,
@@ -34,7 +35,11 @@ import {
 	type ProtectionsDeps,
 	type ProtectionsRuntime
 } from '$lib/server/features/protections';
-import { CHAT_RETRY_WAITS_MS } from '$lib/server/features/apps';
+import { assignedModelsOf, CHAT_RETRY_WAITS_MS } from '$lib/server/features/apps';
+import { detectAssignedModelIssues } from './domain/model-watch';
+import type { ModelCatalogEntry } from '$lib/server/adapters/openrouter/gateway';
+import type { ModelPricingJson } from './schema';
+import { readModelCache } from './repository';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError, type ErrorCode } from '$lib/server/shared/errors';
 import type { IdGenerator } from '$lib/server/shared/ids';
@@ -811,23 +816,31 @@ async function settleOk(
 	input: SettleOk
 ): Promise<ChatResponseBody | null> {
 	const { outcome, attempt } = input.result;
-	const billing = await billAndClose(deps, ctx, {
-		operationId: input.operationId,
-		operation: input.operation,
-		holdId: input.holdId,
-		replay: input.replay,
-		now: input.now,
-		holdMicro: input.holdMicro,
-		provider: 'openrouter',
-		model: outcome.model,
-		usedFallback: attempt.isFallback,
-		inputTokens: outcome.inputTokens,
-		outputTokens: outcome.outputTokens,
-		truncated: outcome.truncated,
-		generationId: outcome.generationId,
-		costMicroUsd: outcome.costMicroUsd,
-		audioMs: null
-	});
+	// El cobro es atómico: si falla, no hay cobro y la reserva sigue abierta, así que se libera como en el resto de fallos
+	// inesperados en lugar de quedar retenida hasta el reinicio.
+	let billing: Awaited<ReturnType<typeof billAndClose>>;
+	try {
+		billing = await billAndClose(deps, ctx, {
+			operationId: input.operationId,
+			operation: input.operation,
+			holdId: input.holdId,
+			replay: input.replay,
+			now: input.now,
+			holdMicro: input.holdMicro,
+			provider: 'openrouter',
+			model: outcome.model,
+			usedFallback: attempt.isFallback,
+			inputTokens: outcome.inputTokens,
+			outputTokens: outcome.outputTokens,
+			truncated: outcome.truncated,
+			generationId: outcome.generationId,
+			costMicroUsd: outcome.costMicroUsd,
+			audioMs: null
+		});
+	} catch (error) {
+		abandonUnexpected(deps, input.operationId, input.holdId, input.now);
+		throw error;
+	}
 
 	if (!billing.delivered) {
 		deps.logger.emit('ai.operation.cancelled', {
@@ -910,6 +923,7 @@ export async function refreshModelCache(deps: AiDeps): Promise<'refreshed' | 'un
 	const entries = await deps.gateway.listModels(AbortSignal.timeout(20_000));
 	if (entries === null) return 'unavailable';
 	const now = toEpochMs(deps.clock.now());
+	const previous = new Map(readModelCache(deps.db).map((row) => [row.modelId, row.pricing]));
 	immediateTransaction(deps.db, (tx) => {
 		replaceModelCache(
 			tx,
@@ -926,5 +940,65 @@ export async function refreshModelCache(deps: AiDeps): Promise<'refreshed' | 'un
 		);
 	});
 	deps.logger.emit('ai.models.refreshed', { provider: 'openrouter', count: entries.length });
+	await watchAssignedModels(deps, entries, previous);
 	return 'refreshed';
+}
+
+/**
+ * Vigila los modelos asignados tras una lectura del catálogo (T335): avisa una vez por cruce de un modelo retirado o de un
+ * precio cambiado más del umbral, y rearma la alerta de los que vuelven a estar bien.
+ */
+async function watchAssignedModels(
+	deps: AiDeps,
+	entries: readonly ModelCatalogEntry[],
+	previous: ReadonlyMap<string, ModelPricingJson>
+): Promise<void> {
+	const assigned = assignedModelsOf(deps.db);
+	const operationOf = new Map(assigned.map((row) => [row.modelId, row.operationKey]));
+	const current = new Map(
+		entries.map((entry) => [
+			entry.id,
+			{
+				catalog: {
+					modalities: entry.inputModalities,
+					supportedParameters: entry.supportedParameters,
+					hasPrice: true
+				},
+				price: {
+					inputPerMTokMicroUsd: entry.inputPerMTokMicroUsd,
+					outputPerMTokMicroUsd: entry.outputPerMTokMicroUsd
+				}
+			}
+		])
+	);
+	const issues = detectAssignedModelIssues({
+		assigned: assigned.map((row) => ({ modelId: row.modelId, needs: row.capabilities })),
+		current,
+		previous,
+		thresholdPpm: numberSetting(deps, 'model_price_change_alert_pct')
+	});
+	const flagged = new Set<string>();
+	for (const issue of issues) {
+		const operation = operationOf.get(issue.modelId) ?? '';
+		if (issue.kind === 'retired') {
+			flagged.add(alertKeys.modelRetired(issue.modelId));
+			deps.logger.emit('ai.model.retired', { operation, model: issue.modelId });
+			await raiseAlert(deps.alerts, {
+				key: alertKeys.modelRetired(issue.modelId),
+				detail: `Modelo asignado retirado o incompatible: ${issue.modelId}`
+			});
+		} else {
+			flagged.add(alertKeys.modelPrice(issue.modelId));
+			deps.logger.emit('ai.model.price_changed', { operation, model: issue.modelId });
+			await raiseAlert(deps.alerts, {
+				key: alertKeys.modelPrice(issue.modelId),
+				detail: `Precio de ${issue.modelId} cambiado un ${String(issue.changePpm / 10_000)} %`
+			});
+		}
+	}
+	for (const modelId of operationOf.keys()) {
+		for (const key of [alertKeys.modelRetired(modelId), alertKeys.modelPrice(modelId)]) {
+			if (!flagged.has(key)) clearAlert(deps.alerts, key);
+		}
+	}
 }

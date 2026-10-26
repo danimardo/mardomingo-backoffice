@@ -46,7 +46,7 @@ describe('checkChatInput', () => {
 		});
 	});
 
-	it('en plantilla no se envían mensajes; en libre no se envían variables', () => {
+	it('[BE-FR-78/CA3] en plantilla no se envían mensajes; en libre no se envían variables', () => {
 		const plantilla = { ...LIBRE, mode: 'plantilla' as const };
 		expect(
 			checkChatInput({ operation: plantilla, appId: 'app_1', body: { messages: text('x') } })

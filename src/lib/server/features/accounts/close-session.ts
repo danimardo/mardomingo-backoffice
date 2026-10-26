@@ -30,3 +30,19 @@ export function closeOtherSession(
 		.run();
 	return 'closed';
 }
+
+/**
+ * Cierra todas las sesiones de la cuenta menos la que hace la petición (UX-10). Devuelve cuántas cerró.
+ * Sin sesión actual legible no cierra nada: no se puede garantizar que la persona siga dentro.
+ */
+export function closeOtherSessions(
+	db: Db,
+	input: { readonly userId: string; readonly currentSessionId: string | null }
+): number {
+	if (input.currentSessionId === null) return 0;
+	const result = db
+		.delete(session)
+		.where(and(eq(session.userId, input.userId), ne(session.id, input.currentSessionId)))
+		.run();
+	return result.changes;
+}

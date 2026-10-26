@@ -4,7 +4,14 @@ import * as m from '$lib/paraglide/messages.js';
 import { renderLayout, type EmailContent } from './layout';
 
 export type AdminAlertKind =
-	'fx_stale' | 'model_retired' | 'model_price' | 'flagged_threshold' | 'global_brake';
+	| 'fx_stale'
+	| 'model_retired'
+	| 'model_price'
+	| 'flagged_threshold'
+	| 'global_brake'
+	| 'ledger_mismatch'
+	| 'openrouter_balance_low'
+	| 'mistral_billing_error';
 
 export interface AdminAlertInput {
 	readonly kind: AdminAlertKind;
@@ -52,6 +59,21 @@ function textOf(
 			return {
 				subject: m.notifications_alert_global_brake_subject(),
 				body: m.notifications_alert_global_brake_body({ detail })
+			};
+		case 'ledger_mismatch':
+			return {
+				subject: m.notifications_alert_ledger_subject(),
+				body: m.notifications_alert_ledger_body({ detail })
+			};
+		case 'openrouter_balance_low':
+			return {
+				subject: m.notifications_alert_openrouter_balance_subject(),
+				body: m.notifications_alert_openrouter_balance_body({ detail })
+			};
+		case 'mistral_billing_error':
+			return {
+				subject: m.notifications_alert_mistral_billing_subject(),
+				body: m.notifications_alert_mistral_billing_body({ detail })
 			};
 	}
 }

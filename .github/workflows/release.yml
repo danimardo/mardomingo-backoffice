@@ -1,0 +1,106 @@
+# Release (Historias.md 15.24, nivel 4): todo lo de la nocturna más la imagen Docker, la carga de laboratorio y la visual dentro
+# del contenedor oficial de Playwright. NO VERIFICADO en CI hasta la primera ejecución en GitHub (T375).
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.21.0
+  PNPM_VERSION: 12.8.1
+  PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble
+
+jobs:
+  calidad:
+    name: check, lint, cobertura y build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      # Puerta 8 (T375): sin vulnerabilidades altas ni críticas en las dependencias de producción. No se rebaja el nivel.
+      - run: pnpm audit --prod --audit-level=high
+      - run: pnpm check
+      - run: pnpm lint
+      - run: pnpm test:coverage
+      - run: pnpm build
+
+  e2e:
+    name: E2E ${{ matrix.project }}
+    needs: calidad
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit, mobile-webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps ${{ matrix.project == 'mobile-webkit' && 'webkit' || matrix.project }}
+      - run: pnpm build
+      - run: pnpm exec playwright test --project=${{ matrix.project }}
+        env:
+          E2E_NIGHTLY: '1'
+      - name: Artefactos (vídeo y trazas)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.project }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
+
+  visual:
+    name: regresión visual (contenedor oficial)
+    needs: calidad
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.64.0-noble
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable && npm install --global pnpm@${{ env.PNPM_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test:e2e:visual
+
+  imagen:
+    name: imagen Docker y carga de laboratorio
+    needs: [e2e, visual]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag mardomingo-backoffice:release .
+      - name: Arranque de la imagen
+        run: |
+          SECRET=$(openssl rand -hex 32)
+          HASH=$(openssl rand -hex 32)
+          docker run --detach --name app -p 3000:3000 \
+            --env APP_ENV=test --env DATABASE_PATH=/data/app.db \
+            --env BETTER_AUTH_SECRET="$SECRET" --env EMAIL_HASH_KEY="$HASH" \
+            --env BETTER_AUTH_URL=http://127.0.0.1:3000 --env PUBLIC_WEB_URL=http://127.0.0.1:3000 \
+            --env PUBLIC_API_URL=http://127.0.0.1:3000 \
+            mardomingo-backoffice:release
+      - name: Carga de laboratorio
+        run: |
+          sleep 20
+          node scripts/perf-load.mjs http://127.0.0.1:3000 20 60 5000
+      - name: Parar la imagen
+        if: always()
+        run: docker stop app || true

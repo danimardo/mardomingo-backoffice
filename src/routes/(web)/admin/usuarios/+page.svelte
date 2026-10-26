@@ -61,3 +61,10 @@
 		{/if}
 	</nav>
 {/if}
+
+<style>
+	/* Emails largos sin espacios: se parten para no desbordar el ancho del móvil (UX-13, T357). */
+	li {
+		overflow-wrap: anywhere;
+	}
+</style>

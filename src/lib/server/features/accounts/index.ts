@@ -8,6 +8,7 @@ import type { CaptchaVerifier } from '$lib/server/adapters/turnstile/captcha-ver
 import type { Db } from '$lib/server/db/client';
 import type { Logger } from '$lib/server/logging/logger';
 import type { IdGenerator } from '$lib/server/shared/ids';
+import type { EpochMs } from '$lib/shared/time';
 import type { AppsDeps } from '$lib/server/features/apps';
 import type { Credits } from '$lib/server/features/credits';
 import { hashNormalizedEmail } from './email-hash';
@@ -54,9 +55,21 @@ import {
 	type EmailChangeConfirmOutcome,
 	type EmailChangeRequestOutcome
 } from './email-change';
+import {
+	clearInactivityWarning,
+	inactivityCandidates,
+	markInactivityWarned,
+	purgeAuthAttempts,
+	purgeExpiredSessions,
+	purgeExpiredVerifications,
+	purgeUnverified,
+	type InactivityCandidate
+} from './retention';
+export type { InactivityCandidate } from './retention';
 export { sessionsOf, type SessionView } from './sessions';
-export { closeOtherSession } from './close-session';
-export { emailOfUser } from './user-email';
+export { sessionDtoOf, type SessionDto } from './presenters';
+export { closeOtherSession, closeOtherSessions } from './close-session';
+export { emailOfUser, signupAppIdOf } from './user-email';
 export { appsUsedBy } from './apps-used';
 export { touchActivity } from './activity';
 export type { EmailChangeConfirmOutcome, EmailChangeRequestOutcome } from './email-change';
@@ -105,6 +118,18 @@ export interface Accounts {
 	anonymizeUser(userId: string): boolean;
 	/** Borra la cookie de sesión de la petición tras borrar la cuenta (W29). */
 	clearSessionCookie(headers: Headers): Promise<void>;
+	/** Limpieza de cuentas sin verificar con más de `ttlDays` días: borrado físico (BE-FR-68). */
+	purgeUnverified(ttlDays: number): number;
+	/** Retención (BE-FR-83): sesiones caducadas antes del corte. Solo `privacy`. */
+	purgeExpiredSessions(before: EpochMs): number;
+	/** Retención: contadores de límites por IP e intentos de login antiguos, sin bloqueo vigente. Solo `privacy`. */
+	purgeAuthAttempts(before: EpochMs): number;
+	/** Retención: tokens de verificación y recuperación caducados antes del corte. Solo `privacy`. */
+	purgeExpiredVerifications(before: EpochMs): number;
+	/** Cuentas que pueden estar inactivas o ya avisadas (BE-FR-86). Solo `privacy`. */
+	inactivityCandidates(cutoff: EpochMs): InactivityCandidate[];
+	markInactivityWarned(userId: string, at: EpochMs): void;
+	clearInactivityWarning(userId: string): void;
 	/** Perfil y dispositivos para la exportación RGPD (BE-FR-08). */
 	exportProfile(userId: string): ProfileExport | null;
 	/** Pide el cambio de email: contraseña actual, enlace de 24 h a la dirección nueva (W27, T266). */
@@ -210,6 +235,17 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		anonymizeUser: (userId) => anonymizeUser(deps, userId),
 		clearSessionCookie: (headers) => clearSessionCookie(deps, headers),
 		exportProfile: (userId) => exportProfile(deps, userId),
+		purgeUnverified: (ttlDays) => purgeUnverified(deps, ttlDays),
+		purgeExpiredSessions: (before) => purgeExpiredSessions(deps, before),
+		purgeAuthAttempts: (before) => purgeAuthAttempts(deps, before),
+		purgeExpiredVerifications: (before) => purgeExpiredVerifications(deps, before),
+		inactivityCandidates: (cutoff) => inactivityCandidates(deps, cutoff),
+		markInactivityWarned: (userId, at) => {
+			markInactivityWarned(deps, userId, at);
+		},
+		clearInactivityWarning: (userId) => {
+			clearInactivityWarning(deps, userId);
+		},
 		requestEmailChange: (input) =>
 			requestEmailChange(deps, { ...input, publicWebUrl: config.publicWebUrl }),
 		confirmEmailChange: (token) => confirmEmailChange(deps, token),
@@ -286,3 +322,6 @@ export {
 	type FirstLoginFact,
 	type SignupFact
 } from './stats-facts';
+
+// Refresco de la lista de dominios desechables (T340).
+export { applyDisposableDomains } from './disposable-refresh';

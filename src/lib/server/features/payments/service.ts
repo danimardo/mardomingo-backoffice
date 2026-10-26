@@ -172,15 +172,14 @@ export function purchase(deps: PaymentsDeps, input: PurchaseInput): PurchaseOutc
  * acredita dos veces (BE-FR-24 CA1).
  */
 function completePayment(deps: PaymentsDeps, row: PaymentRow): void {
+	// Orden pensado para reintentar tras una caída a medias: acreditar y facturar son idempotentes (la bolsa se enlaza al pago y
+	// la factura lleva su `issueKey`) y la compra solo pasa a `completed` al final. Si el proceso cae antes, la compra sigue
+	// `pending` y el siguiente evento repite los pasos sin acreditar ni facturar dos veces; si cayera después, ya estaría todo.
 	deps.credits.grantPurchase({
 		userId: row.userId,
 		paymentId: row.id,
 		amountMicro: row.creditsMicro,
 		simulated: row.simulated
-	});
-	const now = toEpochMs(deps.clock.now());
-	immediateTransaction(deps.db, (tx) => {
-		setStatus(tx, row.id, 'completed', now, now);
 	});
 	deps.invoicing.issueForPayment({
 		paymentId: row.id,
@@ -189,6 +188,10 @@ function completePayment(deps: PaymentsDeps, row: PaymentRow): void {
 		kind: row.wantsFullInvoice ? 'full' : 'simplified',
 		amountEurCents: row.amountEurCents,
 		issueKey: `payment:${row.id}:initial`
+	});
+	const now = toEpochMs(deps.clock.now());
+	immediateTransaction(deps.db, (tx) => {
+		setStatus(tx, row.id, 'completed', now, now);
 	});
 	deps.logger.emit('payments.purchase.completed', {});
 }
@@ -217,6 +220,11 @@ function applyEvent(deps: PaymentsDeps, event: PaymentEvent): void {
 	if (event.type === 'chargeback_opened') {
 		if (row.status === 'chargeback') {
 			deps.logger.emit('payments.webhook.duplicate', {});
+			return;
+		}
+		// Sin acreditación no hay nada que retirar ni factura que rectificar, y bloquear la cuenta sería arbitrario.
+		if (row.status !== 'completed' && row.status !== 'refunded') {
+			deps.logger.emit('payments.webhook.rejected', { reason: 'not_completed' });
 			return;
 		}
 		applyChargeback(deps, row);
@@ -250,6 +258,22 @@ function applyChargeback(deps: PaymentsDeps, row: PaymentRow): void {
 /** Créditos a retirar de un reembolso parcial, proporcionales al importe (redondeo hacia abajo). */
 function creditsForRefund(row: PaymentRow, amountEurCents: number): number {
 	return Number((BigInt(row.creditsMicro) * BigInt(amountEurCents)) / BigInt(row.amountEurCents));
+}
+
+/**
+ * Vista previa del reembolso (BE-FR-27, T308): los créditos que se retirarían para ese importe, sin escribir nada. El
+ * reembolso real vuelve a validar todo en `refund`.
+ */
+export function refundPreview(
+	deps: PaymentsDeps,
+	input: { readonly paymentId: string; readonly amountEurCents: number }
+): { readonly creditsToWithdrawMicro: number; readonly refundableEurCents: number } {
+	const row = findById(deps.db, input.paymentId);
+	if (row === undefined) throw new AppError('NOT_FOUND');
+	return {
+		creditsToWithdrawMicro: creditsForRefund(row, input.amountEurCents),
+		refundableEurCents: row.amountEurCents - row.refundedEurCents
+	};
 }
 
 /**
@@ -446,6 +470,10 @@ export interface PaymentsService {
 	paymentFactsBetween(input: { readonly fromMs: number; readonly toMs: number }): PaymentFactRow[];
 	exportPayments(userId: string): PaymentExport[];
 	requestFullInvoice(input: { readonly userId: string; readonly paymentId: string }): boolean;
+	refundPreview(input: { readonly paymentId: string; readonly amountEurCents: number }): {
+		readonly creditsToWithdrawMicro: number;
+		readonly refundableEurCents: number;
+	};
 	purchase(input: PurchaseInput): PurchaseOutcome;
 	handleProviderEvents(body: unknown): void;
 	refund(input: {
@@ -472,6 +500,7 @@ export function createPaymentsService(deps: PaymentsDeps): PaymentsService {
 			handleProviderEvents(deps, body);
 		},
 		refund: (input) => refund(deps, input),
+		refundPreview: (input) => refundPreview(deps, input),
 		packsForSale: () => packsForSale(deps),
 		availability: (role) => purchaseAvailability(deps, role),
 		purchaseOf: (userId, paymentId) => purchaseOf(deps, userId, paymentId),

@@ -7,6 +7,8 @@ import { test as base, expect } from '@playwright/test';
 declare global {
 	interface Window {
 		__sinRecarga?: boolean;
+		/** INP de laboratorio medido por `e2e/perf/web-vitals.spec.ts` (T371). */
+		__inp?: number;
 	}
 }
 
@@ -24,9 +26,10 @@ export const test = base.extend<GuardOptions & { guard: undefined }>({
 			// WebKit inyecta por su cuenta una hoja de estilos en las páginas con un campo de contraseña (autorrelleno)
 			// y nuestra CSP (`style-src 'self'`) la bloquea. No viene de la aplicación ni tiene efecto visible: se admite
 			// solo en WebKit; la CSP no se relaja. Con JavaScript desactivado, WebKit además cancela la precarga de los módulos
-			// de la aplicación (`requestfailed ... Load request cancelled`): es lo esperado y no afecta a la página.
+			// de la aplicación (`requestfailed ... Load request cancelled`): es lo esperado y no afecta a la página. La exportación es una
+			// descarga: WebKit cancela esa navegación y la reporta como `Frame load interrupted`; la descarga la comprueba su prueba.
 			const webkitNoise =
-				/Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'|requestfailed: \S+\/_app\/immutable\/\S+\.js \(Load request cancelled\)/;
+				/Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'|requestfailed: \S+\/_app\/immutable\/\S+\.js \(Load request cancelled\)|requestfailed: \S+\/panel\/perfil\/exportar \(Frame load interrupted\)/;
 			const allowed = (text: string): boolean =>
 				guardAllow.some((pattern) => pattern.test(text)) ||
 				(browserName === 'webkit' && webkitNoise.test(text));

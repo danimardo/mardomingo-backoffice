@@ -64,6 +64,7 @@ export interface DeactivateOperationInput {
 
 /** Desactiva una operación. No exige comprobación: quitar una operación del servicio siempre es seguro (W41). */
 export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationInput): void {
+	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
 	const now = deps.clock.now();
 	immediateTransaction(deps.db, (tx) => {
 		const before = tx

@@ -11,7 +11,7 @@ function last(status: LastOperation['status'], ageMs = 60_000): LastOperation {
 }
 
 describe('decideIdempotency', () => {
-	it('sin clave, la petición es independiente', () => {
+	it('[BE-FR-81/CA2] sin clave, la petición es independiente', () => {
 		expect(
 			decideIdempotency({ key: null, last: last('ok'), now: NOW, windowMs: WINDOW_MS })
 		).toEqual({ action: 'run', replayOfUndelivered: false });

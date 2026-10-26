@@ -115,7 +115,7 @@ describe('GET /api/v1/sync (E10)', () => {
 		expect(isRecord(body.data)).toBe(true);
 	});
 
-	it('sin cabecera de versión responde 426 UPGRADE_REQUIRED', async () => {
+	it('[BE-FR-48/CA1] sin cabecera de versión responde 426 UPGRADE_REQUIRED', async () => {
 		const result = await get('/api/v1/sync', { 'x-app-version': '3.0.0' });
 
 		expect(result.status).toBe(426);
@@ -232,7 +232,7 @@ describe('documento OpenAPI (api-v1)', () => {
 	it('publica GET y PUT de /sync y GET de /defaults', async () => {
 		const result = await send(baseUrl, '/api/v1/openapi.json', {
 			host: apiHost,
-			headers: { accept: 'application/json' }
+			headers
 		});
 
 		expect(result.status).toBe(200);

@@ -7,10 +7,11 @@ import { getComposition } from '$lib/server/composition.cache';
 import {
 	accessFor,
 	closeOtherSession,
+	closeOtherSessions,
 	reportDenial,
+	sessionDtoOf,
 	sessionsOf
 } from '$lib/server/features/accounts';
-import { civilDateOf } from '$lib/shared/dates';
 import { toEpochMs } from '$lib/shared/time';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -42,14 +43,8 @@ export const load: PageServerLoad = async ({ locals, setHeaders, url, request })
 	const sessions = sessionsOf(composition.db, access.user.id, toEpochMs(composition.clock.now()));
 	return {
 		closed: url.searchParams.get('aviso') === 'session_closed',
-		sessions: sessions.map((item) => ({
-			id: item.id,
-			current: item.id === currentId,
-			createdOn: civilDateOf(item.createdAt),
-			lastUsedOn: item.lastUsedAt === null ? null : civilDateOf(toEpochMs(item.lastUsedAt)),
-			deviceName: item.deviceName ?? '',
-			approxIp: item.approxIp ?? ''
-		}))
+		allClosed: url.searchParams.get('aviso') === 'sessions_closed',
+		sessions: sessions.map((item) => sessionDtoOf(item, currentId))
 	};
 };
 
@@ -72,6 +67,19 @@ export const actions: Actions = {
 		});
 		if (outcome !== 'closed') return fail(400, { errors: { sessionId: 'validation_invalid' } });
 		const done = `${resolve('/panel/sesiones')}?aviso=session_closed`;
+		redirect(303, done);
+	},
+	cerrarTodas: async ({ request, locals }) => {
+		const access = accessFor(locals.user, 'verified');
+		if (access.kind !== 'allow') {
+			const login = resolve('/login');
+			redirect(303, login);
+		}
+		closeOtherSessions(getComposition().db, {
+			userId: access.user.id,
+			currentSessionId: await currentSessionIdOf(request.headers)
+		});
+		const done = `${resolve('/panel/sesiones')}?aviso=sessions_closed`;
 		redirect(303, done);
 	}
 };

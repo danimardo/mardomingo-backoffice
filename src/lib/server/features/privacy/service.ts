@@ -4,9 +4,13 @@
 import type { Clock } from '$lib/server/adapters/clock/clock';
 import type { Db } from '$lib/server/db/client';
 import { immediateTransaction } from '$lib/server/db/tx';
-import type { Accounts, ProfileExport } from '$lib/server/features/accounts';
-import { exportOperations, type OperationExport } from '$lib/server/features/ai';
-import { appNamesOf, operationNamesOf, type AppsDeps } from '$lib/server/features/apps';
+import { emailOfUser, type Accounts, type ProfileExport } from '$lib/server/features/accounts';
+import {
+	anonymizeOperationsBefore,
+	exportOperations,
+	type OperationExport
+} from '$lib/server/features/ai';
+import { appNamesOf, getSetting, operationNamesOf, type AppsDeps } from '$lib/server/features/apps';
 import type { Credits, MovementExportRow } from '$lib/server/features/credits';
 import type {
 	BillingProfileExport,
@@ -18,6 +22,11 @@ import {
 	type AcceptanceExport,
 	type LegalDeps
 } from '$lib/server/features/legal';
+import {
+	purgeAlertKeysBefore,
+	sendAccountEmail,
+	type NotificationsDeps
+} from '$lib/server/features/notifications';
 import type { PaymentExport, PaymentsService } from '$lib/server/features/payments';
 import {
 	deleteAllForUser,
@@ -26,6 +35,10 @@ import {
 	type SyncDocumentExport
 } from '$lib/server/features/sync';
 import type { Logger } from '$lib/server/logging/logger';
+import { civilDateOf, DAY_MS } from '$lib/shared/dates';
+import { toEpochMs } from '$lib/shared/time';
+import { decideInactivity } from './domain/inactivity';
+import { retentionCutoffs } from './domain/retention';
 
 export interface PrivacyDeps {
 	readonly db: Db;
@@ -38,6 +51,9 @@ export interface PrivacyDeps {
 	readonly legal: LegalDeps;
 	readonly invoicing: InvoicingService;
 	readonly payments: PaymentsService;
+	readonly notifications: NotificationsDeps;
+	/** Origen público de la web: base del enlace del aviso de inactividad. */
+	readonly publicWebUrl: string;
 }
 
 /** Documento de la exportación RGPD (BE-FR-08). `schemaVersion` sube si cambia la forma. */
@@ -126,7 +142,7 @@ export async function deleteAccount(
 		// Las transacciones de cada dueña, abiertas dentro de esta, pasan a ser puntos de guardado: o todo o nada.
 		immediateTransaction(deps.db, () => {
 			deps.credits.releaseOpenHolds(input.userId);
-			forfeitedMicro = deps.credits.forfeitAll(input.userId).forfeitedMicro;
+			forfeitedMicro = deps.credits.forfeitAll(input.userId, input.reason).forfeitedMicro;
 			deps.accounts.revokeAllSessions(input.userId);
 			deps.invoicing.deleteBillingProfile(input.userId);
 			deleteAllForUser(deps.sync, input.userId);
@@ -141,4 +157,104 @@ export async function deleteAccount(
 	}
 	deps.logger.emit('privacy.account.deleted', { reason: input.reason });
 	return { status: 'deleted', forfeitedMicro };
+}
+
+export interface RetentionReport {
+	readonly sessions: number;
+	readonly aiOperations: number;
+	readonly other: number;
+}
+
+/**
+ * Aplica los plazos de retención de BE-FR-83 (data-model §6): cada dueña de datos borra o anonimiza lo suyo y aquí solo se
+ * suman los recuentos por categoría. Las IP de registro y de aceptaciones legales no se tocan: se conservan mientras exista la
+ * cuenta y después durante el plazo de prescripción, que está pendiente de confirmar (H-17).
+ */
+export function applyRetention(deps: PrivacyDeps): RetentionReport {
+	const now = toEpochMs(deps.clock.now());
+	const cutoffs = retentionCutoffs(now);
+	const sessions = deps.accounts.purgeExpiredSessions(cutoffs.sessionsExpiredBefore);
+	const aiOperations = anonymizeOperationsBefore(deps, cutoffs.operationsBefore);
+	const other =
+		deps.accounts.purgeAuthAttempts(cutoffs.attemptsBefore) +
+		deps.accounts.purgeExpiredVerifications(cutoffs.verificationsExpiredBefore) +
+		deps.credits.purgeReleasedHolds(cutoffs.holdsReleasedBefore) +
+		purgeAlertKeysBefore(deps, cutoffs.alertsBefore);
+	deps.logger.emit('privacy.retention.applied', { reason: 'sessions', count: sessions });
+	deps.logger.emit('privacy.retention.applied', { reason: 'ai_operations', count: aiOperations });
+	deps.logger.emit('privacy.retention.applied', { reason: 'other', count: other });
+	return { sessions, aiOperations, other };
+}
+
+export interface InactiveReport {
+	readonly notified: number;
+	readonly cancelled: number;
+	readonly deleted: number;
+}
+
+function numberSetting(
+	deps: PrivacyDeps,
+	key: 'inactive_account_years' | 'inactive_account_notice_days'
+): number {
+	const value = getSetting(deps.apps, key);
+	if (typeof value !== 'number') throw new Error(`falta el parámetro ${key}`);
+	return value;
+}
+
+/**
+ * Cuentas inactivas (BE-FR-86): avisa a las verificadas sin compra real que llevan `inactive_account_years` años sin actividad,
+ * cancela el borrado de las que volvieron durante el aviso y borra (como el borrado de la cuenta, con `forfeit` de lo que
+ * quede) las que siguen inactivas pasados `inactive_account_notice_days` días. Una cuenta con compra real no se toca nunca.
+ * Un aviso que no sale (el proveedor falla) no se anota: se reintenta en la siguiente ejecución.
+ */
+export async function processInactive(deps: PrivacyDeps): Promise<InactiveReport> {
+	const now = toEpochMs(deps.clock.now());
+	const config = {
+		years: numberSetting(deps, 'inactive_account_years'),
+		noticeDays: numberSetting(deps, 'inactive_account_notice_days')
+	};
+	// Prefiltro con años de 365 días, que incluye a todas las que cumplen el plazo de calendario; la decisión es exacta.
+	const candidates = deps.accounts.inactivityCandidates(
+		toEpochMs(now - config.years * 365 * DAY_MS)
+	);
+	const paying = deps.credits.realPurchaseUserIds(candidates.map((candidate) => candidate.userId));
+
+	let notified = 0;
+	let cancelled = 0;
+	let deleted = 0;
+	for (const candidate of candidates) {
+		if (paying.has(candidate.userId)) {
+			// Con compra real no se cierra nunca. Si compró durante el aviso, el aviso pendiente ya no significa nada.
+			if (candidate.warnedAt !== null) deps.accounts.clearInactivityWarning(candidate.userId);
+			continue;
+		}
+		const decision = decideInactivity(
+			{ referenceAt: candidate.referenceAt, warnedAt: candidate.warnedAt, hasRealPurchase: false },
+			now,
+			config
+		);
+		if (decision === 'cancel') {
+			deps.accounts.clearInactivityWarning(candidate.userId);
+			deps.logger.emit('privacy.inactive.cancelled', {});
+			cancelled += 1;
+		} else if (decision === 'warn') {
+			const to = emailOfUser(deps.db, candidate.userId);
+			if (to === null) continue;
+			const sent = await sendAccountEmail(deps.notifications, {
+				reason: 'inactivity_notice',
+				to,
+				link: `${deps.publicWebUrl}/login`,
+				inactivity: config,
+				idempotencyKey: `inactivity-notice-${candidate.userId}-${civilDateOf(now)}`
+			});
+			if (!sent) continue;
+			deps.accounts.markInactivityWarned(candidate.userId, now);
+			notified += 1;
+		} else if (decision === 'delete') {
+			const outcome = await deleteAccount(deps, { userId: candidate.userId, reason: 'inactivity' });
+			if (outcome.status === 'deleted') deleted += 1;
+		}
+	}
+	if (notified > 0) deps.logger.emit('privacy.inactive.notified', { count: notified });
+	return { notified, cancelled, deleted };
 }

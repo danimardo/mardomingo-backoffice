@@ -76,7 +76,7 @@ export function lastEcbRecord(db: Db | Tx): FxRecord | undefined {
 		.select()
 		.from(fxRates)
 		.where(eq(fxRates.source, 'ecb'))
-		.orderBy(desc(fxRates.effectiveFrom))
+		.orderBy(desc(fxRates.createdAt), desc(fxRates.effectiveFrom))
 		.limit(1)
 		.get();
 	return row === undefined ? undefined : toRecord(row);
@@ -131,4 +131,35 @@ export function upsertPriceReference(
 			}
 		})
 		.run();
+}
+
+export interface EffectivePriceReference {
+	readonly operationId: string;
+	/** Coste típico efectivo en micro-USD: el manual si lo hay; si no, el calculado. */
+	readonly typicalMicroUsd: number;
+	readonly source: 'auto' | 'manual';
+	readonly computedAt: number | null;
+}
+
+/** Costes típicos publicables de todas las operaciones con valor (el manual manda sobre el calculado; BE-FR-73 CA1). */
+export function effectivePriceReferences(db: Db | Tx): Map<string, EffectivePriceReference> {
+	const result = new Map<string, EffectivePriceReference>();
+	for (const row of db.select().from(priceReferences).all()) {
+		if (row.manualTypicalMicro !== null) {
+			result.set(row.operationId, {
+				operationId: row.operationId,
+				typicalMicroUsd: row.manualTypicalMicro,
+				source: 'manual',
+				computedAt: row.computedAt
+			});
+		} else if (row.typicalMicro !== null && row.source !== null) {
+			result.set(row.operationId, {
+				operationId: row.operationId,
+				typicalMicroUsd: row.typicalMicro,
+				source: row.source,
+				computedAt: row.computedAt
+			});
+		}
+	}
+	return result;
 }

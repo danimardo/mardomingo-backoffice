@@ -1,4 +1,7 @@
 <script lang="ts">
+	// Estados: cargando (`busy`, con la altura reservada), con datos y sin datos (`null`, «Sin datos»). Teclado: la gráfica no
+	// tiene controles; la tabla equivalente es el contenido navegable. Temas: colores de tokens en claro y oscuro. Efectos
+	// reducidos: sin transiciones propias.
 	// Contenedor de gráficas del panel (DS-06, UX-08; T256). Muestra título, periodo, unidad («créditos») y vigencia, y siempre
 	// incluye la tabla equivalente en el HTML: es el contenido sin JavaScript y lo que leen los lectores de pantalla. La gráfica
 	// (LayerChart) va como `children`. Un día sin datos (`null`) se escribe como «Sin datos», no como cero. Con `busy`, el

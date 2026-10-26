@@ -11,6 +11,8 @@ function op(
 	return {
 		date: '2026-10-16',
 		appId: 'app_a',
+		operationKey: 'improve',
+		userId: null,
 		status: 'ok',
 		costMicroUsd: 0,
 		chargedMicro: 0,
@@ -150,5 +152,91 @@ describe('servicio de estadísticas (BE-FR-54)', () => {
 
 		expect(stats.totals.unconvertedOperations).toBe(1);
 		expect(stats.totals.costEurCents).toBe(0);
+	});
+});
+
+describe('agrupación y filtros de operaciones (W45, T320)', () => {
+	const fact = (overrides: Record<string, unknown>) => ({
+		...op({ costMicroUsd: 1_000_000 }),
+		...overrides
+	});
+	const rows = [
+		fact({ appId: 'app_a', operationKey: 'improve', userId: 'usr_1' }),
+		fact({ appId: 'app_a', operationKey: 'enhance', userId: 'usr_2' }),
+		fact({
+			appId: 'app_b',
+			operationKey: 'improve',
+			userId: null,
+			fxRateId: null,
+			costMicroUsd: 2_000_000
+		})
+	];
+
+	it('agrupa por app y suma el coste solo de las operaciones con tipo conocido', () => {
+		const stats = statsForPeriod(deps({ operationFacts: () => rows }), PERIOD, { grouping: 'app' });
+
+		expect(stats.groups.map((group) => group.key)).toEqual(['app_a', 'app_b']);
+		expect(stats.groups[0]).toMatchObject({ operations: 2, unconverted: 0 });
+		expect(stats.groups[1]).toEqual({
+			key: 'app_b',
+			operations: 1,
+			costEurCents: null,
+			unconverted: 1
+		});
+	});
+
+	it('agrupa por operación y por usuario, con «sin_usuario» para las cuentas anonimizadas', () => {
+		const operacion = statsForPeriod(deps({ operationFacts: () => rows }), PERIOD, {
+			grouping: 'operacion'
+		});
+		const usuario = statsForPeriod(deps({ operationFacts: () => rows }), PERIOD, {
+			grouping: 'usuario'
+		});
+
+		expect(operacion.groups.map((group) => group.key)).toEqual(['enhance', 'improve']);
+		expect(usuario.groups.map((group) => group.key)).toEqual(['sin_usuario', 'usr_1', 'usr_2']);
+	});
+
+	it('un filtro por app deja solo sus operaciones y el margen sin datos', () => {
+		const stats = statsForPeriod(deps({ operationFacts: () => rows }), PERIOD, { appId: 'app_a' });
+
+		expect(stats.totals.operationsWithCost).toBe(2);
+		expect(stats.totals.marginEurCents).toBeNull();
+		expect(stats.days.every((day) => day.marginEurCents === null)).toBe(true);
+	});
+
+	it('sin agrupación ni filtro, la serie diaria y el margen se calculan como antes', () => {
+		const stats = statsForPeriod(deps({ operationFacts: () => rows }), PERIOD);
+
+		expect(stats.groups).toEqual([]);
+		expect(stats.totals.operationsWithCost).toBe(3);
+	});
+});
+
+describe('embudo por semanas (W45, T320)', () => {
+	it('las altas se cuentan por semana y las descargas sin datos son nulas', () => {
+		const stats = statsForPeriod(
+			deps({
+				signups: () => [
+					{ date: '2026-10-19', appId: 'app_a', verified: true },
+					{ date: '2026-10-21', appId: 'app_a', verified: false }
+				]
+			}),
+			PERIOD,
+			{ embudo: 'acumulado' }
+		);
+
+		expect(stats.funnelWeeks).toEqual([
+			{
+				week: '2026-10-19',
+				counts: {
+					descargas: null,
+					altas: 2,
+					verificadas: 1,
+					primer_login: 0,
+					primera_operacion: 0
+				}
+			}
+		]);
 	});
 });

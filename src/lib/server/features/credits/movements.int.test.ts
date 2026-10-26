@@ -55,6 +55,29 @@ describe('movementsPage (BE-FR-49.3)', () => {
 		expect(page.pagination).toEqual({ page: 1, hasPrevious: false, hasNext: false });
 	});
 
+	it('[UX-09] ordena por fecha ascendente cuando se pide, y descendente por defecto', () => {
+		useCredits(10);
+
+		const ascending = movementsPage(f.deps, {
+			userId,
+			fromMs: null,
+			toMs: null,
+			appId: null,
+			page: 1,
+			order: 'asc'
+		});
+		const byDefault = movementsPage(f.deps, {
+			userId,
+			fromMs: null,
+			toMs: null,
+			appId: null,
+			page: 1
+		});
+
+		expect(ascending.rows.map((row) => row.type)).toEqual(['welcome', 'usage']);
+		expect(byDefault.rows.map((row) => row.type)).toEqual(['usage', 'welcome']);
+	});
+
 	it('pagina de veinticinco en veinticinco y avisa de la página siguiente', () => {
 		for (let index = 0; index < 26; index += 1) useCredits(1);
 

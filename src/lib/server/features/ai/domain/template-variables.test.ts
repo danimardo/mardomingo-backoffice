@@ -15,7 +15,7 @@ describe('checkVariables', () => {
 		expect(checkVariables(DEFS, { texto: 'hola', foto: PNG })).toEqual({ ok: true });
 	});
 
-	it('falta una obligatoria → VALIDATION_ERROR con el nombre del campo', () => {
+	it('[BE-FR-78/CA1] falta una obligatoria → VALIDATION_ERROR con el nombre del campo', () => {
 		expect(checkVariables(DEFS, { foto: PNG })).toEqual({ ok: false, field: 'texto' });
 	});
 

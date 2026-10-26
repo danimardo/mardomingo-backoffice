@@ -56,7 +56,7 @@ function movingClock(start: number) {
 }
 
 describe('login de app', () => {
-	it('la sesión queda ligada a la app, al equipo y a la versión', async () => {
+	it('[BE-FR-65/CA3] [BE-FR-03/CA3] la sesión queda ligada a la app, al equipo y a la versión', async () => {
 		await verifiedAccount(fixture);
 
 		const result = await fixture.accounts.loginFromApp(appLogin());
@@ -101,7 +101,7 @@ describe('login de app', () => {
 		expect(result.pendingAcceptances).toEqual([{ document: 'terms', version: '2026-12-01' }]);
 	});
 
-	it('una contraseña mal escrita no abre sesión de app', async () => {
+	it('[BE-FR-03/CA1] una contraseña mal escrita no abre sesión de app', async () => {
 		await verifiedAccount(fixture);
 
 		expect(

@@ -10,6 +10,7 @@ import { announcementsForPanel, supportEmail } from '$lib/server/features/apps';
 import { acceptDocuments, pendingAcceptancesOf } from '$lib/server/features/legal';
 import { AppError } from '$lib/server/shared/errors';
 import { clientIpOf } from '$lib/server/web/actions';
+import { legalHrefOf } from '$lib/server/web/legal-page';
 import { syncedAppIds } from '$lib/server/features/sync';
 import { toEpochMs } from '$lib/shared/time';
 import { balanceEurCentsOf } from '$lib/server/web/balance-eur';
@@ -62,7 +63,11 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 			composition.db,
 			userId,
 			toEpochMs(composition.clock.now())
-		).map((item) => ({ document: item.document, version: item.version })),
+		).map((item) => ({
+			document: item.document,
+			version: item.version,
+			url: legalHrefOf(item.document)
+		})),
 		announcements: announcementsForPanel(
 			composition.apps,
 			[

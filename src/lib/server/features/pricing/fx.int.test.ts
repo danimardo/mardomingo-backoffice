@@ -129,7 +129,7 @@ describe('adaptador del BCE contra el simulador (BE-FR-87 CA2)', () => {
 		await mock.close();
 	});
 
-	it('una observación actual se guarda con su fecha, su origen y el colchón', async () => {
+	it('[BE-FR-87/CA1] una observación actual se guarda con su fecha, su origen y el colchón', async () => {
 		fixture.clock.set(Date.UTC(2026, 9, 10, 8, 0, 0));
 		deps = { ...deps, fxSource: createEcbFxSource({ endpoint: mock.url }) };
 
@@ -158,7 +158,7 @@ describe('adaptador del BCE contra el simulador (BE-FR-87 CA2)', () => {
 		mock.scenario('ok');
 	});
 
-	it('un CSV que no encaja es un fallo de contenido, y se mantiene el último valor', async () => {
+	it('[BE-FR-87/CA2] un CSV que no encaja es un fallo de contenido, y se mantiene el último valor', async () => {
 		fixture.clock.set(Date.UTC(2026, 9, 10, 8, 0, 0));
 		deps = { ...deps, fxSource: createEcbFxSource({ endpoint: mock.url }) };
 		await refreshFxFromEcb(deps);
@@ -188,7 +188,7 @@ describe('adaptador del BCE contra el simulador (BE-FR-87 CA2)', () => {
 });
 
 describe('alerta por tipo de cambio sin actualizar (BE-FR-87 CA2, SC-019)', () => {
-	it('tras tres días laborables sin actualizar avisa una vez, y se rearma al volver a actualizar', async () => {
+	it('[BE-FR-87/CA2] tras tres días laborables sin actualizar avisa una vez, y se rearma al volver a actualizar', async () => {
 		// Primera actualización el viernes 9 de octubre.
 		fake.next({ status: 'observation', timePeriod: '2026-10-09', rate: '1.0870' });
 		fixture.clock.set(Date.UTC(2026, 9, 9, 17, 0, 0));
@@ -225,7 +225,7 @@ describe('alerta por tipo de cambio sin actualizar (BE-FR-87 CA2, SC-019)', () =
 });
 
 describe('valor manual auditado (BE-FR-87 CA3)', () => {
-	it('fijar un valor manual lo sustituye, queda en la auditoría con antes y después, y desactivarlo vuelve al BCE', async () => {
+	it('[BE-FR-87/CA3] fijar un valor manual lo sustituye, queda en la auditoría con antes y después, y desactivarlo vuelve al BCE', async () => {
 		fake.next({ status: 'observation', timePeriod: '2026-10-09', rate: '1.0870' });
 		fixture.clock.set(Date.UTC(2026, 9, 9, 17, 0, 0));
 		await refreshFxFromEcb(deps);
@@ -253,6 +253,27 @@ describe('valor manual auditado (BE-FR-87 CA3)', () => {
 				.where(eq(adminAudit.action, 'pricing.fx.manual_cleared'))
 				.all()
 		).toHaveLength(1);
+	});
+});
+
+describe('el refresco automático respeta el valor manual (BE-FR-87 CA3)', () => {
+	it('un refresco con el manual vigente no lo sustituye, y al desactivarlo se vuelve al último valor del BCE', async () => {
+		fake.next({ status: 'observation', timePeriod: '2026-10-09', rate: '1.0870' });
+		fixture.clock.set(Date.UTC(2026, 9, 9, 17, 0, 0));
+		await refreshFxFromEcb(deps);
+
+		fixture.clock.advance(1_000);
+		setManualFx(deps, { adminId, usdEurPpm: toPpm(950_000), reason: 'Tipo de la gestoría' });
+
+		fake.next({ status: 'observation', timePeriod: '2026-10-09', rate: '1.1000' });
+		fixture.clock.advance(1_000);
+		await refreshFxFromEcb(deps);
+		expect(getCurrentFxRate(deps)).toMatchObject({ usdEurPpm: toPpm(950_000), source: 'manual' });
+
+		fixture.clock.advance(1_000);
+		expect(clearManualFx(deps, { adminId, reason: 'Vuelta al BCE' })).toEqual({ ok: true });
+		const expected = fxUsdEurPpm({ bceRatePpm: toPpm(1_100_000), bufferPpm: toPpm(BUFFER) });
+		expect(getCurrentFxRate(deps)).toMatchObject({ usdEurPpm: expected, source: 'ecb' });
 	});
 });
 

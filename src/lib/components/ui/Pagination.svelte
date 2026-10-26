@@ -1,4 +1,6 @@
 <script lang="ts">
+	// Estados: página actual con `aria-current="page"` y, con una sola página, no se muestra. Teclado: enlaces GET enfocables,
+	// sin JavaScript. Temas: colores de tokens en claro y oscuro. Efectos reducidos: sin transiciones ni cristal propios.
 	// Paginación de las listas (DS-06; T255). Enlaces GET que conservan los filtros (`hrefFor` los compone); la página actual
 	// lleva `aria-current="page"` y se anuncia como texto, no solo por color.
 	import * as m from '$lib/paraglide/messages.js';

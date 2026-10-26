@@ -13,6 +13,8 @@ function emailToken(name: string): string {
 
 const ACTION_BG = emailToken('email-action-bg');
 const ACTION_TEXT = emailToken('email-action-text');
+const DARK_BG = emailToken('email-dark-bg');
+const DARK_TEXT = emailToken('email-dark-text');
 
 export interface EmailContent {
 	readonly subject: string;
@@ -68,7 +70,9 @@ export function renderLayout(input: LayoutInput): EmailContent {
 	const html =
 		'<!doctype html><html lang="es"><head><meta charset="utf-8">' +
 		'<meta name="color-scheme" content="light dark">' +
-		`<title>${escapeHtml(input.subject)}</title></head>` +
+		'<meta name="supported-color-schemes" content="light dark">' +
+		`<title>${escapeHtml(input.subject)}</title>` +
+		`<style>@media (prefers-color-scheme: dark){body{background:${DARK_BG} !important;color:${DARK_TEXT} !important;}}</style></head>` +
 		'<body style="margin:0;padding:24px;font-family:system-ui,sans-serif;line-height:1.5;">' +
 		`<h1 style="font-size:1.25rem;">${escapeHtml(input.subject)}</h1>` +
 		`<p>${escapeHtml(input.lead)}</p>${appHtml}${actionHtml}` +

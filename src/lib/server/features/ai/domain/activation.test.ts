@@ -25,11 +25,11 @@ describe('checkActivation (W41)', () => {
 		});
 	});
 
-	it('rechaza un modelo que no está en el catálogo guardado', () => {
+	it('[BE-FR-77/CA2] rechaza un modelo que no está en el catálogo guardado', () => {
 		expect(checkActivation(chat(), null)).toEqual({ ok: false, reason: 'model_unknown' });
 	});
 
-	it('rechaza un modelo incapaz de la imagen de entrada', () => {
+	it('[BE-FR-77/CA2] rechaza un modelo incapaz de la imagen de entrada', () => {
 		const needs = chat({ capabilities: { ...NONE, image_input: true } });
 		expect(checkActivation(needs, catalog({ modalities: ['text'] }))).toEqual({
 			ok: false,
@@ -37,7 +37,7 @@ describe('checkActivation (W41)', () => {
 		});
 	});
 
-	it('rechaza un modelo sin salida estructurada o sin herramientas cuando se piden', () => {
+	it('[BE-FR-77/CA2] rechaza un modelo sin salida estructurada o sin herramientas cuando se piden', () => {
 		const structured = chat({ capabilities: { ...NONE, structured_output: true } });
 		const tools = chat({ capabilities: { ...NONE, tools: true } });
 		expect(checkActivation(structured, catalog()).ok).toBe(false);
@@ -48,7 +48,7 @@ describe('checkActivation (W41)', () => {
 		expect(checkActivation(tools, catalog({ supportedParameters: ['tools'] })).ok).toBe(true);
 	});
 
-	it('rechaza sin precio del catálogo y sin coste máximo estimado', () => {
+	it('[BE-FR-72/CA3] rechaza sin precio del catálogo y sin coste máximo estimado', () => {
 		expect(checkActivation(chat(), catalog({ hasPrice: false }))).toEqual({
 			ok: false,
 			reason: 'no_price'

@@ -22,6 +22,8 @@ export interface FakeAiGateway extends AiGateway {
 	/** Se ejecuta justo después de decidir la próxima respuesta no retenida (p. ej. para desconectar al cliente). */
 	afterNextAnswer(callback: () => void): void;
 	setGenerationCost(costMicroUsd: number | null): void;
+	/** Saldo de la cuenta que devuelve `creditsBalanceMicroUsd` (T326). `null` simula un proveedor que no responde. */
+	setCreditsBalance(micro: number | null): void;
 	setModels(models: readonly ModelCatalogEntry[] | null): void;
 }
 
@@ -54,6 +56,7 @@ export function createFakeAiGateway(): FakeAiGateway {
 	let afterAnswer: (() => void) | undefined;
 	let generationCost: number | null = null;
 	let models: readonly ModelCatalogEntry[] | null = [];
+	let creditsBalance: number | null = null;
 
 	function holdUntilAborted(request: ChatRequest): Promise<ChatOutcome> {
 		return new Promise((resolve) => {
@@ -87,6 +90,12 @@ export function createFakeAiGateway(): FakeAiGateway {
 		},
 		listModels(): Promise<readonly ModelCatalogEntry[] | null> {
 			return Promise.resolve(models);
+		},
+		creditsBalanceMicroUsd(): Promise<number | null> {
+			return Promise.resolve(creditsBalance);
+		},
+		setCreditsBalance(micro: number | null): void {
+			creditsBalance = micro;
 		},
 		answerNext(outcome: ChatOutcome): void {
 			queue.push(outcome);

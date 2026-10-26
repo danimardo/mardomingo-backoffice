@@ -5,7 +5,10 @@ import type { EmailSender } from '$lib/server/adapters/resend/email-sender';
 import type { Logger } from '$lib/server/logging/logger';
 import { passwordChangedEmail } from './emails/password-changed';
 import { legalUpdateEmail } from './emails/legal-update';
+import { inactivityNoticeEmail } from './emails/inactivity-notice';
 import { lowBalanceEmail } from './emails/low-balance';
+import { freeExpiryWarningEmail } from './emails/free-expiry-warning';
+import { invoiceAvailableEmail } from './emails/invoice-available';
 import { emailChangeVerifyEmail } from './emails/email-change-verify';
 import { emailChangedNoticeEmail } from './emails/email-changed-notice';
 import { passwordResetEmail } from './emails/password-reset';
@@ -24,6 +27,10 @@ export interface AccountEmail {
 	readonly to: string;
 	/** Enlace de verificación o de recuperación; no aplica al aviso de cambio de contraseña. */
 	readonly link?: string;
+	/** Años de inactividad y días de plazo del aviso de borrado (BE-FR-86). */
+	readonly inactivity?: { readonly years: number; readonly noticeDays: number };
+	/** Días que faltan para la caducidad del saldo gratuito (T330). */
+	readonly expiry?: { readonly days: number };
 	/** Nombre visible de la app, cuando el email se refiere a una (BE-FR-64 CA3). */
 	readonly appName?: string;
 	/** Clave de idempotencia: el mismo envío lógico lleva siempre la misma clave. */
@@ -45,12 +52,26 @@ function contentOf(deps: NotificationsDeps, email: AccountEmail) {
 		return passwordResetEmail({ link: email.link ?? '', supportEmail });
 	}
 	if (email.reason === 'low_balance') return lowBalanceEmail({ supportEmail });
+	if (email.reason === 'invoice_available') return invoiceAvailableEmail({ supportEmail });
+	if (email.reason === 'free_expiry_warning') {
+		return freeExpiryWarningEmail({ days: email.expiry?.days ?? 0, supportEmail });
+	}
 	if (email.reason === 'email_change_verify') {
 		return emailChangeVerifyEmail({ link: email.link ?? '', supportEmail });
 	}
 	if (email.reason === 'email_changed_notice') return emailChangedNoticeEmail({ supportEmail });
 	if (email.reason === 'legal_update') return legalUpdateEmail({ supportEmail });
-	return passwordChangedEmail({ supportEmail });
+	if (email.reason === 'inactivity_notice') {
+		return inactivityNoticeEmail({
+			link: email.link ?? '',
+			years: email.inactivity?.years ?? 0,
+			noticeDays: email.inactivity?.noticeDays ?? 0,
+			supportEmail
+		});
+	}
+	if (email.reason === 'password_changed') return passwordChangedEmail({ supportEmail });
+	// Un motivo sin plantilla no debe salir con el texto de otro aviso: se falla en vez de enviar un email equivocado.
+	throw new Error(`sin plantilla para el motivo ${email.reason}`);
 }
 
 /** Envía un email de la cuenta. Devuelve `true` si el proveedor lo aceptó. */
@@ -71,7 +92,12 @@ export async function sendAccountEmail(
 		deps.logger.emit('notifications.email.sent', { reason: email.reason });
 		return true;
 	}
-	deps.logger.emit('notifications.email.failed', {
+	// Un rechazo por validación del proveedor es un error de nuestro lado (T329): va en su propio evento, a nivel error.
+	const event =
+		result.errorCode === 'validation_error'
+			? 'notifications.email.rejected'
+			: 'notifications.email.failed';
+	deps.logger.emit(event, {
 		reason: email.reason,
 		provider: PROVIDER,
 		errorCode: result.errorCode

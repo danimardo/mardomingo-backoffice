@@ -32,6 +32,10 @@
 	<section aria-labelledby="vista-previa-reembolso">
 		<h2 id="vista-previa-reembolso">{m.admin_refund_preview()}</h2>
 		<p>{formatEuros(form.preview.refundEurCents)}</p>
+		<p>
+			{m.admin_refund_credits_withdrawn()}
+			{formatCredits(form.preview.creditsToWithdrawMicro)}
+		</p>
 	</section>
 {/if}
 
@@ -52,7 +56,7 @@
 	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_refund_confirm()}</Checkbox>
 	<p>
-		<Button type="submit" formaction="?/previsualizar" variant="secondary"
+		<Button type="submit" formaction="?/previsualizarReembolso" variant="secondary"
 			>{m.admin_refund_preview_submit()}</Button
 		>
 		<Button type="submit" formaction="?/reembolsar" variant="primary"

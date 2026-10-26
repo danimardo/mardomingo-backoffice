@@ -1,0 +1,11 @@
+{
+	"name": "mardomingo-mutacion",
+	"private": true,
+	"description": "Entorno aislado de mutación (T368): Stryker exige Vitest 4.x; el proyecto usa Vitest 5.",
+	"type": "module",
+	"devDependencies": {
+		"@stryker-mutator/core": "10.0.0",
+		"@stryker-mutator/vitest-runner": "10.0.0",
+		"vitest": "4.1.12"
+	}
+}

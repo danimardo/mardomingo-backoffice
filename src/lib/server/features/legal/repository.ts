@@ -79,3 +79,30 @@ export function isOwnWithdrawalWaiver(db: Db | Tx, userId: string, acceptanceId:
 			.get() !== undefined
 	);
 }
+
+export interface PublishedDocument {
+	readonly document: LegalDocumentName;
+	readonly version: string;
+	readonly content: string;
+	readonly publishedAt: EpochMs;
+}
+
+/** Versión vigente de un documento con su texto, para mostrarlo en las páginas públicas (BE-FR-60). */
+export function readCurrentDocument(
+	db: Db,
+	document: LegalDocumentName,
+	now: EpochMs
+): PublishedDocument | undefined {
+	return db
+		.select({
+			document: legalDocuments.document,
+			version: legalDocuments.version,
+			content: legalDocuments.content,
+			publishedAt: legalDocuments.publishedAt
+		})
+		.from(legalDocuments)
+		.where(and(eq(legalDocuments.document, document), lte(legalDocuments.publishedAt, now)))
+		.orderBy(desc(legalDocuments.publishedAt))
+		.limit(1)
+		.get();
+}

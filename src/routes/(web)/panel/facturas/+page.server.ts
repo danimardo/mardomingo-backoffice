@@ -8,6 +8,16 @@ import { accessFor, reportDenial } from '$lib/server/features/accounts';
 import { BillingProfile } from '$lib/schemas/invoicing/billing-profile';
 import { billingProfileOf } from '$lib/server/features/invoicing';
 import { civilDateOf } from '$lib/shared/dates';
+import {
+	INVOICES_PAGE_SIZE,
+	kindParam,
+	orderParam,
+	pageOf,
+	pageParam,
+	selectInvoices,
+	type InvoiceKind,
+	type InvoiceOrder
+} from '$lib/shared/invoice-list';
 import { toEpochMs } from '$lib/shared/time';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -41,17 +51,48 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 			}
 		];
 	});
+	// UX-09: filtro por tipo y orden por fecha en la URL, paginado de 20 en 20; la URL comparte el resultado.
+	const kind = kindParam(url.searchParams.get('tipo'));
+	const order = orderParam(url.searchParams.get('orden'));
+	const matching = selectInvoices(invoices, kind, order);
+	const { page, pages, start } = pageOf(matching.length, pageParam(url.searchParams.get('pagina')));
+	const pageHrefs = Array.from({ length: pages }, (_, index) =>
+		hrefOfInvoices({ tipo: kind, orden: order, pagina: index + 1 })
+	);
+
 	return {
-		invoices: invoices.map((invoice) => ({
+		invoices: matching.slice(start, start + INVOICES_PAGE_SIZE).map((invoice) => ({
 			date: civilDateOf(invoice.issuedAt),
 			kind: invoice.kind,
 			number: `${invoice.series}-${invoice.number}`,
 			amountEurCents: invoice.amountEurCents
 		})),
+		filters: { tipo: kind ?? '', orden: order },
+		pagination: {
+			page,
+			pages,
+			previousHref: page > 1 ? (pageHrefs[page - 2] ?? '') : null,
+			nextHref: page < pages ? (pageHrefs[page] ?? '') : null,
+			pageHrefs
+		},
 		purchases,
 		requested: url.searchParams.get('aviso') === 'full_invoice_requested'
 	};
 };
+
+/** Enlace a la lista con sus filtros; los valores por defecto no ensucian la URL. */
+function hrefOfInvoices(input: {
+	readonly tipo: InvoiceKind | null;
+	readonly orden: InvoiceOrder;
+	readonly pagina: number;
+}): string {
+	const params = new URLSearchParams();
+	if (input.tipo !== null) params.set('tipo', input.tipo);
+	if (input.orden === 'asc') params.set('orden', 'asc');
+	if (input.pagina > 1) params.set('pagina', String(input.pagina));
+	const query = params.toString();
+	return `${resolve('/panel/facturas')}${query === '' ? '' : `?${query}`}`;
+}
 
 export const actions: Actions = {
 	solicitarFacturaCompleta: async ({ request, locals }) => {

@@ -14,6 +14,7 @@ import {
 	type AnnouncementInput
 } from '$lib/server/features/apps';
 import { AppError } from '$lib/server/shared/errors';
+import { isConfirmed } from '$lib/server/forms/confirmation';
 import { failureOf } from '$lib/server/web/actions';
 import { toEpochMs } from '$lib/shared/time';
 import type { Actions, PageServerLoad } from './$types';
@@ -127,10 +128,12 @@ export const actions: Actions = {
 	desactivar: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
+		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		try {
 			deactivateAnnouncement(getComposition().adminAnnouncements, {
 				adminId: admin.id,
-				id: textOf(form, 'anuncioId')
+				id: textOf(form, 'anuncioId'),
+				reason: textOf(form, 'motivo')
 			});
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);

@@ -5,6 +5,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 export interface MockRequest {
 	readonly method: string;
 	readonly path: string;
+	/** Búsqueda de la URL (`?page=2`), vacía si no la hay. */
+	readonly query: string;
 	readonly body: string;
 	readonly scenario: string;
 	/** Cabeceras recibidas, en minúsculas (para comprobar `Authorization`, `HTTP-Referer` o `X-Title`). */
@@ -17,6 +19,8 @@ export interface MockReply {
 	/** Cuerpo de texto plano (p. ej. CSV del BCE). Tiene prioridad sobre `body`; sin `contentType`, es `text/plain`. */
 	readonly text?: string;
 	readonly contentType?: string;
+	/** Cabeceras de respuesta adicionales (p. ej. `Link` de la paginación de GitHub). */
+	readonly headers?: Readonly<Record<string, string>>;
 	readonly delayMs?: number;
 }
 
@@ -51,6 +55,7 @@ export function startMockServer(
 		const request: MockRequest = {
 			method: req.method ?? 'GET',
 			path: new URL(req.url ?? '/', 'http://localhost').pathname,
+			query: new URL(req.url ?? '/', 'http://localhost').search,
 			body,
 			scenario,
 			headers: req.headers
@@ -60,12 +65,16 @@ export function startMockServer(
 		if (reply.delayMs !== undefined) await delay(reply.delayMs);
 		if (reply.text !== undefined) {
 			res.writeHead(reply.status, {
-				'content-type': reply.contentType ?? 'text/plain; charset=utf-8'
+				'content-type': reply.contentType ?? 'text/plain; charset=utf-8',
+				...reply.headers
 			});
 			res.end(reply.text);
 			return;
 		}
-		res.writeHead(reply.status, { 'content-type': 'application/json; charset=utf-8' });
+		res.writeHead(reply.status, {
+			'content-type': 'application/json; charset=utf-8',
+			...reply.headers
+		});
 		res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
 	}
 

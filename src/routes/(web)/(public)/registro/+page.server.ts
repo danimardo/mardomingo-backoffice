@@ -14,6 +14,7 @@ import { currentVersions } from '$lib/server/features/legal';
 import { parseForm } from '$lib/server/forms';
 import { AppError } from '$lib/server/shared/errors';
 import { clientIpOf, failureOf } from '$lib/server/web/actions';
+import { legalHrefOf } from '$lib/server/web/legal-page';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url }) => {
@@ -32,7 +33,11 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	const minAge = getSetting(composition.apps, 'min_age');
 	return {
 		originApp: origin === undefined ? null : { slug: slug ?? '', name: origin.name },
-		legal: [...versions.entries()].map(([kind, current]) => ({ kind, version: current.version })),
+		legal: [...versions.entries()].map(([kind, current]) => ({
+			kind,
+			version: current.version,
+			url: legalHrefOf(kind) ?? ''
+		})),
 		minAge: typeof minAge === 'number' ? minAge : 18,
 		passwordRule: { min: PASSWORD_MIN, max: PASSWORD_MAX },
 		turnstileSiteKey: composition.config.PUBLIC_TURNSTILE_SITE_KEY

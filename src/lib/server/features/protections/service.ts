@@ -112,7 +112,7 @@ export interface RequestGuardInput {
 export function guardRequest(deps: ProtectionsDeps, input: RequestGuardInput): () => void {
 	guardAccess(deps, input);
 	const now = toEpochMs(deps.clock.now());
-	guardBrake(deps, now);
+	guardBrake(deps, now, input.userId);
 	const limits = effectiveLimits(deps, input.appId);
 	checkRate(deps, input, now, limits);
 	const release = input.transcription ? acquireSlot(deps, input, limits) : () => undefined;
@@ -123,9 +123,9 @@ export function guardRequest(deps: ProtectionsDeps, input: RequestGuardInput): (
 /**
  * Freno global de gasto (BE-FR-46): el coste real del día de las cuentas sin compra real más sus reservas en curso.
  * Al cruzar el límite se activa, se guarda, avisa una vez al administrador y rechaza. Hasta el cambio de día, o una
- * liberación manual, sigue activo.
+ * liberación manual, sigue activo. Las cuentas con compra real quedan fuera del rechazo.
  */
-function guardBrake(deps: ProtectionsDeps, now: EpochMs): void {
+function guardBrake(deps: ProtectionsDeps, now: EpochMs, userId: string): void {
 	const day = civilDateOf(now);
 	const stored = readBrakeState(deps.db);
 	// Rearme por cambio de día: el freno de un día anterior se cierra una sola vez y queda registrado. No va a la auditoría
@@ -137,7 +137,10 @@ function guardBrake(deps: ProtectionsDeps, now: EpochMs): void {
 		deps.logger.emit('protections.brake.released', { reason: 'new_day' });
 	}
 	// Mientras el freno esté activo hoy no hace falta volver a sumar el día: la respuesta es la misma.
-	if (stored !== null && stored.day === day && stored.active) rejectBraked(deps);
+	if (stored !== null && stored.day === day && stored.active) {
+		rejectBraked(deps, userId);
+		return;
+	}
 
 	const verdict = brakeVerdict({
 		freeCostCents: freeAccountsCostCents(deps, day),
@@ -160,10 +163,12 @@ function guardBrake(deps: ProtectionsDeps, now: EpochMs): void {
 			deps.logger.emit('protections.brake.alert_failed', {});
 		});
 	}
-	rejectBraked(deps);
+	rejectBraked(deps, userId);
 }
 
-function rejectBraked(deps: ProtectionsDeps): never {
+/** El freno solo alcanza a cuentas sin compra real: quien ha comprado sigue operando (BE-FR-46 CA1). */
+function rejectBraked(deps: ProtectionsDeps, userId: string): void {
+	if (deps.credits.realPurchaseUserIds([userId]).has(userId)) return;
 	deps.logger.emit('protections.request.rejected', { reason: 'brake_active' });
 	throw new AppError('SERVICE_LIMITED');
 }

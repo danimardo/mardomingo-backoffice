@@ -20,7 +20,7 @@ describe('ChartContainer', () => {
 		expect(screen.getByText(/Periodo: 30 días · Unidad: créditos · Vigencia: hoy/)).toBeTruthy();
 	});
 
-	it('la tabla equivalente trae los mismos valores, y un día sin datos no es cero', () => {
+	it('[UX-08] la tabla equivalente trae los mismos valores, y un día sin datos no es cero', () => {
 		render(ChartContainer, {
 			props: { title: 'Consumo', period: '30 días', unit: 'créditos', validity: 'hoy', points }
 		});

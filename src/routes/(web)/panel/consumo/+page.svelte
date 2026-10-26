@@ -1,5 +1,6 @@
 <script lang="ts">
 	// W24 · `/panel/consumo`: operaciones de IA de la cuenta con su estado y los créditos cobrados. Filtro GET sin JavaScript.
+	import { formatCredits } from '$lib/format/credits';
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import Banner from '$lib/components/ui/Banner.svelte';
@@ -34,14 +35,15 @@
 		}
 	}
 
-	const creditsFormat = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 });
+	// Los créditos llegan convertidos de micro-créditos; se formatean con la regla de BE-FR-22.
+	const creditsText = (credits: number): string => formatCredits(Math.round(credits * 1_000_000));
 	const rows = $derived(
 		data.rows.map((row) => [
 			row.date,
 			row.appName,
 			row.operation,
 			statusLabel(row.status),
-			creditsFormat.format(row.credits)
+			creditsText(row.credits)
 		])
 	);
 	const columns = [
@@ -95,6 +97,17 @@
 						{option.label}
 					</option>
 				{/each}
+			</select>
+		</div>
+		<div class="field">
+			<label for="consumo-orden">{m.movements_order_label()}</label>
+			<select id="consumo-orden" name="orden">
+				<option value="desc" selected={data.filters?.orden !== 'asc'}
+					>{m.movements_order_desc()}</option
+				>
+				<option value="asc" selected={data.filters?.orden === 'asc'}
+					>{m.movements_order_asc()}</option
+				>
 			</select>
 		</div>
 		<Button type="submit" variant="primary">{m.movements_apply()}</Button>
