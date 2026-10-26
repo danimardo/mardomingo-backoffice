@@ -24,3 +24,6 @@ export const E2E_ADMIN_EMAIL = 'admin-contenido.e2e@gmail.com';
  */
 export const WEBKIT_SECURE_COOKIE_SKIP =
 	'WebKit no envía cookies Secure sobre http://localhost: la persistencia se prueba en Chromium y Firefox';
+
+/** Origen web de la suite local (`playwright.config.ts`): sin él, el humo corre contra un despliegue (T374). */
+export const LOCAL_WEB_ORIGIN = 'http://localhost:7390';

@@ -531,6 +531,22 @@ for (const scheme of ['light', 'dark'] as const) {
 test.describe('administración en móvil', () => {
 	for (const route of ['/admin', '/admin/usuarios', '/admin/facturacion']) {
 		test(`@UX-13 ${route} entra en 390×844 sin desbordamiento horizontal`, async ({ page }) => {
+			// Un email largo sin espacios: sin `overflow-wrap` en la lista desborda el móvil. Se inserta siempre para que la
+			// prueba no dependa de lo que haya en la base (T357; falló en la suite completa, no aislada).
+			const db = dbFile();
+			try {
+				db.prepare(
+					`INSERT OR IGNORE INTO user (id, name, email, email_verified, role, banned, email_normalized, created_at, updated_at)
+					 VALUES ('usr_e2e_email_largo', '', ?, 1, 'user', 0, ?, ?, ?)`
+				).run(
+					'correo.de.prueba.con.un.nombre.muy.largo.sin.espacios.para.comprobar.el.ajuste@ejemplo.es',
+					'correo.de.prueba.con.un.nombre.muy.largo.sin.espacios.para.comprobar.el.ajuste@ejemplo.es',
+					Date.now(),
+					Date.now()
+				);
+			} finally {
+				db.close();
+			}
 			await page.setViewportSize({ width: 390, height: 844 });
 			await loginAsAdmin(page);
 			await page.goto(route);

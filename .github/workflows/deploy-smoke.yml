@@ -1,8 +1,14 @@
 # Humo tras cada despliegue (T374; constitución, «Despliegue»): solo lectura contra la URL desplegada, sin crear datos.
-# Un fallo bloquea la promoción a producción. Se llama desde el pipeline de despliegue (`workflow_call`) o a mano.
+# Un fallo bloquea la promoción a producción. Se dispara:
+#  - tras un CI correcto en `staging` (workflow_run): contra la URL de staging, esperando a que el despliegue responda;
+#  - a mano (workflow_dispatch) o desde otro pipeline (workflow_call), con la URL como entrada.
 name: deploy-smoke
 
 on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [staging]
   workflow_call:
     inputs:
       url:
@@ -22,13 +28,29 @@ permissions:
 env:
   NODE_VERSION: 24.21.0
   PNPM_VERSION: 12.8.1
+  # Staging por defecto (constitución, «Despliegue»); `vars.STAGING_URL` lo puede sustituir.
+  STAGING_URL_DEFECTO: https://cuenta-staging.mardomingo.com
 
 jobs:
   smoke:
-    name: humo contra ${{ inputs.url }}
+    # En `workflow_run` solo si el CI de `staging` ha pasado.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    name: humo del despliegue
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - name: URL a verificar
+        id: destino
+        env:
+          ENTRADA_URL: ${{ inputs.url }}
+          VARIABLE_STAGING: ${{ vars.STAGING_URL }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            URL="${VARIABLE_STAGING:-$STAGING_URL_DEFECTO}"
+          else
+            URL="$ENTRADA_URL"
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -36,12 +58,24 @@ jobs:
       - run: npm install --global pnpm@${{ env.PNPM_VERSION }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Health del despliegue
-        run: curl --fail --silent --show-error --max-time 20 "${{ inputs.url }}/api/v1/health"
+      # Coolify despliega por webhook: el health puede tardar en responder con la versión nueva. Se reintenta unos minutos.
+      - name: Health del despliegue (con reintentos)
+        env:
+          URL: ${{ steps.destino.outputs.url }}
+        run: |
+          for intento in $(seq 1 20); do
+            if curl --fail --silent --max-time 15 "$URL/api/v1/health" > /dev/null; then
+              echo "health correcto en el intento $intento"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "el health no responde tras 20 intentos"
+          exit 1
       - name: Humo de la web desplegada
         run: pnpm exec playwright test --project=smoke-desplegado
         env:
-          E2E_BASE_URL: ${{ inputs.url }}
+          E2E_BASE_URL: ${{ steps.destino.outputs.url }}
       - name: Informe (siempre)
         if: always()
         uses: actions/upload-artifact@v4

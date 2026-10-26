@@ -1,6 +1,7 @@
 // Humo de la aplicación (T-PLAY-002): la página principal responde, el marco aparece con los estilos cargados,
 // hay navegación cliente y no hay excepciones, `console.error` ni errores de hidratación.
 import { expect, test } from './fixtures';
+import { LOCAL_WEB_ORIGIN } from './constants';
 
 test('@smoke la página principal tiene contenido, marco y estilos del tema', async ({ page }) => {
 	const response = await page.goto('/');
@@ -39,8 +40,9 @@ test('@smoke GET /api/v1/health responde 200 con estado ok', async ({ request })
 });
 
 test.describe('humo con sesión de usuario', () => {
+	// Se decide con la URL de la ejecución (fixture `baseURL`), no con el entorno: los specs no leen `process.env`.
 	test.skip(
-		process.env.E2E_BASE_URL !== undefined,
+		({ baseURL }) => baseURL !== LOCAL_WEB_ORIGIN,
 		'sin cuentas de prueba en un despliegue: el humo con sesión corre solo en local'
 	);
 	test.use({ storageState: 'e2e/.auth/user.json' });
