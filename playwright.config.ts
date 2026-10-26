@@ -82,7 +82,8 @@ export default defineConfig({
 			// Los estados de sesión (`e2e/.auth/`) los crea el proyecto `setup` antes de cualquier navegador (T112).
 			dependencies: ['setup'],
 			use: { ...devices['Desktop Chrome'] },
-			testIgnore: [/.*\.setup\.ts/, ADMIN_FINAL_SPEC, ...NIGHTLY_ONLY]
+			// Legal y cierre de administración corren en sus proyectos finales: si no, chocan con admin-contenido (mismo admin, T288).
+			testIgnore: [/.*\.setup\.ts/, ADMIN_FINAL_SPEC, LEGAL_LAST_SPEC, ...NIGHTLY_ONLY]
 		},
 		{
 			name: 'firefox',

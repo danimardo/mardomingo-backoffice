@@ -28,7 +28,11 @@ const config = {
 	// Umbral de partida decidido por el propietario (2026-10-22): por debajo del 60 % la ejecución falla.
 	thresholds: { high: 80, low: 60, break: 60 },
 	ignoreStatic: false,
-	timeoutMS: 30000
+	timeoutMS: 30000,
+	// La ejecución inicial con cobertura «all» agotó los 5 minutos por defecto con 11 procesos (T368, 2026-10-25).
+	// Se da más margen y menos concurrencia; no cambia ningún umbral.
+	dryRunTimeoutMinutes: 30,
+	concurrency: 2
 };
 
 export default config;
