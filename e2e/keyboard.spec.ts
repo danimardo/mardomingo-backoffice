@@ -108,9 +108,13 @@ for (const route of ['/', '/login', '/registro', '/precios']) {
 				const box = el.getBoundingClientRect();
 				if (box.width === 0 || box.height === 0) return;
 				const pseudo = getComputedStyle(el, '::before');
-				const extra = pseudo.content !== 'none' && pseudo.position === 'absolute' ? 24 : 0;
-				if (box.height + extra < 44)
-					bad.push(`${name} ${String(Math.round(box.height + extra))}px`);
+				// La zona táctil es la mayor entre la caja y el pseudo-elemento de `app.css` (44 px de alto, centrado).
+				const zona =
+					pseudo.content !== 'none' && pseudo.position === 'absolute'
+						? parseFloat(pseudo.height)
+						: 0;
+				const touch = Math.max(box.height, zona);
+				if (touch < 44) bad.push(`${name} ${String(Math.round(touch))}px`);
 			};
 			for (const el of document.querySelectorAll('a[href], button'))
 				// Diagnóstico (2026-10-26): el fallo de CI en Firefox decía solo «a 43px»; se nombra el elemento por su texto y destino.

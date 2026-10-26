@@ -26,11 +26,17 @@
 		position: relative;
 	}
 
+	/* La zona táctil mide 44 px de alto con independencia de la fuente: una caja de texto de 19 px más un margen fijo
+	   quedaba en 43 px en el CI (2026-10-26). */
 	a::before,
 	button::before {
 		content: '';
 		position: absolute;
-		inset: -12px 0;
+		left: 0;
+		right: 0;
+		top: 50%;
+		height: 44px;
+		transform: translateY(-50%);
 	}
 
 	html {
