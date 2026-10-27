@@ -14,6 +14,9 @@ import { expect, test } from './fixtures';
 import { PASSWORD } from './outbox';
 
 test.describe.configure({ mode: 'serial' });
+// Una navegación que sustituye a otra aborta la petición de datos (`__data.json`) de la anterior: el abort es benigno y lo
+// acotan así `legal-critico7` y `privacy`. Cualquier otro fallo de red sigue contando. Fallo intermitente en CI (2026-10-27).
+test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
 
 test.beforeAll(async ({ baseURL }) => {
 	await ensureAdminAccount(baseURL);
