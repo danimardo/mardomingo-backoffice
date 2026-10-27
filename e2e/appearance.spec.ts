@@ -1,6 +1,7 @@
 // Apariencia y accesibilidad de la interfaz (T054; UX-TEMA CA1–CA5; UX-EFECTOS CA1–CA4; V08; SC-017).
 // Con JavaScript desactivado el tema se decide solo en el servidor. Con JavaScript, el cambio del sistema se
 // aplica sin recargar. Las comprobaciones que el navegador no puede dar se anotan como «no verificable».
+import type { Browser } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { emulate, emulateReducedTransparency, recordUx } from './fixtures/ux-emulation';
 
@@ -9,6 +10,56 @@ import { emulate, emulateReducedTransparency, recordUx } from './fixtures/ux-emu
 const PRELOAD_CSP = /requestfailed: .*\(csp\)/;
 
 const WIDTHS = [320, 390, 1366];
+
+// Captura de la página con JavaScript desactivado y con el mismo sistema claro: la pintura que ve el usuario antes de
+// que la aplicación se ejecute. Se compara con la de la página ya hidratada, en la misma resolución.
+async function capturaConJavaScript(
+	browser: Browser,
+	origen: string,
+	tamano: { width: number; height: number } | null
+): Promise<Buffer> {
+	const referencia = await browser.newContext({ colorScheme: 'light', viewport: tamano });
+	try {
+		const pagina = await referencia.newPage();
+		await pagina.goto(`${origen}/`);
+		await pagina.waitForLoadState('networkidle');
+		return await pagina.screenshot({ type: 'png' });
+	} finally {
+		await referencia.close();
+	}
+}
+
+// Color RGB de cuatro esquinas de una captura, leído en una página de sonda (sin CSP ni JavaScript de la app).
+// Devuelve doce números: r, g, b por esquina.
+async function coloresDeCaptura(browser: Browser, captura: Buffer): Promise<number[]> {
+	const sonda = await browser.newContext();
+	try {
+		const pagina = await sonda.newPage();
+		await pagina.setContent('<!doctype html><title>sonda</title>');
+		return await pagina.evaluate(async (datos) => {
+			const imagen = await createImageBitmap(
+				new Blob([new Uint8Array(datos)], { type: 'image/png' })
+			);
+			const lienzo = document.createElement('canvas');
+			lienzo.width = imagen.width;
+			lienzo.height = imagen.height;
+			const contexto = lienzo.getContext('2d');
+			if (!contexto) throw new Error('sin contexto 2d');
+			contexto.drawImage(imagen, 0, 0);
+			const esquinas: [number, number][] = [
+				[1, 1],
+				[imagen.width - 2, 1],
+				[1, imagen.height - 2],
+				[imagen.width - 2, imagen.height - 2]
+			];
+			return esquinas.flatMap(([x, y]) =>
+				Array.from(contexto.getImageData(x, y, 1, 1).data).slice(0, 3)
+			);
+		}, Array.from(captura));
+	} finally {
+		await sonda.close();
+	}
+}
 
 test.describe('tema sin JavaScript (UX-TEMA CA1 y CA3)', () => {
 	test.use({ javaScriptEnabled: false, colorScheme: 'light', guardAllow: [PRELOAD_CSP] });
@@ -21,6 +72,50 @@ test.describe('tema sin JavaScript (UX-TEMA CA1 y CA3)', () => {
 
 		expect(html).not.toContain('data-theme=');
 		expect(html).toContain('<html lang="es"');
+	});
+
+	// La medida es la captura de la página sin JavaScript, tomada tras la carga (sin hidratación que la cambie). No es el
+	// primer fotograma real: ese no se puede capturar de forma fiable desde Playwright (ver la nota junto a la prueba con JS).
+	test('[UX-TEMA/CA1] sin JavaScript y con sistema claro, la pintura ya es clara y coincide con la final', async ({
+		page,
+		browser
+	}) => {
+		await page.goto('/');
+		const pintura = await page.screenshot({ type: 'png' });
+		const origen = new URL(page.url()).origin;
+		const conJavaScript = await capturaConJavaScript(browser, origen, page.viewportSize());
+
+		const sinJavaScript = await coloresDeCaptura(browser, pintura);
+		const final = await coloresDeCaptura(browser, conJavaScript);
+
+		expect(sinJavaScript).toHaveLength(final.length);
+		const diferencia = Math.max(
+			...sinJavaScript.map((valor, i) => Math.abs(valor - (final[i] ?? 0)))
+		);
+		expect(
+			diferencia,
+			'las esquinas sin JavaScript difieren de la página final'
+		).toBeLessThanOrEqual(4);
+		const media = final.reduce((suma, valor) => suma + valor, 0) / final.length;
+		expect(media, 'el tema de la página final no es claro').toBeGreaterThan(128);
+	});
+
+	test('[UX-TEMA/CA4] sin JavaScript, la opción actual va marcada según la cookie', async ({
+		page,
+		context
+	}) => {
+		await context.addCookies([{ name: 'mdm_theme', value: 'dark', url: 'http://localhost:7390' }]);
+		await page.goto('/login');
+
+		const grupo = page.getByRole('group', { name: 'Tema' });
+		await expect(grupo.getByRole('button', { name: 'Oscuro' })).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+		await expect(grupo.getByRole('button', { name: 'Claro' })).toHaveAttribute(
+			'aria-pressed',
+			'false'
+		);
 	});
 
 	test('[UX-TEMA/CA3] con la cookie «oscuro», el servidor pinta data-theme="dark" en la primera respuesta', async ({
@@ -86,6 +181,7 @@ test.describe('elegir tema y efectos con JavaScript', () => {
 		const after = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 		expect(after).not.toBe(before);
 		expect(await page.getByLabel('Email').inputValue()).toBe('texto que no se pierde');
+		await expect(page.getByLabel('Email')).toBeFocused();
 		expect(await page.evaluate(() => window.__sinRecarga === true)).toBe(true);
 	});
 
@@ -228,6 +324,7 @@ test.describe('tema: caducidad, perfil y páginas públicas (T359)', () => {
 			const after = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 			expect(after).not.toBe(before);
 			await expect(city).toHaveValue('texto que no se pierde');
+			await expect(city).toBeFocused();
 			expect(await page.evaluate(() => window.__sinRecarga === true)).toBe(true);
 			// Firefox restaura el desplazamiento con redondeo subpíxel (1 px de diferencia observada el 2026-10-26): tolerancia de 2 px.
 			const scrollAfter = await page.evaluate(() => window.scrollY);
@@ -244,7 +341,14 @@ test.describe('tema: caducidad, perfil y páginas públicas (T359)', () => {
 			}) => {
 				await page.goto(route);
 				for (const name of ['Sistema', 'Claro', 'Oscuro']) {
-					await expect(page.getByRole('button', { name })).toBeVisible();
+					await expect(
+						page.getByRole('group', { name: 'Tema' }).getByRole('button', { name })
+					).toBeVisible();
+					if (name === 'Sistema') {
+						await expect(
+							page.getByRole('group', { name: 'Tema' }).getByRole('button', { name })
+						).toHaveAttribute('aria-pressed', 'true');
+					}
 				}
 			});
 		}
@@ -252,8 +356,10 @@ test.describe('tema: caducidad, perfil y páginas públicas (T359)', () => {
 });
 
 // Tema desde la primera pintura con JavaScript (T359, UX-TEMA/CA1). Aproximación medible: el fondo calculado en DOMContentLoaded,
-// antes de que la hidratación cambie nada, debe coincidir con el fondo final. La captura del primer fotograma sigue pendiente.
-for (const scheme of ['light', 'dark'] as const) {
+// antes de que la hidratación cambie nada, debe coincidir con el fondo final. No es el primer fotograma: Playwright no lo captura
+// de forma fiable, así que el destello real sigue sin verificar y se queda como pendiente de revisión manual.
+const ESQUEMAS: ('light' | 'dark')[] = ['light', 'dark'];
+for (const scheme of ESQUEMAS) {
 	test.describe(`primera pintura con sistema ${scheme} (T359)`, () => {
 		test.use({ colorScheme: scheme });
 
@@ -282,6 +388,9 @@ for (const scheme of ['light', 'dark'] as const) {
 		});
 	});
 }
+
+// Pendiente, revisión manual (T359, UX-TEMA/CA5): el tema oscuro en estados, foco, gráficas e imágenes. No se automatiza.
+// Pendiente, no verificado en E2E: la persistencia «al día siguiente» de la cookie del tema (solo se prueba su caducidad).
 
 // Cristal opaco en todas las superficies con efectos reducidos (T357, UX-EFECTOS/CA2): ninguna superficie `data-surface="glass"`
 // desenfoca el fondo ni es translúcida. Amplía la prueba de la cabecera a todas las que la página pinte.
