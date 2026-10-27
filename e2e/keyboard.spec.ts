@@ -1,6 +1,6 @@
 // Teclado en las páginas públicas (T361; UX-16, WCAG 2.1.1). El primer Tab llega al enlace de saltar al contenido; Enter lleva el
-// foco a `#contenido`; el selector de tema se maneja con Enter y Espacio. Los diálogos y el menú de cuenta se prueban en el
-// flujo de sesión (pendiente: no hay un diálogo público con el que probarlos aquí).
+// foco a `#contenido`; el selector de tema se maneja con Enter y Espacio. Los desplegables nativos (menú de cuenta y datos de
+// facturación) se prueban con sesión. Los diálogos y el `Sidebar` no existen en v4 (ver 16.5): no hay nada que probar aquí.
 import { expect, test } from './fixtures';
 import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD, WEBKIT_SECURE_COOKIE_SKIP } from './constants';
 
@@ -227,5 +227,78 @@ test.describe('menú de cuenta con teclado', () => {
 
 		expect(inside[0], 'el primer Tab entra en el menú').toBe(true);
 		expect(inside.at(-1), 'el foco sale del menú y no queda atrapado').toBe(false);
+	});
+
+	test('@UX-16 el menú de cuenta se alcanza con Tab y su resumen muestra el foco', async ({
+		page,
+		browserName
+	}) => {
+		test.skip(
+			browserName === 'webkit',
+			'WebKit no recorre enlaces con Tab por defecto (ver el primer test de este fichero)'
+		);
+		await page.goto('/panel');
+		const summary = page.locator('details.menu > summary');
+		let focused = false;
+		for (let step = 0; step < 40 && !focused; step += 1) {
+			await page.keyboard.press('Tab');
+			focused = await summary.evaluate((el) => el === document.activeElement);
+		}
+		expect(focused, 'Tab llega al resumen del menú de cuenta').toBe(true);
+
+		const outline = await summary.evaluate((el) => getComputedStyle(el).outlineStyle);
+		expect(outline, 'el foco del resumen del menú es visible').not.toBe('none');
+	});
+
+	test('@UX-16 el menú de cuenta se abre y se cierra con Espacio y con Enter', async ({
+		page,
+		browserName
+	}) => {
+		test.skip(
+			browserName === 'webkit',
+			'WebKit no recorre enlaces con Tab por defecto (ver el primer test de este fichero)'
+		);
+		await page.goto('/panel');
+		const menu = page.locator('details.menu');
+		await menu.locator('summary').focus();
+
+		await page.keyboard.press('Space');
+		await expect(menu).toHaveAttribute('open', '');
+		await page.keyboard.press('Space');
+		await expect(menu).not.toHaveAttribute('open');
+		await page.keyboard.press('Enter');
+		await expect(menu).toHaveAttribute('open', '');
+		await page.keyboard.press('Enter');
+		await expect(menu).not.toHaveAttribute('open');
+	});
+});
+
+// Desplegable nativo de datos de facturación de la confirmación de compra (`<details>` de `PurchaseStep`): se alcanza con Tab
+// desde la casilla anterior, se abre con Enter y muestra foco visible. Es un desplegable, no un diálogo.
+test.describe('desplegable de facturación con teclado', () => {
+	test.use({ storageState: 'e2e/.auth/user.json' });
+
+	test('@BE-FR-25 @UX-16 el desplegable de facturación se alcanza con Tab, se abre con Enter y muestra el foco', async ({
+		page,
+		browserName
+	}) => {
+		test.skip(
+			browserName === 'webkit',
+			'WebKit no recorre enlaces con Tab por defecto (ver el primer test de este fichero)'
+		);
+		await page.goto('/panel/comprar?paquete=pck_seed_5eur');
+		const billing = page.locator('form details');
+		const summary = billing.locator('summary');
+		await expect(summary).toBeVisible();
+		await expect(billing).not.toHaveAttribute('open');
+
+		await page.locator('input[name="wantsFullInvoice"]').focus();
+		await page.keyboard.press('Tab');
+		await expect(summary).toBeFocused();
+		const outline = await summary.evaluate((el) => getComputedStyle(el).outlineStyle);
+		expect(outline, 'el foco del desplegable de facturación es visible').not.toBe('none');
+
+		await page.keyboard.press('Enter');
+		await expect(billing).toHaveAttribute('open', '');
 	});
 });

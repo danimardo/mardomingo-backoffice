@@ -2,6 +2,9 @@
 // 390 y 1366 px; sin desbordamiento horizontal; axe sin violaciones serious o critical. Además: `forced-colors`, `contrast` y
 // `prefers-reduced-transparency` emulados (o «no verificable»), y los flujos sin JavaScript. El cristal no se da por bueno con
 // axe: lo que axe no calcula queda como «pendiente DS-09» (medición manual).
+// Cada celda también comprueba (T357): foco visible en el primer elemento enfocable, y con efectos reducidos, las mismas
+// acciones, cristal opaco y ningún movimiento. Las páginas con sesión (login, saldo, compra, estadísticas) están en
+// `ux-matrix-nocturna.spec.ts`, que solo corre en la nocturna.
 import { expect, test } from './fixtures';
 import { checkAccessibility } from './fixtures/axe';
 import { emulate, emulateReducedTransparency, recordUx } from './fixtures/ux-emulation';
@@ -9,6 +12,8 @@ import { emulate, emulateReducedTransparency, recordUx } from './fixtures/ux-emu
 const KEY_PAGES = ['/', '/apps/secretario', '/precios'];
 const WIDTHS = [320, 390, 1366];
 const EFFECTS = ['normales', 'reducidos'] as const;
+
+type Page = import('@playwright/test').Page;
 
 async function applyEffects(
 	page: import('@playwright/test').Page,
@@ -45,6 +50,52 @@ async function borderTokenOf(page: import('@playwright/test').Page): Promise<str
 	);
 }
 
+/** Acciones visibles (enlaces, botones, `summary` y campos) con su nombre: deben ser las mismas con efectos reducidos (T357). */
+async function visibleActions(page: Page): Promise<string[]> {
+	return page.evaluate(() =>
+		Array.from(
+			document.querySelectorAll<HTMLElement>(
+				'a[href], button, summary, input:not([type="hidden"]), select, textarea'
+			)
+		)
+			.filter((element) => element.getClientRects().length > 0)
+			.map(
+				(element) =>
+					`${element.tagName.toLowerCase()}|${element.textContent.trim()}|${element.getAttribute('href') ?? ''}|${element.getAttribute('aria-label') ?? ''}|${element.getAttribute('name') ?? ''}`
+			)
+	);
+}
+
+/** Superficies `data-surface="glass"` con su desenfoque y su fondo calculados (UX-EFECTOS/CA2; T357). */
+async function glassSurfaces(page: Page): Promise<{ backdrop: string; background: string }[]> {
+	return page.locator('[data-surface="glass"]').evaluateAll((elements) =>
+		elements.map((element) => {
+			const style = getComputedStyle(element);
+			return { backdrop: style.backdropFilter, background: style.backgroundColor };
+		})
+	);
+}
+
+/** Primer elemento que recibe Tab y si tiene contorno o sombra de foco (T357: foco visible en cada celda). */
+async function firstTabFocus(page: Page): Promise<{ tag: string; ring: boolean }> {
+	await page.keyboard.press('Tab');
+	return page.evaluate(() => {
+		const element = document.activeElement ?? document.body;
+		const style = getComputedStyle(element);
+		const outline = style.outlineStyle !== 'none' && style.outlineWidth !== '0px';
+		return { tag: element.tagName.toLowerCase(), ring: outline || style.boxShadow !== 'none' };
+	});
+}
+
+/** Cada superficie de cristal, con efectos reducidos, sin desenfoque y con fondo opaco: mismo criterio que `appearance.spec.ts` (T357). */
+function expectOpaqueGlass(surface: { backdrop: string; background: string }): void {
+	expect(
+		surface.backdrop === 'none' || /blur\(0(px)?\)/.test(surface.backdrop),
+		`cristal con desenfoque: ${surface.backdrop}`
+	).toBe(true);
+	expect(surface.background, 'cristal translúcido').not.toMatch(/rgba\(.*,\s*0?\.\d+\)/);
+}
+
 for (const scheme of ['light', 'dark'] as const) {
 	for (const effects of EFFECTS) {
 		for (const width of WIDTHS) {
@@ -58,6 +109,8 @@ for (const scheme of ['light', 'dark'] as const) {
 						reducedMotion: effects === 'reducidos' ? 'reduce' : 'no-preference'
 					});
 					await page.goto(route);
+					if (effects === 'reducidos') await page.waitForLoadState('networkidle');
+					const actionsBefore = effects === 'reducidos' ? await visibleActions(page) : [];
 					await applyEffects(page, effects);
 
 					const overflow = await page.evaluate(
@@ -67,6 +120,21 @@ for (const scheme of ['light', 'dark'] as const) {
 						overflow,
 						`desbordamiento horizontal de ${String(overflow)} px`
 					).toBeLessThanOrEqual(0);
+
+					const focus = await firstTabFocus(page);
+					expect(
+						focus.ring,
+						`sin indicador de foco en el primer elemento enfocable (${focus.tag})`
+					).toBe(true);
+
+					if (effects === 'reducidos') {
+						expect(
+							await visibleActions(page),
+							'las acciones visibles cambian con efectos reducidos'
+						).toEqual(actionsBefore);
+						for (const surface of await glassSurfaces(page)) expectOpaqueGlass(surface);
+						expect(await movingElements(page), 'elementos con transición o animación').toEqual([]);
+					}
 
 					await checkAccessibility(page, testInfo);
 				});
