@@ -168,7 +168,8 @@ jobs:
   humo-staging:
     name: humo tras el despliegue de staging
     needs: gates
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    # Solo cuando existe staging: la variable del repositorio STAGING_ENABLED = true (2026-10-27: staging aún no está creado).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging' && vars.STAGING_ENABLED == 'true'
     uses: ./.github/workflows/deploy-smoke.yml
     with:
       url: https://cuenta-staging.mardomingo.com
