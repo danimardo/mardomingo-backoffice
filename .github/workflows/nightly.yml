@@ -1,5 +1,7 @@
 # Nocturna (Historias.md 15.26): matriz de tres navegadores y mobile-webkit, con vídeo de los fallos.
-# La matriz completa de UX (16.11) y el trabajo visual se activan con sus líneas base (L10 y L16).
+# E2E_NIGHTLY=1 activa la matriz completa de UX (16.11, `ux-matrix-nocturna.spec.ts`, T357). `appearance.spec.ts` (T359),
+# `ux-matrix.spec.ts` (T358) y las specs a11y corren en cada proyecto sin filtro. El trabajo visual no va aquí: solo en el
+# contenedor oficial de Playwright.
 name: nocturna
 
 on:
