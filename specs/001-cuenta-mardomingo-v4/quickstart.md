@@ -2,11 +2,10 @@
 
 **Funcionalidad**: `001-cuenta-mardomingo-v4` · **Fase**: 1 de `/speckit-plan` · **Fecha**: 2026-10-10
 
-> **Estado: comandos PENDIENTES DEL SCAFFOLD (L01).** El repositorio aún no tiene `package.json`, scripts,
-> suites ni servidores simulados. Los comandos de esta guía son los fijados por la constitución («Scripts
-> estándar») y por `Historias.md` 15.25; se crean en L01 (T-TEST-006) y se documentan en `CLAUDE.md`. Hasta
-> entonces, ningún escenario puede marcarse como **comprobado**. Los nombres de las variables exclusivas de
-> test (simuladores, _outbox_, captcha falso) los fija `env-schema.ts` en L01.
+> **Estado (2026-10-27): los scripts existen desde L01.** Todos los comandos de esta guía están en `package.json`
+> (comprobado con un cruce automático). Un escenario se marca **comprobado** solo si se ha ejecutado en la
+> fecha indicada; los que siguen sin ejecutar son **pendientes**. Los nombres de las variables exclusivas de
+> test (simuladores, _outbox_, captcha falso) los fija `env-schema.ts`.
 
 Esta guía **no** explica cómo implementar: describe cómo comprobar que la funcionalidad completa cumple la
 especificación. Cada escenario enlaza a los contratos:
@@ -71,7 +70,7 @@ con claves reales de OpenRouter, Mistral, Resend o Turnstile.
 
 ## 3. Comandos
 
-Todos **pendientes de L01**.
+Todos existen en `package.json` desde L01 (2026-10-27).
 
 | Comando                                          | Qué valida                                                                                                                                                         | Cuándo (15.24)                   |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
