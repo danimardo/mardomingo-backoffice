@@ -6,7 +6,41 @@ import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toEurCents } from '$lib/shared/money';
 import type { EpochMs } from '$lib/shared/time';
-import { packs, payments } from './schema';
+import { packs, payments, refundKeys } from './schema';
+
+export type RefundKeyRow = typeof refundKeys.$inferSelect;
+
+/** Clave de un reembolso ya intentado (R12): la de este formulario, si existe. */
+export function findRefundKey(db: Db | Tx, key: string): RefundKeyRow | undefined {
+	return db.select().from(refundKeys).where(eq(refundKeys.key, key)).get();
+}
+
+/** Reembolso de la compra que aún no ha terminado (clave `claimed`): bloquea otro reembolso de la misma compra. */
+export function findClaimedRefundKeyOf(db: Db | Tx, paymentId: string): RefundKeyRow | undefined {
+	return db
+		.select()
+		.from(refundKeys)
+		.where(and(eq(refundKeys.paymentId, paymentId), eq(refundKeys.status, 'claimed')))
+		.get();
+}
+
+export function insertRefundKey(
+	tx: Tx,
+	row: { readonly key: string; readonly paymentId: string; readonly createdAt: EpochMs }
+): void {
+	tx.insert(refundKeys)
+		.values({ ...row, status: 'claimed' })
+		.run();
+}
+
+export function markRefundKeyApplied(tx: Tx, key: string): void {
+	tx.update(refundKeys).set({ status: 'applied' }).where(eq(refundKeys.key, key)).run();
+}
+
+/** Libera la clave de un reembolso que no llegó a retirar créditos: el formulario puede volver a intentarse. */
+export function deleteRefundKey(tx: Tx, key: string): void {
+	tx.delete(refundKeys).where(eq(refundKeys.key, key)).run();
+}
 
 export type PaymentRow = typeof payments.$inferSelect;
 export type PaymentStatus = PaymentRow['status'];
