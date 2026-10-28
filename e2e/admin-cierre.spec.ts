@@ -123,7 +123,31 @@ test('@BE-FR-42 copiar una sola casilla a predeterminados sustituye solo su cate
 	await page.waitForLoadState('networkidle');
 	const before = objectOf(JSON.parse(await page.locator('#datos').inputValue()));
 
-	await page.goto('/admin/apps/secretario/predeterminados/copiar?usuario=usr_panel');
+	// D03 (= R13): la cuenta origen es la del propio administrador. Se siembra su documento con el de la cuenta del panel.
+	const sembrado = openDb();
+	try {
+		const adminRow = rowOf(sembrado, 'SELECT id FROM user WHERE email = ?', E2E_ADMIN_EMAIL);
+		const panelRow = rowOf(
+			sembrado,
+			"SELECT data FROM sync_documents WHERE user_id = 'usr_panel' AND app_id = 'app_secretario'"
+		);
+		if (typeof adminRow?.id !== 'string' || typeof panelRow?.data !== 'string') {
+			throw new Error('faltan la cuenta administradora o el documento de origen');
+		}
+		sembrado
+			.prepare('DELETE FROM sync_documents WHERE user_id = ? AND app_id = ?')
+			.run(adminRow.id, 'app_secretario');
+		sembrado
+			.prepare(
+				`INSERT INTO sync_documents (user_id, app_id, revision, data, created_at, updated_at)
+				 VALUES (?, 'app_secretario', 1, ?, ?, ?)`
+			)
+			.run(adminRow.id, panelRow.data, Date.now(), Date.now());
+	} finally {
+		sembrado.close();
+	}
+
+	await page.goto('/admin/apps/secretario/predeterminados/copiar?vista=propia');
 	await page.waitForLoadState('networkidle');
 	await page.getByRole('group', { name: 'coreReplacements' }).getByRole('checkbox').first().check();
 	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
@@ -137,8 +161,8 @@ test('@BE-FR-42 copiar una sola casilla a predeterminados sustituye solo su cate
 	try {
 		const source = rowOf(
 			db,
-			"SELECT data FROM sync_documents WHERE user_id = ? AND app_id = 'app_secretario'",
-			'usr_panel'
+			"SELECT data FROM sync_documents WHERE user_id = (SELECT id FROM user WHERE email = ?) AND app_id = 'app_secretario'",
+			E2E_ADMIN_EMAIL
 		);
 		if (source === undefined || typeof source.data !== 'string') {
 			throw new Error('la cuenta de origen no tiene documento de sincronización');
