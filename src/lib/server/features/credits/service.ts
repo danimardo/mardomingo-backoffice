@@ -650,43 +650,54 @@ export type RefundWithdrawOutcome =
  */
 export function withdrawForRefund(
 	deps: CreditsDeps,
-	input: {
-		readonly adminId: string;
-		readonly userId: string;
-		readonly paymentId: string;
-		readonly amountMicro: number;
-		readonly reason: string;
-	}
+	input: RefundWithdrawInput
 ): RefundWithdrawOutcome {
-	return immediateTransaction(deps.db, (tx): RefundWithdrawOutcome => {
-		const bucket = bucketOfPayment(tx, input.paymentId);
-		if (bucket === undefined) return { ok: false, reason: 'no_purchase_bucket' };
-		const before = loadState(tx, input.userId);
-		const result = applyRefundWithdrawal(before, {
-			bucketId: bucket.id,
-			amount: input.amountMicro
-		});
-		if (!result.ok) {
-			return {
-				ok: false,
-				reason: result.reason === 'exceeds_bucket' ? 'credits_exceed_bucket' : 'amount_not_positive'
-			};
-		}
-		const now = deps.clock.now();
-		persistState(tx, input.userId, before, result.state, now);
-		insertMovements(
-			tx,
-			movementRows(input.userId, result.lines, {
-				paymentId: input.paymentId,
-				adminId: input.adminId,
-				adminReason: input.reason
-			}),
-			idsOf(deps, 'mov'),
-			now
-		);
-		deps.logger.emit('credits.refund.applied', {});
-		return { ok: true };
+	if (input.tx !== undefined) return withdrawForRefundIn(deps, input.tx, input);
+	return immediateTransaction(deps.db, (tx) => withdrawForRefundIn(deps, tx, input));
+}
+
+/** Entrada de `withdrawForRefund`. Con `tx`, la retirada va en la transacción de quien llama (R12); sin ella, abre la suya. */
+export interface RefundWithdrawInput {
+	readonly adminId: string;
+	readonly userId: string;
+	readonly paymentId: string;
+	readonly amountMicro: number;
+	readonly reason: string;
+	readonly tx?: Tx;
+}
+
+function withdrawForRefundIn(
+	deps: CreditsDeps,
+	tx: Tx,
+	input: RefundWithdrawInput
+): RefundWithdrawOutcome {
+	const bucket = bucketOfPayment(tx, input.paymentId);
+	if (bucket === undefined) return { ok: false, reason: 'no_purchase_bucket' };
+	const before = loadState(tx, input.userId);
+	const result = applyRefundWithdrawal(before, {
+		bucketId: bucket.id,
+		amount: input.amountMicro
 	});
+	if (!result.ok) {
+		return {
+			ok: false,
+			reason: result.reason === 'exceeds_bucket' ? 'credits_exceed_bucket' : 'amount_not_positive'
+		};
+	}
+	const now = deps.clock.now();
+	persistState(tx, input.userId, before, result.state, now);
+	insertMovements(
+		tx,
+		movementRows(input.userId, result.lines, {
+			paymentId: input.paymentId,
+			adminId: input.adminId,
+			adminReason: input.reason
+		}),
+		idsOf(deps, 'mov'),
+		now
+	);
+	deps.logger.emit('credits.refund.applied', {});
+	return { ok: true };
 }
 
 export type ChargebackOutcome =

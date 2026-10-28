@@ -8,7 +8,9 @@ import { creditsFixture, type CreditsFixture } from '../../../../../tests/builde
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import { insertCompletedPurchase } from '../../../../../tests/builders/purchases';
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
+import { immediateTransaction } from '$lib/server/db/tx';
 import type { LineType } from './domain/ledger';
+import type { RefundWithdrawOutcome } from './index';
 import { creditBuckets, creditMovements, userBalances } from './schema';
 
 const CREDIT = 1_000_000;
@@ -157,6 +159,32 @@ describe('reembolso: retirada de la bolsa de la compra (BE-FR-27)', () => {
 		expect(outcome).toEqual({ ok: false, reason: 'credits_exceed_bucket' });
 		expect(bucketOf('pay_exceso')[0]?.remainingMicro).toBe(10_500 * CREDIT);
 		expect(movementsOf('pay_exceso', 'refund')).toEqual([]);
+	});
+
+	// R12: con `tx`, la retirada va en la transacción de quien llama y se deshace si esa transacción falla.
+	it('con una transacción compartida, la retirada se deshace junto con ella', () => {
+		const userId = f.addUser('usr_tx_compartida');
+		const adminId = f.addUser('adm_tx_compartida', 'admin');
+		buy(userId, 'pay_tx_compartida', 10_500);
+		let outcome: RefundWithdrawOutcome | undefined;
+
+		expect(() =>
+			immediateTransaction(f.db, (tx) => {
+				outcome = f.credits.withdrawForRefund({
+					tx,
+					adminId,
+					userId,
+					paymentId: 'pay_tx_compartida',
+					amountMicro: 2000 * CREDIT,
+					reason: 'reembolso con transacción compartida'
+				});
+				throw new Error('fallo posterior en la transacción de quien llama');
+			})
+		).toThrow('fallo posterior');
+
+		expect(outcome).toEqual({ ok: true });
+		expect(bucketOf('pay_tx_compartida')[0]?.remainingMicro).toBe(10_500 * CREDIT);
+		expect(movementsOf('pay_tx_compartida', 'refund')).toEqual([]);
 	});
 });
 
