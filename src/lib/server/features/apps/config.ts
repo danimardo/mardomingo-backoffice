@@ -70,6 +70,47 @@ export function resolveMarginPpm(
 	return operationOverridePpm ?? globalMarginPpm;
 }
 
+/** Claves con tope frente al global (D06 = R01). */
+export type CeilingKey = (typeof OVERRIDABLE_CEILINGS)[number];
+
+/**
+ * Una app cuya sobrescritura impide bajar un global (D07 = R02): la administración ve qué app y qué valor hay que cambiar antes.
+ */
+export interface CeilingConflict {
+	readonly appId: string;
+	readonly appSlug: string;
+	readonly appName: string;
+	readonly key: CeilingKey;
+	readonly override: number;
+	readonly global: number;
+}
+
+function isCeilingConflict(value: unknown): value is CeilingConflict {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		'appId' in value &&
+		typeof value.appId === 'string' &&
+		'appSlug' in value &&
+		typeof value.appSlug === 'string' &&
+		'appName' in value &&
+		typeof value.appName === 'string' &&
+		'key' in value &&
+		typeof value.key === 'string' &&
+		'override' in value &&
+		typeof value.override === 'number' &&
+		'global' in value &&
+		typeof value.global === 'number'
+	);
+}
+
+/** Conflictos de un error de `updateSetting` (`details.conflicts`); lista vacía si no los trae o no tienen esa forma. */
+export function ceilingConflictsOf(details: Readonly<Record<string, unknown>>): CeilingConflict[] {
+	const conflicts = details.conflicts;
+	if (!Array.isArray(conflicts)) return [];
+	return conflicts.filter(isCeilingConflict);
+}
+
 /** Topes de las sobrescrituras frente al global (3.2): una app no puede superar el global. */
 export function overrideCeilingIssues(
 	overrides: SettingsOverrides,

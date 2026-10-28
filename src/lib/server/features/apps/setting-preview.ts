@@ -2,7 +2,7 @@
 // techo de las sobrescrituras de las apps lo comprueba `updateSetting` al guardar; la previsualización no lo repite.
 import { AppError } from '$lib/server/shared/errors';
 import { readSettingValue } from './repository';
-import { isSettingKey, parseSettingValue } from './json-schemas';
+import { isSettingKey, parseAdminSettingValue } from './json-schemas';
 import type { AppsDeps } from './service';
 
 /** Valor como texto para mostrarlo; `null` si no hay valor o no es válido. */
@@ -19,7 +19,7 @@ export interface SettingPreview {
 
 export function previewSettingChange(deps: AppsDeps, key: string, value: unknown): SettingPreview {
 	if (!isSettingKey(key)) throw new AppError('VALIDATION_ERROR', { field: 'key' });
-	const parsed = parseSettingValue(key, value);
+	const parsed = parseAdminSettingValue(key, value);
 	return {
 		key,
 		before: previewText(readSettingValue(deps.db, deps.logger, key)),

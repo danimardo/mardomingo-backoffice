@@ -5,7 +5,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
-import { createApp, listAppsForAdmin } from '$lib/server/features/apps';
+import { createApp, isValidSlug, listAppsForAdmin } from '$lib/server/features/apps';
 import { isConfirmed } from '$lib/server/forms/confirmation';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
@@ -49,6 +49,8 @@ export const actions: Actions = {
 		const slug = textOf(form, 'slug').trim();
 		const name = textOf(form, 'nombre').trim();
 		if (slug === '' || name === '') return fail(400, { errors: { slug: 'validation_required' } });
+		// Formato fijado al dar de alta (D10 = R15): 2 a 40 caracteres, letra minúscula inicial, después minúsculas, dígitos o guion.
+		if (!isValidSlug(slug)) return fail(400, { errors: { slug: 'slug_format' } });
 		try {
 			createApp(getComposition().apps, admin.id, {
 				slug,

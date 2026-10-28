@@ -24,6 +24,22 @@
 	<Banner level="critical">{m.admin_protections_error()}</Banner>
 {/if}
 
+{#if form?.conflicts && form.conflicts.length > 0}
+	<Banner level="critical">{m.admin_protections_conflicts()}</Banner>
+	<ul>
+		{#each form.conflicts as conflict (`${conflict.appId}-${conflict.key}`)}
+			<li>
+				{m.admin_protections_conflict_item({
+					app: conflict.appName,
+					clave: conflict.key,
+					sobrescritura: String(conflict.override),
+					nuevo: String(conflict.global)
+				})}
+			</li>
+		{/each}
+	</ul>
+{/if}
+
 <section aria-labelledby="freno">
 	<h2 id="freno">{m.admin_protections_brake_heading()}</h2>
 	<p>

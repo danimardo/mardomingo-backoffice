@@ -9,6 +9,7 @@
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
 </script>
 
 <svelte:head>
@@ -53,7 +54,13 @@
 	<section aria-labelledby="desactivar">
 		<h2 id="desactivar">{m.admin_operation_deactivate()}</h2>
 		<form method="POST" action="?/desactivar">
-			<TextField id="motivo-desactivar" name="motivo" label={m.admin_operation_reason()} required />
+			<TextField
+				id="motivo-desactivar"
+				name="motivo"
+				label={m.admin_operation_reason()}
+				error={errors.motivo === 'validation_required' ? m.validation_required() : ''}
+				required
+			/>
 			<Checkbox id="confirmado-desactivar" name="confirmado" value="true"
 				>{m.admin_operation_confirm_deactivate()}</Checkbox
 			>

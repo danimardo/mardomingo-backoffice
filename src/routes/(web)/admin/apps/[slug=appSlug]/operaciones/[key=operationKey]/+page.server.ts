@@ -117,6 +117,10 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		// Desactivar exige motivo (D09 = R08; FR-094): sin texto no se toca nada y el error va al campo.
+		if (textOf(form, 'motivo').trim() === '') {
+			return fail(400, { errors: { motivo: 'validation_required' } });
+		}
 		const composition = getComposition();
 		const app = findActiveAppBySlug(composition.apps, params.slug);
 		if (app === undefined) error(404);

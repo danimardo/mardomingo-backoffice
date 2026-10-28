@@ -14,6 +14,7 @@ import { cachedSettings, invalidateSettings, storeSettings } from './config.cach
 import { appOperations, apps } from './schema';
 import { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
 import { isVisible } from './domain/announcements';
+import { isValidSlug } from './domain/slug';
 import {
 	operationRuleIssues,
 	overrideCeilingIssues,
@@ -21,6 +22,8 @@ import {
 	resolveMarginPpm,
 	resolveOperationLimits,
 	type AppSettings,
+	type CeilingConflict,
+	type CeilingKey,
 	type GlobalNumbers
 } from './config';
 import {
@@ -30,13 +33,14 @@ import {
 	ClientTypes,
 	FallbackModels,
 	OperationLimits,
+	OVERRIDABLE_CEILINGS,
 	PromptTemplateBody,
 	SETTING_SCHEMAS,
 	SettingsOverrides,
 	SyncSchema,
 	TranscriptionConfig,
 	isSettingKey,
-	parseSettingValue,
+	parseAdminSettingValue,
 	type ResponseFormat,
 	type SettingKey,
 	type SettingValue,
@@ -49,7 +53,6 @@ import {
 	insertOperation,
 	insertTemplate,
 	latestTemplateVersion,
-	listAppOverrides,
 	readApp,
 	readCurrentTemplate,
 	listApps,
@@ -90,11 +93,9 @@ function optionalAmount<T>(
 	return value === undefined || value === null ? null : convert(value);
 }
 
-/** Un parámetro global cuya subida no puede dejar por debajo ninguna sobrescritura de app. */
-function isCeilingKey(
-	key: SettingKey
-): key is 'ai_requests_per_minute' | 'max_concurrent_transcriptions' {
-	return key === 'ai_requests_per_minute' || key === 'max_concurrent_transcriptions';
+/** Un parámetro global con tope: ninguna sobrescritura de app puede quedar por encima de él (D06 = R01, D07 = R02). */
+function isCeilingKey(key: SettingKey): key is CeilingKey {
+	return OVERRIDABLE_CEILINGS.some((ceiling) => ceiling === key);
 }
 
 export interface EffectiveOperation {
@@ -323,7 +324,7 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 	requireReason(input.reason);
 	if (!isSettingKey(input.key)) throw new AppError('VALIDATION_ERROR', { field: 'key' });
 	const key = input.key;
-	const parsed = parseSettingValue(key, input.value);
+	const parsed = parseAdminSettingValue(key, input.value);
 	if (!parsed.success) {
 		deps.logger.emit('apps.settings.rejected', { key, scope: 'global', reason: 'validation' });
 		throw new AppError('VALIDATION_ERROR', { field: 'value' });
@@ -334,14 +335,25 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 	immediateTransaction(deps.db, (tx) => {
 		const before = readSettingValue(deps.db, deps.logger, key);
 		if (isCeilingKey(key) && typeof value === 'number') {
-			// Un global no puede quedar por debajo de una sobrescritura ya concedida a una app (3.2).
-			const breaches = listAppOverrides(deps.db, deps.logger).filter((overrides) => {
-				const current = overrides[key];
-				return current !== undefined && current > value;
-			});
-			if (breaches.length > 0) {
+			// Un global no puede quedar por debajo de una sobrescritura ya concedida a una app (3.2). No se recorta nada en
+			// silencio: se rechaza y se listan las apps y valores que lo impiden (D07 = R02).
+			const conflicts: CeilingConflict[] = [];
+			for (const app of listApps(deps.db, deps.logger)) {
+				const override = app.settingsOverrides[key];
+				if (override !== undefined && override > value) {
+					conflicts.push({
+						appId: app.id,
+						appSlug: app.slug,
+						appName: app.name,
+						key,
+						override,
+						global: value
+					});
+				}
+			}
+			if (conflicts.length > 0) {
 				deps.logger.emit('apps.settings.rejected', { key, scope: 'global', reason: 'ceiling' });
-				throw new AppError('VALIDATION_ERROR', { field: 'value' });
+				throw new AppError('VALIDATION_ERROR', { field: 'value', conflicts });
 			}
 		}
 		upsertSetting(tx, key, value, now);
@@ -623,6 +635,7 @@ export interface NewApp {
 
 /** Alta de una app sin redesplegar (BE-FR-62). Valida las columnas JSON y la coherencia de versiones. */
 export function createApp(deps: AppsDeps, actorId: string, input: NewApp): string {
+	if (!isValidSlug(input.slug)) throw new AppError('VALIDATION_ERROR', { field: 'slug' });
 	const clientTypes = ClientTypes.safeParse(input.clientTypes);
 	const links = AppLinks.safeParse(input.links);
 	const syncSchema = SyncSchema.safeParse(input.syncSchema);

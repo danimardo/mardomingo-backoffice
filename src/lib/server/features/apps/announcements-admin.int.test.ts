@@ -185,6 +185,18 @@ describe('anuncios del administrador (BE-FR-85)', () => {
 		).toEqual(['apps.announcement.create', 'apps.announcement.deactivate']);
 	});
 
+	it('desactivar sin motivo (vacío o solo blancos) se rechaza y el anuncio sigue activo (D09 = R08)', () => {
+		const made = createAnnouncement(deps, { adminId, announcement: announcement() });
+
+		expect(codeOf(() => deactivateAnnouncement(deps, { adminId, id: made.id, reason: '' }))).toBe(
+			'VALIDATION_ERROR'
+		);
+		expect(
+			codeOf(() => deactivateAnnouncement(deps, { adminId, id: made.id, reason: '   ' }))
+		).toBe('VALIDATION_ERROR');
+		expect(listAnnouncements(deps)[0]?.active).toBe(true);
+	});
+
 	it('desactivar uno que no existe responde NOT_FOUND', () => {
 		expect(
 			codeOf(() =>

@@ -55,7 +55,28 @@ describe('topes de las sobrescrituras (BE-FR-61 CA4)', () => {
 	it('igualar o quedar por debajo del global es válido', () => {
 		expect(overrideCeilingIssues({ ai_requests_per_minute: 30 }, GLOBALS)).toEqual([]);
 		expect(overrideCeilingIssues({ max_concurrent_transcriptions: 1 }, GLOBALS)).toEqual([]);
-		expect(overrideCeilingIssues({ max_text_chars: 999_999_999 }, GLOBALS)).toEqual([]);
+		expect(overrideCeilingIssues({ max_text_chars: 200_000, max_image_mb: 10 }, GLOBALS)).toEqual(
+			[]
+		);
+	});
+
+	it('max_text_chars y max_image_mb también tienen tope frente al global (D06 = R01)', () => {
+		expect(overrideCeilingIssues({ max_text_chars: 200_001 }, GLOBALS)).toHaveLength(1);
+		expect(overrideCeilingIssues({ max_image_mb: 11 }, GLOBALS)).toHaveLength(1);
+	});
+
+	it('las claves sin global no tienen tope (D06 = R01)', () => {
+		expect(
+			overrideCeilingIssues(
+				{
+					max_audio_seconds: 999_999,
+					audio_duration_tolerance_seconds: 999_999,
+					max_audio_mb: 999_999,
+					max_sync_doc_kb: 999_999
+				},
+				GLOBALS
+			)
+		).toEqual([]);
 	});
 });
 
