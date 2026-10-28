@@ -29,6 +29,12 @@ function apiOriginOf(baseURL: string | undefined): string {
 	return (baseURL ?? 'http://localhost:7390').replace('localhost', '127.0.0.1');
 }
 
+/** Abre la base del servidor E2E para escribir la siembra de una prueba (solo en pruebas que lo necesitan). */
+function openDbForWriting(): Database.Database {
+	const path = readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8').trim();
+	return new Database(path);
+}
+
 /** Abre la base del servidor E2E en solo lectura, con la ruta que escribe `playwright.config.ts`. */
 function openDb(): Database.Database {
 	const path = readFileSync(join('test-results', 'e2e', 'db-path.txt'), 'utf8').trim();
@@ -124,7 +130,7 @@ test('@BE-FR-42 copiar una sola casilla a predeterminados sustituye solo su cate
 	const before = objectOf(JSON.parse(await page.locator('#datos').inputValue()));
 
 	// D03 (= R13): la cuenta origen es la del propio administrador. Se siembra su documento con el de la cuenta del panel.
-	const sembrado = openDb();
+	const sembrado = openDbForWriting();
 	try {
 		const adminRow = rowOf(sembrado, 'SELECT id FROM user WHERE email = ?', E2E_ADMIN_EMAIL);
 		const panelRow = rowOf(
@@ -205,23 +211,27 @@ test('@BE-FR-27 reembolsar una compra recién pagada: la vista previa no cambia 
 	const db = openDb();
 	const payment = rowOf(
 		db,
-		"SELECT id, user_id AS userId, amount_eur_cents AS amount FROM payments WHERE status = 'completed' ORDER BY created_at DESC LIMIT 1"
+		"SELECT id, user_id AS userId, credits_micro AS credits FROM payments WHERE status = 'completed' ORDER BY created_at DESC LIMIT 1"
 	);
 	db.close();
 	if (
 		payment === undefined ||
 		typeof payment.id !== 'string' ||
 		typeof payment.userId !== 'string' ||
-		typeof payment.amount !== 'number'
+		typeof payment.credits !== 'number'
 	) {
 		throw new Error('la compra de la prueba no quedó registrada como completada');
 	}
-	const { id, userId, amount } = { id: payment.id, userId: payment.userId, amount: payment.amount };
+	const { id, userId, credits } = {
+		id: payment.id,
+		userId: payment.userId,
+		credits: payment.credits
+	};
 
 	await loginAsAdmin(page);
 	await page.goto(`/admin/usuarios/${userId}/pagos/${id}/reembolso`);
 	await page.waitForLoadState('networkidle');
-	await page.locator('#importe').fill(String(amount));
+	await page.locator('#creditos').fill(String(credits / 1_000_000));
 	await page.locator('#motivo').fill('Reembolso de prueba E2E');
 	await page.getByRole('button', { name: 'Ver vista previa' }).click();
 	await page.waitForLoadState('networkidle');
@@ -236,7 +246,7 @@ test('@BE-FR-27 reembolsar una compra recién pagada: la vista previa no cambia 
 		check.close();
 	}
 
-	await page.locator('#importe').fill(String(amount));
+	await page.locator('#creditos').fill(String(credits / 1_000_000));
 	await page.locator('#motivo').fill('Reembolso de prueba E2E');
 	await page.locator('#confirmado').check();
 	await page.getByRole('button', { name: 'Reembolsar', exact: true }).click();
@@ -249,7 +259,8 @@ test('@BE-FR-27 reembolsar una compra recién pagada: la vista previa no cambia 
 			'SELECT status, refunded_eur_cents AS refunded FROM payments WHERE id = ?',
 			id
 		);
-		expect(row).toEqual({ status: 'refunded', refunded: amount });
+		// D02: en compra simulada no hay importe en euros; la compra queda reembolsada sin importe.
+		expect(row).toEqual({ status: 'refunded', refunded: 0 });
 	} finally {
 		done.close();
 	}
