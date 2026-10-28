@@ -49,7 +49,7 @@ afterAll(() => {
 	session = { ...session, cookie: '' };
 });
 
-const credito = 'cantidad=2&tipo=credit&bolsa=free&vence=2030-01-01&motivo=Compensaci%C3%B3n';
+const credito = 'cantidad=2&tipo=credit&bolsa=free&vence=2027-06-30&motivo=Compensaci%C3%B3n';
 
 describe('ajuste de saldo con sesión de administrador (W36, T307)', () => {
 	it('la página del ajuste entrega una clave de formulario', async () => {

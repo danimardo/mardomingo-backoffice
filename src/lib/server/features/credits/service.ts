@@ -27,6 +27,7 @@ import {
 	balanceOf,
 	canGrantWelcome,
 	canReserve,
+	kindTotalOf,
 	type BucketKind,
 	type BucketSource,
 	type LedgerState,
@@ -311,7 +312,7 @@ export function expireHolds(deps: CreditsDeps): number {
 
 export type AdjustOutcome =
 	| { readonly ok: true; readonly auditId: string }
-	| { readonly ok: false; readonly reason: 'exceeds_available' | 'repeated' };
+	| { readonly ok: false; readonly reason: 'exceeds_available' | 'exceeds_kind' | 'repeated' };
 
 /**
  * Ajuste del administrador (BE-FR-18): suma (liquidando primero la deuda) o resta (nunca más que el disponible, D-16).
@@ -549,6 +550,25 @@ export function getBalance(deps: CreditsDeps, userId: string): BalanceView {
 			paidMicro,
 			debtMicro: state.debt,
 			nextFreeExpiry: nextFreeIso(tx, userId)
+		};
+	});
+}
+
+/**
+ * Lo máximo que una resta de cada tipo puede quitar ahora (R06, D05): el saldo del tipo, acotado por el disponible total.
+ * Es la misma regla que aplica `adjust`, así que la vista previa y la aplicación no se contradicen.
+ */
+export function adjustableByKind(
+	deps: CreditsDeps,
+	userId: string
+): { readonly freeMicro: number; readonly paidMicro: number } {
+	return immediateTransaction(deps.db, (tx) => {
+		const state = loadState(tx, userId);
+		// Con deuda o reservas el disponible puede ser negativo: no hay nada que restar.
+		const available = balanceOf(state) - reservedOf(tx, userId);
+		return {
+			freeMicro: Math.max(0, Math.min(kindTotalOf(state, 'free'), available)),
+			paidMicro: Math.max(0, Math.min(kindTotalOf(state, 'paid'), available))
 		};
 	});
 }

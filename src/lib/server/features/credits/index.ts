@@ -9,6 +9,7 @@ import {
 	warnExpiringBuckets,
 	expireHolds,
 	forfeitAll,
+	adjustableByKind,
 	getBalance,
 	movementsForExport,
 	releaseOpenHolds,
@@ -136,6 +137,8 @@ export interface Credits {
 	}): AdjustOutcome;
 	/** Saldo: total, reservado y disponible (BE-FR-71 CA2). */
 	getBalance(userId: string): BalanceView;
+	/** Lo máximo que una resta de cada tipo puede quitar ahora (R06): el saldo del tipo, acotado por el disponible. */
+	adjustableByKind(userId: string): { readonly freeMicro: number; readonly paidMicro: number };
 	/** Cuentas de la lista que tienen compra real; el resto son cuentas sin compras reales (BE-FR-11 CA2). */
 	realPurchaseUserIds(userIds: readonly string[]): ReadonlySet<string>;
 	/** Micro-créditos reservados en curso de las cuentas sin compra real (BE-FR-46 CA1). */
@@ -205,6 +208,7 @@ export function createCredits(config: CreditsConfig): Credits {
 		exportMovements: (userId) => movementsForExport(deps, userId),
 		adjust: (input) => adjust(deps, input),
 		getBalance: (userId) => getBalance(deps, userId),
+		adjustableByKind: (userId) => adjustableByKind(deps, userId),
 		realPurchaseUserIds: (userIds) => realPurchaseUserIds(deps.db, userIds),
 		freeAccountsOpenHoldsMicro: () => freeAccountsOpenHoldsMicro(deps.db),
 		grantPurchase: (input) => grantPurchase(deps, input),
@@ -220,6 +224,17 @@ export function createCredits(config: CreditsConfig): Credits {
 	};
 }
 
+// Reglas de los ajustes manuales (R04, R05, R06, R07): funciones puras que usa la ruta de ajuste.
+export {
+	adjustmentCreditsFit,
+	blockedAdjustmentAllowed,
+	debitFitsKind,
+	eurCentsOfCredits,
+	freeExpiryOf,
+	MAX_ADJUSTMENT_CREDITS,
+	MAX_ADJUSTMENT_EXPIRY_DAYS,
+	type FreeExpiryVerdict
+} from './domain/adjustment-rules';
 // Saldo anulado por borrado de cuentas (BE-FR-07 CA4; T318). Solo lectura.
 export { forfeitsBetween, type ForfeitFact } from './stats-facts';
 // Bolsas de una cuenta para su ficha de administración (W35; T306). Solo lectura.

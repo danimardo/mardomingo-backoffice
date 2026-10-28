@@ -298,7 +298,7 @@ async function fillAdjustment(page: Page, motivo: string): Promise<void> {
 	await page.locator('input#cantidad').fill('2');
 	await page.locator('select#tipo').selectOption('credit');
 	await page.locator('select#bolsa').selectOption('free');
-	await page.locator('input#vence').fill('2030-01-01');
+	await page.locator('input#vence').fill('2027-06-30');
 	await page.locator('input#motivo').fill(motivo);
 }
 
@@ -354,7 +354,7 @@ test('@BE-FR-18 un reenvío del mismo formulario no aplica el ajuste dos veces (
 			cantidad: '2',
 			tipo: 'credit',
 			bolsa: 'free',
-			vence: '2030-01-01',
+			vence: '2027-06-30',
 			motivo: 'Doble envío E2E',
 			confirmado: 'true',
 			clave
@@ -667,7 +667,30 @@ test('la copia a predeterminados muestra la vista previa sin nada preseleccionad
 	page
 }) => {
 	await loginAsAdmin(page);
-	await page.goto('/admin/apps/secretario/predeterminados/copiar?usuario=usr_panel');
+	// D03 (= R13): la vista muestra la cuenta del propio administrador. Se siembra su documento con uno de elementos.
+	const db = dbFile();
+	try {
+		const admin = db
+			.prepare<[string], { id: string }>('SELECT id FROM user WHERE email = ?')
+			.get(E2E_ADMIN_EMAIL);
+		const origen = db
+			.prepare<[], { data: string }>(
+				"SELECT data FROM sync_documents WHERE user_id = 'usr_panel' AND app_id = 'app_secretario'"
+			)
+			.get();
+		if (admin === undefined || origen === undefined)
+			throw new Error('faltan la cuenta administradora o el documento de origen');
+		db.prepare("DELETE FROM sync_documents WHERE user_id = ? AND app_id = 'app_secretario'").run(
+			admin.id
+		);
+		db.prepare(
+			`INSERT INTO sync_documents (user_id, app_id, revision, data, created_at, updated_at)
+			 VALUES (?, 'app_secretario', 1, ?, ?, ?)`
+		).run(admin.id, origen.data, Date.now(), Date.now());
+	} finally {
+		db.close();
+	}
+	await page.goto('/admin/apps/secretario/predeterminados/copiar?vista=propia');
 	await page.waitForLoadState('networkidle');
 
 	const groups = page.getByRole('group').filter({ has: page.getByRole('checkbox') });

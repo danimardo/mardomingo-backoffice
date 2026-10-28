@@ -106,3 +106,24 @@ export const payments = sqliteTable(
 		check('payments_simulated_bool', boolCheck(table.simulated.name))
 	]
 );
+
+export const REFUND_KEY_STATUSES = Object.freeze(['claimed', 'applied'] as const);
+
+// Claves de los reembolsos manuales (R12, propuesta de reglas): un reenvío del mismo formulario no vuelve a reembolsar. `claimed`
+// mientras se retiran los créditos y `applied` cuando el estado y la auditoría ya están escritos. Sin cuenta ni importe, para
+// que no dependa del borrado de cuentas (RGPD).
+export const refundKeys = sqliteTable(
+	'refund_keys',
+	{
+		key: text('key').primaryKey(),
+		paymentId: text('payment_id')
+			.notNull()
+			.references(() => payments.id, { onDelete: 'restrict' }),
+		status: text('status', { enum: REFUND_KEY_STATUSES }).notNull(),
+		createdAt: epochMs('created_at').notNull().default(nowMs)
+	},
+	(table) => [
+		index('refund_keys_payment_idx').on(table.paymentId),
+		check('refund_keys_status_enum', enumCheck(table.status.name, REFUND_KEY_STATUSES))
+	]
+);

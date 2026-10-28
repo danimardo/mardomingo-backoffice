@@ -13,9 +13,15 @@ export interface PaymentsLogFields {
 		reason:
 			| 'amount_not_positive'
 			| 'amount_exceeds_paid'
+			| 'amount_not_allowed'
+			| 'credits_negative'
+			| 'nothing_to_refund'
+			| 'not_completed'
+			| 'in_progress'
 			| 'credits_exceed_bucket'
 			| 'no_purchase_bucket';
 	};
+	'payments.refund.repeated': Record<string, never>;
 	'payments.chargeback.applied': Record<string, never>;
 }
 
@@ -39,5 +45,9 @@ export const PAYMENTS_LOG_EVENTS = Object.freeze({
 	},
 	'payments.refund.applied': { level: 'info', msg: 'Reembolso aplicado' },
 	'payments.refund.rejected': { level: 'info', msg: 'Reembolso rechazado' },
+	'payments.refund.repeated': {
+		level: 'info',
+		msg: 'Reembolso repetido (mismo formulario): no se aplica otra vez'
+	},
 	'payments.chargeback.applied': { level: 'warn', msg: 'Contracargo aplicado: cuenta bloqueada' }
 } as const satisfies Record<keyof PaymentsLogFields, LogEventMeta>);

@@ -6,7 +6,7 @@
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
-	import { formatCredits } from '$lib/components/payments/format';
+	import { formatCredits, formatEuros } from '$lib/components/payments/format';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -24,9 +24,18 @@
 
 <h1>{m.admin_adjust_title()}</h1>
 <p>{data.account.email}</p>
+{#if data.account.banned}
+	<p>{m.admin_users_state_blocked()}</p>
+{/if}
 <p>
 	{m.admin_account_balance_total()}: {formatCredits(data.balance.totalMicro)} ·
 	{m.admin_account_balance_debt()}: {formatCredits(data.balance.debtMicro)}
+</p>
+<p>
+	{m.panel_balance_available()} · {m.admin_adjust_free()}: {formatCredits(
+		data.adjustable.freeMicro
+	)} ·
+	{m.admin_adjust_paid()}: {formatCredits(data.adjustable.paidMicro)}
 </p>
 <p>{m.admin_adjust_intro()}</p>
 
@@ -38,6 +47,10 @@
 	<section aria-labelledby="vista-previa">
 		<h2 id="vista-previa">{m.admin_adjust_preview_submit()}</h2>
 		<dl>
+			{#if form.preview.eurCents !== null}
+				<dt>{m.panel_balance_eur()}</dt>
+				<dd>{formatEuros(form.preview.eurCents)}</dd>
+			{/if}
 			<dt>{m.admin_adjust_before()}</dt>
 			<dd>{formatCredits(form.preview.balanceBeforeMicro)}</dd>
 			<dt>{m.admin_adjust_after()}</dt>

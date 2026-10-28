@@ -5,7 +5,12 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
-import { getSetting, previewSettingChange, updateSetting } from '$lib/server/features/apps';
+import {
+	ceilingConflictsOf,
+	getSetting,
+	previewSettingChange,
+	updateSetting
+} from '$lib/server/features/apps';
 import { brakeStatus, releaseBrake } from '$lib/server/features/protections';
 import { setMistralBillingError } from '$lib/server/features/notifications';
 import { isConfirmed } from '$lib/server/forms/confirmation';
@@ -105,7 +110,12 @@ export const actions: Actions = {
 				reason: textOf(form, 'motivo')
 			});
 		} catch (cause) {
-			if (cause instanceof AppError) return failureOf(cause);
+			if (cause instanceof AppError) {
+				// Bajar un global por debajo de una sobrescritura se rechaza con la lista de apps y valores (D07 = R02).
+				const conflicts = ceilingConflictsOf(cause.details);
+				if (conflicts.length > 0) return { formError: cause.code, conflicts };
+				return failureOf(cause);
+			}
 			throw cause;
 		}
 		const back = resolve('/admin/protecciones');

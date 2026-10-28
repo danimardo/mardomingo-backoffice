@@ -37,9 +37,13 @@ export const AppLinks = z.strictObject({
 export type AppLinks = z.infer<typeof AppLinks>;
 
 // Sobrescrituras por app de las claves «por app» de §9 (3.2). Los topes frente al global se comprueban en `config.ts`.
+// Las claves con global llevan tope (D06 = R01); las que no tienen global (max_audio_seconds, audio_duration_tolerance_seconds,
+// max_audio_mb, max_sync_doc_kb) no lo llevan hasta que la especificación fije uno.
 export const OVERRIDABLE_CEILINGS = Object.freeze([
 	'ai_requests_per_minute',
-	'max_concurrent_transcriptions'
+	'max_concurrent_transcriptions',
+	'max_text_chars',
+	'max_image_mb'
 ] as const);
 
 export const SettingsOverrides = z.strictObject({
@@ -142,6 +146,29 @@ export function isSettingKey(value: string): value is SettingKey {
 /** Valida el valor de una clave de `settings` con su esquema (3.1). */
 export function parseSettingValue(key: SettingKey, value: unknown) {
 	return SETTING_SCHEMAS[key].safeParse(value);
+}
+
+/**
+ * Rangos de los parámetros de protección que fija la administración (D08 = R03 de la propuesta). Solo los aplica el camino
+ * de escritura (`parseAdminSettingValue`): la lectura de la BD (`parseSettingValue`) no los exige, así que un valor sembrado
+ * fuera de rango (p. ej. la siembra de pruebas E2E) sigue siendo legible.
+ */
+const ADMIN_SETTING_SCHEMAS = Object.freeze({
+	...SETTING_SCHEMAS,
+	global_daily_free_cost_brake_eur: z.int().min(100).max(10_000),
+	registrations_per_ip_24h: z.int().min(1).max(20),
+	login_max_failures: z.int().min(3).max(50),
+	login_lock_minutes: z.int().min(1).max(1_440),
+	login_per_ip_15min: z.int().min(5).max(500),
+	resend_verification_per_ip_hour: z.int().min(1).max(50),
+	password_reset_per_ip_hour: z.int().min(1).max(50),
+	ai_requests_per_minute: z.int().min(1).max(300),
+	max_concurrent_transcriptions: z.int().min(1).max(10)
+});
+
+/** Valida un valor que escribe la administración (D08 = R03): el esquema de la clave, con los rangos de protección. */
+export function parseAdminSettingValue(key: SettingKey, value: unknown) {
+	return ADMIN_SETTING_SCHEMAS[key].safeParse(value);
 }
 
 // Operaciones (3.4): modelos de respaldo, capacidades, límites y configuración de transcripción.

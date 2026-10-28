@@ -39,7 +39,9 @@ export {
 	type UpdateAppOverridesInput,
 	type UpdateSettingInput
 } from './service';
-export type { AppSettings } from './config';
+export { isValidSlug } from './domain/slug';
+export type { AppSettings, CeilingConflict } from './config';
+export { ceilingConflictsOf } from './config';
 export { DEFAULT_PACKS, DEFAULT_SETTINGS, type DefaultPack } from './defaults';
 export { seedApps, SECRETARIO_APP_ID } from './seed';
 export { SECRETARIO_SYNC_SCHEMA } from './defaults';

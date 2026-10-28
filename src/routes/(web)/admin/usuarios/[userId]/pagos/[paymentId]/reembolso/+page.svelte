@@ -1,5 +1,6 @@
 <script lang="ts">
-	// W37 · reembolso de una compra (T308; BE-FR-27). La vista previa no cambia nada; reembolsar exige la casilla de confirmación.
+	// W37 · reembolso de una compra (T308; BE-FR-27; D01, D02). La vista previa no cambia nada; reembolsar exige la casilla de
+	// confirmación. El administrador indica los créditos a retirar; el importe en euros solo se pide en compras reales.
 	// Sin JavaScript funciona igual.
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -31,20 +32,32 @@
 {#if form?.preview}
 	<section aria-labelledby="vista-previa-reembolso">
 		<h2 id="vista-previa-reembolso">{m.admin_refund_preview()}</h2>
-		<p>{formatEuros(form.preview.refundEurCents)}</p>
+		{#if !form.preview.simulated}
+			<p>{formatEuros(form.preview.refundEurCents)}</p>
+		{/if}
 		<p>
 			{m.admin_refund_credits_withdrawn()}
-			{formatCredits(form.preview.creditsToWithdrawMicro)}
+			{formatCredits(form.preview.creditsToRemoveMicro)}
 		</p>
 	</section>
 {/if}
 
 <form method="POST">
+	<input type="hidden" name="clave" value={data.refundKey} />
+	{#if !data.purchase.simulated}
+		<TextField
+			id="importe"
+			name="importe"
+			label={m.admin_refund_amount_cents()}
+			error={errors.importe ?? ''}
+			required
+		/>
+	{/if}
 	<TextField
-		id="importe"
-		name="importe"
-		label={m.admin_refund_amount_cents()}
-		error={errors.importe ?? ''}
+		id="creditos"
+		name="creditos"
+		label={m.admin_adjust_amount()}
+		error={errors.creditos ?? ''}
 		required
 	/>
 	<TextField

@@ -1,12 +1,11 @@
 <script lang="ts">
-	// W43 · copiar de una cuenta a los predeterminados (T312; BE-FR-42 CA3–CA4). Una casilla por elemento, sin preselección. Solo se
-	// sustituyen las categorías con algún elemento marcado. Sin JavaScript funciona igual.
+	// W43 · copiar de la cuenta propia a los predeterminados (T312; BE-FR-42 CA3–CA4; D03). Una casilla por elemento, sin preselección. Solo
+	// se sustituyen las categorías con algún elemento marcado. Sin JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import CheckboxGroup from '$lib/components/ui/CheckboxGroup.svelte';
-	import TextField from '$lib/components/ui/TextField.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -29,23 +28,16 @@
 {/if}
 
 <form method="GET" action={resolve(`/admin/apps/${data.app.slug}/predeterminados/copiar`)}>
-	<TextField
-		id="usuario"
-		name="usuario"
-		label={m.admin_defaults_source_user()}
-		value={data.userId}
-		required
-	/>
+	<input type="hidden" name="vista" value="propia" />
 	<p><Button type="submit" variant="secondary">{m.admin_defaults_preview()}</Button></p>
 </form>
 
-{#if data.userId !== '' && data.categories.length === 0}
+{#if data.preview && data.categories.length === 0}
 	<p>{m.admin_defaults_no_data()}</p>
 {/if}
 
 {#if data.categories.length > 0}
 	<form method="POST" action="?/copiar">
-		<input type="hidden" name="usuario" value={data.userId} />
 		{#each data.categories as category (category.category)}
 			<CheckboxGroup
 				id={`sel-${category.category}`}

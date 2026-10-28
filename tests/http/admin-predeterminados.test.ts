@@ -14,6 +14,7 @@ const COPIAR = `${PAGE}/copiar?/copiar`;
 
 let session: AdminSession;
 const USUARIO = 'usr_http_copia_origen';
+const ADMIN_ID = 'usr_http_predet_admin';
 let defaultsBefore: string | null = null;
 let appId = '';
 
@@ -129,7 +130,7 @@ describe('predeterminados con sesión de administrador (W42–W43, T312)', () =>
 		const result = await postAdmin(
 			session,
 			COPIAR,
-			'usuario=usr_inexistente&motivo=Sin+elementos&confirmado=true'
+			`usuario=${ADMIN_ID}&motivo=Sin+elementos&confirmado=true`
 		);
 
 		expect(result.status).toBe(400);
@@ -146,9 +147,43 @@ describe('predeterminados con sesión de administrador (W42–W43, T312)', () =>
 		expect(result.status).toBe(400);
 	});
 
-	it('la copia toma el elemento marcado de la cuenta origen, lo deja en predeterminados y audita (CA3–CA4)', async () => {
+	it('copiar desde la cuenta de otro usuario responde 403 y no copia ni audita (D03 = R13)', async () => {
 		const audit = auditCount('sync.defaults.copied');
-		const vista = await send(baseUrl, `${PAGE}/copiar?usuario=${USUARIO}`, {
+
+		const result = await postAdmin(
+			session,
+			COPIAR,
+			`usuario=${USUARIO}&sel%3Apreferences=language&motivo=Copia+ajena&confirmado=true`
+		);
+
+		expect(result.status).toBe(403);
+		expect(auditCount('sync.defaults.copied')).toBe(audit);
+	});
+
+	it('la copia toma el elemento marcado del propio documento del administrador, lo deja en predeterminados y audita (CA3–CA4)', async () => {
+		const audit = auditCount('sync.defaults.copied');
+		// D03: la cuenta origen es siempre la del propio administrador. Se siembra su documento aquí para esta prueba.
+		const siembra = new Database(databasePath);
+		try {
+			siembra
+				.prepare('DELETE FROM sync_documents WHERE user_id = ? AND app_id = ?')
+				.run(ADMIN_ID, appId);
+			siembra
+				.prepare(
+					`INSERT INTO sync_documents (user_id, app_id, revision, data, created_at, updated_at)
+					 VALUES (?, ?, 1, ?, ?, ?)`
+				)
+				.run(
+					ADMIN_ID,
+					appId,
+					JSON.stringify({ preferences: { language: { value: 'es', updatedAt: 1 } } }),
+					Date.now(),
+					Date.now()
+				);
+		} finally {
+			siembra.close();
+		}
+		const vista = await send(baseUrl, `${PAGE}/copiar?vista=propia`, {
 			host: session.webHost,
 			headers: { accept: 'text/html', cookie: session.cookie }
 		});
@@ -157,7 +192,7 @@ describe('predeterminados con sesión de administrador (W42–W43, T312)', () =>
 		const copiado = await postAdmin(
 			session,
 			COPIAR,
-			`usuario=${USUARIO}&sel%3Apreferences=language&motivo=Copia+de+prueba&confirmado=true`
+			`usuario=${ADMIN_ID}&sel%3Apreferences=language&motivo=Copia+de+prueba&confirmado=true`
 		);
 		expect(copiado.status).toBe(303);
 		expect(auditCount('sync.defaults.copied')).toBe(audit + 1);

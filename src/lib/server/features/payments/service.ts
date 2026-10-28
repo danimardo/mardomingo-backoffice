@@ -22,21 +22,32 @@ import { and, asc, gte, lte } from 'drizzle-orm';
 import { payments } from './schema';
 import { toEurCents, toMicro, toPpm } from '$lib/shared/money';
 import { packCreditsMicro } from './domain/pack-credits';
-import { planRefund } from './domain/refund';
+import {
+	planRefund,
+	type RefundInput,
+	type RefundPlan,
+	type RefundRejection
+} from './domain/refund';
 import { splitVat } from './domain/vat';
 import {
 	activePacks,
+	deleteRefundKey,
 	findByAttempt,
 	findById,
 	findByProviderRef,
+	findClaimedRefundKeyOf,
 	findPack,
+	findRefundKey,
 	insertPayment,
+	insertRefundKey,
+	markRefundKeyApplied,
 	markWantsFullInvoice,
 	paymentIdsOfUser,
 	paymentsOfUser,
 	setRefundedEurCents,
 	setStatus,
-	type PaymentRow
+	type PaymentRow,
+	type RefundKeyRow
 } from './repository';
 
 /** IVA de España incluido en el precio (BE-FR-25 CA5). */
@@ -255,75 +266,175 @@ function applyChargeback(deps: PaymentsDeps, row: PaymentRow): void {
 	deps.logger.emit('payments.chargeback.applied', {});
 }
 
-/** Créditos a retirar de un reembolso parcial, proporcionales al importe (redondeo hacia abajo). */
-function creditsForRefund(row: PaymentRow, amountEurCents: number): number {
-	return Number((BigInt(row.creditsMicro) * BigInt(amountEurCents)) / BigInt(row.amountEurCents));
+/** Datos del reembolso manual que escribe el administrador (BE-FR-27, W37). */
+export interface RefundRequest {
+	readonly adminId: string;
+	readonly paymentId: string;
+	/** Céntimos a devolver. Cero en compras simuladas (D02). */
+	readonly amountEurCents: number;
+	/** Micro-créditos no consumidos a retirar de la bolsa de la compra (D01). Cero no retira nada. */
+	readonly creditsToRemoveMicro: number;
+	readonly reason: string;
+	/** Clave de este formulario: un reenvío con la misma clave no vuelve a reembolsar (R12). */
+	readonly idempotencyKey: string;
 }
 
-/**
- * Vista previa del reembolso (BE-FR-27, T308): los créditos que se retirarían para ese importe, sin escribir nada. El
- * reembolso real vuelve a validar todo en `refund`.
- */
-export function refundPreview(
-	deps: PaymentsDeps,
-	input: { readonly paymentId: string; readonly amountEurCents: number }
-): { readonly creditsToWithdrawMicro: number; readonly refundableEurCents: number } {
-	const row = findById(deps.db, input.paymentId);
-	if (row === undefined) throw new AppError('NOT_FOUND');
+function refundPlanInput(
+	row: PaymentRow,
+	input: { readonly amountEurCents: number; readonly creditsToRemoveMicro: number }
+): RefundInput {
 	return {
-		creditsToWithdrawMicro: creditsForRefund(row, input.amountEurCents),
-		refundableEurCents: row.amountEurCents - row.refundedEurCents
+		simulated: row.simulated,
+		status: row.status,
+		paidEurCents: row.amountEurCents,
+		alreadyRefundedEurCents: row.refundedEurCents,
+		amountEurCents: input.amountEurCents,
+		creditsToRemoveMicro: input.creditsToRemoveMicro
 	};
 }
 
 /**
- * Reembolso manual (BE-FR-27): motivo obligatorio, créditos retirados de la bolsa de la compra y rectificativa. La
- * auditoría registra el cambio en la misma transacción que el importe devuelto.
+ * Vista previa del reembolso (BE-FR-27, W37): lo que haría con esos importes, sin escribir nada. El reembolso real vuelve a
+ * validar todo en `refund`; los créditos no consumidos los comprueba `credits` al retirarlos.
  */
-export function refund(
+export function refundPreview(
 	deps: PaymentsDeps,
 	input: {
-		readonly adminId: string;
 		readonly paymentId: string;
 		readonly amountEurCents: number;
-		readonly reason: string;
+		readonly creditsToRemoveMicro: number;
 	}
-): RefundOutcome {
-	const reason = input.reason.trim();
-	if (reason.length === 0) throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+): { readonly plan: RefundPlan; readonly refundableEurCents: number; readonly simulated: boolean } {
 	const row = findById(deps.db, input.paymentId);
 	if (row === undefined) throw new AppError('NOT_FOUND');
-	const creditsToWithdrawMicro = creditsForRefund(row, input.amountEurCents);
-	const plan = planRefund({
-		paidEurCents: row.amountEurCents,
-		alreadyRefundedEurCents: row.refundedEurCents,
-		amountEurCents: input.amountEurCents,
-		bucketRemainingMicro: row.creditsMicro,
-		creditsToWithdrawMicro
-	});
-	if (!plan.ok) {
-		deps.logger.emit('payments.refund.rejected', { reason: plan.reason });
-		if (plan.reason === 'amount_not_positive')
-			throw new AppError('VALIDATION_ERROR', { field: 'amount' });
+	return {
+		plan: planRefund(refundPlanInput(row, input)),
+		refundableEurCents: row.amountEurCents - row.refundedEurCents,
+		simulated: row.simulated
+	};
+}
+
+type RefundClaim =
+	| { readonly kind: 'missing' }
+	| { readonly kind: 'repeated'; readonly key: RefundKeyRow }
+	| { readonly kind: 'rejected'; readonly reason: RefundRejection | 'in_progress' }
+	| {
+			readonly kind: 'claimed';
+			readonly row: PaymentRow;
+			readonly newRefundedEurCents: number;
+			readonly newStatus: 'refunded' | 'partially_refunded';
+	  };
+
+function rejectionError(reason: RefundRejection | 'in_progress'): AppError {
+	switch (reason) {
+		case 'amount_not_positive':
+		case 'amount_not_allowed':
+			return new AppError('VALIDATION_ERROR', { field: 'amount' });
+		case 'credits_negative':
+		case 'nothing_to_refund':
+			return new AppError('VALIDATION_ERROR', { field: 'credits' });
+		case 'amount_exceeds_paid':
+		case 'not_completed':
+		case 'in_progress':
+			return new AppError('PAYMENT_NOT_REFUNDABLE');
+	}
+}
+
+/** Un reenvío con una clave ya aplicada responde con el estado actual y no vuelve a reembolsar (R12). */
+function repeatedRefund(deps: PaymentsDeps, key: RefundKeyRow, paymentId: string): RefundOutcome {
+	if (key.paymentId !== paymentId)
+		throw new AppError('VALIDATION_ERROR', { field: 'idempotencyKey' });
+	if (key.status === 'claimed') {
+		deps.logger.emit('payments.refund.rejected', { reason: 'in_progress' });
 		throw new AppError('PAYMENT_NOT_REFUNDABLE');
+	}
+	deps.logger.emit('payments.refund.repeated', {});
+	const row = findById(deps.db, paymentId);
+	if (row === undefined) throw new AppError('NOT_FOUND');
+	return {
+		status: row.status === 'refunded' ? 'refunded' : 'partially_refunded',
+		refundedEurCents: row.refundedEurCents
+	};
+}
+
+/** Libera la clave de un reembolso que no retiró créditos: el formulario puede volver a enviarse tras corregirlo. */
+function releaseRefundKey(deps: PaymentsDeps, key: string): void {
+	immediateTransaction(deps.db, (tx: Tx) => {
+		deleteRefundKey(tx, key);
+	});
+}
+
+/**
+ * Retira de la bolsa de la compra los créditos del reembolso (BE-FR-27, D01). `credits` comprueba que no superen el saldo no
+ * consumido de la bolsa; si no caben, no retira nada y se libera la clave.
+ */
+function withdrawRefundCredits(deps: PaymentsDeps, input: RefundRequest, row: PaymentRow): void {
+	let outcome: ReturnType<Credits['withdrawForRefund']>;
+	try {
+		outcome = deps.credits.withdrawForRefund({
+			adminId: input.adminId,
+			userId: row.userId,
+			paymentId: row.id,
+			amountMicro: input.creditsToRemoveMicro,
+			reason: input.reason
+		});
+	} catch (cause) {
+		releaseRefundKey(deps, input.idempotencyKey);
+		throw cause;
+	}
+	if (outcome.ok) return;
+	releaseRefundKey(deps, input.idempotencyKey);
+	deps.logger.emit('payments.refund.rejected', { reason: outcome.reason });
+	throw new AppError('PAYMENT_NOT_REFUNDABLE');
+}
+
+/**
+ * Reembolso manual (BE-FR-27): motivo obligatorio, créditos retirados de la bolsa de la compra (D01), importe en compras reales
+ * (D02: sin importe en simuladas) y rectificativa. Un reenvío con la misma clave no vuelve a aplicarse (R12).
+ *
+ * Orden: 1) en una transacción se valida y se reserva la clave; 2) se retiran los créditos (transacción de `credits`); 3) en otra
+ * transacción se escriben importe, estado, clave y auditoría. Si el paso 2 falla, la clave se libera. Si el proceso cae entre
+ * el 2 y el 3, la clave queda `claimed`: bloquea nuevos reembolsos de esa compra hasta revisarla a mano (no se repite nada).
+ */
+export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome {
+	const reason = input.reason.trim();
+	if (reason.length === 0) throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const claim = immediateTransaction(deps.db, (tx: Tx): RefundClaim => {
+		const previous = findRefundKey(tx, input.idempotencyKey);
+		if (previous !== undefined) return { kind: 'repeated', key: previous };
+		const row = findById(tx, input.paymentId);
+		if (row === undefined) return { kind: 'missing' };
+		if (findClaimedRefundKeyOf(tx, row.id) !== undefined)
+			return { kind: 'rejected', reason: 'in_progress' };
+		const plan = planRefund(refundPlanInput(row, input));
+		if (!plan.ok) return { kind: 'rejected', reason: plan.reason };
+		insertRefundKey(tx, {
+			key: input.idempotencyKey,
+			paymentId: row.id,
+			createdAt: toEpochMs(deps.clock.now())
+		});
+		return {
+			kind: 'claimed',
+			row,
+			newRefundedEurCents: plan.newRefundedEurCents,
+			newStatus: plan.newStatus
+		};
+	});
+	if (claim.kind === 'missing') throw new AppError('NOT_FOUND');
+	if (claim.kind === 'repeated') return repeatedRefund(deps, claim.key, input.paymentId);
+	if (claim.kind === 'rejected') {
+		deps.logger.emit('payments.refund.rejected', { reason: claim.reason });
+		throw rejectionError(claim.reason);
 	}
 
-	const withdrawal = deps.credits.withdrawForRefund({
-		adminId: input.adminId,
-		userId: row.userId,
-		paymentId: row.id,
-		amountMicro: creditsToWithdrawMicro,
-		reason
-	});
-	if (!withdrawal.ok) {
-		deps.logger.emit('payments.refund.rejected', { reason: withdrawal.reason });
-		throw new AppError('PAYMENT_NOT_REFUNDABLE');
-	}
+	const { row, newRefundedEurCents, newStatus } = claim;
+	if (input.creditsToRemoveMicro > 0) withdrawRefundCredits(deps, input, row);
 
 	const now = toEpochMs(deps.clock.now());
 	immediateTransaction(deps.db, (tx: Tx) => {
-		setRefundedEurCents(tx, row.id, plan.newRefundedEurCents, now);
-		setStatus(tx, row.id, plan.newStatus, now, row.completedAt);
+		setRefundedEurCents(tx, row.id, newRefundedEurCents, now);
+		setStatus(tx, row.id, newStatus, now, row.completedAt);
+		markRefundKeyApplied(tx, input.idempotencyKey);
 		recordEntry(
 			tx,
 			{
@@ -332,7 +443,7 @@ export function refund(
 				entity: 'payment',
 				entityId: row.id,
 				before: { refundedEurCents: row.refundedEurCents },
-				after: { refundedEurCents: plan.newRefundedEurCents },
+				after: { refundedEurCents: newRefundedEurCents },
 				reason
 			},
 			deps.auditDeps
@@ -343,10 +454,10 @@ export function refund(
 		userId: row.userId,
 		simulated: row.simulated,
 		amountEurCents: input.amountEurCents,
-		issueKey: `refund:${row.id}:${String(plan.newRefundedEurCents)}`
+		issueKey: `refund:${row.id}:${String(newRefundedEurCents)}`
 	});
 	deps.logger.emit('payments.refund.applied', {});
-	return { status: plan.newStatus, refundedEurCents: plan.newRefundedEurCents };
+	return { status: newStatus, refundedEurCents: newRefundedEurCents };
 }
 
 /** Paquete a la venta, con los créditos ya calculados con la tasa vigente (W20, BE-FR-23). */
@@ -470,18 +581,18 @@ export interface PaymentsService {
 	paymentFactsBetween(input: { readonly fromMs: number; readonly toMs: number }): PaymentFactRow[];
 	exportPayments(userId: string): PaymentExport[];
 	requestFullInvoice(input: { readonly userId: string; readonly paymentId: string }): boolean;
-	refundPreview(input: { readonly paymentId: string; readonly amountEurCents: number }): {
-		readonly creditsToWithdrawMicro: number;
+	refundPreview(input: {
+		readonly paymentId: string;
+		readonly amountEurCents: number;
+		readonly creditsToRemoveMicro: number;
+	}): {
+		readonly plan: RefundPlan;
 		readonly refundableEurCents: number;
+		readonly simulated: boolean;
 	};
 	purchase(input: PurchaseInput): PurchaseOutcome;
 	handleProviderEvents(body: unknown): void;
-	refund(input: {
-		readonly adminId: string;
-		readonly paymentId: string;
-		readonly amountEurCents: number;
-		readonly reason: string;
-	}): RefundOutcome;
+	refund(input: RefundRequest): RefundOutcome;
 	packsForSale(): SalePack[];
 	availability(role: string): {
 		readonly canPurchase: boolean;

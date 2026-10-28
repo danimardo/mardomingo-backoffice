@@ -1,10 +1,20 @@
 // W36 · `/admin/usuarios/[userId]/ajuste` (contracts/web-routes.md W36; BE-FR-18, D-16, BE-FR-55; T307). Ajuste manual del saldo con
 // vista previa: `previsualizarAjuste` no cambia nada; `ajustarSaldo` solo con `confirmado=true`. Un ingreso liquida primero la deuda; una resta
-// nunca supera el disponible y nunca crea deuda. El motivo es obligatorio (1–500). Requiere rol de administrador.
+// nunca supera el disponible del tipo elegido ni el disponible total, y nunca crea deuda. El motivo es obligatorio (1–500). Reglas de la
+// propuesta de administración: un ajuste admite como máximo 100 000 créditos (R04); la caducidad de una bolsa gratuita es de Madrid y como
+// mucho a 365 días (R05); y una cuenta bloqueada admite solo restas (R07). Requiere rol de administrador.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor, accountView } from '$lib/server/features/accounts';
+import { getSetting } from '$lib/server/features/apps';
+import {
+	adjustmentCreditsFit,
+	blockedAdjustmentAllowed,
+	debitFitsKind,
+	eurCentsOfCredits,
+	freeExpiryOf
+} from '$lib/server/features/credits';
 import { isConfirmed, savedRedirect } from '$lib/server/forms/confirmation';
 import { previewAdjustment } from '$lib/server/web/balance-adjustment';
 import { failureOf } from '$lib/server/web/actions';
@@ -29,40 +39,47 @@ function adminOrThrow(locals: App.Locals) {
 interface Parsed {
 	readonly direction: 'credit' | 'debit';
 	readonly kind: 'free' | 'paid';
+	readonly credits: number;
 	readonly amountMicro: number;
 	readonly expiresAt: number | null;
 	readonly reason: string;
 }
 
-/** Lee el formulario. Un error de importe o de motivo devuelve el campo con su texto de clave. */
 /** Texto de un campo del formulario; vacío si no es texto. */
 function textOf(form: FormData, key: string): string {
 	const value = form.get(key);
 	return typeof value === 'string' ? value : '';
 }
 
+/** Lee el formulario. Un error de importe, de caducidad o de motivo devuelve el campo con su texto de clave. */
 function parse(
 	form: FormData,
 	nowMs: number
 ): { ok: true; value: Parsed } | { ok: false; errors: Record<string, string> } {
 	const errors: Record<string, string> = {};
 	const credits = Number(form.get('cantidad'));
-	if (!Number.isInteger(credits) || credits <= 0) errors.amountCredits = 'validation_invalid';
+	if (!adjustmentCreditsFit(credits)) errors.amountCredits = 'validation_invalid';
 	const direction = form.get('tipo') === 'debit' ? 'debit' : 'credit';
 	const kind = form.get('bolsa') === 'paid' ? 'paid' : 'free';
 	const reason = textOf(form, 'motivo').trim();
 	if (reason === '' || reason.length > MAX_REASON) errors.motivo = 'validation_required';
 	let expiresAt: number | null = null;
 	if (direction === 'credit' && kind === 'free') {
-		const day = textOf(form, 'vence');
-		const ms = /^\d{4}-\d{2}-\d{2}$/.test(day) ? Date.parse(`${day}T23:59:59Z`) : Number.NaN;
-		if (Number.isNaN(ms) || ms <= nowMs) errors.vence = 'validation_invalid';
-		else expiresAt = ms;
+		const verdict = freeExpiryOf(textOf(form, 'vence'), nowMs);
+		if (verdict.ok) expiresAt = verdict.expiresAt;
+		else errors.vence = 'validation_invalid';
 	}
 	if (Object.keys(errors).length > 0) return { ok: false, errors };
 	return {
 		ok: true,
-		value: { direction, kind, amountMicro: toMicro(credits * 1_000_000), expiresAt, reason }
+		value: {
+			direction,
+			kind,
+			credits,
+			amountMicro: toMicro(credits * 1_000_000),
+			expiresAt,
+			reason
+		}
 	};
 }
 
@@ -75,6 +92,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 	const account = accountView(composition.adminUsers, params.userId);
 	if (account === null || account.deleted) error(404);
 	const balance = composition.credits.getBalance(params.userId);
+	const adjustable = composition.credits.adjustableByKind(params.userId);
 	return {
 		adjustmentKey,
 		account,
@@ -82,7 +100,8 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 			totalMicro: balance.totalMicro,
 			debtMicro: balance.debtMicro,
 			availableMicro: balance.availableMicro
-		}
+		},
+		adjustable
 	};
 };
 
@@ -101,9 +120,14 @@ export const actions: Actions = {
 	previsualizarAjuste: async ({ locals, params, request }) => {
 		adminOrThrow(locals);
 		const form = await request.formData();
-		const parsed = parse(form, getComposition().clock.now());
+		const composition = getComposition();
+		const parsed = parse(form, composition.clock.now());
 		if (!parsed.ok) return fail(400, { errors: parsed.errors, values: submitted(form) });
-		const balance = getComposition().credits.getBalance(params.userId);
+		const account = accountView(composition.adminUsers, params.userId);
+		if (account === null || account.deleted) error(404);
+		if (!blockedAdjustmentAllowed(parsed.value.direction, account.banned))
+			return fail(400, { formError: 'VALIDATION_ERROR', values: submitted(form) });
+		const balance = composition.credits.getBalance(params.userId);
 		const preview = previewAdjustment({
 			direction: parsed.value.direction,
 			amountMicro: parsed.value.amountMicro,
@@ -116,8 +140,27 @@ export const actions: Actions = {
 				errors: { amountCredits: 'validation_invalid' },
 				values: submitted(form)
 			});
+		// La vista previa promete lo mismo que luego cumple `credits.adjust`: una resta cabe en el disponible del tipo elegido (R06).
+		const adjustable = composition.credits.adjustableByKind(params.userId);
+		const kindMicro = parsed.value.kind === 'free' ? adjustable.freeMicro : adjustable.paidMicro;
+		if (parsed.value.direction === 'debit' && !debitFitsKind(parsed.value.amountMicro, kindMicro))
+			return fail(400, {
+				errors: { amountCredits: 'validation_invalid' },
+				values: submitted(form)
+			});
+		// Equivalente en euros al precio de compra (R04); sin ajuste de precio válido no se muestra.
+		const creditsPerEur = Number(getSetting(composition.apps, 'credits_per_eur_purchase'));
+		const eurCents =
+			Number.isFinite(creditsPerEur) && creditsPerEur > 0
+				? eurCentsOfCredits(parsed.value.credits, creditsPerEur)
+				: null;
 		return {
-			preview: { ...preview, direction: parsed.value.direction, kind: parsed.value.kind },
+			preview: {
+				...preview,
+				direction: parsed.value.direction,
+				kind: parsed.value.kind,
+				eurCents
+			},
 			values: submitted(form)
 		};
 	},
@@ -132,6 +175,10 @@ export const actions: Actions = {
 		const composition = getComposition();
 		const parsed = parse(form, composition.clock.now());
 		if (!parsed.ok) return fail(400, { errors: parsed.errors, values: submitted(form) });
+		const account = accountView(composition.adminUsers, params.userId);
+		if (account === null || account.deleted) error(404);
+		if (!blockedAdjustmentAllowed(parsed.value.direction, account.banned))
+			return fail(400, { formError: 'VALIDATION_ERROR', values: submitted(form) });
 		let auditId: string | null = null;
 		try {
 			const outcome = composition.credits.adjust({
@@ -145,8 +192,11 @@ export const actions: Actions = {
 				idempotencyKey
 			});
 			if (outcome.ok) auditId = outcome.auditId;
-			// Un reenvío del mismo formulario ya se aplicó: se responde como éxito sin repetir el cambio.
-			if (!outcome.ok && outcome.reason === 'exceeds_available')
+			// Una resta que no cabe en el disponible total o en el del tipo elegido se rechaza sin escribir nada.
+			if (
+				!outcome.ok &&
+				(outcome.reason === 'exceeds_available' || outcome.reason === 'exceeds_kind')
+			)
 				return fail(400, {
 					errors: { amountCredits: 'validation_invalid' },
 					values: submitted(form)

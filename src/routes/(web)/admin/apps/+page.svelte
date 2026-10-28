@@ -11,6 +11,13 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+	const slugError = $derived(
+		errors.slug === 'slug_format'
+			? m.admin_apps_slug_invalid()
+			: errors.slug === 'validation_required'
+				? m.validation_required()
+				: ''
+	);
 </script>
 
 <svelte:head>
@@ -42,7 +49,8 @@
 			id="slug"
 			name="slug"
 			label={m.admin_apps_slug()}
-			error={errors.slug ?? ''}
+			hint={m.admin_apps_slug_format()}
+			error={slugError}
 			required
 		/>
 		<TextField id="nombre" name="nombre" label={m.admin_apps_name()} required />
