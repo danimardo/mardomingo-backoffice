@@ -355,6 +355,35 @@ describe('ajustes manuales (BE-FR-18, D-16)', () => {
 
 		expect(
 			applyNegativeAdjustment(state, { kind: 'free', amount: 6_000_000, available: 15_000_000 })
+		).toEqual({ ok: false, reason: 'exceeds_kind' });
+	});
+
+	it('una resta exactamente igual al tipo cabe; un micro-crédito por encima se rechaza por tipo (R06)', () => {
+		const state = stateOf([
+			bucket({ id: 'f1', remaining: 5_000_000 }),
+			bucket({
+				id: 'p1',
+				kind: 'paid',
+				source: 'purchase',
+				remaining: 10_000_000,
+				expiresAt: null,
+				createdAt: 1
+			})
+		]);
+
+		expect(
+			applyNegativeAdjustment(state, { kind: 'free', amount: 5_000_000, available: 15_000_000 })
+		).toMatchObject({ ok: true });
+		expect(
+			applyNegativeAdjustment(state, { kind: 'free', amount: 5_000_001, available: 15_000_000 })
+		).toEqual({ ok: false, reason: 'exceeds_kind' });
+	});
+
+	it('una resta por encima del disponible total sigue siendo exceeds_available aunque el tipo alcance', () => {
+		const state = stateOf([bucket({ id: 'f1', remaining: 5_000_000 })]);
+
+		expect(
+			applyNegativeAdjustment(state, { kind: 'free', amount: 5_000_001, available: 5_000_000 })
 		).toEqual({ ok: false, reason: 'exceeds_available' });
 	});
 });

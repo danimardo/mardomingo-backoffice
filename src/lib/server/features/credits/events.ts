@@ -18,7 +18,7 @@ export interface CreditsLogFields {
 	};
 	'credits.welcome.denied': { reason: 'hash_granted' | 'account_has_welcome' };
 	'credits.adjustment.applied': { direction: 'credit' | 'debit'; kind: 'free' | 'paid' };
-	'credits.adjustment.rejected': { reason: 'exceeds_available' };
+	'credits.adjustment.rejected': { reason: 'exceeds_available' | 'exceeds_kind' };
 	'credits.expiry.applied': { count: number };
 	'credits.expiry.warned': { count: number };
 	'credits.balance.forfeited': { reason: 'user' | 'inactivity'; count: number };

@@ -287,6 +287,74 @@ describe('ajustes del administrador (BE-FR-18, D13, D-16)', () => {
 	});
 });
 
+describe('resta limitada al tipo de bolsa (R06, D05)', () => {
+	function withPaidAdjustment(label: string) {
+		const userId = fixture.addUser(`usr_${label}`);
+		const adminId = fixture.addUser(`usr_admin_${label}`, 'admin');
+		fixture.credits.grantWelcome({ userId, emailNormalizedHash: `hash-${label}` });
+		const granted = fixture.credits.adjust({
+			idempotencyKey: randomUUID(),
+			adminId,
+			userId,
+			direction: 'credit',
+			kind: 'paid',
+			amountMicro: 300 * CREDIT,
+			reason: 'Compra manual'
+		});
+		expect(granted).toMatchObject({ ok: true });
+		return { userId, adminId };
+	}
+
+	it('el disponible por tipo es el de cada bolsa, sin superar el total disponible', () => {
+		const { userId } = withPaidAdjustment('tipo_disp');
+
+		expect(fixture.credits.adjustableByKind(userId)).toEqual({
+			freeMicro: WELCOME,
+			paidMicro: 300 * CREDIT
+		});
+	});
+
+	it('restar más de la bolsa comprada se rechaza por tipo aunque el total alcance, sin escribir nada', () => {
+		const { userId, adminId } = withPaidAdjustment('tipo_rechazo');
+		const before = movementsOf(userId).length;
+
+		const outcome = fixture.credits.adjust({
+			idempotencyKey: randomUUID(),
+			adminId,
+			userId,
+			direction: 'debit',
+			kind: 'paid',
+			amountMicro: 300 * CREDIT + 1,
+			reason: 'Retirada'
+		});
+
+		expect(outcome).toEqual({ ok: false, reason: 'exceeds_kind' });
+		expect(movementsOf(userId)).toHaveLength(before);
+		expect(fixture.credits.getBalance(userId).totalMicro).toBe(WELCOME + 300 * CREDIT);
+		expect(eventsNamed(fixture.logger, 'credits.adjustment.rejected').at(-1)?.fields).toEqual({
+			reason: 'exceeds_kind'
+		});
+	});
+
+	it('restar exactamente la bolsa comprada se aplica y no toca la gratuita', () => {
+		const { userId, adminId } = withPaidAdjustment('tipo_exacto');
+
+		const outcome = fixture.credits.adjust({
+			idempotencyKey: randomUUID(),
+			adminId,
+			userId,
+			direction: 'debit',
+			kind: 'paid',
+			amountMicro: 300 * CREDIT,
+			reason: 'Retirada exacta'
+		});
+
+		expect(outcome).toMatchObject({ ok: true });
+		expect(fixture.credits.adjustableByKind(userId)).toEqual({ freeMicro: WELCOME, paidMicro: 0 });
+		expect(fixture.credits.getBalance(userId).totalMicro).toBe(WELCOME);
+	});
+});
+
 describe('caducidades (BE-FR-16, BE-FR-71)', () => {
 	it('la bolsa gratuita caducada se pone a cero con su movimiento expiry', () => {
 		const userId = fixture.addUser('usr_a');

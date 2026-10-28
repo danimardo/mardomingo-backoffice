@@ -248,20 +248,26 @@ export function canReserve(input: {
 // ---------------------------------------------------------------------------------------------------------------------
 // Ajuste negativo (BE-FR-18, D-16)
 
+/** Saldo restante de las bolsas de un tipo, sin descontar la deuda ni las reservas. */
+export function kindTotalOf(state: LedgerState, kind: BucketKind): number {
+	return state.buckets
+		.filter((item) => item.kind === kind)
+		.reduce((sum, item) => sum + item.remaining, 0);
+}
+
 /**
- * Ajuste negativo: solo reduce bolsas del tipo indicado; nunca más que el disponible (D-16) y nunca crea deuda.
+ * Ajuste negativo: solo reduce bolsas del tipo indicado; nunca más que el disponible (D-16) y nunca crea deuda. Una resta
+ * mayor que el disponible total se rechaza con `exceeds_available`; una mayor que el saldo del tipo, con `exceeds_kind` (R06).
  */
 export function applyNegativeAdjustment(
 	state: LedgerState,
 	input: { readonly kind: BucketKind; readonly amount: number; readonly available: number }
 ):
 	| { readonly ok: true; readonly state: LedgerState; readonly lines: readonly Line[] }
-	| { readonly ok: false; readonly reason: 'exceeds_available' } {
+	| { readonly ok: false; readonly reason: 'exceeds_available' | 'exceeds_kind' } {
+	if (input.amount > input.available) return { ok: false, reason: 'exceeds_available' };
+	if (input.amount > kindTotalOf(state, input.kind)) return { ok: false, reason: 'exceeds_kind' };
 	const ofKind = consumptionOrder(state.buckets).filter((item) => item.kind === input.kind);
-	const kindTotal = ofKind.reduce((sum, item) => sum + item.remaining, 0);
-	if (input.amount > input.available || input.amount > kindTotal) {
-		return { ok: false, reason: 'exceeds_available' };
-	}
 	const { takes } = takeFrom(ofKind, input.amount);
 	return {
 		ok: true,
