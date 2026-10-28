@@ -78,8 +78,15 @@ test.describe('tema sin JavaScript (UX-TEMA CA1 y CA3)', () => {
 	// primer fotograma real: ese no se puede capturar de forma fiable desde Playwright (ver la nota junto a la prueba con JS).
 	test('[UX-TEMA/CA1] sin JavaScript y con sistema claro, la pintura ya es clara y coincide con la final', async ({
 		page,
-		browser
+		browser,
+		browserName
 	}) => {
+		// La sonda de píxeles se cuelga en Firefox headless (RenderCompositorSWGL, reproducido en local el 2026-10-28, 30 s de
+		// espera). Solo Chromium hasta resolverlo; las demás pruebas de tema sin JavaScript siguen en todos los navegadores.
+		test.skip(
+			browserName !== 'chromium',
+			'sonda de píxeles solo fiable en Chromium (ver el comentario)'
+		);
 		await page.goto('/');
 		const pintura = await page.screenshot({ type: 'png' });
 		const origen = new URL(page.url()).origin;
