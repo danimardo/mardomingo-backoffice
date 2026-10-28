@@ -51,23 +51,41 @@ function textOf(form: FormData, key: string): string {
 	return typeof value === 'string' ? value : '';
 }
 
-/** Lee el formulario. Un error de importe, de caducidad o de motivo devuelve el campo con su texto de clave. */
+/** Código del campo de importe: entero mayor que cero (`amount_invalid`), o por encima del tope (`amount_over_max`). */
+function amountCodeOf(credits: number): string {
+	return Number.isInteger(credits) && credits > 0 ? 'amount_over_max' : 'amount_invalid';
+}
+
+/** Código del campo de caducidad, según el motivo que devuelve `freeExpiryOf`. */
+function expiryCodeOf(reason: 'invalid' | 'past' | 'beyond_horizon'): string {
+	switch (reason) {
+		case 'past':
+			return 'expiry_past';
+		case 'beyond_horizon':
+			return 'expiry_too_far';
+		case 'invalid':
+			return 'expiry_invalid';
+	}
+}
+
+/** Lee el formulario. Un error de importe, de caducidad o de motivo devuelve el campo con su código; el texto lo pone la página. */
 function parse(
 	form: FormData,
 	nowMs: number
 ): { ok: true; value: Parsed } | { ok: false; errors: Record<string, string> } {
 	const errors: Record<string, string> = {};
 	const credits = Number(form.get('cantidad'));
-	if (!adjustmentCreditsFit(credits)) errors.amountCredits = 'validation_invalid';
+	if (!adjustmentCreditsFit(credits)) errors.amountCredits = amountCodeOf(credits);
 	const direction = form.get('tipo') === 'debit' ? 'debit' : 'credit';
 	const kind = form.get('bolsa') === 'paid' ? 'paid' : 'free';
 	const reason = textOf(form, 'motivo').trim();
-	if (reason === '' || reason.length > MAX_REASON) errors.motivo = 'validation_required';
+	if (reason === '') errors.motivo = 'validation_required';
+	else if (reason.length > MAX_REASON) errors.motivo = 'reason_too_long';
 	let expiresAt: number | null = null;
 	if (direction === 'credit' && kind === 'free') {
 		const verdict = freeExpiryOf(textOf(form, 'vence'), nowMs);
 		if (verdict.ok) expiresAt = verdict.expiresAt;
-		else errors.vence = 'validation_invalid';
+		else errors.vence = expiryCodeOf(verdict.reason);
 	}
 	if (Object.keys(errors).length > 0) return { ok: false, errors };
 	return {
@@ -126,7 +144,7 @@ export const actions: Actions = {
 		const account = accountView(composition.adminUsers, params.userId);
 		if (account === null || account.deleted) error(404);
 		if (!blockedAdjustmentAllowed(parsed.value.direction, account.banned))
-			return fail(400, { formError: 'VALIDATION_ERROR', values: submitted(form) });
+			return fail(400, { formError: 'BLOCKED_ACCOUNT_CREDIT', values: submitted(form) });
 		const balance = composition.credits.getBalance(params.userId);
 		const preview = previewAdjustment({
 			direction: parsed.value.direction,
@@ -137,7 +155,10 @@ export const actions: Actions = {
 		});
 		if (!preview.ok)
 			return fail(400, {
-				errors: { amountCredits: 'validation_invalid' },
+				errors: {
+					amountCredits:
+						preview.reason === 'exceeds_available' ? 'amount_exceeds_available' : 'amount_invalid'
+				},
 				values: submitted(form)
 			});
 		// La vista previa promete lo mismo que luego cumple `credits.adjust`: una resta cabe en el disponible del tipo elegido (R06).
@@ -145,7 +166,7 @@ export const actions: Actions = {
 		const kindMicro = parsed.value.kind === 'free' ? adjustable.freeMicro : adjustable.paidMicro;
 		if (parsed.value.direction === 'debit' && !debitFitsKind(parsed.value.amountMicro, kindMicro))
 			return fail(400, {
-				errors: { amountCredits: 'validation_invalid' },
+				errors: { amountCredits: 'amount_exceeds_kind' },
 				values: submitted(form)
 			});
 		// Equivalente en euros al precio de compra (R04); sin ajuste de precio válido no se muestra.
@@ -178,7 +199,7 @@ export const actions: Actions = {
 		const account = accountView(composition.adminUsers, params.userId);
 		if (account === null || account.deleted) error(404);
 		if (!blockedAdjustmentAllowed(parsed.value.direction, account.banned))
-			return fail(400, { formError: 'VALIDATION_ERROR', values: submitted(form) });
+			return fail(400, { formError: 'BLOCKED_ACCOUNT_CREDIT', values: submitted(form) });
 		let auditId: string | null = null;
 		try {
 			const outcome = composition.credits.adjust({
@@ -198,7 +219,10 @@ export const actions: Actions = {
 				(outcome.reason === 'exceeds_available' || outcome.reason === 'exceeds_kind')
 			)
 				return fail(400, {
-					errors: { amountCredits: 'validation_invalid' },
+					errors: {
+						amountCredits:
+							outcome.reason === 'exceeds_kind' ? 'amount_exceeds_kind' : 'amount_exceeds_available'
+					},
 					values: submitted(form)
 				});
 		} catch (cause) {

@@ -12,6 +12,23 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+
+	/** Texto de un error de campo. El servidor devuelve códigos concretos; `validation_invalid` queda como respaldo genérico. */
+	function fieldErrorText(code: string | undefined): string {
+		if (!code) return '';
+		switch (code) {
+			case 'validation_required':
+				return m.validation_required();
+			case 'amount_invalid':
+				return m.admin_refund_amount_invalid();
+			case 'credits_invalid':
+				return m.admin_refund_credits_invalid();
+			case 'credits_zero':
+				return m.admin_refund_credits_zero();
+			default:
+				return m.validation_invalid();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -49,7 +66,7 @@
 			id="importe"
 			name="importe"
 			label={m.admin_refund_amount_cents()}
-			error={errors.importe ?? ''}
+			error={fieldErrorText(errors.importe)}
 			required
 		/>
 	{/if}
@@ -57,14 +74,14 @@
 		id="creditos"
 		name="creditos"
 		label={m.admin_adjust_amount()}
-		error={errors.creditos ?? ''}
+		error={fieldErrorText(errors.creditos)}
 		required
 	/>
 	<TextField
 		id="motivo"
 		name="motivo"
 		label={m.admin_refund_reason()}
-		error={errors.motivo ?? ''}
+		error={fieldErrorText(errors.motivo)}
 		required
 	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_refund_confirm()}</Checkbox>

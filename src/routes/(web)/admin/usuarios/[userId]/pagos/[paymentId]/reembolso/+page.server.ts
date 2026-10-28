@@ -69,8 +69,8 @@ function parse(
 	const credits = creditsMicroOf(form);
 	const reason = textOf(form, 'motivo').trim();
 	const errors: Record<string, string> = {};
-	if (amount === null) errors.importe = 'validation_invalid';
-	if (credits === null) errors.creditos = 'validation_invalid';
+	if (amount === null) errors.importe = 'amount_invalid';
+	if (credits === null) errors.creditos = 'credits_invalid';
 	if (reason === '') errors.motivo = 'validation_required';
 	if (amount === null || credits === null || reason === '') return { ok: false, errors };
 	return { ok: true, value: { amountEurCents: amount, creditsToRemoveMicro: credits, reason } };
@@ -116,10 +116,11 @@ export const actions: Actions = {
 			switch (preview.plan.reason) {
 				case 'amount_not_positive':
 				case 'amount_not_allowed':
-					return fail(400, { errors: { importe: 'validation_invalid' } });
+					return fail(400, { errors: { importe: 'amount_invalid' } });
 				case 'credits_negative':
+					return fail(400, { errors: { creditos: 'credits_invalid' } });
 				case 'nothing_to_refund':
-					return fail(400, { errors: { creditos: 'validation_invalid' } });
+					return fail(400, { errors: { creditos: 'credits_zero' } });
 				default:
 					return fail(409, { formError: 'PAYMENT_NOT_REFUNDABLE' });
 			}
