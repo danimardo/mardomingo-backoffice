@@ -556,8 +556,9 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
 
 - **`load`**: pago, saldo no consumido de su bolsa.
 - **Actions**: `?/previsualizarReembolso` / `?/reembolsar` — `creditsToRemove` (decimal español → µc, ≤ no
-  consumido), `amountEur` (solo con proveedor real; ≤ pagado), `reason`, `confirmado` → movimiento `refund`,
+  consumido), `amountEurCents` (importe en **céntimos** de euro; solo con proveedor real; ≤ pagado; campo `importe`), `reason`, `confirmado` → movimiento `refund`,
   devolución por el proveedor (si es real) y rectificativa. Errores: `400`, `409 PAYMENT_NOT_REFUNDABLE`.
+  _Enmienda 2026-10-28: `amountEur` decía euros y el código usa céntimos. D01 (el administrador indica los créditos a retirar) ya coincide con `creditsToRemove`: no cambia nada más del bloque._
 - **Eventos**: `payments.refund.applied`, `invoicing.invoice.issued`, `audit.entry.recorded`.
 
 ### W38 · `/admin/economia` — Economía (BE-FR-51, 61, 73, 87; UX-14; FR-089, FR-096, FR-128)
