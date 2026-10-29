@@ -76,7 +76,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - run: corepack enable && npm install --global pnpm@${{ env.PNPM_VERSION }}
+      # El contenedor de Playwright ya trae pnpx de npm: `npm install -g pnpm` choca con el shim de corepack (EEXIST). Corepack usa la versión fijada en packageManager.
+      - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:e2e:visual
