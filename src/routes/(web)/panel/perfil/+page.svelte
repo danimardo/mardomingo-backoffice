@@ -204,7 +204,7 @@
 	<p>{m.profile_export_intro()}</p>
 	<p>
 		<!-- Descarga de un fichero: se pide con un enlace normal y el servidor responde con `attachment`. -->
-		<Button href={resolve('/panel/perfil/exportar')} variant="secondary"
+		<Button href={resolve('/panel/perfil/exportar')} download variant="secondary"
 			>{m.profile_export_link()}</Button
 		>
 	</p>

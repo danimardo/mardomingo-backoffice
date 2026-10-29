@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '17 2 * * *'
   workflow_dispatch:
+  # Lanzamiento manual sin main: una etiqueta `nightly-*` ejecuta esta matriz en el commit etiquetado (T365).
+  push:
+    tags:
+      - 'nightly-*'
 
 permissions:
   contents: read
