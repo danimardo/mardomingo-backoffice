@@ -10,6 +10,8 @@
 		variant?: Variant;
 		/** Si se da, el control es un enlace; el llamador debe pasar la ruta ya resuelta. */
 		href?: string;
+		/** Con `href`, el enlace descarga el fichero y el router de SvelteKit no lo intercepta (WebKit en Linux no emitía la descarga). */
+		download?: boolean;
 		type?: 'button' | 'submit' | 'reset';
 		name?: string;
 		value?: string;
@@ -25,6 +27,7 @@
 	let {
 		variant = 'secondary',
 		href,
+		download = false,
 		type = 'button',
 		name,
 		value,
@@ -43,6 +46,7 @@
 		class="button {variant}"
 		class:busy
 		href={disabled ? undefined : href}
+		download={download ? '' : undefined}
 		aria-disabled={disabled ? 'true' : undefined}
 		aria-busy={busy ? 'true' : undefined}
 		tabindex={disabled ? -1 : undefined}

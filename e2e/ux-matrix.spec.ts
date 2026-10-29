@@ -136,6 +136,10 @@ for (const scheme of ['light', 'dark'] as const) {
 						expect(await movingElements(page), 'elementos con transición o animación').toEqual([]);
 					}
 
+					// El enlace «Saltar al contenido» se superpone a la marca mientras tiene el foco; axe lo contaba como un objetivo táctil tapado.
+					await page.evaluate(() => {
+						if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+					});
 					await checkAccessibility(page, testInfo);
 				});
 			}
