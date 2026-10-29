@@ -16,6 +16,33 @@
 		form && 'values' in form ? form.values : { tipo: 'credit', bolsa: 'free' }
 	);
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+
+	/** Texto de un error de campo. El servidor devuelve códigos concretos; `validation_invalid` queda como respaldo genérico. */
+	function fieldErrorText(code: string | undefined): string {
+		if (!code) return '';
+		switch (code) {
+			case 'validation_required':
+				return m.validation_required();
+			case 'amount_invalid':
+				return m.admin_adjust_amount_invalid();
+			case 'amount_over_max':
+				return m.admin_adjust_amount_max();
+			case 'amount_exceeds_available':
+				return m.admin_adjust_amount_exceeds_available();
+			case 'amount_exceeds_kind':
+				return m.admin_adjust_amount_exceeds_kind();
+			case 'expiry_invalid':
+				return m.admin_adjust_expiry_invalid();
+			case 'expiry_past':
+				return m.admin_adjust_expiry_past();
+			case 'expiry_too_far':
+				return m.admin_adjust_expiry_too_far();
+			case 'reason_too_long':
+				return m.admin_adjust_reason_too_long();
+			default:
+				return m.validation_invalid();
+		}
+	}
 </script>
 
 <svelte:head>
@@ -40,7 +67,11 @@
 <p>{m.admin_adjust_intro()}</p>
 
 {#if form?.formError}
-	<Banner level="critical">{m.admin_adjust_error()}</Banner>
+	<Banner level="critical"
+		>{form.formError === 'BLOCKED_ACCOUNT_CREDIT'
+			? m.admin_adjust_blocked()
+			: m.admin_adjust_error()}</Banner
+	>
 {/if}
 
 {#if form?.preview}
@@ -68,7 +99,7 @@
 		name="cantidad"
 		value={values.cantidad ?? ''}
 		label={m.admin_adjust_amount()}
-		error={errors.amountCredits ?? ''}
+		error={fieldErrorText(errors.amountCredits)}
 		required
 	/>
 	<Select
@@ -97,14 +128,14 @@
 		value={values.vence ?? ''}
 		label={m.admin_adjust_expires()}
 		hint="AAAA-MM-DD"
-		error={errors.vence ?? ''}
+		error={fieldErrorText(errors.vence)}
 	/>
 	<TextField
 		id="motivo"
 		name="motivo"
 		value={values.motivo ?? ''}
 		label={m.admin_adjust_reason()}
-		error={errors.motivo ?? ''}
+		error={fieldErrorText(errors.motivo)}
 		required
 	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_adjust_confirm()}</Checkbox>

@@ -19,6 +19,7 @@ import {
 	releaseOpenHoldsOnStartup,
 	type ChargebackOutcome,
 	type PurchaseGrantOutcome,
+	type RefundWithdrawInput,
 	type RefundWithdrawOutcome,
 	withdrawForRefund,
 	reserve,
@@ -151,13 +152,7 @@ export interface Credits {
 		readonly simulated: boolean;
 	}): PurchaseGrantOutcome;
 	/** Retira de la bolsa de la compra los créditos de un reembolso, con motivo y administrador (BE-FR-27). */
-	withdrawForRefund(input: {
-		readonly adminId: string;
-		readonly userId: string;
-		readonly paymentId: string;
-		readonly amountMicro: number;
-		readonly reason: string;
-	}): RefundWithdrawOutcome;
+	withdrawForRefund(input: RefundWithdrawInput): RefundWithdrawOutcome;
 	/** Contracargo: retira lo que quede de la compra y pasa el resto a deuda sin tope (BE-FR-28). Una vez por compra. */
 	applyChargeback(input: {
 		readonly userId: string;

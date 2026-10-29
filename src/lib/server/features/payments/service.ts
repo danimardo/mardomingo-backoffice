@@ -1,5 +1,6 @@
 // Servicio de `payments` (BE-FR-23–28; T236). Compra, eventos del proveedor y reembolsos. Cada escritura va en su transacción
-// `BEGIN IMMEDIATE`; el saldo solo lo toca `credits` (una transacción propia por operación). Por eso el orden es el de la
+// `BEGIN IMMEDIATE`; el saldo solo lo toca `credits` (una transacción propia por operación, o la del reembolso, que comparte
+// con `credits` para retirar los créditos y cambiar el estado a la vez; R12). Por eso el orden es el de la
 // idempotencia: primero se acredita (que ya es idempotente por `payment_id`) y después se marca la compra; si algo falla entre
 // medias, el reintento lo cierra sin acreditar dos veces.
 import type { PaymentsProvider, PaymentEvent } from '$lib/server/adapters/payments/provider';
@@ -10,7 +11,7 @@ import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import { getSetting, type AppsDeps } from '$lib/server/features/apps';
 import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
 import { blockAccount } from '$lib/server/features/accounts';
-import type { Credits } from '$lib/server/features/credits';
+import type { Credits, RefundWithdrawOutcome } from '$lib/server/features/credits';
 import type { InvoicingService } from '$lib/server/features/invoicing';
 import { isOwnWithdrawalWaiver, type LegalDeps } from '$lib/server/features/legal';
 import type { Logger } from '$lib/server/logging/logger';
@@ -365,36 +366,14 @@ function releaseRefundKey(deps: PaymentsDeps, key: string): void {
 }
 
 /**
- * Retira de la bolsa de la compra los créditos del reembolso (BE-FR-27, D01). `credits` comprueba que no superen el saldo no
- * consumido de la bolsa; si no caben, no retira nada y se libera la clave.
- */
-function withdrawRefundCredits(deps: PaymentsDeps, input: RefundRequest, row: PaymentRow): void {
-	let outcome: ReturnType<Credits['withdrawForRefund']>;
-	try {
-		outcome = deps.credits.withdrawForRefund({
-			adminId: input.adminId,
-			userId: row.userId,
-			paymentId: row.id,
-			amountMicro: input.creditsToRemoveMicro,
-			reason: input.reason
-		});
-	} catch (cause) {
-		releaseRefundKey(deps, input.idempotencyKey);
-		throw cause;
-	}
-	if (outcome.ok) return;
-	releaseRefundKey(deps, input.idempotencyKey);
-	deps.logger.emit('payments.refund.rejected', { reason: outcome.reason });
-	throw new AppError('PAYMENT_NOT_REFUNDABLE');
-}
-
-/**
  * Reembolso manual (BE-FR-27): motivo obligatorio, créditos retirados de la bolsa de la compra (D01), importe en compras reales
  * (D02: sin importe en simuladas) y rectificativa. Un reenvío con la misma clave no vuelve a aplicarse (R12).
  *
- * Orden: 1) en una transacción se valida y se reserva la clave; 2) se retiran los créditos (transacción de `credits`); 3) en otra
- * transacción se escriben importe, estado, clave y auditoría. Si el paso 2 falla, la clave se libera. Si el proceso cae entre
- * el 2 y el 3, la clave queda `claimed`: bloquea nuevos reembolsos de esa compra hasta revisarla a mano (no se repite nada).
+ * Orden: 1) en una transacción se valida y se reserva la clave; 2) en UNA sola transacción, compartida con `credits`, se retiran
+ * los créditos (si los hay), se escriben importe, estado y auditoría, y se marca la clave como aplicada. Si algo falla en el
+ * paso 2, SQLite deshace todo él (créditos incluidos) y la clave se libera para poder reenviar el formulario. Si el proceso cae
+ * dentro del paso 2, la transacción no se confirma: queda la clave `claimed` sin nada aplicado, que bloquea nuevos reembolsos de
+ * esa compra hasta revisarla a mano.
  */
 export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome {
 	const reason = input.reason.trim();
@@ -428,27 +407,52 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 	}
 
 	const { row, newRefundedEurCents, newStatus } = claim;
-	if (input.creditsToRemoveMicro > 0) withdrawRefundCredits(deps, input, row);
 
 	const now = toEpochMs(deps.clock.now());
-	immediateTransaction(deps.db, (tx: Tx) => {
-		setRefundedEurCents(tx, row.id, newRefundedEurCents, now);
-		setStatus(tx, row.id, newStatus, now, row.completedAt);
-		markRefundKeyApplied(tx, input.idempotencyKey);
-		recordEntry(
-			tx,
-			{
-				adminId: input.adminId,
-				action: 'payments.refund',
-				entity: 'payment',
-				entityId: row.id,
-				before: { refundedEurCents: row.refundedEurCents },
-				after: { refundedEurCents: newRefundedEurCents },
-				reason
-			},
-			deps.auditDeps
-		);
-	});
+	let applied: RefundWithdrawOutcome;
+	try {
+		applied = immediateTransaction(deps.db, (tx: Tx): RefundWithdrawOutcome => {
+			if (input.creditsToRemoveMicro > 0) {
+				const withdrawal = deps.credits.withdrawForRefund({
+					tx,
+					adminId: input.adminId,
+					userId: row.userId,
+					paymentId: row.id,
+					amountMicro: input.creditsToRemoveMicro,
+					reason: input.reason
+				});
+				// Si los créditos no caben, `credits` no ha escrito nada: la transacción no cambia nada más.
+				if (!withdrawal.ok) return withdrawal;
+			}
+			setRefundedEurCents(tx, row.id, newRefundedEurCents, now);
+			setStatus(tx, row.id, newStatus, now, row.completedAt);
+			markRefundKeyApplied(tx, input.idempotencyKey);
+			recordEntry(
+				tx,
+				{
+					adminId: input.adminId,
+					action: 'payments.refund',
+					entity: 'payment',
+					entityId: row.id,
+					before: { refundedEurCents: row.refundedEurCents },
+					after: { refundedEurCents: newRefundedEurCents },
+					reason
+				},
+				deps.auditDeps
+			);
+			return { ok: true };
+		});
+	} catch (cause) {
+		// Nada se confirmó: la clave vuelve a estar libre para reenviar el formulario.
+		releaseRefundKey(deps, input.idempotencyKey);
+		throw cause;
+	}
+	if (!applied.ok) {
+		releaseRefundKey(deps, input.idempotencyKey);
+		deps.logger.emit('payments.refund.rejected', { reason: applied.reason });
+		throw new AppError('PAYMENT_NOT_REFUNDABLE');
+	}
+
 	deps.invoicing.correctPayment({
 		paymentId: row.id,
 		userId: row.userId,

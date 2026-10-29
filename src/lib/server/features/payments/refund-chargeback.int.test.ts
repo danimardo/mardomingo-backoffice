@@ -3,7 +3,7 @@
 // aplican dos veces, rechazo cuando los créditos no caben en la bolsa, y contracargo que retira el saldo, pasa el resto a deuda
 // sin tope, bloquea la cuenta y no se repite con un evento repetido.
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertInFlightOperation } from '../../../../../tests/builders/ai-operations';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
@@ -143,6 +143,37 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		expect(refundMovements()).toHaveLength(1);
 		expect(f.base.db.select().from(adminAudit).all()).toHaveLength(1);
 		expect(eventsNamed(f.base.logger, 'payments.refund.repeated')).toHaveLength(1);
+	});
+
+	// R12 (atomicidad): si el cambio de estado falla después de retirar los créditos, la retirada se deshace con él. El fallo
+	// simulado es un trigger de SQLite sobre `payments.status` creado tras la compra; se quita antes del reenvío.
+	it('si el cambio de estado falla a mitad, la retirada de créditos también se deshace y la clave se libera', () => {
+		const { userId } = f.addAccount('usr_atomico');
+		const adminId = f.addAccount('adm_atomico', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_atomico');
+		const form = {
+			adminId,
+			paymentId,
+			amountEurCents: 1000,
+			creditsToRemoveMicro: 10_500 * CREDIT,
+			reason: 'Fallo a mitad',
+			idempotencyKey: randomUUID()
+		};
+		f.base.db.run(
+			sql`CREATE TRIGGER fallo_estado_reembolso BEFORE UPDATE OF status ON payments WHEN NEW.status IN ('refunded', 'partially_refunded') BEGIN SELECT RAISE(ABORT, 'fallo simulado'); END`
+		);
+
+		expect(() => f.payments.refund(form)).toThrow();
+
+		expect(f.base.credits.getBalance(userId).totalMicro).toBe(10_500 * CREDIT);
+		expect(refundMovements()).toHaveLength(0);
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'completed', refundedEurCents: 0 });
+		expect(f.base.db.select().from(adminAudit).all()).toHaveLength(0);
+
+		f.base.db.run(sql`DROP TRIGGER fallo_estado_reembolso`);
+		expect(f.payments.refund(form)).toEqual({ status: 'refunded', refundedEurCents: 1000 });
+		expect(f.base.credits.getBalance(userId).totalMicro).toBe(0);
+		expect(refundMovements()).toHaveLength(1);
 	});
 
 	it('dos formularios distintos sí son dos reembolsos parciales', () => {
