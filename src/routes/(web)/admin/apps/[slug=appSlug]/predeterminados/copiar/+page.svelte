@@ -39,6 +39,9 @@
 {#if data.categories.length > 0}
 	<form method="POST" action="?/copiar">
 		{#each data.categories as category (category.category)}
+			{#if category.personal}
+				<Banner level="warning">{m.admin_defaults_personal_warning()}</Banner>
+			{/if}
 			<CheckboxGroup
 				id={`sel-${category.category}`}
 				name={`sel:${category.category}`}
