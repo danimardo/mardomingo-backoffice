@@ -57,6 +57,9 @@ test.describe('@BE-FR-59 app inexistente', () => {
 });
 
 test.describe('@BE-FR-73 precios', () => {
+	// La petición `__data.json` de invalidación se cancela cuando la navegación siguiente ya empezó: no es un fallo de la aplicación.
+	test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
+
 	test('la página de precios avisa de que el cobro real depende del texto, del audio y del modelo', async ({
 		page
 	}) => {
