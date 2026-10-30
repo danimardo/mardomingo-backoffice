@@ -8,6 +8,7 @@ const SCHEMA: SyncSchema = {
 	categories: {
 		customReplacements: { strategy: 'items', key: 'from', tombstone_ttl_days: 30 },
 		coreReplacements: { strategy: 'block' },
+		prompts: { strategy: 'block', personal: true },
 		preferences: { strategy: 'keyed', keys: ['language', 'autoCopy'] }
 	}
 };
@@ -21,6 +22,7 @@ const SOURCE = {
 		tombstones: [{ from: 'viejo', deletedAt: 3 }]
 	},
 	coreReplacements: { value: [{ a: 1 }], updatedAt: 4 },
+	prompts: { value: ['resume mis correos'], updatedAt: 7 },
 	preferences: {
 		language: { value: 'es', updatedAt: 5 },
 		autoCopy: { value: true, updatedAt: 6 }
@@ -32,11 +34,27 @@ describe('previewCopy', () => {
 		expect(previewCopy(SCHEMA, SOURCE)).toEqual([
 			{
 				category: 'customReplacements',
-				elements: ['hola', 'datos-personales']
+				elements: ['hola', 'datos-personales'],
+				personal: false
 			},
-			{ category: 'coreReplacements', elements: ['coreReplacements'] },
-			{ category: 'preferences', elements: ['language', 'autoCopy'] }
+			{ category: 'coreReplacements', elements: ['coreReplacements'], personal: false },
+			{ category: 'prompts', elements: ['prompts'], personal: true },
+			{ category: 'preferences', elements: ['language', 'autoCopy'], personal: false }
 		]);
+	});
+
+	it('marca como personales solo las categorías con `personal: true` en el esquema (D14)', () => {
+		const personal = previewCopy(SCHEMA, SOURCE)
+			.filter((category) => category.personal)
+			.map((category) => category.category);
+
+		expect(personal).toEqual(['prompts']);
+	});
+
+	it('no preselecciona nada: la vista previa solo describe, la copia exige marcar (D14)', () => {
+		const result = applyCopy(SCHEMA, SOURCE, []);
+
+		expect(result).toEqual({});
 	});
 });
 
@@ -91,13 +109,13 @@ describe('casos de borde de la copia', () => {
 		};
 
 		expect(previewCopy(SCHEMA, messy)).toEqual([
-			{ category: 'customReplacements', elements: ['a'] }
+			{ category: 'customReplacements', elements: ['a'], personal: false }
 		]);
 	});
 
 	it('una categoría items con valor que no es un objeto no ofrece elementos', () => {
 		expect(previewCopy(SCHEMA, { customReplacements: [1, 2] })).toEqual([
-			{ category: 'customReplacements', elements: [] }
+			{ category: 'customReplacements', elements: [], personal: false }
 		]);
 	});
 

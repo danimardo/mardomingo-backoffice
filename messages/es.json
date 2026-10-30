@@ -589,6 +589,7 @@
 	"admin_defaults_json": "Predeterminados (JSON)",
 	"admin_defaults_json_invalid": "El JSON no es válido o no cumple el esquema de la app.",
 	"admin_defaults_confirm": "Confirmo este cambio",
+	"admin_defaults_personal_warning": "Esta categoría puede contener datos personales de la cuenta. Márcala solo si quieres que sean predeterminados para todas las cuentas nuevas.",
 	"admin_defaults_save": "Guardar predeterminados",
 	"admin_defaults_copy_link": "Copiar elementos de una cuenta a los predeterminados",
 	"admin_defaults_copy_title": "Copiar a predeterminados",

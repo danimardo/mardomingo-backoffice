@@ -1,7 +1,7 @@
 // Valores aprobados de las operaciones de `secretario` (T079, 2026-10-11): cada grupo tiene su modelo, su respaldo y sus
 // topes, y ninguna operación repite el modelo principal como respaldo (regla de `operationRuleIssues`).
 import { describe, expect, it } from 'vitest';
-import { SECRETARIO_OPERATIONS, approvedOperationOf } from './defaults';
+import { SECRETARIO_OPERATIONS, SECRETARIO_SYNC_SCHEMA, approvedOperationOf } from './defaults';
 
 describe('approvedOperationOf', () => {
 	it('cubre las once operaciones de secretario sin dejar ninguna fuera', () => {
@@ -70,5 +70,15 @@ describe('approvedOperationOf', () => {
 
 	it('una clave desconocida es un error de programación', () => {
 		expect(() => approvedOperationOf('inventada')).toThrow('sin valores aprobados: inventada');
+	});
+});
+
+describe('SECRETARIO_SYNC_SCHEMA (D14)', () => {
+	it('marca solo la categoría `prompts` como datos personales', () => {
+		const personal = Object.entries(SECRETARIO_SYNC_SCHEMA.categories)
+			.filter(([, category]) => category.personal === true)
+			.map(([name]) => name);
+
+		expect(personal).toEqual(['prompts']);
 	});
 });

@@ -60,16 +60,24 @@ export type SettingsOverrides = z.infer<typeof SettingsOverrides>;
 
 // Esquema de sincronización (3.2): categorías con nombre camelCase y su estrategia.
 const CATEGORY_NAME = /^[a-zA-Z][a-zA-Z0-9]*$/;
+// `personal: true` marca una categoría con datos personales: la copia a predeterminados la avisa (D14 = R14).
+const Personal = z.literal(true).optional();
 export const SyncCategory = z.discriminatedUnion('strategy', [
-	z.strictObject({ strategy: z.literal('items'), key: Text, tombstone_ttl_days: PositiveInt }),
-	z.strictObject({ strategy: z.literal('block') }),
+	z.strictObject({
+		strategy: z.literal('items'),
+		key: Text,
+		tombstone_ttl_days: PositiveInt,
+		personal: Personal
+	}),
+	z.strictObject({ strategy: z.literal('block'), personal: Personal }),
 	z.strictObject({
 		strategy: z.literal('keyed'),
 		keys: z
 			.array(Text)
 			.min(1)
 			.refine(hasNoDuplicates, { message: 'keys no admite repetidos' })
-			.optional()
+			.optional(),
+		personal: Personal
 	})
 ]);
 export const SyncSchema = z.strictObject({

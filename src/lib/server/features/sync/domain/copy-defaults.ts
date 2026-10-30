@@ -7,6 +7,8 @@ import type { SyncData } from './document-types';
 export interface PreviewCategory {
 	readonly category: string;
 	readonly elements: readonly string[];
+	/** Categoría marcada con datos personales en el esquema (D14): la vista previa la avisa y no la preselecciona. */
+	readonly personal: boolean;
 }
 
 export interface Selection {
@@ -37,7 +39,7 @@ export function previewCopy(schema: SyncSchema, source: SyncData): PreviewCatego
 		.map(([name, category]) => {
 			const value = source[name];
 			const elements = category.strategy === 'block' ? [name] : elementsOf(category, value);
-			return { category: name, elements };
+			return { category: name, elements, personal: category.personal === true };
 		});
 }
 

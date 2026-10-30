@@ -63,6 +63,19 @@ describe('sobrescrituras y sincronización (3.2)', () => {
 			SyncSchema.safeParse({ categories: { customReplacements: { strategy: 'items' } } }).success
 		).toBe(false);
 	});
+
+	it('marca categorías personales con `personal: true` y rechaza otros valores (D14)', () => {
+		const withPersonal = (personal: unknown) => ({
+			categories: { prompts: { strategy: 'block', personal } }
+		});
+
+		expect(SyncSchema.safeParse(withPersonal(true)).success).toBe(true);
+		expect(SyncSchema.safeParse(withPersonal(false)).success).toBe(false);
+		expect(SyncSchema.safeParse(withPersonal('si')).success).toBe(false);
+		expect(SyncSchema.safeParse({ categories: { prompts: { strategy: 'block' } } }).success).toBe(
+			true
+		);
+	});
 });
 
 describe('configuración de transcripción (3.4, BE-FR-35)', () => {
