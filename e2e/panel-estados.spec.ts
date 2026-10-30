@@ -6,6 +6,9 @@ import { PANEL_E2E_EMAIL, PANEL_E2E_PASSWORD } from './constants';
 
 test.describe.configure({ mode: 'parallel' });
 
+// La petición `__data.json` de invalidación se cancela cuando la navegación siguiente ya empezó: no es un fallo de la aplicación.
+test.use({ guardAllow: [/__data\.json.*ERR_ABORTED/] });
+
 test.beforeEach(async ({ page }) => {
 	await page.goto('/login');
 	await page.waitForLoadState('networkidle');
