@@ -32,16 +32,22 @@ import {
 	lockReachedBy,
 	loginAttemptKeyOf,
 	refundPasswordAttempt,
-	reservePasswordAttempt
+	reservePasswordAttempt,
+	type PasswordAttempt
 } from './password-attempts';
 import {
 	bumpRateCounter,
 	type AuthRateScope,
 	clearLoginAttempts,
+	deleteSessionByToken,
 	insertDisposableDomains,
 	isDisposableDomain,
+	loginCredentialOf,
+	type LoginCredential,
 	releaseSignupSlot,
 	reserveSignupSlot,
+	revocationMarksOf,
+	sessionOwnerOf,
 	setSignupMetadata
 } from './repository';
 import type { EmailDispatcher } from './email-dispatch';
@@ -391,6 +397,48 @@ export function ipRateLimited(
 	});
 }
 
+/**
+ * Rechaza el login como credenciales inválidas. El intento reservado queda contado como fallo; si alcanza el umbral, la
+ * respuesta es el bloqueo (BE-FR-67).
+ */
+function rejectAsInvalidCredentials(
+	deps: AccountsDeps,
+	attempt: Extract<PasswordAttempt, { kind: 'reserved' }>
+): never {
+	deps.logger.emit('accounts.login.failed', {
+		reason: 'invalid_credentials',
+		errorCode: 'INVALID_CREDENTIALS'
+	});
+	const lockMinutes = lockReachedBy(attempt);
+	if (lockMinutes !== null) {
+		deps.logger.emit('accounts.login.locked', {
+			reason: 'too_many_failures',
+			count: attempt.state.failures
+		});
+		throw new AppError('LOGIN_TEMPORARILY_LOCKED', { retryAfterMinutes: lockMinutes });
+	}
+	throw new AppError('INVALID_CREDENTIALS');
+}
+
+/**
+ * ¿Sigue la cuenta como estaba cuando Better Auth comprobó la contraseña (C-27)? Misma cuenta, mismo email, sin borrar y con
+ * la misma credencial (un cambio o una recuperación de contraseña cambian el hash, que lleva su propia sal).
+ */
+function credentialUnchanged(
+	before: LoginCredential | undefined,
+	after: LoginCredential | undefined
+): boolean {
+	return (
+		before !== undefined &&
+		after !== undefined &&
+		before.passwordHash !== null &&
+		after.passwordHash === before.passwordHash &&
+		after.userId === before.userId &&
+		after.email === before.email &&
+		after.deletedAt === null
+	);
+}
+
 async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<string> {
 	const now = deps.clock.now();
 	if (input.remoteIp !== null) {
@@ -415,6 +463,8 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 		});
 	}
 
+	// Instantánea de la credencial antes de que Better Auth la lea (C-27): la busca igual que él, por el email en minúsculas.
+	const before = loginCredentialOf(deps.db, { email: input.email.toLowerCase() });
 	let token: string;
 	try {
 		({ token } = await deps.auth.api.signInEmail({
@@ -441,24 +491,26 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 		}
 		// Un error inesperado deja el intento contado (falla cerrado; ver `password-attempts.ts`).
 		if (!isBadCredentials(error)) throw error;
-		deps.logger.emit('accounts.login.failed', {
-			reason: 'invalid_credentials',
-			errorCode: 'INVALID_CREDENTIALS'
-		});
-		const lockMinutes = lockReachedBy(attempt);
-		if (lockMinutes !== null) {
-			deps.logger.emit('accounts.login.locked', {
-				reason: 'too_many_failures',
-				count: attempt.state.failures
-			});
-			throw new AppError('LOGIN_TEMPORARILY_LOCKED', { retryAfterMinutes: lockMinutes });
-		}
-		throw new AppError('INVALID_CREDENTIALS');
+		return rejectAsInvalidCredentials(deps, attempt);
 	}
 
-	immediateTransaction(deps.db, (tx) => {
+	// Better Auth crea la sesión sin volver a leer la credencial que comprobó antes de esperar al hash (C-27). Si entretanto se
+	// borró la cuenta, se cambió o recuperó la contraseña o se cambió el email, esas operaciones ya cerraron las sesiones que
+	// había y esta se crearía después: se vuelve a leer la credencial en una transacción IMMEDIATE, serializada con ellas. Si
+	// cambió (o la sesión ya no existe), se borra la sesión nueva y el login falla como una contraseña errónea: la contraseña
+	// ya no es la de la cuenta (o la cuenta ya no existe, y el intento cuenta exista o no, BE-FR-67 CA1). Una revocación que
+	// llegue después de esta transacción ya encuentra la sesión y la borra.
+	const intact = immediateTransaction(deps.db, (tx) => {
+		const ownerId = sessionOwnerOf(tx, token);
+		const after = ownerId === undefined ? undefined : loginCredentialOf(tx, { userId: ownerId });
+		if (!credentialUnchanged(before, after)) {
+			deleteSessionByToken(tx, token);
+			return false;
+		}
 		clearLoginAttempts(tx, attempt.key);
+		return true;
 	});
+	if (!intact) return rejectAsInvalidCredentials(deps, attempt);
 	return token;
 }
 
@@ -708,9 +760,17 @@ export function resetTokenStateOf(deps: AccountsBase, token: string): 'valid' | 
 	return 'valid';
 }
 
-/** Sesión de las cabeceras dadas, o `null` si no hay una válida. */
-export function readSession(deps: AccountsDeps, headers: Headers) {
-	return deps.auth.api.getSession({ headers });
+/**
+ * Sesión de las cabeceras dadas, o `null` si no hay una válida. La de una cuenta borrada o bloqueada no vale aunque siga en
+ * la base de datos (C-27, defensa en profundidad): el borrado y el bloqueo cierran las sesiones, pero Better Auth no mira
+ * `deleted_at` y su plugin `admin` solo mira `banned` al crear la sesión, no al leerla.
+ */
+export async function readSession(deps: AccountsDeps, headers: Headers) {
+	const current = await deps.auth.api.getSession({ headers });
+	if (current === null) return null;
+	const marks = revocationMarksOf(deps.db, current.user.id);
+	if (marks === undefined || marks.deleted || marks.banned) return null;
+	return current;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

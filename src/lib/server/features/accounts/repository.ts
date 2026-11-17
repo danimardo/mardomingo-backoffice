@@ -12,9 +12,11 @@ import {
 	type LoginAttemptResult
 } from './domain/abuse';
 import {
+	account,
 	authRateLimits,
 	disposableDomains,
 	loginAttempts,
+	session,
 	user,
 	userAppActivity,
 	type AUTH_RATE_SCOPES
@@ -238,4 +240,65 @@ export function countRateRows(db: Db): number {
 			.from(authRateLimits)
 			.get()?.total ?? 0
 	);
+}
+
+/**
+ * Credencial de una cuenta tal como la comprueba el login de Better Auth (C-27): el usuario y el hash de su cuenta
+ * `credential` (la de `account_id` igual al id del usuario). `passwordHash` es `null` si la credencial no existe.
+ */
+export interface LoginCredential {
+	readonly userId: string;
+	readonly email: string;
+	readonly deletedAt: EpochMs | null;
+	readonly passwordHash: string | null;
+}
+
+/** Credencial de la cuenta con ese email (`by: 'email'`, ya en minúsculas) o con ese id; `undefined` si no hay cuenta. */
+export function loginCredentialOf(
+	db: Db | Tx,
+	by: { readonly email: string } | { readonly userId: string }
+): LoginCredential | undefined {
+	const row = db
+		.select({
+			userId: user.id,
+			email: user.email,
+			deletedAt: user.deletedAt,
+			passwordHash: account.password
+		})
+		.from(user)
+		.leftJoin(
+			account,
+			and(
+				eq(account.userId, user.id),
+				eq(account.providerId, 'credential'),
+				eq(account.accountId, user.id)
+			)
+		)
+		.where('email' in by ? eq(user.email, by.email) : eq(user.id, by.userId))
+		.get();
+	return row === undefined ? undefined : { ...row, passwordHash: row.passwordHash ?? null };
+}
+
+/** Cuenta dueña de la sesión de ese token, o `undefined` si la sesión ya no existe. */
+export function sessionOwnerOf(tx: Tx, token: string): string | undefined {
+	return tx.select({ userId: session.userId }).from(session).where(eq(session.token, token)).get()
+		?.userId;
+}
+
+/** Borra la sesión de ese token (si existe). */
+export function deleteSessionByToken(tx: Tx, token: string): void {
+	tx.delete(session).where(eq(session.token, token)).run();
+}
+
+/** Marcas de una cuenta que invalidan cualquier sesión suya: borrada o bloqueada. `undefined` si la fila no existe. */
+export function revocationMarksOf(
+	db: Db,
+	userId: string
+): { readonly deleted: boolean; readonly banned: boolean } | undefined {
+	const row = db
+		.select({ deletedAt: user.deletedAt, banned: user.banned })
+		.from(user)
+		.where(eq(user.id, userId))
+		.get();
+	return row === undefined ? undefined : { deleted: row.deletedAt !== null, banned: row.banned };
 }

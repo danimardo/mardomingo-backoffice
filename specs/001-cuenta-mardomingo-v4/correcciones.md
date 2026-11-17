@@ -455,7 +455,9 @@ confirmado después ejecutando sus tests de reproducción contra el código de 3
 - **Ficheros**: `src/lib/server/features/accounts/service.ts` (`authenticate`, que llama a `auth.api.signInEmail`: Better Auth lee
   el usuario, espera el hash y crea la sesión sin volver a leer la credencial); `src/hooks.server.ts` (`loadSession`) y
   `src/lib/server/api/session.ts` (`requireAppSession`), que no comprueban `deletedAt` ni `banned`.
-- **Estado**: confirmado por ejecución: con el hash detenido a mitad del login, borrar la cuenta o cambiar la contraseña deja
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio (`accounts/login-race.int.test.ts`, 6 casos, también el
+  cambio de email). El rechazo cuenta como una contraseña errónea (`INVALID_CREDENTIALS`, BE-FR-67 CA1). Confirmado por
+  ejecución: con el hash detenido a mitad del login, borrar la cuenta o cambiar la contraseña deja
   viva la sesión que el login crea después (30 días deslizantes). El bloqueo por el administrador no se ve afectado: el plugin
   `admin` vuelve a leer `banned` al crear la sesión.
 - **Cambio**: instantánea antes de `signInEmail` (hash de la contraseña, email y `deletedAt`); después, en una
