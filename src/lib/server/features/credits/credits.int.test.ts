@@ -410,6 +410,75 @@ describe('caducidades (BE-FR-16, BE-FR-71)', () => {
 		expect(movementsOf(userId)).toHaveLength(before);
 		expect(eventsNamed(fixture.logger, 'credits.hold.expired')).toHaveLength(1);
 	});
+
+	describe('reserva caducada y no cerrada (BE-FR-71, C-02)', () => {
+		function accountWithOpenHold(userId: string) {
+			fixture.addUser(userId);
+			fixture.credits.grantWelcome({ userId, emailNormalizedHash: `hash-${userId}` });
+			// Exenta del tope diario de cuentas sin compra real: aquí se mide solo el saldo reservado.
+			fixture.db
+				.update(userBalances)
+				.set({ hasRealPurchase: true })
+				.where(eq(userBalances.userId, userId))
+				.run();
+			const held = fixture.credits.reserve({
+				userId,
+				appId: SEEDED_APP_ID,
+				operationId: insertInFlightOperation(fixture.db, { userId }),
+				amountMicro: 300 * CREDIT
+			});
+			if (!held.ok) throw new Error('la reserva debía caber');
+			return held.holdId;
+		}
+
+		it('sin pasar por expireHolds, una reserva caducada deja de restar saldo y el disponible vuelve a caber', () => {
+			const userId = 'usr_a';
+			accountWithOpenHold(userId);
+			expect(fixture.credits.getBalance(userId).reservedMicro).toBe(300 * CREDIT);
+
+			fixture.clock.advance((600 + 1) * 1000);
+
+			expect(fixture.credits.getBalance(userId)).toMatchObject({
+				reservedMicro: 0,
+				availableMicro: WELCOME
+			});
+			expect(fixture.credits.adjustableByKind(userId).freeMicro).toBe(WELCOME);
+			const again = fixture.credits.reserve({
+				userId,
+				appId: SEEDED_APP_ID,
+				operationId: insertInFlightOperation(fixture.db, { userId }),
+				amountMicro: WELCOME
+			});
+			expect(again.ok).toBe(true);
+		});
+
+		it('la reserva caducada pero no cerrada sigue pudiendo cobrarse', () => {
+			const userId = 'usr_a';
+			const holdId = accountWithOpenHold(userId);
+
+			fixture.clock.advance((600 + 1) * 1000);
+			const charge = fixture.credits.chargeAndRelease({ holdId, realCostMicro: 100 * CREDIT });
+
+			expect(charge).toMatchObject({ ok: true, chargedMicro: 100 * CREDIT });
+		});
+
+		it('el freno global solo cuenta las reservas vigentes de cuentas sin compra real', () => {
+			const userId = fixture.addUser('usr_free');
+			fixture.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-free' });
+			const held = fixture.credits.reserve({
+				userId,
+				appId: SEEDED_APP_ID,
+				operationId: insertInFlightOperation(fixture.db, { userId }),
+				amountMicro: 100 * CREDIT
+			});
+			if (!held.ok) throw new Error('la reserva debía caber');
+			expect(fixture.credits.freeAccountsOpenHoldsMicro()).toBe(100 * CREDIT);
+
+			fixture.clock.advance((600 + 1) * 1000);
+
+			expect(fixture.credits.freeAccountsOpenHoldsMicro()).toBe(0);
+		});
+	});
 });
 
 describe('saldo desglosado (BE-FR-71 CA2)', () => {

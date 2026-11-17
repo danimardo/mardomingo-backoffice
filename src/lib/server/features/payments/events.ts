@@ -22,6 +22,7 @@ export interface PaymentsLogFields {
 			| 'no_purchase_bucket';
 	};
 	'payments.refund.repeated': Record<string, never>;
+	'payments.refund.corrective_pending': { reason: 'error' | 'rejected' | 'skipped' };
 	'payments.chargeback.applied': Record<string, never>;
 }
 
@@ -48,6 +49,10 @@ export const PAYMENTS_LOG_EVENTS = Object.freeze({
 	'payments.refund.repeated': {
 		level: 'info',
 		msg: 'Reembolso repetido (mismo formulario): no se aplica otra vez'
+	},
+	'payments.refund.corrective_pending': {
+		level: 'warn',
+		msg: 'Reembolso aplicado sin rectificativa emitida: se reintenta al reenviar el formulario'
 	},
 	'payments.chargeback.applied': { level: 'warn', msg: 'Contracargo aplicado: cuenta bloqueada' }
 } as const satisfies Record<keyof PaymentsLogFields, LogEventMeta>);

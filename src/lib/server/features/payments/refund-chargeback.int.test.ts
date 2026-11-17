@@ -13,8 +13,10 @@ import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-set
 import { adminAudit } from '$lib/server/features/audit/schema';
 import { creditMovements, userBalances } from '$lib/server/features/credits/schema';
 import { session, user } from '$lib/server/features/accounts/schema';
+import { invoices } from '$lib/server/features/invoicing/schema';
 import { termsAcceptances } from '$lib/server/features/legal/schema';
 import { toEpochMs } from '$lib/shared/time';
+import { createPaymentsService } from './index';
 import { payments, refundKeys } from './schema';
 
 const CREDIT = 1_000_000;
@@ -82,6 +84,29 @@ function buyReal(userId: string, attemptId: string): string {
 
 function paymentOf(paymentId: string) {
 	return f.base.db.select().from(payments).where(eq(payments.id, paymentId)).get();
+}
+
+/** Factura inicial de una compra tratada como real: el doble de la compra simulada no la emitió. */
+function issueInitialInvoice(paymentId: string, userId: string): void {
+	f.deps.invoicing.issueForPayment({
+		paymentId,
+		userId,
+		simulated: false,
+		kind: 'simplified',
+		amountEurCents: 1000,
+		issueKey: `payment:${paymentId}:initial`
+	});
+}
+
+/** Importes (en negativo) de las rectificativas de la compra. */
+function correctiveAmounts(paymentId: string): number[] {
+	return f.base.db
+		.select({ amount: invoices.amountEurCents })
+		.from(invoices)
+		.where(and(eq(invoices.paymentId, paymentId), eq(invoices.kind, 'corrective')))
+		.all()
+		.map((row) => row.amount)
+		.sort((a, b) => a - b);
 }
 
 function refundMovements() {
@@ -174,6 +199,94 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		expect(f.payments.refund(form)).toEqual({ status: 'refunded', refundedEurCents: 1000 });
 		expect(f.base.credits.getBalance(userId).totalMicro).toBe(0);
 		expect(refundMovements()).toHaveLength(1);
+	});
+
+	// C-04 (T396): si la rectificativa falla tras confirmar el reembolso, queda rastro y el reenvío con la misma clave la emite.
+	it.each([
+		['lanza una excepción', 'throw'],
+		['no se emite (not_issued)', 'not_issued']
+	] as const)(
+		'si la rectificativa %s, queda payments.refund.corrective_pending y el reenvío la emite una sola vez',
+		(_label, failure) => {
+			const { userId } = f.addAccount(`usr_pendiente_${failure}`);
+			const adminId = f.addAccount(`adm_pendiente_${failure}`, 'admin').userId;
+			const paymentId = buyReal(userId, `att_pendiente_${failure}`);
+			issueInitialInvoice(paymentId, userId);
+			let failuresLeft = 1;
+			const flaky = createPaymentsService({
+				...f.deps,
+				invoicing: {
+					...f.deps.invoicing,
+					correctPayment: (input) => {
+						if (failuresLeft > 0) {
+							failuresLeft -= 1;
+							if (failure === 'throw') throw new Error('proveedor de facturación caído');
+							return { status: 'skipped', reason: 'not_issued' };
+						}
+						return f.deps.invoicing.correctPayment(input);
+					}
+				}
+			});
+			const form = {
+				adminId,
+				paymentId,
+				amountEurCents: 400,
+				creditsToRemoveMicro: 0,
+				reason: 'Rectificativa fallida',
+				idempotencyKey: randomUUID()
+			};
+
+			expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+			expect(paymentOf(paymentId)).toMatchObject({ refundedEurCents: 400 });
+			expect(correctiveAmounts(paymentId)).toEqual([]);
+			expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(1);
+			expect(eventsNamed(f.base.logger, 'payments.refund.applied')).toHaveLength(1);
+
+			expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+			expect(correctiveAmounts(paymentId)).toEqual([-400]);
+			expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(1);
+			expect(eventsNamed(f.base.logger, 'payments.refund.repeated')).toHaveLength(1);
+
+			// Un tercer reenvío es idempotente por `issue_key`: sigue habiendo una sola rectificativa.
+			flaky.refund(form);
+			expect(correctiveAmounts(paymentId)).toEqual([-400]);
+		}
+	);
+
+	// C-04 (T396): tras otro reembolso de la misma compra, el total de la fila ya no es el del reembolso reenviado, así que no se
+	// puede reconstruir su `issueKey`. Reintentarlo emitiría el importe del primero con la clave del segundo y bloquearía la buena.
+	it('el reenvío de un reembolso anterior al último no reintenta su rectificativa', () => {
+		const { userId } = f.addAccount('usr_pendiente_viejo');
+		const adminId = f.addAccount('adm_pendiente_viejo', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_pendiente_viejo');
+		issueInitialInvoice(paymentId, userId);
+		let failuresLeft = 2;
+		const flaky = createPaymentsService({
+			...f.deps,
+			invoicing: {
+				...f.deps.invoicing,
+				correctPayment: (input) => {
+					if (failuresLeft > 0) {
+						failuresLeft -= 1;
+						return { status: 'skipped', reason: 'not_issued' };
+					}
+					return f.deps.invoicing.correctPayment(input);
+				}
+			}
+		});
+		const base = { adminId, paymentId, creditsToRemoveMicro: 0, reason: 'Dos parciales' };
+		const first = { ...base, amountEurCents: 400, idempotencyKey: randomUUID() };
+		const second = { ...base, amountEurCents: 300, idempotencyKey: randomUUID() };
+
+		flaky.refund(first);
+		flaky.refund(second);
+		expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(2);
+
+		expect(flaky.refund(first)).toEqual({ status: 'partially_refunded', refundedEurCents: 700 });
+		expect(correctiveAmounts(paymentId)).toEqual([]);
+
+		flaky.refund(second);
+		expect(correctiveAmounts(paymentId)).toEqual([-300]);
 	});
 
 	it('dos formularios distintos sí son dos reembolsos parciales', () => {
@@ -516,6 +629,218 @@ describe('contracargo (BE-FR-28)', () => {
 		);
 		expect(eventsNamed(f.base.logger, 'payments.chargeback.applied')).toHaveLength(1);
 		expect(eventsNamed(f.base.logger, 'payments.webhook.duplicate')).toHaveLength(1);
+	});
+
+	// C-01 (T393): una compra `partially_refunded` también admite contracargo; se retira lo que queda y se rectifica lo no devuelto.
+	it('compra parcialmente reembolsada: retira lo que queda (bolsa y deuda), bloquea la cuenta y rectifica lo no devuelto', () => {
+		const { userId } = f.addAccount('usr_contracargo_parcial');
+		const adminId = f.addAccount('adm_contracargo_parcial', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_contracargo_parcial');
+		issueInitialInvoice(paymentId, userId);
+		markRealPurchase(f.base.db, userId);
+		// Se consumen 3.000 de los 10.500 créditos; el reembolso retira 5.000 y en la bolsa quedan 2.500.
+		const reserved = f.base.credits.reserve({
+			userId,
+			appId: SEEDED_APP_ID,
+			operationId: insertInFlightOperation(f.base.db, { userId }),
+			amountMicro: 3000 * CREDIT
+		});
+		if (!reserved.ok) throw new Error('la reserva debía caber');
+		f.base.credits.chargeAndRelease({ holdId: reserved.holdId, realCostMicro: 3000 * CREDIT });
+		f.payments.refund({
+			adminId,
+			paymentId,
+			amountEurCents: 500,
+			creditsToRemoveMicro: 5000 * CREDIT,
+			reason: 'Reembolso parcial',
+			idempotencyKey: randomUUID()
+		});
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'partially_refunded' });
+
+		f.payments.handleProviderEvents({
+			type: 'chargeback_opened',
+			providerRef: `fake_${paymentId}`
+		});
+
+		// Créditos de la compra 10.500 − retirados por el reembolso 5.000 = 5.500: 2.500 salen de la bolsa y 3.000 pasan a deuda.
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'chargeback', refundedEurCents: 500 });
+		const chargebacks = f.base.db
+			.select()
+			.from(creditMovements)
+			.where(eq(creditMovements.type, 'chargeback'))
+			.all();
+		expect(chargebacks.map((movement) => movement.amountMicro).sort((a, b) => a - b)).toEqual([
+			-3000 * CREDIT,
+			-2500 * CREDIT
+		]);
+		expect(
+			f.base.db.select().from(userBalances).where(eq(userBalances.userId, userId)).get()?.debtMicro
+		).toBe(3000 * CREDIT);
+		expect(f.base.db.select().from(user).where(eq(user.id, userId)).get()).toMatchObject({
+			banned: true,
+			banReason: 'chargeback'
+		});
+		expect(eventsNamed(f.base.logger, 'payments.chargeback.applied')).toHaveLength(1);
+		expect(eventsNamed(f.base.logger, 'payments.webhook.rejected')).toHaveLength(0);
+		// Rectificativas: la del reembolso (500) y la del contracargo (lo pagado menos lo ya devuelto: 1.000 − 500 = 500).
+		expect(correctiveAmounts(paymentId)).toEqual([-500, -500]);
+	});
+
+	// Decisión del propietario (2026-11-17): una compra totalmente reembolsada que recibe un contracargo bloquea la cuenta y pasa a
+	// `chargeback`, sin retirar créditos (ya se retiraron) ni rectificar (importe pendiente 0).
+	it('compra totalmente reembolsada: bloquea la cuenta y pasa a chargeback sin movimiento ni rectificativa nuevos', () => {
+		const { userId } = f.addAccount('usr_contracargo_total');
+		const adminId = f.addAccount('adm_contracargo_total', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_contracargo_total');
+		issueInitialInvoice(paymentId, userId);
+		f.payments.refund({
+			adminId,
+			paymentId,
+			amountEurCents: 1000,
+			creditsToRemoveMicro: 10_500 * CREDIT,
+			reason: 'Reembolso total',
+			idempotencyKey: randomUUID()
+		});
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'refunded' });
+		const movementsBefore = f.base.db.select().from(creditMovements).all().length;
+		expect(correctiveAmounts(paymentId)).toEqual([-1000]);
+
+		f.payments.handleProviderEvents({
+			type: 'chargeback_opened',
+			providerRef: `fake_${paymentId}`
+		});
+
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'chargeback', refundedEurCents: 1000 });
+		expect(f.base.db.select().from(user).where(eq(user.id, userId)).get()).toMatchObject({
+			banned: true,
+			banReason: 'chargeback'
+		});
+		expect(f.base.db.select().from(creditMovements).all()).toHaveLength(movementsBefore);
+		expect(
+			f.base.db.select().from(creditMovements).where(eq(creditMovements.type, 'chargeback')).all()
+		).toHaveLength(0);
+		expect(correctiveAmounts(paymentId)).toEqual([-1000]);
+		expect(eventsNamed(f.base.logger, 'payments.chargeback.applied')).toHaveLength(1);
+	});
+
+	// C-11 (T403), decisión del propietario (2026-11-17): si el administrador solo retiró parte de los créditos, el contracargo
+	// retira lo que quede de la compra (créditos de la compra − ya retirados), sin rectificativa nueva, y bloquea la cuenta.
+	it('compra reembolsada con retirada parcial de créditos: el contracargo retira el resto de la compra y bloquea la cuenta', () => {
+		const { userId } = f.addAccount('usr_contracargo_retirada_parcial');
+		const adminId = f.addAccount('adm_contracargo_retirada_parcial', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_contracargo_retirada_parcial');
+		issueInitialInvoice(paymentId, userId);
+		f.payments.refund({
+			adminId,
+			paymentId,
+			amountEurCents: 1000,
+			creditsToRemoveMicro: 5000 * CREDIT,
+			reason: 'Reembolso total, retirada parcial',
+			idempotencyKey: randomUUID()
+		});
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'refunded' });
+
+		f.payments.handleProviderEvents({
+			type: 'chargeback_opened',
+			providerRef: `fake_${paymentId}`
+		});
+
+		// Créditos de la compra 10.500 − retirados 5.000 = 5.500, todos en la bolsa: sin deuda.
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'chargeback', refundedEurCents: 1000 });
+		const chargebacks = f.base.db
+			.select()
+			.from(creditMovements)
+			.where(eq(creditMovements.type, 'chargeback'))
+			.all();
+		expect(chargebacks.map((movement) => movement.amountMicro)).toEqual([-5500 * CREDIT]);
+		expect(
+			f.base.db.select().from(userBalances).where(eq(userBalances.userId, userId)).get()?.debtMicro
+		).toBe(0);
+		expect(f.base.db.select().from(user).where(eq(user.id, userId)).get()).toMatchObject({
+			banned: true,
+			banReason: 'chargeback'
+		});
+		expect(correctiveAmounts(paymentId)).toEqual([-1000]);
+		expect(eventsNamed(f.base.logger, 'payments.chargeback.applied')).toHaveLength(1);
+	});
+
+	it('compra reembolsada con retirada parcial y créditos consumidos: lo consumido pasa a deuda sin tope', () => {
+		const { userId } = f.addAccount('usr_contracargo_retirada_deuda');
+		const adminId = f.addAccount('adm_contracargo_retirada_deuda', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_contracargo_retirada_deuda');
+		issueInitialInvoice(paymentId, userId);
+		markRealPurchase(f.base.db, userId);
+		// Se consumen 3.000 de 10.500; el reembolso retira 5.000 y en la bolsa quedan 2.500.
+		const reserved = f.base.credits.reserve({
+			userId,
+			appId: SEEDED_APP_ID,
+			operationId: insertInFlightOperation(f.base.db, { userId }),
+			amountMicro: 3000 * CREDIT
+		});
+		if (!reserved.ok) throw new Error('la reserva debía caber');
+		f.base.credits.chargeAndRelease({ holdId: reserved.holdId, realCostMicro: 3000 * CREDIT });
+		f.payments.refund({
+			adminId,
+			paymentId,
+			amountEurCents: 1000,
+			creditsToRemoveMicro: 5000 * CREDIT,
+			reason: 'Reembolso total, retirada parcial',
+			idempotencyKey: randomUUID()
+		});
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'refunded' });
+
+		f.payments.handleProviderEvents({
+			type: 'chargeback_opened',
+			providerRef: `fake_${paymentId}`
+		});
+
+		// Por retirar 10.500 − 5.000 = 5.500: 2.500 salen de la bolsa y 3.000 (lo consumido) pasan a deuda.
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'chargeback' });
+		const chargebacks = f.base.db
+			.select()
+			.from(creditMovements)
+			.where(eq(creditMovements.type, 'chargeback'))
+			.all();
+		expect(chargebacks.map((movement) => movement.amountMicro).sort((a, b) => a - b)).toEqual([
+			-3000 * CREDIT,
+			-2500 * CREDIT
+		]);
+		expect(
+			f.base.db.select().from(userBalances).where(eq(userBalances.userId, userId)).get()?.debtMicro
+		).toBe(3000 * CREDIT);
+		expect(f.base.db.select().from(user).where(eq(user.id, userId)).get()).toMatchObject({
+			banned: true,
+			banReason: 'chargeback'
+		});
+		expect(correctiveAmounts(paymentId)).toEqual([-1000]);
+	});
+
+	// C-10 (T402): un contracargo abierto no se pisa con un reembolso manual (data-model 4.5).
+	it('compra real en chargeback: el reembolso se rechaza y no cambia estado ni rectificativas', () => {
+		const { userId } = f.addAccount('usr_reembolso_en_contracargo');
+		const adminId = f.addAccount('adm_reembolso_en_contracargo', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_reembolso_en_contracargo');
+		issueInitialInvoice(paymentId, userId);
+		f.payments.handleProviderEvents({
+			type: 'chargeback_opened',
+			providerRef: `fake_${paymentId}`
+		});
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'chargeback' });
+		expect(correctiveAmounts(paymentId)).toEqual([-1000]);
+
+		expect(() =>
+			f.payments.refund({
+				adminId,
+				paymentId,
+				amountEurCents: 500,
+				creditsToRemoveMicro: 0,
+				reason: 'Reembolso tras contracargo',
+				idempotencyKey: randomUUID()
+			})
+		).toThrow(expect.objectContaining({ code: 'PAYMENT_NOT_REFUNDABLE' }));
+
+		expect(paymentOf(paymentId)).toMatchObject({ status: 'chargeback', refundedEurCents: 0 });
+		expect(correctiveAmounts(paymentId)).toEqual([-1000]);
 	});
 
 	it('un contracargo sobre una compra sin acreditar no bloquea la cuenta ni cambia nada', () => {

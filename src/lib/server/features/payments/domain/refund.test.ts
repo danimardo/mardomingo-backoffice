@@ -82,6 +82,25 @@ describe('planRefund en compras reales (D01)', () => {
 		});
 	});
 
+	// C-10 (T402, data-model 4.5): el reembolso solo sale de `completed` o `partially_refunded`.
+	it.each<RefundStatus>(['pending', 'refunded', 'chargeback'])(
+		'una compra real en estado %s no se reembolsa',
+		(status) => {
+			expect(planRefund({ ...REAL, status })).toEqual({ ok: false, reason: 'not_completed' });
+		}
+	);
+
+	it('una compra real partially_refunded sigue admitiendo reembolso', () => {
+		expect(
+			planRefund({
+				...REAL,
+				status: 'partially_refunded',
+				alreadyRefundedEurCents: 300,
+				amountEurCents: 400
+			})
+		).toEqual({ ok: true, newRefundedEurCents: 700, newStatus: 'partially_refunded' });
+	});
+
 	it('retirar un número negativo de créditos se rechaza', () => {
 		expect(planRefund({ ...REAL, creditsToRemoveMicro: -1 })).toEqual({
 			ok: false,

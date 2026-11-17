@@ -928,6 +928,37 @@ Cada fase cierra con su checkpoint y deja algo demostrable: protecciones (US8) �
 - [x] T391 encapsular el contador `seen` de `src/hooks.client.ts` en el estado del layout, o documentarlo como excepción de cliente, frente a la regla «sin estado de módulo» del plan de L01 per plan de L01 «sin estado de módulo» (contradicts) _Hecho en L01 (fase 16): Contador de huellas del navegador documentado como excepción de cliente (la regla es del servidor)._
 - [x] T392 documentar en `contracts/log-events.md` 2.4 que `client.report.failed` solo emite `network` (con `sendBeacon` no se detecta el rechazo), o cambiar el envío para poder detectarlo per log-events 2.4 y T027 (partial) _Hecho en L01 (fase 16): Contrato 2.4 actualizado: client.report.failed solo emite network con sendBeacon._
 
+## Phase 17: Correcciones de la revisión (2026-11-12)
+
+Guía de implementación de cada tarea, con el test que debe fallar primero, el cambio exacto y su verificación:
+`specs/001-cuenta-mardomingo-v4/correcciones.md`. Revisión **parcial**: solo cubre `credits`, `payments` e `invoicing` (L05 y L10).
+
+- [x] T393 [US4] C-01 (Alta): aceptar `chargeback_opened` en compras `partially_refunded` en `src/lib/server/features/payments/service.ts` (`applyEvent`), con su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-28, data-model 4.5] _Hecho (2026-11-17): el contracargo de una compra parcialmente reembolsada se rechazaba como `not_completed`; test rojo (seguía `partially_refunded`) y verde con test:related._
+- [x] T394 C-02 (Media): que `reservedOf` y `freeAccountsOpenHoldsMicro` de `src/lib/server/features/credits/repository.ts` ignoren las reservas caducadas, sin tocar `openHoldOf` ni `chargeAndRelease`, con su T-INT en `credits/credits.int.test.ts` [BE-FR-71] _Hecho (2026-11-17): las lecturas de reservado ignoran las caducadas; 2 tests rojos (reservado 300 en vez de 0 y freno global 100 en vez de 0) y verdes con test:related._
+- [x] T395 [US4] C-03 (Media): `chargebackEurCents` = pagado − ya devuelto en `paymentFactsBetween` (`src/lib/server/features/payments/service.ts`), con su T-INT en `payments/payment-facts.int.test.ts` [BE-FR-76] _Hecho (2026-11-17): el contracargo del informe contable es lo pagado menos lo ya devuelto; test rojo (1000) y verde con test:related._
+- [x] T396 [US4] C-04 (Baja): reintento idempotente de la rectificativa en el reenvío de un reembolso y evento `payments.refund.corrective_pending` en `src/lib/server/features/payments/{service,events}.ts`, con su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-27] _Hecho (2026-11-17): el reenvío con la misma clave reintenta la rectificativa y un fallo deja `payments.refund.corrective_pending`; test rojo (la excepción se propagaba y no había rastro) y verde con test:related._
+
+## Phase 18: Correcciones de la revisión del PR #47 (D14, 2026-11-17)
+
+Hallazgos C-05 a C-09 de `correcciones.md`, de la revisión del PR #47 (categorías personales en `sync`). El PR se fusiona
+sin ellos; la migración de T397 va en un despliegue **posterior** al del PR (C-07).
+
+- [ ] T397 [US6] C-05 (Media): migración de datos personalizada que marque `prompts` de `secretario` como `personal: true` en las bases ya sembradas, sin pisar un esquema cambiado por el administrador, con su T-INT en `src/lib/server/db/migrations.int.test.ts` [BE-FR-42 CA3, D14]
+- [ ] T398 [US6] C-06 (Media): test HTTP en `tests/http/admin-predeterminados.test.ts` que compruebe el aviso de categoría personal en W43 (y solo en ella); renombrar o quitar el test unitario «no preselecciona» de `sync/domain/copy-defaults.test.ts` [BE-FR-42 CA3, D14]
+- [ ] T399 C-07 (Baja): desplegar T397 después del PR #47 y documentar en `docs/operaciones/` que volver a una imagen anterior exige quitar antes la clave `personal` [constitución, migraciones]
+- [ ] T400 [US6] C-08 (Baja): asociar el aviso al grupo de casillas de W43 y nombrar la categoría (vía a, con aprobación del sistema de diseño, o vía b, sin tocarlo), con su E2E en `e2e/admin-contenido.spec.ts` [Historias.md 16.10, D14]
+- [ ] T401 C-09 (Baja): enmendar `data-model.md` (esquema de categoría, `personal?: true`) y `contracts/web-routes.md` (W43, aviso y sin preselección) [D14]
+
+## Phase 19: Correcciones de la revisión de cierre de T393–T396 (2026-11-17)
+
+Hallazgos C-10 a C-14 de `correcciones.md`. C-10 y C-11 entran en el PR del grupo; C-12 a C-14 quedan para después.
+
+- [x] T402 [US4] C-10 (Media): rechazar el reembolso de compras reales que no estén en `completed` ni `partially_refunded` en `src/lib/server/features/payments/domain/refund.ts` (`planRefund`), con su test de dominio y su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-27, BE-FR-28, data-model 4.5] _Hecho (2026-11-17): 4 tests rojos (el reembolso se aceptaba en `pending`, `refunded` y `chargeback`) y verdes con test:related; dominio al 100 %._
+- [x] T403 [US4] C-11 (Media): enmendar `data-model.md` 4.5 (el contracargo en `refunded` retira lo que quede de la compra) y fijarlo con un T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-28, D01] _Hecho (2026-11-17): data-model enmendado y dos T-INT (−5.500 de la bolsa; −2.500 de la bolsa y −3.000 a deuda) en verde._
+- [ ] T404 [US4] C-12 (Baja): `err` en `payments.refund.corrective_pending` y consulta de rectificativas pendientes en `docs/operaciones/` [BE-FR-27]
+- [ ] T405 [US4] C-13 (Baja): guardar importe y total en `refund_keys` (migración) para no tomar el importe del cliente en el reenvío [BE-FR-27, BE-FR-75]
+- [ ] T406 C-14 (Baja): validar en los ajustes de `apps` que `hold_ttl_seconds` supera la duración máxima de una operación [BE-FR-71]
+
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 
 <!-- Pendiente de CI (WebKit): la CSP bloquea una hoja de estilos sin nonce (`style-src 'self'`) durante la carga de /panel/perfil; en local aparece de forma intermitente y no se ha localizado el origen (no hay `<style>` en el HTML ni inserciones por JavaScript). Pendiente de investigar con la hidratación de Svelte; no se ha relajado la CSP. -->
