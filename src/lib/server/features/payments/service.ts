@@ -236,8 +236,9 @@ function applyEvent(deps: PaymentsDeps, event: PaymentEvent): void {
 			return;
 		}
 		// Sin acreditación no hay nada que retirar ni factura que rectificar, y bloquear la cuenta sería arbitrario.
-		// C-01: también `partially_refunded` (se retira lo que queda). `refunded` (decisión del propietario, 2026-11-17): bloquea la
-		// cuenta y pasa a `chargeback` sin movimiento de créditos ni rectificativa, porque ya no queda nada que retirar ni rectificar.
+		// C-01: también `partially_refunded` (se retira lo que queda). `refunded` (decisión del propietario, 2026-11-17, C-11): bloquea
+		// la cuenta y pasa a `chargeback`; retira lo que quede de la compra (créditos de la compra − ya retirados por reembolsos; 0 si
+		// se retiraron todos), lo consumido pasa a deuda sin tope, y no hay rectificativa nueva porque el importe pendiente es 0.
 		const chargeable =
 			row.status === 'completed' ||
 			row.status === 'partially_refunded' ||

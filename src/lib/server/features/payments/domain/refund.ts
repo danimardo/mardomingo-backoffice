@@ -42,6 +42,10 @@ export function planRefund(input: RefundInput): RefundPlan {
 		if (input.creditsToRemoveMicro === 0) return { ok: false, reason: 'nothing_to_refund' };
 		return { ok: true, newRefundedEurCents: 0, newStatus: 'refunded' };
 	}
+	// C-10: el reembolso solo sale de `completed` o `partially_refunded` (data-model 4.5); `pending`, `refunded` y `chargeback` no.
+	if (input.status !== 'completed' && input.status !== 'partially_refunded') {
+		return { ok: false, reason: 'not_completed' };
+	}
 	if (input.amountEurCents <= 0) return { ok: false, reason: 'amount_not_positive' };
 	const refundable = input.paidEurCents - input.alreadyRefundedEurCents;
 	if (input.amountEurCents > refundable) return { ok: false, reason: 'amount_exceeds_paid' };
