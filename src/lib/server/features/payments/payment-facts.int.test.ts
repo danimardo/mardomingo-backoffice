@@ -1,10 +1,13 @@
 // Compras de un periodo para la exportación contable (BE-FR-76; T316) contra SQLite real: incluye solo las compras dentro del periodo,
 // con su día civil de Madrid, sin datos de otras cuentas y con las simuladas marcadas.
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { paymentsFixture, type PaymentsFixture } from '../../../../../tests/builders/payments';
 import { markRealPurchase } from '../../../../../tests/builders/purchases';
 import { civilDateOf } from '$lib/shared/dates';
+import { toEurCents } from '$lib/shared/money';
 import { toEpochMs } from '$lib/shared/time';
+import { payments } from './schema';
 
 let f: PaymentsFixture;
 
@@ -66,5 +69,37 @@ describe('compras de un periodo (BE-FR-76)', () => {
 		});
 
 		expect(facts).toEqual([]);
+	});
+
+	it('con contracargo tras un reembolso parcial, el contracargo es lo pagado menos lo ya devuelto (BE-FR-76)', () => {
+		const { userId, waiverId } = f.addAccount('usr_contracargo');
+		const bought = f.payments.purchase({
+			userId,
+			role: 'user',
+			attemptId: 'att_contracargo',
+			packId: 'pck_seed_10eur',
+			wantsFullInvoice: false,
+			withdrawalAcceptanceId: waiverId
+		});
+		if (bought.status !== 'completed') throw new Error('la compra debía completarse');
+		f.base.db
+			.update(payments)
+			.set({ refundedEurCents: toEurCents(400), status: 'chargeback' })
+			.where(eq(payments.id, bought.paymentId))
+			.run();
+
+		const now = new Date(f.base.clock.now());
+		const from = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+		const to = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59);
+		const facts = f.payments.paymentFactsBetween({ fromMs: from, toMs: to });
+
+		expect(facts).toHaveLength(1);
+		const [fact] = facts;
+		expect(fact?.totalEurCents).toBe(1000);
+		expect(fact).toMatchObject({
+			paymentId: bought.paymentId,
+			refundedEurCents: 400,
+			chargebackEurCents: 600
+		});
 	});
 });

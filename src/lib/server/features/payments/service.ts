@@ -652,7 +652,8 @@ export function paymentFactsBetween(
 			vatEurCents: row.vatEurCents,
 			totalEurCents: row.amountEurCents,
 			refundedEurCents: row.refundedEurCents,
-			chargebackEurCents: row.status === 'chargeback' ? row.amountEurCents : 0,
+			chargebackEurCents:
+				row.status === 'chargeback' ? row.amountEurCents - row.refundedEurCents : 0,
 			simulated: row.simulated,
 			providerRef: row.providerRef
 		}));
