@@ -205,7 +205,7 @@ export function createCredits(config: CreditsConfig): Credits {
 		getBalance: (userId) => getBalance(deps, userId),
 		adjustableByKind: (userId) => adjustableByKind(deps, userId),
 		realPurchaseUserIds: (userIds) => realPurchaseUserIds(deps.db, userIds),
-		freeAccountsOpenHoldsMicro: () => freeAccountsOpenHoldsMicro(deps.db),
+		freeAccountsOpenHoldsMicro: () => freeAccountsOpenHoldsMicro(deps.db, deps.clock.now()),
 		grantPurchase: (input) => grantPurchase(deps, input),
 		withdrawForRefund: (input) => withdrawForRefund(deps, input),
 		applyChargeback: (input) => applyChargeback(deps, input),

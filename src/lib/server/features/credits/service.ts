@@ -155,7 +155,7 @@ export function reserve(
 		const state = loadState(tx, input.userId);
 		const verdict = canReserve({
 			balance: balanceOf(state),
-			reserved: reservedOf(tx, input.userId),
+			reserved: reservedOf(tx, input.userId, deps.clock.now()),
 			debt: state.debt,
 			maxDebt: numberSetting(deps, 'max_debt'),
 			minBalance: numberSetting(deps, 'min_balance_to_operate'),
@@ -176,7 +176,7 @@ export function reserve(
 		// Tope diario de cuentas sin compra real (FR-022, BE-FR-11.6): cobros del día de Madrid + reservas activas + la nueva.
 		const dailyCap = dailyCapVerdict({
 			costsTodayMicro: usageSince(tx, input.userId, startOfMadridDay(now)),
-			activeHoldsMicro: reservedOf(tx, input.userId),
+			activeHoldsMicro: reservedOf(tx, input.userId, deps.clock.now()),
 			newHoldMicro: input.amountMicro,
 			capMicro: numberSetting(deps, 'daily_cap_no_purchase'),
 			hasRealPurchase: hasRealPurchaseOf(tx, input.userId)
@@ -391,7 +391,7 @@ export function adjust(
 			return { ok: true, auditId };
 		}
 
-		const available = balanceOf(before) - reservedOf(tx, input.userId);
+		const available = balanceOf(before) - reservedOf(tx, input.userId, deps.clock.now());
 		const result = applyNegativeAdjustment(before, {
 			kind: input.kind,
 			amount: input.amountMicro,
@@ -534,7 +534,7 @@ function nextFreeIso(tx: Tx, userId: string): EpochMs | null {
 export function getBalance(deps: CreditsDeps, userId: string): BalanceView {
 	return immediateTransaction(deps.db, (tx) => {
 		const state = loadState(tx, userId);
-		const reservedMicro = reservedOf(tx, userId);
+		const reservedMicro = reservedOf(tx, userId, deps.clock.now());
 		const totalMicro = balanceOf(state);
 		const freeMicro = state.buckets
 			.filter((item) => item.kind === 'free')
@@ -565,7 +565,7 @@ export function adjustableByKind(
 	return immediateTransaction(deps.db, (tx) => {
 		const state = loadState(tx, userId);
 		// Con deuda o reservas el disponible puede ser negativo: no hay nada que restar.
-		const available = balanceOf(state) - reservedOf(tx, userId);
+		const available = balanceOf(state) - reservedOf(tx, userId, deps.clock.now());
 		return {
 			freeMicro: Math.max(0, Math.min(kindTotalOf(state, 'free'), available)),
 			paidMicro: Math.max(0, Math.min(kindTotalOf(state, 'paid'), available))

@@ -341,12 +341,18 @@ function toOpenHold(row: typeof creditHolds.$inferSelect): OpenHold {
 
 export function openHolds(
 	db: Db | Tx,
-	filter: { readonly userId?: string; readonly expiredBefore?: number } = {}
+	filter: {
+		readonly userId?: string;
+		readonly expiredBefore?: number;
+		readonly activeAt?: number;
+	} = {}
 ): OpenHold[] {
 	const conditions = [isNull(creditHolds.releasedAt)];
 	if (filter.userId !== undefined) conditions.push(eq(creditHolds.userId, filter.userId));
 	if (filter.expiredBefore !== undefined)
 		conditions.push(lt(creditHolds.expiresAt, toEpochMs(filter.expiredBefore)));
+	if (filter.activeAt !== undefined)
+		conditions.push(gt(creditHolds.expiresAt, toEpochMs(filter.activeAt)));
 	return db
 		.select()
 		.from(creditHolds)
@@ -355,9 +361,9 @@ export function openHolds(
 		.map(toOpenHold);
 }
 
-/** Suma de las reservas abiertas de una cuenta (D5). */
-export function reservedOf(db: Db | Tx, userId: string): number {
-	return openHolds(db, { userId }).reduce((sum, hold) => sum + hold.amountMicro, 0);
+/** Suma de las reservas vigentes de una cuenta (D5): una caducada no resta saldo aunque siga sin cerrar (BE-FR-71). */
+export function reservedOf(db: Db | Tx, userId: string, now: number): number {
+	return openHolds(db, { userId, activeAt: now }).reduce((sum, hold) => sum + hold.amountMicro, 0);
 }
 
 /** Cobros de uso desde `sinceMs` en todas las apps. Los movimientos de uso son negativos; aquí se devuelven en positivo. */
@@ -388,8 +394,8 @@ export function realPurchaseUserIds(db: Db | Tx, userIds: readonly string[]): Se
 }
 
 /** Micro-créditos reservados en curso de las cuentas sin compra real (BE-FR-46 CA1). */
-export function freeAccountsOpenHoldsMicro(db: Db | Tx): number {
-	const holds = openHolds(db);
+export function freeAccountsOpenHoldsMicro(db: Db | Tx, now: number): number {
+	const holds = openHolds(db, { activeAt: now });
 	const paying = realPurchaseUserIds(db, [...new Set(holds.map((hold) => hold.userId))]);
 	return holds
 		.filter((hold) => !paying.has(hold.userId))
