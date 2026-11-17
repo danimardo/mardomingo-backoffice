@@ -987,6 +987,20 @@ corrigen en serie y con el test primero.
 - [x] T422 C-30 (Baja): un fallo de `loadSession` en la API responde `INTERNAL_ERROR` con `X-Request-Id` y cabeceras de seguridad en `hooks.server.ts` _Hecho: un fallo de `loadSession` en la API responde `INTERNAL_ERROR` (7.1) registrado una vez, y `requestContext` pone `x-request-id` y las cabeceras de seguridad también en el camino de error. Test en `src/hooks.server.test.ts`, en rojo antes del cambio._
 - [x] T423 C-31 (Baja): eventos `accounts.session.revoked` con motivo y `count` en todas las revocaciones, y `errorCode` en `apps.app.rejected` _Hecho: `accounts.session.revoked` con motivo y `count` real en cambio y recuperación de contraseña, cambio de email, cierre de una o de las demás sesiones, logout y bloqueo por contracargo; `count` en `password.changed` y `email_change.applied`; `errorCode` en `apps.app.rejected`. Tests en `session-revoked.int.test.ts`, `close-session.int.test.ts` y `api.test.ts`, en rojo antes del cambio._
 
+## Phase 22: Correcciones de la revisión de protecciones y límites (2026-11-17)
+
+Hallazgos C-32 a C-39 de `correcciones.md`, con las decisiones del propietario de `Historias.md` 2.14 (C-32, C-34 y C-36).
+Se corrigen en serie y con el test primero.
+
+- [ ] T424 C-32 (Media): exigir `ADDRESS_HEADER`, `XFF_DEPTH` y `PROTOCOL_HEADER` en staging y producción, y fijarlas en el `Dockerfile` con `PORT=7311` [BE-FR-45, BE-FR-11]
+- [ ] T425 [US8] C-33 (Media): agrupar IPv6 por /64 en todos los límites por IP de `accounts` [BE-FR-45, BE-FR-11]
+- [ ] T426 [US8] C-34 (Media): límite por email del reenvío de verificación y de la recuperación, con sus ajustes [BE-FR-45, BE-FR-02 CA3]
+- [ ] T427 C-35 (Baja): ignorar `x-mm-client-ip` del cliente y pasar la IP real en `changePassword`
+- [ ] T428 [US8] C-36 (Baja): límite de intentos de registro por IP antes del captcha, con su ajuste [BE-FR-45]
+- [ ] T429 C-37 (Baja): `failureOf` muestra los minutos de espera de `RATE_LIMITED` en la web
+- [ ] T430 C-38 (Baja): en `/client-errors`, límite del visitante antes del global y tope de 4 KB antes de leer el cuerpo
+- [ ] T431 C-39 (Baja): en `/ai/*`, frecuencia y concurrencia después de la idempotencia y la validación, en `ai/service.ts` y `ai/media.ts` [BE-FR-81]
+
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 
 <!-- Pendiente de CI (WebKit): la CSP bloquea una hoja de estilos sin nonce (`style-src 'self'`) durante la carga de /panel/perfil; en local aparece de forma intermitente y no se ha localizado el origen (no hay `<style>` en el HTML ni inserciones por JavaScript). Pendiente de investigar con la hidratación de Svelte; no se ha relajado la CSP. -->

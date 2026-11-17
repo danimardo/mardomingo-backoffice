@@ -57,6 +57,14 @@ de corregir).
 | C-29 | Baja     | api      | El orden de las comprobaciones de la API no sigue el contrato 1.8                        | T421  |
 | C-30 | Baja     | web      | Un fallo al cargar la sesión responde 500 sin `X-Request-Id` ni cabeceras de seguridad   | T422  |
 | C-31 | Baja     | accounts | Faltan eventos de revocación de sesiones o están incompletos                             | T423  |
+| C-32 | Media    | config   | Nada garantiza las variables del proxy en el despliegue, y la imagen usa el puerto 3000  | T424  |
+| C-33 | Media    | accounts | Los límites por IP cuentan la dirección IPv6 completa                                    | T425  |
+| C-34 | Media    | accounts | El reenvío de verificación y la recuperación no tienen límite por email                  | T426  |
+| C-35 | Baja     | accounts | El cliente puede fijar la IP de su sesión con la cabecera `x-mm-client-ip`               | T427  |
+| C-36 | Baja     | accounts | Los intentos de registro no tienen límite por IP                                         | T428  |
+| C-37 | Baja     | web      | La web no muestra el tiempo de espera en los 429 `RATE_LIMITED`                          | T429  |
+| C-38 | Baja     | logging  | En `/client-errors` un visitante agota el cupo global y el cuerpo se lee entero          | T430  |
+| C-39 | Baja     | ai       | En `/ai/*` la frecuencia se cuenta antes que la idempotencia y la validación             | T431  |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -511,3 +519,95 @@ confirmado después ejecutando sus tests de reproducción contra el código de 3
   revocación; `count` real en `password.changed` y `email_change.applied`; `errorCode` en `apps.app.rejected`.
 - **Test (primero, debe fallar)**: con el logger de prueba, cada revocación emite `accounts.session.revoked` con su motivo y su
   `count`.
+
+C-32 a C-39 proceden de la revisión de protecciones y límites (2026-11-17), hecha con Opus por lectura. Todos salvo C-36 se
+han confirmado después ejecutando sus tests de reproducción contra el código de 44150eb. Las decisiones del propietario
+(C-32, C-34 y C-36) están en `Historias.md` 2.14 y en la tabla de la sección 13.
+
+## C-32 (Media) — Nada garantiza las variables del proxy en el despliegue, y la imagen usa el puerto 3000
+
+- **Requisito**: constitución, «Proxy, puerto e IP del cliente» y tabla de variables (`ADDRESS_HEADER=x-forwarded-for`,
+  `XFF_DEPTH=1`, `PROTOCOL_HEADER`; `PORT` 7311 en producción y 7312 en staging; el 3000 está prohibido); BE-FR-45, BE-FR-11.
+- **Ficheros**: `src/lib/server/config/env-schema.ts` (las tres variables con `default`, que solo ve la app: adapter-node lee
+  `process.env`), `Dockerfile` (`PORT=3000`, `EXPOSE 3000` y ninguna de las tres variables).
+- **Estado**: confirmado por ejecución: el esquema acepta producción y staging sin las variables, y la imagen no las fija y
+  escucha en el 3000. Si el despliegue no las define, `getClientAddress()` devuelve la IP del proxy y todos los usuarios
+  comparten los límites por IP.
+- **Cambio** (**decisión del propietario: exigir y fijar**): en staging y producción el arranque falla si falta alguna de las
+  tres; el Dockerfile las fija junto con `PORT=7311` y `EXPOSE 7311`. **Antes de desplegar en `main`**, comprobar que
+  Coolify apunta al puerto 7311. No se rechazan puertos en el esquema (opción descartada).
+- **Test (primero, debe fallar)**: el esquema rechaza producción y staging sin las variables nombrándolas; el Dockerfile las
+  fija y no usa el 3000.
+
+## C-33 (Media) — Los límites por IP cuentan la dirección IPv6 completa
+
+- **Requisito**: BE-FR-45, BE-FR-11 (altas por IP); `contracts/web-routes.md` 1.7.
+- **Ficheros**: `src/lib/server/features/accounts/service.ts` (`ipRateLimited` usa la IP tal cual), `accounts/repository.ts`
+  (`bumpRateCounter`, `reserveSignupSlot` y el recuento sobre `user.signup_ip`).
+- **Estado**: confirmado por ejecución: logins y altas desde direcciones distintas del mismo /64 no comparten contador.
+- **Cambio**: una clave de límite que agrupe IPv6 por /64 y deje IPv4 igual (el criterio de `ipv6Subnet` de Better Auth), usada
+  en todos los límites por IP, también en el de altas. Si exige una columna nueva o una migración, detente y anótalo.
+- **Test (primero, debe fallar)**: logins y altas desde el mismo /64 comparten el límite.
+
+## C-34 (Media) — El reenvío de verificación y la recuperación no tienen límite por email
+
+- **Requisito**: BE-FR-45 (2.14); BE-FR-02 CA3; `contracts/api-v1` E03 (al superar el límite por email no se envía).
+- **Ficheros**: `accounts/service.ts` (`resendVerification`, `requestPasswordReset`: solo límite por IP); `apps/defaults.ts`,
+  `apps/json-schemas.ts` y `/admin/protecciones` (ajustes).
+- **Estado**: confirmado por ejecución: desde 10 IP se envían 10 emails a la misma dirección y se crean 10 enlaces de
+  recuperación.
+- **Cambio** (**decisión del propietario: 3 por hora**): contador por HMAC del email normalizado con los ajustes
+  `resend_verification_per_email_hour` y `password_reset_per_email_hour` (3, editables con su rango); al superarlo no se
+  envía nada y la respuesta es la misma.
+- **Test (primero, debe fallar)**: desde muchas IP no se envían ni se crean más de 3 por hora para la misma dirección.
+
+## C-35 (Baja) — El cliente puede fijar la IP de su sesión con la cabecera `x-mm-client-ip`
+
+- **Requisito**: constitución, «Fuente única de la IP del cliente» (`event.getClientAddress()`).
+- **Ficheros**: `accounts/auth.ts` (`ipAddressHeaders: ['x-mm-client-ip']`; el comentario dice que se borra si llega del
+  cliente, y no se borra), `accounts/password-change.ts` (pasa las cabeceras de la petición a `auth.api.changePassword`),
+  `src/hooks.server.ts`.
+- **Estado**: confirmado por ejecución: al cambiar la contraseña con `x-mm-client-ip: 6.6.6.6`, la sesión nueva guarda esa IP,
+  que se ve en `/panel/sesiones` y en la ficha del administrador.
+- **Cambio**: quitar `x-mm-client-ip` de toda petición entrante y, en `changePassword`, pasar cabeceras construidas con la IP
+  real (`headersFor`) más la cookie; corregir el comentario de `auth.ts`.
+- **Test (primero, debe fallar)**: la sesión creada al cambiar la contraseña no toma la IP de esa cabecera.
+
+## C-36 (Baja) — Los intentos de registro no tienen límite por IP
+
+- **Requisito**: BE-FR-45 (2.14); `contracts/web-routes.md` 1.7 y W08 (`429 RATE_LIMITED`).
+- **Fichero**: `accounts/service.ts` (`register`: solo cuenta las cuentas creadas).
+- **Estado**: confirmado por lectura.
+- **Cambio** (**decisión del propietario: 10 por hora**): `ipRateLimited` con el ámbito de registro y el ajuste
+  `signup_attempts_per_ip_hour` (10, editable con su rango), antes de comprobar el captcha.
+- **Test (primero, debe fallar)**: el intento 11 desde una IP en una hora responde `RATE_LIMITED` sin llamar a Turnstile.
+
+## C-37 (Baja) — La web no muestra el tiempo de espera en los 429 `RATE_LIMITED`
+
+- **Requisito**: `contracts/web-routes.md` 1.7 («con el tiempo de espera visible»); W11, W12, W27.
+- **Ficheros**: `src/lib/server/web/actions.ts` (`failureOf` solo copia `retryAfterMinutes`), la ruta de W10 (conversión a mano).
+- **Estado**: confirmado por ejecución: `failureOf` no devuelve los minutos cuando el error trae `retryAfterSeconds`.
+- **Cambio**: `failureOf` convierte `retryAfterSeconds` a minutos con `Math.ceil`; quitar la conversión de W10.
+- **Test (primero, debe fallar)**: un `RATE_LIMITED` con `retryAfterSeconds` da sus minutos redondeados hacia arriba.
+
+## C-38 (Baja) — En `/client-errors` un visitante agota el cupo global y el cuerpo se lee entero
+
+- **Requisito**: W52 (límite por visitante y uno global; entrada de 4 KB como máximo).
+- **Ficheros**: `src/lib/server/logging/client-errors.cache.ts` (suma al cupo global antes de mirar el del visitante),
+  `src/routes/client-errors/+server.ts` (`request.text()` antes de comprobar el tamaño).
+- **Estado**: confirmado por ejecución (el cupo); la lectura del cuerpo, por lectura.
+- **Cambio**: comprobar primero el límite del visitante y después sumar al global; rechazar por `content-length` mayor de 4 KB
+  antes de leer, o leer el cuerpo con un tope.
+- **Test (primero, debe fallar)**: los informes rechazados por el límite del visitante no gastan el cupo global.
+
+## C-39 (Baja) — En `/ai/*` la frecuencia se cuenta antes que la idempotencia y la validación
+
+- **Requisito**: `contracts/api-v1` 1.8 (10 idempotencia, 11 validación, 12 frecuencia); BE-FR-81.
+- **Ficheros**: `src/lib/server/features/ai/service.ts` (`runChat`: `guardRequest` antes de `admissionOf`), `ai/media.ts`
+  (transcripción e imagen).
+- **Estado**: confirmado por ejecución: los reintentos con una clave ya entregada responden `RATE_LIMITED` en vez de
+  `DUPLICATE_REQUEST`, y una operación inexistente gasta cupo.
+- **Cambio**: separar en `guardRequest` el acceso y el freno (pasos 6 a 8), antes de la admisión, de la frecuencia y la
+  concurrencia (paso 12), después de la validación.
+- **Test (primero, debe fallar)**: los reintentos con clave entregada dan `DUPLICATE_REQUEST` y no gastan cupo; una operación
+  inexistente da `VALIDATION_ERROR` y no gasta cupo.
