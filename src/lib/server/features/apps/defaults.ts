@@ -96,7 +96,7 @@ export const SECRETARIO_SYNC_SCHEMA: SyncSchema = Object.freeze({
 		customReplacements: { strategy: 'items', key: 'from', tombstone_ttl_days: 30 },
 		coreReplacements: { strategy: 'block' },
 		quickTexts: { strategy: 'block' },
-		prompts: { strategy: 'block' },
+		prompts: { strategy: 'block', personal: true },
 		preferences: {
 			strategy: 'keyed',
 			keys: [

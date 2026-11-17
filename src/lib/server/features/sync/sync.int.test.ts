@@ -203,7 +203,7 @@ describe('predeterminados (BE-FR-42)', () => {
 			data: { notas: { value: 'mías', updatedAt: 1 } }
 		});
 		const preview = previewCopyAsDefaults(deps, { userId, appId: secondAppId });
-		expect(preview).toEqual([{ category: 'notas', elements: ['notas'] }]);
+		expect(preview).toEqual([{ category: 'notas', elements: ['notas'], personal: false }]);
 
 		applyCopyAsDefaults(deps, {
 			adminId: ctx.adminId,

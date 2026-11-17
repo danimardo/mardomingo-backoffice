@@ -279,7 +279,7 @@ Respuestas cerradas. Donde se pide «sí/no», la respuesta por defecto es la re
   - a) Máximo 365 días. **Recomendado.**
   - b) Máximo 90 días.
   - c) Sin máximo.
-- **D14 (R14). Datos personales de Secretario.** Pregunta abierta, no cerrada: ¿qué categorías o elementos del documento de sincronización son datos personales? Sin esta lista no se puede marcar nada en el esquema.
+- **D14 (R14). Datos personales de Secretario.** Pregunta abierta, no cerrada: ¿qué categorías o elementos del documento de sincronización son datos personales? Sin esta lista no se puede marcar nada en el esquema. **Resuelta el 2026-10-30:** solo la categoría `prompts` es personal; `customReplacements`, `coreReplacements`, `quickTexts` y las 10 claves de `preferences` no lo son. Se marca con `personal: true` en el esquema; la vista previa de la copia la avisa y no preselecciona nada.
 
 **Las tres decisiones más urgentes:**
 
