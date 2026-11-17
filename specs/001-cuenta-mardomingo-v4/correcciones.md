@@ -40,6 +40,17 @@ de corregir).
 | C-12 | Baja     | payments | El reintento de C-04 no se puede hacer desde W37 y el aviso no identifica la compra      | T404  |
 | C-13 | Baja     | payments | El reenvío con la misma clave y otro importe emite la rectificativa con ese importe      | T405  |
 | C-14 | Baja     | credits  | Con C-02, una operación más larga que `hold_ttl_seconds` deja de estar reservada         | T406  |
+| C-15 | Media    | accounts | Los tokens pendientes sobreviven a los cambios de credenciales                           | T407  |
+| C-16 | Media    | accounts | Carrera en el bloqueo de login por fallos                                                | T410  |
+| C-17 | Media    | accounts | El tiempo de respuesta revela si una cuenta existe                                       | T413  |
+| C-18 | Media    | accounts | No se envía el aviso de seguridad al cambiar la contraseña                               | T408  |
+| C-19 | Baja     | web      | La confirmación del cambio de email no sigue W14                                         | T414  |
+| C-20 | Baja     | accounts | Usar un enlace de recuperación no anula los anteriores                                   | T409  |
+| C-21 | Baja     | accounts | Carrera en el límite de registros por IP                                                 | T411  |
+| C-22 | Baja     | accounts | El administrador puede bloquearse a sí mismo                                             | T415  |
+| C-23 | Baja     | accounts | No se puede cambiar el email a la propia forma normalizada                               | T416  |
+| C-24 | Baja     | accounts | Sin límite de intentos en el cambio de contraseña ni en la eliminación de cuenta         | T412  |
+| C-25 | Baja     | adapters | Turnstile no valida `hostname` ni `action`                                               | T417  |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -294,3 +305,120 @@ es anterior al grupo; C-11 a C-14 se derivan de él.
 - **Cambio**: al validar los ajustes, exigir que `hold_ttl_seconds × 1000` supere el mayor `operationTotalMs` de las
   operaciones activas más un margen; si no, anotar el compromiso en BE-FR-71.
 - **Test**: `previewSettingChange('hold_ttl_seconds', 60)` se rechaza con las operaciones por defecto.
+
+---
+
+## Hallazgos de la revisión de autenticación y cuentas (2026-11-17)
+
+Revisión hecha con Opus (fase 3 del plan, primera área), con escenarios R1–R9 ejecutados en un test temporal ya borrado. Las
+decisiones del propietario del mismo día están recogidas en `Historias.md` 2.13 (BE-FR-05, BE-FR-45, BE-FR-66 y sección 13).
+
+## C-15 (Media) — Los tokens pendientes sobreviven a los cambios de credenciales
+
+- **Requisito**: BE-FR-05, BE-FR-66 CA2 y CA6.
+- **Ficheros**: `src/lib/server/features/accounts/password-change.ts` (`changePassword`),
+  `src/lib/server/features/accounts/service.ts` (`resetPassword`),
+  `src/lib/server/features/accounts/email-change.ts` (`requestEmailChange`, `confirmEmailChange`).
+- **Estado**: confirmado por ejecución.
+- **Qué pasa**: un atacante que conoce la contraseña pide un cambio de email a su dirección; la víctima cambia o recupera la
+  contraseña; el atacante confirma el enlace y el email cambia igualmente; después recupera la contraseña con el email nuevo. Al
+  revés, un enlace de recuperación enviado al email antiguo sigue sirviendo tras el cambio de email.
+- **Cambio**: en `changePassword` y `resetPassword`, dentro de la transacción, borrar los cambios de email pendientes del
+  usuario; en `confirmEmailChange`, borrar sus `reset-password:*`. **Decisión del propietario**: avisar también al email actual
+  al solicitar el cambio (plantilla nueva), además del aviso al aplicarse.
+- **Test (primero, debe fallar)**: cambio de email pedido + `changePassword` (y + `resetPassword`) → la confirmación da token
+  inválido; recuperación pedida + cambio de email aplicado → el token de recuperación ya no es válido; la solicitud envía el
+  aviso al email actual.
+
+## C-16 (Media) — Carrera en el bloqueo de login por fallos
+
+- **Requisito**: BE-FR-67, BE-FR-45.
+- **Fichero**: `src/lib/server/features/accounts/service.ts` (`authenticate`): lee el contador antes de `await signInEmail` y
+  escribe después.
+- **Estado**: confirmado por ejecución: 30 intentos simultáneos con `login_max_failures` = 10 llegaron todos a comprobar la
+  contraseña, y el último, correcto, entró.
+- **Cambio**: reservar el intento de forma atómica (`immediateTransaction`) antes de comprobar la contraseña; si el login va
+  bien, limpiar.
+- **Test (primero, debe fallar)**: N intentos con `Promise.all`; como mucho `login_max_failures` llegan a comprobar la
+  contraseña y un acierto tras el umbral devuelve `LOCKED`.
+
+## C-17 (Media) — Enumeración de cuentas por el tiempo de respuesta
+
+- **Requisito**: BE-FR-01 CA5; contratos W10 y W12.
+- **Fichero**: `src/lib/server/features/accounts/service.ts` (`register`, `resendVerification`, `requestPasswordReset`).
+- **Estado**: confirmado por ejecución con un envío de 300 ms: recuperación 306 ms si la cuenta existe y 0 ms si no.
+- **Cambio** (**decisión del propietario**): enviar los emails sin esperar su resultado, registrando el fallo en el log sin
+  PII.
+- **Test (primero, debe fallar)**: con un envío lento, la diferencia entre cuenta existente e inexistente es menor que 50 ms.
+
+## C-18 (Media) — No se envía el aviso de seguridad al cambiar la contraseña
+
+- **Requisito**: BE-FR-05 (5.13).
+- **Fichero**: `src/lib/server/features/accounts/password-change.ts`.
+- **Estado**: confirmado por ejecución (0 emails).
+- **Cambio**: enviar el aviso tras el commit, como `resetPassword`.
+- **Test (primero, debe fallar)**: tras `changePassword`, el buzón de prueba recibe el aviso.
+
+## C-19 (Baja) — La confirmación del cambio de email no sigue el contrato W14
+
+- **Requisito**: BE-FR-66 CA5; `contracts/web-routes.md` (W14).
+- **Ficheros**: `src/routes/(web)/(public)/email/confirmar/+page.server.ts`, `src/lib/server/features/accounts/email-change.ts`.
+- **Estado**: confirmado por lectura: devuelve 200 también con error, no redirige y revoca también la sesión actual.
+- **Cambio** (**decisión del propietario: manda el contrato**): conservar la sesión actual, redirigir con
+  `?aviso=email_changed` y responder 400 con los tokens inválidos.
+- **Test (primero, debe fallar)**: test de datos (la sesión actual sigue viva) y `test:http` (303 y 400).
+
+## C-20 (Baja) — Usar un enlace de recuperación no anula los anteriores
+
+- **Requisito**: BE-FR-05.
+- **Fichero**: `src/lib/server/features/accounts/service.ts` (`resetPassword`).
+- **Estado**: confirmado por ejecución.
+- **Cambio**: borrar todos los `reset-password:*` del usuario al recuperar o cambiar la contraseña (junto con C-15).
+- **Test (primero, debe fallar)**: dos recuperaciones, se usa la segunda; la primera ya no es válida.
+
+## C-21 (Baja) — Carrera en el límite de registros por IP
+
+- **Requisito**: BE-FR-11.4, BE-FR-45.
+- **Fichero**: `src/lib/server/features/accounts/service.ts` (`register`): `countSignupsFromIp` antes de `await signUpEmail`.
+- **Estado**: confirmado por ejecución: 8 registros simultáneos con límite 3 crean 8 cuentas (el captcha lo dificulta).
+- **Cambio**: reservar el hueco de forma atómica, con el mismo patrón que C-16.
+- **Test (primero, debe fallar)**: N registros simultáneos desde una IP; como mucho 3 crean cuenta.
+
+## C-22 (Baja) — El administrador puede bloquearse a sí mismo
+
+- **Requisito**: administración de usuarios; `Historias.md` 13 (2026-11-17).
+- **Fichero**: `src/lib/server/features/accounts/admin-users.ts` (`blockUser`).
+- **Estado**: confirmado por ejecución: con un único administrador, la cuenta queda bloqueada y `ADMIN_EMAIL` no la recupera.
+- **Cambio** (**decisión del propietario**): rechazar el bloqueo de la propia cuenta con un error tipado.
+- **Test (primero, debe fallar)**: `blockUser` con el mismo administrador como actor y destino devuelve el error.
+
+## C-23 (Baja) — No se puede cambiar el email a la propia forma normalizada
+
+- **Requisito**: BE-FR-66 CA3, BE-FR-11 CA1.
+- **Fichero**: `src/lib/server/features/accounts/email-change.ts`.
+- **Estado**: confirmado por ejecución: `pepe+trabajo@ejemplo.es` no puede pasar a `pepe@ejemplo.es` (libre); responde
+  `sent` y no envía nada.
+- **Cambio** (**decisión del propietario**): permitirlo cuando la cuenta que coincide es la propia.
+- **Test (primero, debe fallar)**: el escenario anterior envía el enlace de verificación y al confirmarlo cambia el email.
+
+## C-24 (Baja) — Sin límite de intentos en el cambio de contraseña ni en la eliminación de cuenta
+
+- **Requisito**: BE-FR-45 (ampliado en `Historias.md` 2.13).
+- **Ficheros**: `src/lib/server/features/accounts/password-change.ts`,
+  `src/lib/server/features/privacy/service.ts` (`deleteAccount`).
+- **Estado**: confirmado por lectura.
+- **Cambio** (**decisión del propietario**): limitar los dos por cuenta, con el umbral y la ventana de BE-FR-67 y un contador
+  atómico.
+- **Test (primero, debe fallar)**: tras `login_max_failures` contraseñas actuales erróneas, el siguiente intento se rechaza
+  aunque la contraseña sea la correcta.
+
+## C-25 (Baja) — Turnstile no valida `hostname` ni `action`
+
+- **Requisito**: BE-FR-01 (captcha).
+- **Fichero**: `src/lib/server/adapters/turnstile/turnstile-verifier.ts`.
+- **Estado**: confirmado por lectura.
+- **Cambio**: comprobar que `hostname` es el host web y `action` la del registro.
+- **Test (primero, debe fallar)**: una respuesta con otro `hostname` se rechaza.
+
+Menores sin número: `closeOtherSession` duplicada y sin exportar en `accounts/sessions.ts` (código muerto); `requireAppSession`
+no comprueba `banned` (no explotable hoy: el bloqueo borra las sesiones y Better Auth no crea sesiones de cuentas bloqueadas).

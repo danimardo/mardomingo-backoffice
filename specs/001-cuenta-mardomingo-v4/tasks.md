@@ -959,6 +959,22 @@ Hallazgos C-10 a C-14 de `correcciones.md`. C-10 y C-11 entran en el PR del grup
 - [ ] T405 [US4] C-13 (Baja): guardar importe y total en `refund_keys` (migración) para no tomar el importe del cliente en el reenvío [BE-FR-27, BE-FR-75]
 - [ ] T406 C-14 (Baja): validar en los ajustes de `apps` que `hold_ttl_seconds` supera la duración máxima de una operación [BE-FR-71]
 
+## Phase 20: Correcciones de la revisión de autenticación y cuentas (2026-11-17)
+
+Hallazgos C-15 a C-25 de `correcciones.md`, con las decisiones del propietario recogidas en `Historias.md` 2.13. Se corrigen en tres grupos, en serie y con el test primero.
+
+- [ ] T407 [US1] C-15 (Media): anular los cambios de email pendientes al cambiar o recuperar la contraseña, y los enlaces de recuperación al aplicar un cambio de email; aviso al email actual al solicitar el cambio, en `src/lib/server/features/accounts/` [BE-FR-05, BE-FR-66 CA2 y CA6]
+- [ ] T408 [US1] C-18 (Media): aviso de seguridad tras `changePassword` en `accounts/password-change.ts` [BE-FR-05]
+- [ ] T409 [US1] C-20 (Baja): anular todos los enlaces de recuperación al recuperar o cambiar la contraseña en `accounts/service.ts` [BE-FR-05]
+- [ ] T410 [US1] C-16 (Media): reserva atómica del intento de login antes de comprobar la contraseña en `accounts/service.ts` (`authenticate`) [BE-FR-67, BE-FR-45]
+- [ ] T411 [US1] C-21 (Baja): reserva atómica del hueco de registro por IP en `accounts/service.ts` (`register`) [BE-FR-11.4, BE-FR-45]
+- [ ] T412 [US1] C-24 (Baja): límite por cuenta del cambio de contraseña y de la eliminación de la cuenta [BE-FR-45]
+- [ ] T413 [US1] C-17 (Media): enviar los emails de cuenta sin esperar su resultado en `accounts/service.ts` [BE-FR-01 CA5]
+- [ ] T414 [US1] C-19 (Baja): la confirmación del cambio de email sigue W14 (sesión actual, 303 con aviso y 400) [BE-FR-66 CA5]
+- [ ] T415 C-22 (Baja): rechazar que un administrador bloquee su propia cuenta en `accounts/admin-users.ts`
+- [ ] T416 [US1] C-23 (Baja): admitir el cambio a la propia forma normalizada del email en `accounts/email-change.ts` [BE-FR-66 CA3]
+- [ ] T417 [US1] C-25 (Baja): validar `hostname` y `action` de Turnstile en `src/lib/server/adapters/turnstile/` [BE-FR-01]
+
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 
 <!-- Pendiente de CI (WebKit): la CSP bloquea una hoja de estilos sin nonce (`style-src 'self'`) durante la carga de /panel/perfil; en local aparece de forma intermitente y no se ha localizado el origen (no hay `<style>` en el HTML ni inserciones por JavaScript). Pendiente de investigar con la hidratación de Svelte; no se ha relajado la CSP. -->
