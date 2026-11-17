@@ -58,4 +58,50 @@ describe('sesiones de una misma cuenta (BE-FR-04)', () => {
 		expect(await fixture.accounts.readSession(new Headers({ cookie }))).toBeNull();
 		expect(fixture.database.db.select().from(session).all()).toHaveLength(1);
 	});
+
+	it('[BE-FR-05/CA5] [C-18] cambiar la contraseña envía el aviso de seguridad al email de la cuenta', async () => {
+		await verifiedAccount(fixture);
+		const web = await fixture.accounts.auth.api.signInEmail({
+			body: { email: EMAIL, password: PASSWORD },
+			headers: new Headers(),
+			returnHeaders: true
+		});
+		const cookie = web.headers
+			.getSetCookie()
+			.map((item) => item.split(';')[0] ?? '')
+			.join('; ');
+		const before = fixture.mail.sent.length;
+
+		await fixture.accounts.changePassword(new Headers({ cookie }), {
+			currentPassword: PASSWORD,
+			newPassword: 'contraseña-nueva-de-prueba-456'
+		});
+
+		const notices = fixture.mail.sent
+			.slice(before)
+			.filter((item) => item.subject === 'Tu contraseña ha cambiado');
+		expect(notices.map((item) => item.to)).toEqual([EMAIL]);
+	});
+
+	it('una contraseña actual errónea no envía el aviso', async () => {
+		await verifiedAccount(fixture);
+		const web = await fixture.accounts.auth.api.signInEmail({
+			body: { email: EMAIL, password: PASSWORD },
+			headers: new Headers(),
+			returnHeaders: true
+		});
+		const cookie = web.headers
+			.getSetCookie()
+			.map((item) => item.split(';')[0] ?? '')
+			.join('; ');
+		const before = fixture.mail.sent.length;
+
+		const outcome = await fixture.accounts.changePassword(new Headers({ cookie }), {
+			currentPassword: 'no-es-la-contraseña-1',
+			newPassword: 'contraseña-nueva-de-prueba-456'
+		});
+
+		expect(outcome).toBe('wrong_password');
+		expect(fixture.mail.sent.length).toBe(before);
+	});
 });

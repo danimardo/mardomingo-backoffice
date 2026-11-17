@@ -229,6 +229,33 @@ describe('recuperación de contraseña (W12, W13)', () => {
 	});
 });
 
+describe('recuperación de contraseña: enlaces anteriores (C-20)', () => {
+	it('usar el segundo enlace de recuperación anula también el primero', async () => {
+		await registerAndVerify(EMAIL);
+		const linkTokens: string[] = [];
+		for (let index = 0; index < 2; index += 1) {
+			await fixture.accounts.requestPasswordReset({ email: EMAIL, remoteIp: null });
+			const sent = fixture.mail.sent.filter((item) =>
+				item.text.includes('/recuperar/nueva?token=')
+			);
+			linkTokens.push(
+				decodeURIComponent(/token=([^\s&]+)/.exec(sent.at(-1)?.text ?? '')?.[1] ?? '')
+			);
+		}
+		const [first, second] = linkTokens;
+		expect(first).not.toBe(second);
+
+		await fixture.accounts.resetPassword({ token: second ?? '', password: 'nueva-contraseña-456' });
+
+		expect(fixture.accounts.tokenState(first ?? '', 'reset')).toBe('invalid');
+		expect(
+			await codeOf(() =>
+				fixture.accounts.resetPassword({ token: first ?? '', password: 'otra-contraseña-789' })
+			)
+		).toBe('TOKEN_INVALID');
+	});
+});
+
 describe('estado de los tokens sin consumirlos (W09, W13)', () => {
 	it('el enlace de recuperación se ve válido antes de usarlo, y no válido después', async () => {
 		await registerAndVerify(EMAIL);

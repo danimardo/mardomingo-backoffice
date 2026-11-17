@@ -319,7 +319,7 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 - **Ficheros**: `src/lib/server/features/accounts/password-change.ts` (`changePassword`),
   `src/lib/server/features/accounts/service.ts` (`resetPassword`),
   `src/lib/server/features/accounts/email-change.ts` (`requestEmailChange`, `confirmEmailChange`).
-- **Estado**: confirmado por ejecución.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución.
 - **Qué pasa**: un atacante que conoce la contraseña pide un cambio de email a su dirección; la víctima cambia o recupera la
   contraseña; el atacante confirma el enlace y el email cambia igualmente; después recupera la contraseña con el email nuevo. Al
   revés, un enlace de recuperación enviado al email antiguo sigue sirviendo tras el cambio de email.
@@ -355,7 +355,7 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: BE-FR-05 (5.13).
 - **Fichero**: `src/lib/server/features/accounts/password-change.ts`.
-- **Estado**: confirmado por ejecución (0 emails).
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución (0 emails).
 - **Cambio**: enviar el aviso tras el commit, como `resetPassword`.
 - **Test (primero, debe fallar)**: tras `changePassword`, el buzón de prueba recibe el aviso.
 
@@ -372,7 +372,7 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: BE-FR-05.
 - **Fichero**: `src/lib/server/features/accounts/service.ts` (`resetPassword`).
-- **Estado**: confirmado por ejecución.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución.
 - **Cambio**: borrar todos los `reset-password:*` del usuario al recuperar o cambiar la contraseña (junto con C-15).
 - **Test (primero, debe fallar)**: dos recuperaciones, se usa la segunda; la primera ya no es válida.
 

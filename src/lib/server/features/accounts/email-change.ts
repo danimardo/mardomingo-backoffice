@@ -7,6 +7,7 @@ import { verifyPassword } from 'better-auth/crypto';
 import { immediateTransaction } from '$lib/server/db/tx';
 import { sendAccountEmail } from '$lib/server/features/notifications';
 import { normalizeEmail } from './domain/email';
+import { deleteResetTokens } from './pending-tokens';
 import { account, session, user, verification } from './schema';
 import { ipRateLimited, type AccountsDeps } from './service';
 
@@ -109,6 +110,12 @@ export async function requestEmailChange(
 		})
 		.run();
 
+	// Aviso de seguridad a la dirección ACTUAL (C-15): sin la dirección nueva ni enlace, para que el titular lo vea a tiempo.
+	await sendAccountEmail(deps.notifications, {
+		reason: 'email_change_requested_notice',
+		to: currentEmail ?? '',
+		idempotencyKey: `email-change-notice-${sha256Hex(token)}`
+	});
 	await sendAccountEmail(deps.notifications, {
 		reason: 'email_change_verify',
 		to: payload.newEmail,
@@ -170,6 +177,8 @@ export async function confirmEmailChange(
 			.where(eq(user.id, payload.userId))
 			.run();
 		tx.delete(verification).where(eq(verification.identifier, identifier)).run();
+		// Los enlaces de recuperación enviados a la dirección anterior dejan de valer (C-15).
+		deleteResetTokens(tx, payload.userId);
 		const closed = tx.delete(session).where(eq(session.userId, payload.userId)).run();
 		return {
 			outcome: 'applied' as const,

@@ -141,4 +141,137 @@ describe('cambio de email (T265)', () => {
 
 		expect(await codeOf(() => request({ newEmail: 'otra@ejemplo.es' }))).toBe('RATE_LIMITED');
 	});
+
+	it('[C-15] pedir el cambio avisa a la dirección ACTUAL, con el motivo y sin enlace', async () => {
+		await request();
+
+		const notices = f.mail.sent.filter(
+			(item) =>
+				item.to === EMAIL && item.subject === 'Alguien ha pedido cambiar el email de tu cuenta'
+		);
+		expect(notices).toHaveLength(1);
+		expect(notices[0]?.text).not.toContain('/email/confirmar');
+		expect(notices[0]?.text).not.toContain(NEW_EMAIL);
+	});
+
+	it('[C-15] una petición con contraseña errónea o con dirección ocupada no avisa a la actual', async () => {
+		await request({ currentPassword: 'otra-contraseña-123' });
+		await f.accounts.register(registration({ email: 'ocupada@ejemplo.es' }));
+		await f.accounts.verifyEmail(verificationTokenFor(f.mail, 'ocupada@ejemplo.es'));
+		await request({ newEmail: 'ocupada@ejemplo.es' });
+
+		expect(
+			f.mail.sent.some(
+				(item) =>
+					item.to === EMAIL && item.subject === 'Alguien ha pedido cambiar el email de tu cuenta'
+			)
+		).toBe(false);
+	});
+});
+
+describe('tokens pendientes frente a cambios de credenciales (C-15, C-20)', () => {
+	async function webCookie(password: string): Promise<string> {
+		const web = await f.accounts.auth.api.signInEmail({
+			body: { email: EMAIL, password },
+			headers: new Headers(),
+			returnHeaders: true
+		});
+		return web.headers
+			.getSetCookie()
+			.map((item) => item.split(';')[0] ?? '')
+			.join('; ');
+	}
+
+	function resetTokenFrom(address: string): string {
+		const sent = f.mail.sent.filter(
+			(item) => item.to === address && item.text.includes('/recuperar/nueva?token=')
+		);
+		const match = /token=([^\s&]+)/.exec(sent.at(-1)?.text ?? '');
+		if (match?.[1] === undefined) throw new Error('no hay enlace de recuperación');
+		return decodeURIComponent(match[1]);
+	}
+
+	it('[BE-FR-05] [BE-FR-66/CA6] cambiar la contraseña anula el cambio de email pedido', async () => {
+		await request();
+		const token = changeTokenFrom(NEW_EMAIL);
+		const cookie = await webCookie(PASSWORD);
+
+		expect(
+			await f.accounts.changePassword(new Headers({ cookie }), {
+				currentPassword: PASSWORD,
+				newPassword: 'contraseña-nueva-456789'
+			})
+		).toBe('changed');
+
+		expect(await f.accounts.confirmEmailChange(token)).toMatchObject({ outcome: 'invalid' });
+		const row = f.database.db
+			.select({ email: user.email })
+			.from(user)
+			.where(eq(user.id, userId))
+			.get();
+		expect(row?.email).toBe(EMAIL);
+	});
+
+	it('[BE-FR-05] [BE-FR-66/CA6] recuperar la contraseña anula el cambio de email pedido', async () => {
+		await request();
+		const token = changeTokenFrom(NEW_EMAIL);
+		await f.accounts.requestPasswordReset({ email: EMAIL, remoteIp: null });
+
+		await f.accounts.resetPassword({
+			token: resetTokenFrom(EMAIL),
+			password: 'contraseña-recuperada-1'
+		});
+
+		expect(await f.accounts.confirmEmailChange(token)).toMatchObject({ outcome: 'invalid' });
+		const row = f.database.db
+			.select({ email: user.email })
+			.from(user)
+			.where(eq(user.id, userId))
+			.get();
+		expect(row?.email).toBe(EMAIL);
+	});
+
+	it('[BE-FR-66/CA6] aplicar el cambio de email anula los enlaces de recuperación pendientes', async () => {
+		await f.accounts.requestPasswordReset({ email: EMAIL, remoteIp: null });
+		const resetToken = resetTokenFrom(EMAIL);
+		await request();
+
+		expect(await f.accounts.confirmEmailChange(changeTokenFrom(NEW_EMAIL))).toMatchObject({
+			outcome: 'applied'
+		});
+
+		expect(f.accounts.tokenState(resetToken, 'reset')).toBe('invalid');
+		expect(
+			await codeOf(() =>
+				f.accounts.resetPassword({ token: resetToken, password: 'contraseña-del-atacante-1' })
+			)
+		).toBe('TOKEN_INVALID');
+	});
+
+	it('los cambios de email pendientes de otra cuenta no se tocan', async () => {
+		await f.accounts.register(registration({ email: 'otra@ejemplo.es' }));
+		await f.accounts.verifyEmail(verificationTokenFor(f.mail, 'otra@ejemplo.es'));
+		const other = f.database.db
+			.select({ id: user.id })
+			.from(user)
+			.where(eq(user.email, 'otra@ejemplo.es'))
+			.get();
+		await f.accounts.requestEmailChange({
+			userId: other?.id ?? '',
+			currentPassword: PASSWORD,
+			newEmail: 'otra-nueva@ejemplo.es',
+			remoteIp: null
+		});
+		await request();
+		await f.accounts.requestPasswordReset({ email: EMAIL, remoteIp: null });
+
+		await f.accounts.resetPassword({
+			token: resetTokenFrom(EMAIL),
+			password: 'contraseña-recuperada-1'
+		});
+
+		expect(
+			await f.accounts.confirmEmailChange(changeTokenFrom('otra-nueva@ejemplo.es'))
+		).toMatchObject({ outcome: 'applied' });
+	});
 });

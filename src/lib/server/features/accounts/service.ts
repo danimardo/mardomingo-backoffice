@@ -39,6 +39,7 @@ import {
 	recordLoginFailure,
 	setSignupMetadata
 } from './repository';
+import { deletePendingEmailChanges, deleteResetTokens } from './pending-tokens';
 import { session, user, userAppActivity, verification } from './schema';
 
 /** Lo que `accounts` necesita de la composición. El `Auth` se añade al montar el servicio (ver `index.ts`). */
@@ -597,6 +598,9 @@ export async function resetPassword(
 		const hash = hashNormalizedEmail(normalizeEmail(target.email), deps.emailHashKey);
 		immediateTransaction(deps.db, (tx) => {
 			clearLoginAttempts(tx, hash);
+			// Una recuperación anula las demás y los cambios de email pedidos antes (C-15, C-20).
+			deleteResetTokens(tx, target.id);
+			deletePendingEmailChanges(tx, target.id);
 		});
 		await sendAccountEmail(deps.notifications, {
 			reason: 'password_changed',

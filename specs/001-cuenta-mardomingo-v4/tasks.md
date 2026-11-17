@@ -963,9 +963,9 @@ Hallazgos C-10 a C-14 de `correcciones.md`. C-10 y C-11 entran en el PR del grup
 
 Hallazgos C-15 a C-25 de `correcciones.md`, con las decisiones del propietario recogidas en `Historias.md` 2.13. Se corrigen en tres grupos, en serie y con el test primero.
 
-- [ ] T407 [US1] C-15 (Media): anular los cambios de email pendientes al cambiar o recuperar la contraseña, y los enlaces de recuperación al aplicar un cambio de email; aviso al email actual al solicitar el cambio, en `src/lib/server/features/accounts/` [BE-FR-05, BE-FR-66 CA2 y CA6]
-- [ ] T408 [US1] C-18 (Media): aviso de seguridad tras `changePassword` en `accounts/password-change.ts` [BE-FR-05]
-- [ ] T409 [US1] C-20 (Baja): anular todos los enlaces de recuperación al recuperar o cambiar la contraseña en `accounts/service.ts` [BE-FR-05]
+- [x] T407 [US1] C-15 (Media): anular los cambios de email pendientes al cambiar o recuperar la contraseña, y los enlaces de recuperación al aplicar un cambio de email; aviso al email actual al solicitar el cambio, en `src/lib/server/features/accounts/` [BE-FR-05, BE-FR-66 CA2 y CA6] _Hecho (2026-11-17): tests rojos y verdes con test:related; verify:batch en verde._
+- [x] T408 [US1] C-18 (Media): aviso de seguridad tras `changePassword` en `accounts/password-change.ts` [BE-FR-05] _Hecho (2026-11-17): tests rojos y verdes con test:related; verify:batch en verde._
+- [x] T409 [US1] C-20 (Baja): anular todos los enlaces de recuperación al recuperar o cambiar la contraseña en `accounts/service.ts` [BE-FR-05] _Hecho (2026-11-17): tests rojos y verdes con test:related; verify:batch en verde._
 - [ ] T410 [US1] C-16 (Media): reserva atómica del intento de login antes de comprobar la contraseña en `accounts/service.ts` (`authenticate`) [BE-FR-67, BE-FR-45]
 - [ ] T411 [US1] C-21 (Baja): reserva atómica del hueco de registro por IP en `accounts/service.ts` (`register`) [BE-FR-11.4, BE-FR-45]
 - [ ] T412 [US1] C-24 (Baja): límite por cuenta del cambio de contraseña y de la eliminación de la cuenta [BE-FR-45]
