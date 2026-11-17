@@ -51,6 +51,12 @@ de corregir).
 | C-23 | Baja     | accounts | No se puede cambiar el email a la propia forma normalizada                               | T416  |
 | C-24 | Baja     | accounts | Sin límite de intentos en el cambio de contraseña ni en la eliminación de cuenta         | T412  |
 | C-25 | Baja     | adapters | Turnstile no valida `hostname` ni `action`                                               | T417  |
+| C-26 | Media    | api      | `GET /api/v1/defaults` no exige sesión Bearer                                            | T418  |
+| C-27 | Media    | accounts | Un login en curso sobrevive a una revocación concurrente                                 | T419  |
+| C-28 | Media    | legal    | La aceptación de términos desde la API registra `app_id` nulo                            | T420  |
+| C-29 | Baja     | api      | El orden de las comprobaciones de la API no sigue el contrato 1.8                        | T421  |
+| C-30 | Baja     | web      | Un fallo al cargar la sesión responde 500 sin `X-Request-Id` ni cabeceras de seguridad   | T422  |
+| C-31 | Baja     | accounts | Faltan eventos de revocación de sesiones o están incompletos                             | T423  |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -428,3 +434,78 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 Menores sin número: `closeOtherSession` duplicada y sin exportar en `accounts/sessions.ts` (código muerto; borrada con T413–T417); `requireAppSession`
 no comprueba `banned` (no explotable hoy: el bloqueo borra las sesiones y Better Auth no crea sesiones de cuentas bloqueadas).
+
+C-26 a C-31 proceden de la revisión de los tokens de la API (2026-11-17), hecha con Opus por lectura. C-26 a C-29 se han
+confirmado después ejecutando sus tests de reproducción contra el código de 364645f; C-30 y C-31, releyendo el código.
+
+## C-26 (Media) — `GET /api/v1/defaults` no exige sesión Bearer
+
+- **Requisito**: BE-FR-42 CA2, BE-FR-65; `contracts/api-v1` E12 («(Bearer)», error `UNAUTHENTICATED`).
+- **Ficheros**: `src/routes/api/v1/defaults/+server.ts` (solo `requireApp` y `guardEndpoint`), `src/lib/server/api/openapi.ts`
+  (solo documenta 200 y 426), `tests/http/api-sync.test.ts` (llama sin Bearer y espera 200).
+- **Estado**: confirmado por ejecución: sin Bearer y con un Bearer inventado responde 200.
+- **Cambio** (**decisión del propietario: exigir el token**, como dice E12): `requireAppSession` después de `requireApp` y antes
+  de `guardEndpoint`; 401 en el OpenAPI; `api-sync.test.ts` envía el Bearer. `plan.md` («solo aplica la de versión») se
+  refiere a la exención de mantenimiento y de documentos legales (D-19), no a la sesión.
+- **Test (primero, debe fallar)**: sin Bearer y con un Bearer inventado → 401 `UNAUTHENTICATED`; con el Bearer de la app → 200.
+
+## C-27 (Media) — Un login en curso sobrevive a una revocación concurrente
+
+- **Requisito**: BE-FR-04 CA2 y CA4, BE-FR-06, BE-FR-07.
+- **Ficheros**: `src/lib/server/features/accounts/service.ts` (`authenticate`, que llama a `auth.api.signInEmail`: Better Auth lee
+  el usuario, espera el hash y crea la sesión sin volver a leer la credencial); `src/hooks.server.ts` (`loadSession`) y
+  `src/lib/server/api/session.ts` (`requireAppSession`), que no comprueban `deletedAt` ni `banned`.
+- **Estado**: confirmado por ejecución: con el hash detenido a mitad del login, borrar la cuenta o cambiar la contraseña deja
+  viva la sesión que el login crea después (30 días deslizantes). El bloqueo por el administrador no se ve afectado: el plugin
+  `admin` vuelve a leer `banned` al crear la sesión.
+- **Cambio**: instantánea antes de `signInEmail` (hash de la contraseña, email y `deletedAt`); después, en una
+  `immediateTransaction`, volver a leerlos y, si algo cambió o la credencial ya no existe, borrar la sesión recién creada y
+  responder `INVALID_CREDENTIALS`. Defensa en profundidad: tratar como sin sesión la de un usuario con `deletedAt` o `banned`.
+- **Test (primero, debe fallar)**: con una «puerta» en la verificación del hash, un login en curso cuando se borra la cuenta o
+  se cambia la contraseña no deja ninguna sesión válida.
+
+## C-28 (Media) — La aceptación de términos desde la API registra `app_id` nulo
+
+- **Requisito**: BE-FR-70 CA2; `contracts/api-v1` E06 («registra … app_id»); `data-model.md` (`terms_acceptances.app_id`: nulo
+  = web).
+- **Fichero**: `src/lib/server/features/legal/accept-documents.ts` (`appId: null` fijo).
+- **Estado**: confirmado por ejecución: la fila de `POST /api/v1/me/accept-terms` lleva `app_id` nulo.
+- **Cambio**: `acceptDocuments` recibe `appId`; la ruta de la API pasa el id de la app y la web sigue pasando `null`.
+- **Test (primero, debe fallar)**: la fila de `terms_acceptances` creada desde la API lleva el id de `secretario`.
+
+## C-29 (Baja) — El orden de las comprobaciones de la API no sigue el contrato 1.8
+
+- **Requisito**: `contracts/api-v1` 1.8 (app → Origin → límite → sesión 401 → versión 426 → mantenimiento → … → validación).
+- **Ficheros**: `src/routes/api/v1/me/+server.ts` y `me/accept-terms/+server.ts` (`guardEndpoint` antes de `requireAppSession`);
+  `src/routes/api/v1/auth/logout/+server.ts` (valida el cuerpo antes de comprobar la app y la sesión).
+- **Estado**: confirmado por ejecución: `/me` y `/me/accept-terms` sin Bearer y con versión antigua responden 426; logout sin
+  Bearer responde 400, y con app desconocida, `VALIDATION_ERROR`.
+- **Cambio**: en todas las rutas de `/api/v1`, `requireApp` → `requireAppSession` → `guardEndpoint` → validación del cuerpo.
+- **Test (primero, debe fallar)**: los cuatro casos anteriores responden 401 o `UNKNOWN_APP`.
+
+## C-30 (Baja) — Un fallo al cargar la sesión responde 500 sin `X-Request-Id` ni cabeceras de seguridad
+
+- **Requisito**: constitución (errores y logging); `contracts/api-v1` 1.x (toda respuesta lleva `X-Request-Id`) y formato de
+  error 7.1.
+- **Fichero**: `src/hooks.server.ts`: `loadSession` llama a `readSession` y `touchActivity` sin capturar errores, y
+  `requestContext` solo pone `x-request-id` y las cabeceras de seguridad cuando `resolve` termina bien.
+- **Estado**: confirmado por lectura: una excepción no HTTP sale de `requestContext` sin esas cabeceras; el cuerpo lo genera
+  SvelteKit y no tiene la forma `{ error: { code, … } }` en la API.
+- **Cambio**: en la API, capturar el fallo de `loadSession` y responder `INTERNAL_ERROR` con el formato 7.1, registrándolo una
+  vez; `requestContext` pone las cabeceras también en el camino de error.
+- **Test (primero, debe fallar)**: con `readSession` que lanza, una petición a la API responde 500 `INTERNAL_ERROR` con
+  `X-Request-Id` y las cabeceras de seguridad.
+
+## C-31 (Baja) — Faltan eventos de revocación de sesiones o están incompletos
+
+- **Requisito**: `contracts/log-events.md` (`accounts.session.revoked` con `reason` y `count`; `accounts.password.changed` y
+  `accounts.email_change.applied` con `count`; `apps.app.rejected` con `errorCode`).
+- **Ficheros**: `accounts/password-change.ts` (`count: 1` fijo y sin `session.revoked`), `accounts/service.ts` (`resetPassword`
+  sin `session.revoked`; `logout` y el bloqueo por contracargo sin `count`), `accounts/email-change.ts` (sin `session.revoked`;
+  `applied` usa `sessionsClosed` en vez de `count`), `accounts/close-session.ts` y `routes/(web)/panel/sesiones` (nunca emiten
+  `user_closed_one` ni `user_closed_others`), `src/lib/server/api/session.ts` (`apps.app.rejected` sin `errorCode`).
+- **Estado**: confirmado por lectura.
+- **Cambio**: emitir `accounts.session.revoked` aparte, con su motivo y el número real de sesiones borradas, en cada
+  revocación; `count` real en `password.changed` y `email_change.applied`; `errorCode` en `apps.app.rejected`.
+- **Test (primero, debe fallar)**: con el logger de prueba, cada revocación emite `accounts.session.revoked` con su motivo y su
+  `count`.
