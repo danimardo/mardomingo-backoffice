@@ -35,6 +35,11 @@ de corregir).
 | C-07 | Baja     | apps     | Volver a la versión anterior con `personal` en la BD deja ilegible la app                | T399  |
 | C-08 | Baja     | web      | El aviso no está asociado al grupo de casillas ni nombra la categoría                    | T400  |
 | C-09 | Baja     | docs     | `data-model.md` y `contracts/web-routes.md` no recogen `personal`                        | T401  |
+| C-10 | Media    | payments | Se puede reembolsar una compra real en `chargeback` o en `pending`                       | T402  |
+| C-11 | Media    | docs     | data-model 4.5 decía que el contracargo en `refunded` no mueve créditos                  | T403  |
+| C-12 | Baja     | payments | El reintento de C-04 no se puede hacer desde W37 y el aviso no identifica la compra      | T404  |
+| C-13 | Baja     | payments | El reenvío con la misma clave y otro importe emite la rectificativa con ese importe      | T405  |
+| C-14 | Baja     | credits  | Con C-02, una operación más larga que `hold_ttl_seconds` deja de estar reservada         | T406  |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -52,9 +57,9 @@ reverificado.
   saldo restante, no hay deuda, no se bloquea la cuenta y no hay rectificativa. Además acepta `refunded`, que la tabla de
   transiciones no contempla (es inocuo: el objetivo sale 0, pero bloquea la cuenta).
 - **Cambio**: aceptar `completed` y `partially_refunded`. Para `refunded`, **decidido por el propietario (2026-11-17)**: se
-  acepta y bloquea la cuenta; pasa a `chargeback` sin movimiento de créditos (ya se retiraron todos) ni rectificativa (importe
-  pendiente 0). Enmendar `data-model.md` 4.5 para añadir `refunded` + `chargeback_opened` → `chargeback`, y cubrirlo con un
-  segundo caso en el mismo test.
+  acepta y bloquea la cuenta; pasa a `chargeback` retirando lo que quede de la compra (0 si los reembolsos retiraron todo; ver
+  C-11) y sin rectificativa (importe pendiente 0). Enmendar `data-model.md` 4.5 para añadir `refunded` + `chargeback_opened` →
+  `chargeback`, y cubrirlo con un segundo caso en el mismo test.
 
   ```ts
   const chargeable =
@@ -216,3 +221,76 @@ reverificado.
   (para desmarcar se quita la clave). En W43: «las categorías con `personal: true` muestran un aviso; ninguna casilla viene
   marcada».
 - **Verificación**: no aplica (documentación).
+
+---
+
+## Hallazgos de la revisión de cierre de T393–T396 (2026-11-17)
+
+Revisión hecha con Opus sobre `git diff 98216e6 d13710d`, con escenarios ejecutados en tests temporales (ya borrados). C-10
+es anterior al grupo; C-11 a C-14 se derivan de él.
+
+## C-10 (Media) — Se puede reembolsar una compra real en `chargeback` (o en `pending`)
+
+- **Requisito**: BE-FR-27, BE-FR-28; `data-model.md` 4.5 (el reembolso solo sale de `completed` o `partially_refunded`).
+- **Fichero**: `src/lib/server/features/payments/domain/refund.ts` (`planRefund`): en compras reales no se miraba `status`;
+  solo en las simuladas.
+- **Estado**: corregido (T402, 2026-11-17). Reproducido con 4 tests (3 de dominio y 1 de integración) y verificado con
+  `test:related`, la cobertura del 100 % del dominio de `payments` y `lint:changed`.
+- **Qué pasaba**: compra real de 1000 céntimos → `chargeback_opened` (rectificativa −1000, estado `chargeback`) → reembolso de
+  500 aceptado: estado `partially_refunded`, rectificativa −500 (−1500 sobre 1000), el informe contable pasaba a contracargo 0 y
+  la cuenta seguía bloqueada. En `pending` (real), el reembolso la sacaba de `pending` y el `payment_completed` posterior se
+  ignoraba: nunca se acreditaban los créditos.
+- **Cambio**: en compras reales, `not_completed` (→ `PAYMENT_NOT_REFUNDABLE`, con mensaje ya existente en W37) si `status` no
+  es `completed` ni `partially_refunded`, antes de comprobar el importe.
+
+## C-11 (Media) — El contracargo en `refunded` sí retira créditos si el reembolso no los retiró todos
+
+- **Requisito**: `data-model.md` 4.5 (fila añadida en T393); BE-FR-28; D01.
+- **Ficheros**: `data-model.md` 4.5 y el comentario de `applyEvent` en `src/lib/server/features/payments/service.ts`.
+- **Estado**: corregido (T403, 2026-11-17). El código ya era coherente con H-12; lo incorrecto era el documento.
+- **Qué pasaba**: compra de 10.500 créditos, reembolso total de 1000 céntimos retirando solo 5.000 (D01 lo permite), después
+  `chargeback_opened`: movimiento `chargeback` de −5.500. La fila de T393 decía «sin movimiento de créditos».
+- **Decisión del propietario (2026-11-17)**: se retiran. El contracargo retira lo que quede de la compra en cualquier estado de
+  origen (0 si los reembolsos retiraron todo); lo consumido pasa a deuda sin tope.
+- **Tests**: dos casos en `refund-chargeback.int.test.ts` (sin consumo: −5.500 de la bolsa; con 3.000 consumidos: −2.500 de la
+  bolsa y −3.000 a deuda), con la cuenta bloqueada y sin rectificativa nueva.
+
+## C-12 (Baja) — El reintento de C-04 no se puede hacer desde la interfaz y el aviso no identifica la compra
+
+- **Requisito**: BE-FR-27; `contracts/log-events.md` 3.9.
+- **Ficheros**: `src/lib/server/features/payments/service.ts` (`correctRefund`),
+  `src/routes/(web)/admin/usuarios/[userId]/pagos/[paymentId]/reembolso/+page.server.ts`.
+- **Estado**: confirmado por lectura.
+- **Qué pasa**: cada carga de W37 genera una clave nueva y el éxito redirige con 303: el administrador no ve que falta la
+  rectificativa ni puede reenviar la misma clave (un envío nuevo es otro reembolso). `payments.refund.corrective_pending` solo
+  lleva `reason`, sin `err`, y el `catch` también se traga los errores de programación.
+- **Cambio**: añadir `err` al evento (campo propio del contrato); documentar en `docs/operaciones/` una consulta que liste las
+  compras con `refunded_eur_cents` mayor que la suma de sus rectificativas `refund:*`; opcional, mostrarlo en el detalle del
+  pago. Corregir en C-04 que el reintento solo ocurre si se reenvía la misma petición.
+- **Test**: con `correctPayment` que lanza, el evento lleva `err`.
+
+## C-13 (Baja) — El reenvío con la misma clave y otro importe emite la rectificativa con ese importe
+
+- **Requisito**: BE-FR-27, BE-FR-75.
+- **Fichero**: `src/lib/server/features/payments/service.ts` (`repeatedRefund` usa `input.amountEurCents` del reenvío).
+- **Estado**: confirmado por ejecución.
+- **Qué pasa**: reembolso de 400 con la clave K y rectificativa fallida; reenvío de K con importe 900 → rectificativa −900 con
+  `issueKey` `refund:<id>:400`. `invoicing` no compara el importe al deduplicar. Requiere una petición manipulada o un navegador
+  que restaure el campo oculto.
+- **Cambio**: guardar `amount_eur_cents` y `refunded_after_eur_cents` en `refund_keys` (migración) y no tomar el importe del
+  cliente en el camino repetido. Resuelve también el límite de C-04 (reintentar una clave que no es la última).
+- **Test (primero, debe fallar)**: el escenario anterior da `correctiveAmounts` = `[-400]`.
+
+## C-14 (Baja) — Con C-02, una operación más larga que `hold_ttl_seconds` deja de estar reservada
+
+- **Requisito**: BE-FR-71 CA1, BE-FR-11.6, BE-FR-46.
+- **Ficheros**: `src/lib/server/features/apps/json-schemas.ts` (`hold_ttl_seconds: PositiveInt`, sin relación con
+  `timeout_ms`), `src/lib/server/features/credits/repository.ts` (`reservedOf`).
+- **Estado**: confirmado por ejecución. Con los valores por defecto no ocurre (600 s de reserva frente a unos 137 s de
+  operación).
+- **Qué pasa**: si el administrador baja `hold_ttl_seconds` por debajo de lo que dura una operación, una reserva caducada y aún
+  sin cobrar deja de contar: en una cuenta sin compra real, dos reservas de 300 con tope diario de 400 cobran 600; el freno
+  global infravalora la exposición. `max_debt` sí se respeta (lo que no cabe lo absorbe el administrador).
+- **Cambio**: al validar los ajustes, exigir que `hold_ttl_seconds × 1000` supere el mayor `operationTotalMs` de las
+  operaciones activas más un margen; si no, anotar el compromiso en BE-FR-71.
+- **Test**: `previewSettingChange('hold_ttl_seconds', 60)` se rechaza con las operaciones por defecto.

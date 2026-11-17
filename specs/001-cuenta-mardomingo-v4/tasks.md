@@ -949,6 +949,16 @@ sin ellos; la migración de T397 va en un despliegue **posterior** al del PR (C-
 - [ ] T400 [US6] C-08 (Baja): asociar el aviso al grupo de casillas de W43 y nombrar la categoría (vía a, con aprobación del sistema de diseño, o vía b, sin tocarlo), con su E2E en `e2e/admin-contenido.spec.ts` [Historias.md 16.10, D14]
 - [ ] T401 C-09 (Baja): enmendar `data-model.md` (esquema de categoría, `personal?: true`) y `contracts/web-routes.md` (W43, aviso y sin preselección) [D14]
 
+## Phase 19: Correcciones de la revisión de cierre de T393–T396 (2026-11-17)
+
+Hallazgos C-10 a C-14 de `correcciones.md`. C-10 y C-11 entran en el PR del grupo; C-12 a C-14 quedan para después.
+
+- [x] T402 [US4] C-10 (Media): rechazar el reembolso de compras reales que no estén en `completed` ni `partially_refunded` en `src/lib/server/features/payments/domain/refund.ts` (`planRefund`), con su test de dominio y su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-27, BE-FR-28, data-model 4.5] _Hecho (2026-11-17): 4 tests rojos (el reembolso se aceptaba en `pending`, `refunded` y `chargeback`) y verdes con test:related; dominio al 100 %._
+- [x] T403 [US4] C-11 (Media): enmendar `data-model.md` 4.5 (el contracargo en `refunded` retira lo que quede de la compra) y fijarlo con un T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-28, D01] _Hecho (2026-11-17): data-model enmendado y dos T-INT (−5.500 de la bolsa; −2.500 de la bolsa y −3.000 a deuda) en verde._
+- [ ] T404 [US4] C-12 (Baja): `err` en `payments.refund.corrective_pending` y consulta de rectificativas pendientes en `docs/operaciones/` [BE-FR-27]
+- [ ] T405 [US4] C-13 (Baja): guardar importe y total en `refund_keys` (migración) para no tomar el importe del cliente en el reenvío [BE-FR-27, BE-FR-75]
+- [ ] T406 C-14 (Baja): validar en los ajustes de `apps` que `hold_ttl_seconds` supera la duración máxima de una operación [BE-FR-71]
+
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 
 <!-- Pendiente de CI (WebKit): la CSP bloquea una hoja de estilos sin nonce (`style-src 'self'`) durante la carga de /panel/perfil; en local aparece de forma intermitente y no se ha localizado el origen (no hay `<style>` en el HTML ni inserciones por JavaScript). Pendiente de investigar con la hidratación de Svelte; no se ha relajado la CSP. -->

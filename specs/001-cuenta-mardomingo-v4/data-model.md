@@ -1062,9 +1062,9 @@ Idempotencia (misma `user_id` + `idempotency_key`, última fila dentro de
 | completed                      | Reembolso parcial del admin (BE-FR-27)      | **partially_refunded** | `refund` sobre la bolsa; `refunded_eur_cents`; rectificativa                                                                                                                  |
 | completed / partially_refunded | Reembolso total                             | **refunded**           | Ídem                                                                                                                                                                          |
 | completed / partially_refunded | `chargeback_opened` (BE-FR-28)              | **chargeback**         | `chargeback` sobre la bolsa y sobre la deuda (sin tope); cuenta bloqueada; rectificativa                                                                                      |
-| refunded                       | `chargeback_opened` (BE-FR-28)              | **chargeback**         | Solo bloquea la cuenta: sin movimiento de créditos (ya se retiraron) ni rectificativa (importe pendiente 0)                                                                   |
+| refunded                       | `chargeback_opened` (BE-FR-28)              | **chargeback**         | `chargeback` por lo que quede de la compra (0 si los reembolsos retiraron todo; lo consumido, a deuda sin tope); cuenta bloqueada; sin rectificativa (importe pendiente 0)    |
 
-Nota (C-01, T393): `chargeback_opened` también se acepta en `refunded`, por decisión del propietario del 2026-11-17: la cuenta se bloquea aunque no quede nada que retirar ni rectificar.
+Nota (C-01, T393; C-11, T403): `chargeback_opened` también se acepta en `refunded`, por decisión del propietario del 2026-11-17. Un reembolso total puede no haber retirado todos los créditos (D01: el administrador elige cuántos); el contracargo retira lo que quede, como en los demás estados, y bloquea la cuenta.
 
 No hay estado de fallo o abandono (hueco H-14).
 
