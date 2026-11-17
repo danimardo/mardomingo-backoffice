@@ -933,10 +933,21 @@ Cada fase cierra con su checkpoint y deja algo demostrable: protecciones (US8) �
 Guía de implementación de cada tarea, con el test que debe fallar primero, el cambio exacto y su verificación:
 `specs/001-cuenta-mardomingo-v4/correcciones.md`. Revisión **parcial**: solo cubre `credits`, `payments` e `invoicing` (L05 y L10).
 
-- [ ] T393 [US4] C-01 (Alta): aceptar `chargeback_opened` en compras `partially_refunded` en `src/lib/server/features/payments/service.ts` (`applyEvent`), con su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-28, data-model 4.5]
-- [ ] T394 C-02 (Media): que `reservedOf` y `freeAccountsOpenHoldsMicro` de `src/lib/server/features/credits/repository.ts` ignoren las reservas caducadas, sin tocar `openHoldOf` ni `chargeAndRelease`, con su T-INT en `credits/credits.int.test.ts` [BE-FR-71]
-- [ ] T395 [US4] C-03 (Media): `chargebackEurCents` = pagado − ya devuelto en `paymentFactsBetween` (`src/lib/server/features/payments/service.ts`), con su T-INT en `payments/payment-facts.int.test.ts` [BE-FR-76]
+- [x] T393 [US4] C-01 (Alta): aceptar `chargeback_opened` en compras `partially_refunded` en `src/lib/server/features/payments/service.ts` (`applyEvent`), con su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-28, data-model 4.5] _Hecho (2026-11-17): el contracargo de una compra parcialmente reembolsada se rechazaba como `not_completed`; test rojo (seguía `partially_refunded`) y verde con test:related._
+- [x] T394 C-02 (Media): que `reservedOf` y `freeAccountsOpenHoldsMicro` de `src/lib/server/features/credits/repository.ts` ignoren las reservas caducadas, sin tocar `openHoldOf` ni `chargeAndRelease`, con su T-INT en `credits/credits.int.test.ts` [BE-FR-71] _Hecho (2026-11-17): las lecturas de reservado ignoran las caducadas; 2 tests rojos (reservado 300 en vez de 0 y freno global 100 en vez de 0) y verdes con test:related._
+- [x] T395 [US4] C-03 (Media): `chargebackEurCents` = pagado − ya devuelto en `paymentFactsBetween` (`src/lib/server/features/payments/service.ts`), con su T-INT en `payments/payment-facts.int.test.ts` [BE-FR-76] _Hecho (2026-11-17): el contracargo del informe contable es lo pagado menos lo ya devuelto; test rojo (1000) y verde con test:related._
 - [ ] T396 [US4] C-04 (Baja): reintento idempotente de la rectificativa en el reenvío de un reembolso y evento `payments.refund.corrective_pending` en `src/lib/server/features/payments/{service,events}.ts`, con su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-27]
+
+## Phase 18: Correcciones de la revisión del PR #47 (D14, 2026-11-17)
+
+Hallazgos C-05 a C-09 de `correcciones.md`, de la revisión del PR #47 (categorías personales en `sync`). El PR se fusiona
+sin ellos; la migración de T397 va en un despliegue **posterior** al del PR (C-07).
+
+- [ ] T397 [US6] C-05 (Media): migración de datos personalizada que marque `prompts` de `secretario` como `personal: true` en las bases ya sembradas, sin pisar un esquema cambiado por el administrador, con su T-INT en `src/lib/server/db/migrations.int.test.ts` [BE-FR-42 CA3, D14]
+- [ ] T398 [US6] C-06 (Media): test HTTP en `tests/http/admin-predeterminados.test.ts` que compruebe el aviso de categoría personal en W43 (y solo en ella); renombrar o quitar el test unitario «no preselecciona» de `sync/domain/copy-defaults.test.ts` [BE-FR-42 CA3, D14]
+- [ ] T399 C-07 (Baja): desplegar T397 después del PR #47 y documentar en `docs/operaciones/` que volver a una imagen anterior exige quitar antes la clave `personal` [constitución, migraciones]
+- [ ] T400 [US6] C-08 (Baja): asociar el aviso al grupo de casillas de W43 y nombrar la categoría (vía a, con aprobación del sistema de diseño, o vía b, sin tocarlo), con su E2E en `e2e/admin-contenido.spec.ts` [Historias.md 16.10, D14]
+- [ ] T401 C-09 (Baja): enmendar `data-model.md` (esquema de categoría, `personal?: true`) y `contracts/web-routes.md` (W43, aviso y sin preselección) [D14]
 
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 
