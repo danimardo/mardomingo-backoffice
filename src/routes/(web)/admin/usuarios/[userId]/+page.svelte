@@ -34,7 +34,13 @@
 		tester: m.admin_users_submit_tester_on,
 		cerrarSesiones: m.admin_users_submit_close
 	};
-	const errorText = $derived(form?.formError ? m.admin_users_error() : '');
+	const errorText = $derived(
+		form?.formError === 'CANNOT_BLOCK_SELF'
+			? m.errors_cannot_block_self()
+			: form?.formError
+				? m.admin_users_error()
+				: ''
+	);
 </script>
 
 <svelte:head>

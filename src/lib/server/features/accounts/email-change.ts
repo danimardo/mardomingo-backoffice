@@ -1,6 +1,6 @@
 // Cambio de email de la cuenta (W27 y W14; BE-FR-66, BE-FR-45; T266). Dos pasos: pedir (contraseña actual, límite por IP y un
-// enlace de 24 h a la dirección NUEVA) y confirmar (el enlace aplica el cambio, cierra todas las sesiones y avisa a la dirección
-// ANTERIOR). No hay bienvenida nueva: el alta ya se concedió. Una dirección de otra cuenta responde igual que una libre, sin email.
+// enlace de 24 h a la dirección NUEVA) y confirmar (el enlace aplica el cambio, cierra las demás sesiones, la actual se
+// conserva (C-19), y avisa a la dirección ANTERIOR). No hay bienvenida nueva: el alta ya se concedió. Una dirección de otra cuenta responde igual que una libre, sin email.
 // La contraseña actual se limita con el contador de sesión de la cuenta, compartido con el cambio de contraseña y el borrado
 // (BE-FR-45, BE-FR-67; C-24; ver `password-attempts.ts`): con el bloqueo vigente, o con el fallo que alcanza el umbral, se
 // lanza `LOGIN_TEMPORARILY_LOCKED` con los minutos que faltan.
@@ -31,7 +31,12 @@ interface ChangePayload {
 
 export type EmailChangeRequestOutcome = 'sent' | 'wrong_password';
 export type EmailChangeConfirmOutcome =
-	| { readonly outcome: 'applied'; readonly sessionsClosed: number }
+	| {
+			readonly outcome: 'applied';
+			readonly sessionsClosed: number;
+			/** La sesión actual era de la cuenta del cambio y se conservó (W14: redirige al perfil; si no, al login). */
+			readonly sessionKept: boolean;
+	  }
 	| { readonly outcome: 'expired' | 'invalid' | 'taken' };
 
 function sha256Hex(text: string): string {
@@ -109,8 +114,10 @@ export async function requestEmailChange(
 		.from(user)
 		.where(and(eq(user.emailNormalized, newNormalized), ne(user.id, input.userId)))
 		.get();
+	// Solo la misma dirección exacta no es un cambio: la forma normalizada propia (`pepe+trabajo@` → `pepe@`) sí se admite (C-23).
+	const sameAddress = input.newEmail.trim().toLowerCase() === (currentEmail ?? '').toLowerCase();
 	// Igual que una dirección libre: la respuesta no revela si la dirección pertenece a otra cuenta (CA3).
-	if (taken !== undefined || newNormalized === normalizeEmail(currentEmail ?? '')) {
+	if (taken !== undefined || sameAddress) {
 		deps.logger.emit('accounts.email_change.requested', { status: 'suppressed' });
 		return 'sent';
 	}
@@ -134,26 +141,35 @@ export async function requestEmailChange(
 		.run();
 
 	// Aviso de seguridad a la dirección ACTUAL (C-15): sin la dirección nueva ni enlace, para que el titular lo vea a tiempo.
-	await sendAccountEmail(deps.notifications, {
-		reason: 'email_change_requested_notice',
-		to: currentEmail ?? '',
-		idempotencyKey: `email-change-notice-${sha256Hex(token)}`
-	});
-	await sendAccountEmail(deps.notifications, {
-		reason: 'email_change_verify',
-		to: payload.newEmail,
-		link: `${input.publicWebUrl}/email/confirmar?token=${encodeURIComponent(token)}`,
-		idempotencyKey: `email-change-${sha256Hex(token)}`
-	});
+	// Sin esperar el envío (C-17): solo sale cuando la dirección está libre, y esperarlo revelaría por el tiempo que no lo está.
+	deps.emails.dispatch(() =>
+		sendAccountEmail(deps.notifications, {
+			reason: 'email_change_requested_notice',
+			to: currentEmail ?? '',
+			idempotencyKey: `email-change-notice-${sha256Hex(token)}`
+		})
+	);
+	deps.emails.dispatch(() =>
+		sendAccountEmail(deps.notifications, {
+			reason: 'email_change_verify',
+			to: payload.newEmail,
+			link: `${input.publicWebUrl}/email/confirmar?token=${encodeURIComponent(token)}`,
+			idempotencyKey: `email-change-${sha256Hex(token)}`
+		})
+	);
 	deps.logger.emit('accounts.email_change.requested', { status: 'sent' });
 	return 'sent';
 }
 
-/** Aplica el cambio desde el enlace: un solo uso, 24 h, cierra todas las sesiones y avisa a la dirección anterior. */
-export async function confirmEmailChange(
+/**
+ * Aplica el cambio desde el enlace: un solo uso, 24 h, cierra las sesiones de la cuenta salvo la actual (`currentSessionId`,
+ * si es de esa cuenta; W14) y avisa a la dirección anterior.
+ */
+export function confirmEmailChange(
 	deps: AccountsDeps,
-	token: string
-): Promise<EmailChangeConfirmOutcome> {
+	token: string,
+	currentSessionId: string | null = null
+): EmailChangeConfirmOutcome {
 	const now = deps.clock.now();
 	const identifier = `${IDENTIFIER_PREFIX}${sha256Hex(token)}`;
 	const row = deps.db
@@ -202,11 +218,27 @@ export async function confirmEmailChange(
 		tx.delete(verification).where(eq(verification.identifier, identifier)).run();
 		// Los enlaces de recuperación enviados a la dirección anterior dejan de valer (C-15).
 		deleteResetTokens(tx, payload.userId);
-		const closed = tx.delete(session).where(eq(session.userId, payload.userId)).run();
+		const kept =
+			currentSessionId === null
+				? undefined
+				: tx
+						.select({ id: session.id })
+						.from(session)
+						.where(and(eq(session.id, currentSessionId), eq(session.userId, payload.userId)))
+						.get();
+		const closed = tx
+			.delete(session)
+			.where(
+				kept === undefined
+					? eq(session.userId, payload.userId)
+					: and(eq(session.userId, payload.userId), ne(session.id, kept.id))
+			)
+			.run();
 		return {
 			outcome: 'applied' as const,
 			previousEmail: owner.email,
-			sessionsClosed: closed.changes
+			sessionsClosed: closed.changes,
+			sessionKept: kept !== undefined
 		};
 	});
 
@@ -214,11 +246,17 @@ export async function confirmEmailChange(
 		deps.logger.emit('accounts.email_change.rejected', { reason: result.outcome });
 		return { outcome: result.outcome };
 	}
-	await sendAccountEmail(deps.notifications, {
-		reason: 'email_changed_notice',
-		to: result.previousEmail,
-		idempotencyKey: `email-changed-${sha256Hex(token)}`
-	});
+	deps.emails.dispatch(() =>
+		sendAccountEmail(deps.notifications, {
+			reason: 'email_changed_notice',
+			to: result.previousEmail,
+			idempotencyKey: `email-changed-${sha256Hex(token)}`
+		})
+	);
 	deps.logger.emit('accounts.email_change.applied', { sessionsClosed: result.sessionsClosed });
-	return { outcome: 'applied', sessionsClosed: result.sessionsClosed };
+	return {
+		outcome: 'applied',
+		sessionsClosed: result.sessionsClosed,
+		sessionKept: result.sessionKept
+	};
 }

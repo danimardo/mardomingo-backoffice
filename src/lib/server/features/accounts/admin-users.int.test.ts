@@ -119,6 +119,14 @@ describe('bloqueo y desbloqueo (BE-FR-50)', () => {
 		expect(f.db.select().from(user).where(eq(user.id, targetId)).get()?.banReason).toBe('primero');
 	});
 
+	it('[C-22] un administrador no puede bloquear su propia cuenta (CANNOT_BLOCK_SELF) y no se escribe nada', () => {
+		expect(() => blockUser(deps, { adminId, userId: adminId, reason: 'por error' })).toThrow(
+			expect.objectContaining({ code: 'CANNOT_BLOCK_SELF' })
+		);
+		expect(f.db.select().from(user).where(eq(user.id, adminId)).get()?.banned).toBe(false);
+		expect(auditRows()).toHaveLength(0);
+	});
+
 	it('sin motivo no bloquea (VALIDATION_ERROR) y tampoco con solo espacios', () => {
 		expect(() => blockUser(deps, { adminId, userId: targetId, reason: '   ' })).toThrow(
 			expect.objectContaining({ code: 'VALIDATION_ERROR' })

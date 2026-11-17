@@ -97,7 +97,7 @@ describe('cambio de email (T265)', () => {
 		).toHaveLength(0);
 		expect(
 			f.mail.sent.some(
-				(item) => item.to === EMAIL && item.text.includes('se han cerrado todas las sesiones')
+				(item) => item.to === EMAIL && item.text.includes('se han cerrado las demás sesiones')
 			)
 		).toBe(true);
 		expect(await f.accounts.confirmEmailChange(token)).toMatchObject({ outcome: 'invalid' });
@@ -166,6 +166,117 @@ describe('cambio de email (T265)', () => {
 					item.to === EMAIL && item.subject === 'Alguien ha pedido cambiar el email de tu cuenta'
 			)
 		).toBe(false);
+	});
+});
+
+describe('forma normalizada de la propia cuenta (C-23)', () => {
+	const TAGGED = 'pepe+trabajo@ejemplo.es';
+	const PLAIN = 'pepe@ejemplo.es';
+
+	async function accountWithTaggedEmail(): Promise<string> {
+		await f.accounts.register(registration({ email: TAGGED }));
+		await f.accounts.verifyEmail(verificationTokenFor(f.mail, TAGGED));
+		const row = f.database.db
+			.select({ id: user.id })
+			.from(user)
+			.where(eq(user.email, TAGGED))
+			.get();
+		if (row === undefined) throw new Error('la cuenta debía existir');
+		return row.id;
+	}
+
+	it('[BE-FR-66/CA3] pasar de pepe+trabajo@ a pepe@ (libre) envía el enlace y al confirmarlo cambia el email', async () => {
+		const id = await accountWithTaggedEmail();
+
+		const outcome = await f.accounts.requestEmailChange({
+			userId: id,
+			currentPassword: PASSWORD,
+			newEmail: PLAIN,
+			remoteIp: null
+		});
+		await f.accounts.drainEmails();
+
+		expect(outcome).toBe('sent');
+		expect(await f.accounts.confirmEmailChange(changeTokenFrom(PLAIN))).toMatchObject({
+			outcome: 'applied'
+		});
+		expect(
+			f.database.db
+				.select({ email: user.email, normalized: user.emailNormalized })
+				.from(user)
+				.where(eq(user.id, id))
+				.get()
+		).toEqual({ email: PLAIN, normalized: PLAIN });
+	});
+
+	it('la misma dirección exacta se sigue suprimiendo: responde sent y no envía nada', async () => {
+		const id = await accountWithTaggedEmail();
+		const before = f.mail.sent.length;
+
+		const outcome = await f.accounts.requestEmailChange({
+			userId: id,
+			currentPassword: PASSWORD,
+			newEmail: TAGGED.toUpperCase(),
+			remoteIp: null
+		});
+		await f.accounts.drainEmails();
+
+		expect(outcome).toBe('sent');
+		expect(f.mail.sent).toHaveLength(before);
+	});
+});
+
+describe('sesión actual al aplicar el cambio (C-19; W14)', () => {
+	function sessionIds(): string[] {
+		return f.database.db
+			.select({ id: session.id })
+			.from(session)
+			.where(eq(session.userId, userId))
+			.all()
+			.map((row) => row.id);
+	}
+
+	async function openSecondSession(): Promise<void> {
+		await f.accounts.auth.api.signInEmail({
+			body: { email: EMAIL, password: PASSWORD },
+			headers: new Headers()
+		});
+	}
+
+	it('[BE-FR-66/CA5] conserva la sesión actual y revoca las demás', async () => {
+		await openSecondSession();
+		const [current, other] = sessionIds();
+		expect(other).toBeDefined();
+		await request();
+
+		const outcome = await f.accounts.confirmEmailChange(changeTokenFrom(NEW_EMAIL), current);
+
+		expect(outcome).toEqual({ outcome: 'applied', sessionsClosed: 1, sessionKept: true });
+		expect(sessionIds()).toEqual([current]);
+	});
+
+	it('una sesión de otra cuenta no se conserva ni se toca: la cuenta del cambio queda sin sesiones', async () => {
+		await f.accounts.register(registration({ email: 'otra@ejemplo.es' }));
+		await f.accounts.verifyEmail(verificationTokenFor(f.mail, 'otra@ejemplo.es'));
+		const foreign = f.database.db
+			.select({ id: session.id })
+			.from(session)
+			.innerJoin(user, eq(user.id, session.userId))
+			.where(eq(user.email, 'otra@ejemplo.es'))
+			.get();
+		await request();
+
+		const outcome = await f.accounts.confirmEmailChange(changeTokenFrom(NEW_EMAIL), foreign?.id);
+
+		expect(outcome).toMatchObject({ outcome: 'applied', sessionKept: false });
+		expect(sessionIds()).toEqual([]);
+		expect(
+			f.database.db
+				.select()
+				.from(session)
+				.where(eq(session.id, foreign?.id ?? ''))
+				.get()
+		).toBeDefined();
 	});
 });
 

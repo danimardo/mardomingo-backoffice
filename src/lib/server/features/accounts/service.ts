@@ -43,6 +43,7 @@ import {
 	reserveSignupSlot,
 	setSignupMetadata
 } from './repository';
+import type { EmailDispatcher } from './email-dispatch';
 import { deletePendingEmailChanges, deleteResetTokens } from './pending-tokens';
 import { session, user, userAppActivity, verification } from './schema';
 
@@ -58,6 +59,8 @@ export interface AccountsBase {
 	readonly legal: LegalDeps;
 	readonly emailHashKey: string;
 	readonly adminEmail: string | null;
+	/** Envío de los emails de cuenta sin esperarlos (C-17). */
+	readonly emails: EmailDispatcher;
 }
 
 export interface AccountsDeps extends AccountsBase {
@@ -136,6 +139,15 @@ function emailDomain(email: string): string {
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Alta y verificación (W08–W10)
+
+/**
+ * Iguala el tiempo del registro de un email ya existente con el de uno nuevo (que termina en `sendVerificationEmail`, con el
+ * suelo de tiempo constante de Better Auth): la misma llamada sobre una dirección que no puede existir (`.invalid`, RFC 2606)
+ * firma un token y espera el suelo, sin enviar nada (C-17).
+ */
+async function matchVerificationTiming(deps: AccountsDeps): Promise<void> {
+	await deps.auth.api.sendVerificationEmail({ body: { email: 'registro@mardomingo.invalid' } });
+}
 
 /** Registro (W08): captcha → dominio desechable → altas por IP → versiones legales → alta → aceptaciones → email. */
 export async function register(
@@ -217,6 +229,7 @@ async function createAccount(
 		// Anti-enumeración (BE-FR-01 CA5): si el email ya existe, la respuesta es la misma y no sale ningún email.
 		if (isUserExists(error)) {
 			deps.logger.emit('accounts.signup.rejected', { reason: 'email_exists' });
+			await matchVerificationTiming(deps);
 			return { sentTo: input.email };
 		}
 		throw error;
@@ -229,6 +242,7 @@ async function createAccount(
 		undefined
 	) {
 		deps.logger.emit('accounts.signup.rejected', { reason: 'email_exists' });
+		await matchVerificationTiming(deps);
 		return { sentTo: input.email };
 	}
 
@@ -286,7 +300,9 @@ export async function resendVerification(
 	const email = input.email.toLowerCase();
 	const row = deps.db.select().from(user).where(eq(user.email, email)).get();
 	const pending = row !== undefined && !row.emailVerified;
-	if (pending) await deps.auth.api.sendVerificationEmail({ body: { email } });
+	// Better Auth aplica a este endpoint un suelo de tiempo constante (500 ms) tanto si la cuenta existe como si no, y solo
+	// envía el email si está pendiente: se llama siempre para que el tiempo no distinga ambos casos (C-17).
+	await deps.auth.api.sendVerificationEmail({ body: { email } });
 	deps.logger.emit('accounts.verification.resend_requested', {
 		status: pending ? 'sent' : 'suppressed'
 	});

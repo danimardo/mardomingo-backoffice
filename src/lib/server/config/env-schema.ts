@@ -20,7 +20,7 @@ const LOG_LEVELS = Object.freeze([
 const LOCAL_HOSTS: readonly string[] = Object.freeze(['localhost', '127.0.0.1']);
 
 // Claves de prueba oficiales de Turnstile: siempre aceptan o rechazan, nunca protegen nada.
-const TURNSTILE_TEST_KEY = /^[123]x0+[A-Z]{2}$/;
+export const TURNSTILE_TEST_KEY = /^[123]x0+[A-Z]{2}$/;
 
 // Variables que solo existen para las pruebas: rechazadas fuera de APP_ENV=test.
 const TEST_ONLY_KEYS = Object.freeze([

@@ -346,7 +346,10 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: BE-FR-01 CA5; contratos W10 y W12.
 - **Fichero**: `src/lib/server/features/accounts/service.ts` (`register`, `resendVerification`, `requestPasswordReset`).
-- **Estado**: confirmado por ejecución con un envío de 300 ms: recuperación 306 ms si la cuenta existe y 0 ms si no.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución con un envío de 300 ms: recuperación 306 ms si la cuenta existe y 0 ms si no.
+  El reenvío de verificación y el registro de un email ya existente igualan además el suelo de tiempo constante (500 ms)
+  de `sendVerificationEmail` de Better Auth: el reenvío lo llama siempre, y el registro duplicado lo llama sobre una
+  dirección `.invalid` que no envía nada. Los fallos de envío quedan en `accounts.email.dispatch_failed`.
 - **Cambio** (**decisión del propietario**): enviar los emails sin esperar su resultado, registrando el fallo en el log sin
   PII.
 - **Test (primero, debe fallar)**: con un envío lento, la diferencia entre cuenta existente e inexistente es menor que 50 ms.
@@ -363,7 +366,8 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: BE-FR-66 CA5; `contracts/web-routes.md` (W14).
 - **Ficheros**: `src/routes/(web)/(public)/email/confirmar/+page.server.ts`, `src/lib/server/features/accounts/email-change.ts`.
-- **Estado**: confirmado por lectura: devuelve 200 también con error, no redirige y revoca también la sesión actual.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por lectura: devuelve 200 también con error, no redirige y revoca también la sesión actual.
+  Una dirección que ya no está libre responde `400 TOKEN_INVALID` con su propio mensaje.
 - **Cambio** (**decisión del propietario: manda el contrato**): conservar la sesión actual, redirigir con
   `?aviso=email_changed` y responder 400 con los tokens inválidos.
 - **Test (primero, debe fallar)**: test de datos (la sesión actual sigue viva) y `test:http` (303 y 400).
@@ -388,7 +392,8 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: administración de usuarios; `Historias.md` 13 (2026-11-17).
 - **Fichero**: `src/lib/server/features/accounts/admin-users.ts` (`blockUser`).
-- **Estado**: confirmado por ejecución: con un único administrador, la cuenta queda bloqueada y `ADMIN_EMAIL` no la recupera.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: con un único administrador, la cuenta queda bloqueada y `ADMIN_EMAIL` no la recupera.
+  El error es `409 CANNOT_BLOCK_SELF`.
 - **Cambio** (**decisión del propietario**): rechazar el bloqueo de la propia cuenta con un error tipado.
 - **Test (primero, debe fallar)**: `blockUser` con el mismo administrador como actor y destino devuelve el error.
 
@@ -396,7 +401,7 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: BE-FR-66 CA3, BE-FR-11 CA1.
 - **Fichero**: `src/lib/server/features/accounts/email-change.ts`.
-- **Estado**: confirmado por ejecución: `pepe+trabajo@ejemplo.es` no puede pasar a `pepe@ejemplo.es` (libre); responde
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: `pepe+trabajo@ejemplo.es` no puede pasar a `pepe@ejemplo.es` (libre); responde
   `sent` y no envía nada.
 - **Cambio** (**decisión del propietario**): permitirlo cuando la cuenta que coincide es la propia.
 - **Test (primero, debe fallar)**: el escenario anterior envía el enlace de verificación y al confirmarlo cambia el email.
@@ -416,9 +421,10 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: BE-FR-01 (captcha).
 - **Fichero**: `src/lib/server/adapters/turnstile/turnstile-verifier.ts`.
-- **Estado**: confirmado por lectura.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por lectura. La comprobación solo se activa con Cloudflare real y una clave que no sea la
+  de prueba (la clave de prueba de Cloudflare no devuelve `hostname` ni `action` reales).
 - **Cambio**: comprobar que `hostname` es el host web y `action` la del registro.
 - **Test (primero, debe fallar)**: una respuesta con otro `hostname` se rechaza.
 
-Menores sin número: `closeOtherSession` duplicada y sin exportar en `accounts/sessions.ts` (código muerto); `requireAppSession`
+Menores sin número: `closeOtherSession` duplicada y sin exportar en `accounts/sessions.ts` (código muerto; borrada con T413–T417); `requireAppSession`
 no comprueba `banned` (no explotable hoy: el bloqueo borra las sesiones y Better Auth no crea sesiones de cuentas bloqueadas).

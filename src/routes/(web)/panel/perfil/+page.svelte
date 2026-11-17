@@ -49,6 +49,9 @@
 {#if data.passwordChanged}
 	<Banner level="info">{m.profile_password_changed()}</Banner>
 {/if}
+{#if data.emailChanged}
+	<Banner level="info">{m.profile_email_changed()}</Banner>
+{/if}
 {#if data.emailSent}
 	<Banner level="info">{m.profile_email_sent()}</Banner>
 {/if}

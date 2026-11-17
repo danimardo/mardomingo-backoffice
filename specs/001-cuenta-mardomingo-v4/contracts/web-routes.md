@@ -202,6 +202,8 @@ access: { url } | null, externalLanding: url | null, smartScreenHelp: boolean }`
 - **Query**: `app` (slug opcional; desconocido o inactivo → se ignora y se registra sin origen).
 - **`load`**: `originApp: { slug, name } | null`, `legal: [{ kind, version, url }]` (términos, privacidad,
   uso aceptable vigentes), `minAge`, `passwordRule: { min: 8, max: 128 }`, `turnstileSiteKey`.
+- **Captcha**: el widget declara `data-action="register"`; con Cloudflare real, el servidor exige además que la
+  respuesta traiga ese `action` y el `hostname` de la web (C-25).
 - **Actions**:
 
 | Action        | Entrada                                                                                                                                                                               | Validación                                                                                          | Éxito                                                                                                                                                          | Errores (`fail`)                                                                                                                                                                                                                                 |
@@ -282,7 +284,8 @@ access: { url } | null, externalLanding: url | null, smartScreenHelp: boolean }`
 - **Query**: `token`. **`load`**: `tokenState`.
 - **Actions**: `?/confirmar` — `token` (oculto) → aplica el cambio, recalcula `email_normalized`, revoca
   todas las sesiones salvo la actual (si la hay) y redirige a `/panel/perfil?aviso=email_changed` (con
-  sesión) o `/login?aviso=email_changed` (sin ella). Errores: `400 TOKEN_*`.
+  sesión) o `/login?aviso=email_changed` (sin ella). Errores: `400 TOKEN_EXPIRED`; `400 TOKEN_INVALID` (también
+  si la dirección ya no está libre, con un mensaje propio).
 - **Eventos**: `accounts.email_change.applied`, `accounts.session.revoked`.
 
 ### W15 · `/logout` — Cerrar la sesión actual (BE-FR-06)
@@ -528,12 +531,12 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
   operaciones marcadas por moderación (sin contenido), roles y estado.
 - **Actions** (todas con el patrón de confirmación 1.4 y `reason` obligatorio salvo indicación):
 
-| Action                                               | Entrada                                                     | Efecto                              | Errores                               |
-| ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------- | ------------------------------------- |
-| `?/previsualizarBloqueo` / `?/bloquear`              | `reason`, `confirmado`                                      | Bloquea y revoca todas sus sesiones | `400` (motivo); `409 ALREADY_BLOCKED` |
-| `?/previsualizarDesbloqueo` / `?/desbloquear`        | `reason`, `confirmado`                                      | Desbloquea                          | `409`                                 |
-| `?/marcarTester` / `?/desmarcarTester`               | `reason`                                                    | Cambia el rol `tester`              | `409`                                 |
-| `?/previsualizarCierreSesiones` / `?/cerrarSesiones` | `reason`, `confirmado`, `sessionId` (opcional: una o todas) | Revoca                              | `404`                                 |
+| Action                                               | Entrada                                                     | Efecto                              | Errores                                                                           |
+| ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------- |
+| `?/previsualizarBloqueo` / `?/bloquear`              | `reason`, `confirmado`                                      | Bloquea y revoca todas sus sesiones | `400` (motivo); `409 ALREADY_BLOCKED`; `409 CANNOT_BLOCK_SELF` (su propia cuenta) |
+| `?/previsualizarDesbloqueo` / `?/desbloquear`        | `reason`, `confirmado`                                      | Desbloquea                          | `409`                                                                             |
+| `?/marcarTester` / `?/desmarcarTester`               | `reason`                                                    | Cambia el rol `tester`              | `409`                                                                             |
+| `?/previsualizarCierreSesiones` / `?/cerrarSesiones` | `reason`, `confirmado`, `sessionId` (opcional: una o todas) | Revoca                              | `404`                                                                             |
 
 - **Eventos**: `accounts.user.blocked`, `accounts.user.unblocked`, `accounts.role.changed`,
   `accounts.session.revoked`, `audit.entry.recorded`.

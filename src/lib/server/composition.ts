@@ -9,6 +9,7 @@ import { createFakeEmailSender } from './adapters/resend/fake-sender';
 import type { EmailSender } from './adapters/resend/email-sender';
 import { createResendSender } from './adapters/resend/resend-sender';
 import { withOutbox } from './adapters/resend/outbox';
+import { REGISTER_CAPTCHA_ACTION } from '$lib/shared/captcha';
 import { createTurnstileVerifier } from './adapters/turnstile/turnstile-verifier';
 import { createEcbFxSource } from './adapters/ecb/ecb-fx-source';
 import { createFakeInvoicing } from './adapters/invoicing/fake';
@@ -47,7 +48,7 @@ import { createProtectionsRuntime } from './features/protections';
 import { type PricingDeps } from './features/pricing';
 import type { LegalDeps } from './features/legal';
 import type { AlertDeps, NotificationsDeps } from './features/notifications';
-import type { Env } from './config/env-schema';
+import { TURNSTILE_TEST_KEY, type Env } from './config/env-schema';
 import { openDatabase, type Db } from './db/client';
 import type { Logger } from './logging/logger';
 import { createIdGenerator, type IdGenerator } from './shared/ids';
@@ -107,10 +108,22 @@ function emailSenderFor(config: Env, clock: Clock): EmailSender {
 	return withOutbox(inner, { dir: OUTBOX_DIR, now: () => clock.now() });
 }
 
+/**
+ * Con Cloudflare real y un secreto de verdad, la respuesta debe traer el host web y la acción del registro (C-25). Con el
+ * simulador o con las claves de prueba de Cloudflare (que responden `hostname: example.com`) no se comprueban: no protegen nada.
+ */
 function captchaFor(config: Env): CaptchaVerifier {
+	const strict =
+		config.MOCK_TURNSTILE_URL === undefined && !TURNSTILE_TEST_KEY.test(config.TURNSTILE_SECRET);
 	return createTurnstileVerifier({
 		secret: config.TURNSTILE_SECRET,
-		endpoint: config.MOCK_TURNSTILE_URL ?? TURNSTILE_ENDPOINT
+		endpoint: config.MOCK_TURNSTILE_URL ?? TURNSTILE_ENDPOINT,
+		...(strict
+			? {
+					expectedHostname: new URL(config.PUBLIC_WEB_URL).hostname,
+					expectedAction: REGISTER_CAPTCHA_ACTION
+				}
+			: {})
 	});
 }
 

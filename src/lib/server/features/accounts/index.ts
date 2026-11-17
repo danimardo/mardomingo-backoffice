@@ -14,6 +14,7 @@ import type { Credits } from '$lib/server/features/credits';
 import { hashNormalizedEmail } from './email-hash';
 import { normalizeEmail } from './domain/email';
 import type { LegalDeps } from '$lib/server/features/legal';
+import { createEmailDispatcher } from './email-dispatch';
 import { sendAccountEmail, type NotificationsDeps } from '$lib/server/features/notifications';
 import { createAuth, type Auth } from './auth';
 import {
@@ -146,8 +147,11 @@ export interface Accounts {
 		readonly newEmail: string;
 		readonly remoteIp: string | null;
 	}): Promise<EmailChangeRequestOutcome>;
-	/** Aplica el cambio desde el enlace de W14: cierra todas las sesiones y avisa a la dirección anterior (T266). */
-	confirmEmailChange(token: string): Promise<EmailChangeConfirmOutcome>;
+	/** Aplica el cambio desde el enlace de W14: cierra las sesiones salvo la actual y avisa a la dirección anterior (T266, C-19). */
+	confirmEmailChange(
+		token: string,
+		currentSessionId?: string | null
+	): Promise<EmailChangeConfirmOutcome>;
 	/**
 	 * Cambio de contraseña con la actual; cierra las demás sesiones (W27, T266). Superado el límite de intentos de sesión
 	 * de la cuenta lanza `AppError('LOGIN_TEMPORARILY_LOCKED')` con `retryAfterMinutes` (C-24).
@@ -178,6 +182,8 @@ export interface Accounts {
 	/** Estado sin consumir el token: `verification` (JWT, con «used») o `reset` (opaco, «valid» o «invalid»). */
 	tokenState(token: string, kind: TokenKind): 'valid' | 'used' | 'invalid';
 	readSession(headers: Headers): ReturnType<typeof readSession>;
+	/** Solo pruebas: espera a que terminen los emails de cuenta enviados sin esperar (C-17). */
+	drainEmails(): Promise<void>;
 	auth: Auth;
 }
 
@@ -192,6 +198,7 @@ function keyOf(kind: string, token: string): string {
 }
 
 export function createAccounts(config: AccountsConfig): Accounts {
+	const emails = createEmailDispatcher(config.logger);
 	const base: AccountsBase = {
 		db: config.db,
 		logger: config.logger,
@@ -202,28 +209,36 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		apps: config.apps,
 		legal: config.legal,
 		emailHashKey: config.emailHashKey,
-		adminEmail: config.adminEmail
+		adminEmail: config.adminEmail,
+		emails
 	};
 
 	const auth = createAuth({
 		db: config.db,
 		secret: config.authSecret,
 		baseUrl: config.publicWebUrl,
-		sendVerification: async (email, _userId, token) => {
-			await sendAccountEmail(config.notifications, {
-				reason: 'verification',
-				to: email,
-				link: linkTo(config.publicWebUrl, '/verificar', token),
-				idempotencyKey: keyOf('verification', token)
-			});
+		// Better Auth espera la promesa del callback: el envío se lanza sin esperarlo (C-17).
+		sendVerification: (email, _userId, token) => {
+			emails.dispatch(() =>
+				sendAccountEmail(config.notifications, {
+					reason: 'verification',
+					to: email,
+					link: linkTo(config.publicWebUrl, '/verificar', token),
+					idempotencyKey: keyOf('verification', token)
+				})
+			);
+			return Promise.resolve();
 		},
-		sendPasswordReset: async (email, _userId, token) => {
-			await sendAccountEmail(config.notifications, {
-				reason: 'password_reset',
-				to: email,
-				link: linkTo(config.publicWebUrl, '/recuperar/nueva', token),
-				idempotencyKey: keyOf('password-reset', token)
-			});
+		sendPasswordReset: (email, _userId, token) => {
+			emails.dispatch(() =>
+				sendAccountEmail(config.notifications, {
+					reason: 'password_reset',
+					to: email,
+					link: linkTo(config.publicWebUrl, '/recuperar/nueva', token),
+					idempotencyKey: keyOf('password-reset', token)
+				})
+			);
+			return Promise.resolve();
 		},
 		onEmailVerified: (userId, email) => {
 			promoteAdminIfEligible(base, userId, email);
@@ -239,6 +254,7 @@ export function createAccounts(config: AccountsConfig): Accounts {
 	const deps: AccountsDeps = { ...base, auth };
 	return {
 		auth,
+		drainEmails: () => emails.drain(),
 		changePassword: (headers, input) => changePassword(deps, headers, input),
 		checkCurrentPassword: (userId, password) => checkCurrentPassword(deps, userId, password),
 		revokeAllSessions: (userId) => revokeAllSessions(deps, userId),
@@ -258,7 +274,8 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		},
 		requestEmailChange: (input) =>
 			requestEmailChange(deps, { ...input, publicWebUrl: config.publicWebUrl }),
-		confirmEmailChange: (token) => confirmEmailChange(deps, token),
+		confirmEmailChange: (token, currentSessionId) =>
+			Promise.resolve(confirmEmailChange(deps, token, currentSessionId ?? null)),
 		register: (input) => register(deps, input),
 		resendVerification: (input) => resendVerification(deps, input),
 		verifyEmail: (token) => verifyEmail(deps, token),

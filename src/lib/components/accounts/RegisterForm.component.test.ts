@@ -120,5 +120,6 @@ describe('RegisterForm', () => {
 		expect(form.querySelector('input[name="versionPrivacy"]')).toHaveValue('2026-06');
 		expect(form.querySelector('input[name="versionAup"]')).toHaveValue('2026-06');
 		expect(form.querySelector('.cf-turnstile')).toHaveAttribute('data-sitekey', 'clave-publica');
+		expect(form.querySelector('.cf-turnstile')).toHaveAttribute('data-action', 'register');
 	});
 });

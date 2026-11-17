@@ -15,6 +15,7 @@ export interface AccountsLogFields {
 	'accounts.signup.rejected': { reason: SignupRejectReason };
 	'accounts.captcha.unavailable': { provider: 'turnstile' };
 	'accounts.email.verified': Record<string, never>;
+	'accounts.email.dispatch_failed': { err: unknown };
 	'accounts.verification.rejected': { reason: 'expired' | 'used' | 'invalid' };
 	'accounts.verification.resend_requested': { status: 'sent' | 'suppressed' };
 	'accounts.login.succeeded': { status: 'web' | 'app' };
@@ -70,6 +71,10 @@ export const ACCOUNTS_LOG_EVENTS = Object.freeze({
 	'accounts.signup.rejected': { level: 'info', msg: 'Registro rechazado' },
 	'accounts.captcha.unavailable': { level: 'warn', msg: 'Captcha no disponible' },
 	'accounts.email.verified': { level: 'info', msg: 'Email verificado' },
+	'accounts.email.dispatch_failed': {
+		level: 'error',
+		msg: 'Fallo al enviar un email de cuenta sin esperarlo'
+	},
 	'accounts.verification.rejected': { level: 'info', msg: 'Verificación rechazada' },
 	'accounts.verification.resend_requested': {
 		level: 'info',

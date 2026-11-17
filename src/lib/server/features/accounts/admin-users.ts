@@ -138,6 +138,8 @@ export function blockUser(
 	input: { adminId: string; userId: string; reason: string }
 ): string {
 	const reason = requireReason(input.reason);
+	// Un único administrador bloqueado no se recupera ni con `ADMIN_EMAIL` (C-22).
+	if (input.adminId === input.userId) throw new AppError('CANNOT_BLOCK_SELF');
 	return immediateTransaction(deps.db, (tx) => {
 		const current = loadUser(tx, input.userId);
 		if (current.banned) throw new AppError('ALREADY_BLOCKED');

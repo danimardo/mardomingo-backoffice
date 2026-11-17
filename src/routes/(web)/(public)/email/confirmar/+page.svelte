@@ -9,7 +9,7 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let busy = $state(false);
 
-	const result = $derived(form && 'result' in form ? form.result : null);
+	const outcome = $derived(form && 'outcome' in form ? form.outcome : null);
 </script>
 
 <svelte:head>
@@ -18,17 +18,12 @@
 
 <h1>{m.email_confirm_title()}</h1>
 
-{#if result?.outcome === 'applied'}
-	<Notice tone="success">
-		<p>{m.email_confirm_applied({ count: String(result.sessionsClosed) })}</p>
-		<p><a href={resolve('/login')}>{m.email_confirm_login()}</a></p>
-	</Notice>
-{:else if result !== null}
+{#if outcome !== null}
 	<Notice tone="warning">
 		<p>
-			{#if result.outcome === 'expired'}
+			{#if outcome === 'expired'}
 				{m.email_confirm_expired()}
-			{:else if result.outcome === 'taken'}
+			{:else if outcome === 'taken'}
 				{m.email_confirm_taken()}
 			{:else}
 				{m.email_confirm_invalid()}
