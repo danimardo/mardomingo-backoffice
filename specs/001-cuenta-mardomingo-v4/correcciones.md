@@ -113,7 +113,7 @@ reverificado.
 - **Requisito**: BE-FR-27 («se emite la factura rectificativa»).
 - **Fichero**: `src/lib/server/features/payments/service.ts`, `refund` (llamada a `deps.invoicing.correctPayment` tras la
   transacción).
-- **Estado**: confirmado por lectura. Sin efecto en la v4 (proveedor de facturación `none`); importa al activar la facturación.
+- **Estado**: corregido (T396, 2026-11-17). Reproducido con test (la excepción se propagaba y no quedaba rastro) y verificado con `test:related` y `lint:changed`. Límite: el reenvío solo reintenta si su clave es el último reembolso aplicado de la compra; tras otro reembolso, la rectificativa pendiente del anterior queda en `payments.refund.corrective_pending` para tratarla a mano (reconstruir su `issueKey` exigiría guardar el total en `refund_keys`, con migración).
 - **Qué pasa**: la rectificativa se emite después de confirmar el reembolso y marcar la clave como aplicada. Si
   `correctPayment` lanza o devuelve `skipped: not_issued`, el reembolso queda sin rectificativa y un reenvío con la misma clave
   responde «repetido» sin volver a intentarlo. No queda ningún rastro que permita detectarlo.

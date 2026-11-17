@@ -41,6 +41,7 @@ import {
 	findRefundKey,
 	insertPayment,
 	insertRefundKey,
+	latestAppliedRefundKeyOf,
 	markRefundKeyApplied,
 	markWantsFullInvoice,
 	paymentIdsOfUser,
@@ -347,8 +348,47 @@ function rejectionError(reason: RefundRejection | 'in_progress'): AppError {
 	}
 }
 
-/** Un reenvío con una clave ya aplicada responde con el estado actual y no vuelve a reembolsar (R12). */
-function repeatedRefund(deps: PaymentsDeps, key: RefundKeyRow, paymentId: string): RefundOutcome {
+/**
+ * Rectificativa de un reembolso (BE-FR-27), con la misma `issueKey` en el primer intento y en los reenvíos: `invoicing` es
+ * idempotente por esa clave. C-04 (T396): el reembolso ya está confirmado, así que un fallo de la rectificativa (excepción o
+ * resultado que no sea emitida, repetida u omitida a propósito) no se propaga: queda `payments.refund.corrective_pending` y el
+ * reenvío del formulario con la misma clave vuelve a intentarlo.
+ */
+function correctRefund(
+	deps: PaymentsDeps,
+	row: PaymentRow,
+	amountEurCents: number,
+	refundedEurCents: number
+): void {
+	try {
+		const outcome = deps.invoicing.correctPayment({
+			paymentId: row.id,
+			userId: row.userId,
+			simulated: row.simulated,
+			amountEurCents,
+			issueKey: `refund:${row.id}:${String(refundedEurCents)}`
+		});
+		const done =
+			outcome.status === 'issued' ||
+			outcome.status === 'duplicate' ||
+			(outcome.status === 'skipped' &&
+				(outcome.reason === 'simulated' || outcome.reason === 'provider_none'));
+		if (!done) deps.logger.emit('payments.refund.corrective_pending', { reason: outcome.status });
+	} catch {
+		deps.logger.emit('payments.refund.corrective_pending', { reason: 'error' });
+	}
+}
+
+/**
+ * Un reenvío con una clave ya aplicada responde con el estado actual y no vuelve a reembolsar (R12), pero reintenta la
+ * rectificativa si la anterior no llegó a emitirse (C-04).
+ */
+function repeatedRefund(
+	deps: PaymentsDeps,
+	key: RefundKeyRow,
+	paymentId: string,
+	amountEurCents: number
+): RefundOutcome {
 	if (key.paymentId !== paymentId)
 		throw new AppError('VALIDATION_ERROR', { field: 'idempotencyKey' });
 	if (key.status === 'claimed') {
@@ -358,6 +398,10 @@ function repeatedRefund(deps: PaymentsDeps, key: RefundKeyRow, paymentId: string
 	deps.logger.emit('payments.refund.repeated', {});
 	const row = findById(deps.db, paymentId);
 	if (row === undefined) throw new AppError('NOT_FOUND');
+	// Tras otro reembolso de la misma compra, el total de la fila ya no es el de este: reintentar emitiría su importe con la clave
+	// del siguiente. Su `corrective_pending` ya quedó registrado en el primer intento.
+	if (latestAppliedRefundKeyOf(deps.db, paymentId) === key.key)
+		correctRefund(deps, row, amountEurCents, row.refundedEurCents);
 	return {
 		status: row.status === 'refunded' ? 'refunded' : 'partially_refunded',
 		refundedEurCents: row.refundedEurCents
@@ -406,7 +450,8 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 		};
 	});
 	if (claim.kind === 'missing') throw new AppError('NOT_FOUND');
-	if (claim.kind === 'repeated') return repeatedRefund(deps, claim.key, input.paymentId);
+	if (claim.kind === 'repeated')
+		return repeatedRefund(deps, claim.key, input.paymentId, input.amountEurCents);
 	if (claim.kind === 'rejected') {
 		deps.logger.emit('payments.refund.rejected', { reason: claim.reason });
 		throw rejectionError(claim.reason);
@@ -459,13 +504,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 		throw new AppError('PAYMENT_NOT_REFUNDABLE');
 	}
 
-	deps.invoicing.correctPayment({
-		paymentId: row.id,
-		userId: row.userId,
-		simulated: row.simulated,
-		amountEurCents: input.amountEurCents,
-		issueKey: `refund:${row.id}:${String(newRefundedEurCents)}`
-	});
+	correctRefund(deps, row, input.amountEurCents, newRefundedEurCents);
 	deps.logger.emit('payments.refund.applied', {});
 	return { status: newStatus, refundedEurCents: newRefundedEurCents };
 }

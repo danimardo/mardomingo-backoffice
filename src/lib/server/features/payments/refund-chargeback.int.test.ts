@@ -16,6 +16,7 @@ import { session, user } from '$lib/server/features/accounts/schema';
 import { invoices } from '$lib/server/features/invoicing/schema';
 import { termsAcceptances } from '$lib/server/features/legal/schema';
 import { toEpochMs } from '$lib/shared/time';
+import { createPaymentsService } from './index';
 import { payments, refundKeys } from './schema';
 
 const CREDIT = 1_000_000;
@@ -198,6 +199,94 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		expect(f.payments.refund(form)).toEqual({ status: 'refunded', refundedEurCents: 1000 });
 		expect(f.base.credits.getBalance(userId).totalMicro).toBe(0);
 		expect(refundMovements()).toHaveLength(1);
+	});
+
+	// C-04 (T396): si la rectificativa falla tras confirmar el reembolso, queda rastro y el reenvío con la misma clave la emite.
+	it.each([
+		['lanza una excepción', 'throw'],
+		['no se emite (not_issued)', 'not_issued']
+	] as const)(
+		'si la rectificativa %s, queda payments.refund.corrective_pending y el reenvío la emite una sola vez',
+		(_label, failure) => {
+			const { userId } = f.addAccount(`usr_pendiente_${failure}`);
+			const adminId = f.addAccount(`adm_pendiente_${failure}`, 'admin').userId;
+			const paymentId = buyReal(userId, `att_pendiente_${failure}`);
+			issueInitialInvoice(paymentId, userId);
+			let failuresLeft = 1;
+			const flaky = createPaymentsService({
+				...f.deps,
+				invoicing: {
+					...f.deps.invoicing,
+					correctPayment: (input) => {
+						if (failuresLeft > 0) {
+							failuresLeft -= 1;
+							if (failure === 'throw') throw new Error('proveedor de facturación caído');
+							return { status: 'skipped', reason: 'not_issued' };
+						}
+						return f.deps.invoicing.correctPayment(input);
+					}
+				}
+			});
+			const form = {
+				adminId,
+				paymentId,
+				amountEurCents: 400,
+				creditsToRemoveMicro: 0,
+				reason: 'Rectificativa fallida',
+				idempotencyKey: randomUUID()
+			};
+
+			expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+			expect(paymentOf(paymentId)).toMatchObject({ refundedEurCents: 400 });
+			expect(correctiveAmounts(paymentId)).toEqual([]);
+			expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(1);
+			expect(eventsNamed(f.base.logger, 'payments.refund.applied')).toHaveLength(1);
+
+			expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+			expect(correctiveAmounts(paymentId)).toEqual([-400]);
+			expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(1);
+			expect(eventsNamed(f.base.logger, 'payments.refund.repeated')).toHaveLength(1);
+
+			// Un tercer reenvío es idempotente por `issue_key`: sigue habiendo una sola rectificativa.
+			flaky.refund(form);
+			expect(correctiveAmounts(paymentId)).toEqual([-400]);
+		}
+	);
+
+	// C-04 (T396): tras otro reembolso de la misma compra, el total de la fila ya no es el del reembolso reenviado, así que no se
+	// puede reconstruir su `issueKey`. Reintentarlo emitiría el importe del primero con la clave del segundo y bloquearía la buena.
+	it('el reenvío de un reembolso anterior al último no reintenta su rectificativa', () => {
+		const { userId } = f.addAccount('usr_pendiente_viejo');
+		const adminId = f.addAccount('adm_pendiente_viejo', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_pendiente_viejo');
+		issueInitialInvoice(paymentId, userId);
+		let failuresLeft = 2;
+		const flaky = createPaymentsService({
+			...f.deps,
+			invoicing: {
+				...f.deps.invoicing,
+				correctPayment: (input) => {
+					if (failuresLeft > 0) {
+						failuresLeft -= 1;
+						return { status: 'skipped', reason: 'not_issued' };
+					}
+					return f.deps.invoicing.correctPayment(input);
+				}
+			}
+		});
+		const base = { adminId, paymentId, creditsToRemoveMicro: 0, reason: 'Dos parciales' };
+		const first = { ...base, amountEurCents: 400, idempotencyKey: randomUUID() };
+		const second = { ...base, amountEurCents: 300, idempotencyKey: randomUUID() };
+
+		flaky.refund(first);
+		flaky.refund(second);
+		expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(2);
+
+		expect(flaky.refund(first)).toEqual({ status: 'partially_refunded', refundedEurCents: 700 });
+		expect(correctiveAmounts(paymentId)).toEqual([]);
+
+		flaky.refund(second);
+		expect(correctiveAmounts(paymentId)).toEqual([-300]);
 	});
 
 	it('dos formularios distintos sí son dos reembolsos parciales', () => {
