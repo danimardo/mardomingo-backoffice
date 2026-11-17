@@ -443,7 +443,7 @@ confirmado después ejecutando sus tests de reproducción contra el código de 3
 - **Requisito**: BE-FR-42 CA2, BE-FR-65; `contracts/api-v1` E12 («(Bearer)», error `UNAUTHENTICATED`).
 - **Ficheros**: `src/routes/api/v1/defaults/+server.ts` (solo `requireApp` y `guardEndpoint`), `src/lib/server/api/openapi.ts`
   (solo documenta 200 y 426), `tests/http/api-sync.test.ts` (llama sin Bearer y espera 200).
-- **Estado**: confirmado por ejecución: sin Bearer y con un Bearer inventado responde 200.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. confirmado por ejecución: sin Bearer y con un Bearer inventado responde 200.
 - **Cambio** (**decisión del propietario: exigir el token**, como dice E12): `requireAppSession` después de `requireApp` y antes
   de `guardEndpoint`; 401 en el OpenAPI; `api-sync.test.ts` envía el Bearer. `plan.md` («solo aplica la de versión») se
   refiere a la exención de mantenimiento y de documentos legales (D-19), no a la sesión.
@@ -469,7 +469,7 @@ confirmado después ejecutando sus tests de reproducción contra el código de 3
 - **Requisito**: BE-FR-70 CA2; `contracts/api-v1` E06 («registra … app_id»); `data-model.md` (`terms_acceptances.app_id`: nulo
   = web).
 - **Fichero**: `src/lib/server/features/legal/accept-documents.ts` (`appId: null` fijo).
-- **Estado**: confirmado por ejecución: la fila de `POST /api/v1/me/accept-terms` lleva `app_id` nulo.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. confirmado por ejecución: la fila de `POST /api/v1/me/accept-terms` lleva `app_id` nulo.
 - **Cambio**: `acceptDocuments` recibe `appId`; la ruta de la API pasa el id de la app y la web sigue pasando `null`.
 - **Test (primero, debe fallar)**: la fila de `terms_acceptances` creada desde la API lleva el id de `secretario`.
 
@@ -478,7 +478,7 @@ confirmado después ejecutando sus tests de reproducción contra el código de 3
 - **Requisito**: `contracts/api-v1` 1.8 (app → Origin → límite → sesión 401 → versión 426 → mantenimiento → … → validación).
 - **Ficheros**: `src/routes/api/v1/me/+server.ts` y `me/accept-terms/+server.ts` (`guardEndpoint` antes de `requireAppSession`);
   `src/routes/api/v1/auth/logout/+server.ts` (valida el cuerpo antes de comprobar la app y la sesión).
-- **Estado**: confirmado por ejecución: `/me` y `/me/accept-terms` sin Bearer y con versión antigua responden 426; logout sin
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. confirmado por ejecución: `/me` y `/me/accept-terms` sin Bearer y con versión antigua responden 426; logout sin
   Bearer responde 400, y con app desconocida, `VALIDATION_ERROR`.
 - **Cambio**: en todas las rutas de `/api/v1`, `requireApp` → `requireAppSession` → `guardEndpoint` → validación del cuerpo.
 - **Test (primero, debe fallar)**: los cuatro casos anteriores responden 401 o `UNKNOWN_APP`.
@@ -489,7 +489,7 @@ confirmado después ejecutando sus tests de reproducción contra el código de 3
   error 7.1.
 - **Fichero**: `src/hooks.server.ts`: `loadSession` llama a `readSession` y `touchActivity` sin capturar errores, y
   `requestContext` solo pone `x-request-id` y las cabeceras de seguridad cuando `resolve` termina bien.
-- **Estado**: confirmado por lectura: una excepción no HTTP sale de `requestContext` sin esas cabeceras; el cuerpo lo genera
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. confirmado por lectura: una excepción no HTTP sale de `requestContext` sin esas cabeceras; el cuerpo lo genera
   SvelteKit y no tiene la forma `{ error: { code, … } }` en la API.
 - **Cambio**: en la API, capturar el fallo de `loadSession` y responder `INTERNAL_ERROR` con el formato 7.1, registrándolo una
   vez; `requestContext` pone las cabeceras también en el camino de error.
@@ -504,7 +504,7 @@ confirmado después ejecutando sus tests de reproducción contra el código de 3
   sin `session.revoked`; `logout` y el bloqueo por contracargo sin `count`), `accounts/email-change.ts` (sin `session.revoked`;
   `applied` usa `sessionsClosed` en vez de `count`), `accounts/close-session.ts` y `routes/(web)/panel/sesiones` (nunca emiten
   `user_closed_one` ni `user_closed_others`), `src/lib/server/api/session.ts` (`apps.app.rejected` sin `errorCode`).
-- **Estado**: confirmado por lectura.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. confirmado por lectura.
 - **Cambio**: emitir `accounts.session.revoked` aparte, con su motivo y el número real de sesiones borradas, en cada
   revocación; `count` real en `password.changed` y `email_change.applied`; `errorCode` en `apps.app.rejected`.
 - **Test (primero, debe fallar)**: con el logger de prueba, cada revocación emite `accounts.session.revoked` con su motivo y su

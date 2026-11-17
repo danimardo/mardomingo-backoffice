@@ -980,12 +980,12 @@ Hallazgos C-15 a C-25 de `correcciones.md`, con las decisiones del propietario r
 Hallazgos C-26 a C-31 de `correcciones.md`. C-26 sigue la decisión del propietario (exigir el token, como dice E12). Se
 corrigen en serie y con el test primero.
 
-- [ ] T418 C-26 (Media): `GET /api/v1/defaults` exige sesión Bearer, con el 401 en el OpenAPI y `api-sync.test.ts` ajustado [BE-FR-42 CA2, BE-FR-65]
+- [x] T418 C-26 (Media): `GET /api/v1/defaults` exige sesión Bearer, con el 401 en el OpenAPI y `api-sync.test.ts` ajustado [BE-FR-42 CA2, BE-FR-65] _Hecho: `/defaults` exige `requireAppSession` antes de `guardEndpoint`, 401 en el OpenAPI (código y `contracts/openapi-v1.json`) y `api-sync.test.ts` envía el Bearer. Tests en `tests/http/api-order.test.ts`, en rojo antes del cambio._
 - [ ] T419 [US1] C-27 (Media): un login no deja sesión si la credencial o la cuenta cambian mientras se comprueba, y la sesión de un usuario borrado o bloqueado no cuenta, en `accounts/service.ts`, `hooks.server.ts` y `api/session.ts` [BE-FR-04 CA2 y CA4, BE-FR-06, BE-FR-07]
-- [ ] T420 C-28 (Media): la aceptación de términos desde la API registra el `app_id` en `legal/accept-documents.ts` [BE-FR-70 CA2]
-- [ ] T421 C-29 (Baja): orden app → sesión → versión → validación en las rutas de `/api/v1` (contrato 1.8)
-- [ ] T422 C-30 (Baja): un fallo de `loadSession` en la API responde `INTERNAL_ERROR` con `X-Request-Id` y cabeceras de seguridad en `hooks.server.ts`
-- [ ] T423 C-31 (Baja): eventos `accounts.session.revoked` con motivo y `count` en todas las revocaciones, y `errorCode` en `apps.app.rejected`
+- [x] T420 C-28 (Media): la aceptación de términos desde la API registra el `app_id` en `legal/accept-documents.ts` [BE-FR-70 CA2] _Hecho: `acceptDocuments` recibe `appId` (la API pasa el id de la app, la web `null`). Test HTTP en `api-order.test.ts`, en rojo antes del cambio._
+- [x] T421 C-29 (Baja): orden app → sesión → versión → validación en las rutas de `/api/v1` (contrato 1.8) _Hecho: `/me`, `/me/accept-terms`, `/defaults` y `/auth/logout` siguen app, sesión, versión y validación. Cuatro tests en `api-order.test.ts`, en rojo antes del cambio._
+- [x] T422 C-30 (Baja): un fallo de `loadSession` en la API responde `INTERNAL_ERROR` con `X-Request-Id` y cabeceras de seguridad en `hooks.server.ts` _Hecho: un fallo de `loadSession` en la API responde `INTERNAL_ERROR` (7.1) registrado una vez, y `requestContext` pone `x-request-id` y las cabeceras de seguridad también en el camino de error. Test en `src/hooks.server.test.ts`, en rojo antes del cambio._
+- [x] T423 C-31 (Baja): eventos `accounts.session.revoked` con motivo y `count` en todas las revocaciones, y `errorCode` en `apps.app.rejected` _Hecho: `accounts.session.revoked` con motivo y `count` real en cambio y recuperación de contraseña, cambio de email, cierre de una o de las demás sesiones, logout y bloqueo por contracargo; `count` en `password.changed` y `email_change.applied`; `errorCode` en `apps.app.rejected`. Tests en `session-revoked.int.test.ts`, `close-session.int.test.ts` y `api.test.ts`, en rojo antes del cambio._
 
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 

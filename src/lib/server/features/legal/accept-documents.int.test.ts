@@ -46,6 +46,7 @@ describe('acceptDocuments (BE-FR-70)', () => {
 	it('registra la versión vigente con fecha, IP y app nula', () => {
 		acceptDocuments(legalDeps(), {
 			userId,
+			appId: null,
 			ip: '203.0.113.9',
 			now: toEpochMs(NOW),
 			accepted: [{ document: 'terms', version: vigente('terms') }]
@@ -58,8 +59,8 @@ describe('acceptDocuments (BE-FR-70)', () => {
 
 	it('aceptar dos veces la misma versión no duplica', () => {
 		const accepted = [{ document: 'privacy' as const, version: vigente('privacy') }];
-		acceptDocuments(legalDeps(), { userId, ip: null, now: toEpochMs(NOW), accepted });
-		acceptDocuments(legalDeps(), { userId, ip: null, now: toEpochMs(NOW), accepted });
+		acceptDocuments(legalDeps(), { userId, appId: null, ip: null, now: toEpochMs(NOW), accepted });
+		acceptDocuments(legalDeps(), { userId, appId: null, ip: null, now: toEpochMs(NOW), accepted });
 
 		expect(rowsOf('privacy')).toHaveLength(1);
 	});
@@ -68,6 +69,7 @@ describe('acceptDocuments (BE-FR-70)', () => {
 		expect(() =>
 			acceptDocuments(legalDeps(), {
 				userId,
+				appId: null,
 				ip: null,
 				now: toEpochMs(NOW),
 				accepted: [{ document: 'terms', version: '1999-01-01' }]

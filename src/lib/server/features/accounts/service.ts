@@ -25,6 +25,7 @@ import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import type { Auth } from './auth';
 import { DISPOSABLE_DOMAINS_V1 } from './disposable-domains';
 import { normalizeEmail } from './domain/email';
+import { revokedSince, sessionIdsOf } from './close-session';
 import { safeRedirect } from './domain/redirect';
 import { hashNormalizedEmail } from './email-hash';
 import {
@@ -632,6 +633,7 @@ export async function resetPassword(
 		pending === undefined
 			? undefined
 			: deps.db.select().from(user).where(eq(user.id, pending.userId)).get();
+	const sessionsBefore = target === undefined ? [] : sessionIdsOf(deps.db, target.id);
 	try {
 		await deps.auth.api.resetPassword({
 			body: { newPassword: input.password, token: input.token }
@@ -654,12 +656,22 @@ export async function resetPassword(
 		});
 	}
 	deps.logger.emit('accounts.password.reset_completed', {});
+	if (target !== undefined) {
+		deps.logger.emit('accounts.session.revoked', {
+			reason: 'password_changed',
+			count: revokedSince(deps.db, target.id, sessionsBefore)
+		});
+	}
 }
 
 /** Cierra la sesión de las cabeceras dadas (W15, BE-FR-06). */
 export async function logout(deps: AccountsDeps, headers: Headers): Promise<void> {
+	const current = await deps.auth.api.getSession({ headers });
 	await deps.auth.api.signOut({ headers });
-	deps.logger.emit('accounts.session.revoked', { reason: 'logout' });
+	deps.logger.emit('accounts.session.revoked', {
+		reason: 'logout',
+		count: current === null ? 0 : 1
+	});
 }
 
 /**
@@ -749,13 +761,13 @@ export function blockAccount(
 	deps: { readonly db: Db; readonly logger: Logger },
 	input: { readonly userId: string; readonly reason: 'chargeback' }
 ): void {
-	immediateTransaction(deps.db, (tx) => {
+	const closed = immediateTransaction(deps.db, (tx) => {
 		tx.update(user)
 			.set({ banned: true, banReason: input.reason })
 			.where(eq(user.id, input.userId))
 			.run();
-		tx.delete(session).where(eq(session.userId, input.userId)).run();
+		return tx.delete(session).where(eq(session.userId, input.userId)).run().changes;
 	});
 	deps.logger.emit('accounts.user.blocked', { reason: input.reason });
-	deps.logger.emit('accounts.session.revoked', { reason: 'blocked' });
+	deps.logger.emit('accounts.session.revoked', { reason: 'blocked', count: closed });
 }

@@ -2,14 +2,15 @@
 // token, con efecto inmediato. Nunca exige versión mínima de la app.
 import { apiFallback, apiRoute } from '$lib/server/api/handler';
 import { validationErrorResponse } from '$lib/server/api/errors';
-import { bearerOnlyHeaders, requireAppSession } from '$lib/server/api/session';
+import { bearerOnlyHeaders, requireApp, requireAppSession } from '$lib/server/api/session';
 import { getComposition } from '$lib/server/composition.cache';
 
 export const POST = apiRoute(async (event) => {
+	requireApp(event);
+	requireAppSession(event);
 	const body = await event.request.text();
 	if (body.trim() !== '') return validationErrorResponse('body');
 
-	requireAppSession(event);
 	await getComposition().accounts.logout(bearerOnlyHeaders(event.request.headers));
 	return new Response(null, { status: 204 });
 });

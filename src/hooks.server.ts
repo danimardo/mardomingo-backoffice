@@ -4,6 +4,7 @@
 import { building } from '$app/environment';
 import {
 	isHttpError,
+	isRedirect,
 	type Handle,
 	type HandleServerError,
 	type RequestEvent,
@@ -172,8 +173,25 @@ const requestContext: Handle = async ({ event, resolve }) => {
 		setSecurityHeaders(response);
 		return response;
 	} catch (cause) {
-		if (isHttpError(cause)) httpStatus = cause.status;
-		throw cause;
+		if (isHttpError(cause) || isRedirect(cause)) {
+			httpStatus = cause.status;
+			throw cause;
+		}
+		// Un fallo que escapa de los demás pasos (p. ej. al cargar la sesión): la respuesta sale de aquí, con su
+		// `X-Request-Id` y las cabeceras de seguridad, y se registra una sola vez (C-30).
+		httpStatus = 500;
+		log.emit('http.request.failed', {
+			route: event.route.id ?? '',
+			method: event.request.method,
+			httpStatus: 500,
+			err: cause
+		});
+		const response = event.url.pathname.startsWith(API_PREFIX)
+			? apiErrorResponse('INTERNAL_ERROR')
+			: unexpectedErrorResponse(requestId);
+		response.headers.set('x-request-id', requestId);
+		setSecurityHeaders(response);
+		return response;
 	} finally {
 		const isHealth = event.url.pathname === HEALTH_PATH;
 		log.emit(
@@ -188,6 +206,15 @@ const requestContext: Handle = async ({ event, resolve }) => {
 		);
 	}
 };
+
+/** Página mínima de 500 de la web, con el código de referencia, para un fallo fuera del trazado de SvelteKit. */
+function unexpectedErrorResponse(requestId: string): Response {
+	const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${m.errors_unexpected()}</title></head><body><main><h1>${m.errors_unexpected()}</h1><p>${m.errors_reference_code()}: <code>${requestId}</code></p></main></body></html>`;
+	return new Response(html, {
+		status: 500,
+		headers: { 'content-type': 'text/html; charset=utf-8' }
+	});
+}
 
 /** Separación por host: la API solo responde a `/api/v1/*` y la web al resto (`/api/v1/health`, aparte). */
 const hostSeparation: Handle = ({ event, resolve }) => {
@@ -368,7 +395,18 @@ const sessionStep: Handle = async ({ event, resolve }) => {
 			});
 		}
 		if (event.request.headers.has('authorization')) {
-			await loadSession(event, bearerOnlyHeaders(event.request.headers));
+			try {
+				await loadSession(event, bearerOnlyHeaders(event.request.headers));
+			} catch (cause) {
+				// Formato 7.1 y un solo registro; `requestContext` añade `X-Request-Id` y las cabeceras de seguridad (C-30).
+				event.locals.log.emit('http.request.failed', {
+					route: event.route.id ?? '',
+					method: event.request.method,
+					httpStatus: 500,
+					err: cause
+				});
+				return apiErrorResponse('INTERNAL_ERROR');
+			}
 		}
 		const response = await resolve(event);
 		response.headers.delete('set-cookie');

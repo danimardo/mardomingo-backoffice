@@ -2,6 +2,7 @@
 // y nunca una de otra cuenta.
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import { creditsFixture, type CreditsFixture } from '../../../../../tests/builders/credits';
 import { session } from './schema';
 import { closeOtherSession, closeOtherSessions } from './close-session';
@@ -33,6 +34,10 @@ function addSession(id: string, owner: string): void {
 		.run();
 }
 
+function deps() {
+	return { db: f.db, logger: f.logger };
+}
+
 function exists(id: string): boolean {
 	return f.db.select().from(session).where(eq(session.id, id)).get() !== undefined;
 }
@@ -42,7 +47,7 @@ describe('closeOtherSession (T264)', () => {
 		addSession('ses_actual', userId);
 		addSession('ses_otra', userId);
 
-		const outcome = closeOtherSession(f.db, {
+		const outcome = closeOtherSession(deps(), {
 			userId,
 			sessionId: 'ses_otra',
 			currentSessionId: 'ses_actual'
@@ -51,13 +56,16 @@ describe('closeOtherSession (T264)', () => {
 		expect(outcome).toBe('closed');
 		expect(exists('ses_otra')).toBe(false);
 		expect(exists('ses_actual')).toBe(true);
+		expect(eventsNamed(f.logger, 'accounts.session.revoked').map((item) => item.fields)).toEqual([
+			{ reason: 'user_closed_one', count: 1 }
+		]);
 	});
 
 	it('no cierra la sesión actual', () => {
 		addSession('ses_actual', userId);
 
 		expect(
-			closeOtherSession(f.db, { userId, sessionId: 'ses_actual', currentSessionId: 'ses_actual' })
+			closeOtherSession(deps(), { userId, sessionId: 'ses_actual', currentSessionId: 'ses_actual' })
 		).toBe('current');
 		expect(exists('ses_actual')).toBe(true);
 	});
@@ -66,14 +74,14 @@ describe('closeOtherSession (T264)', () => {
 		addSession('ses_ajena', f.addUser('usr_cierre_otro'));
 
 		expect(
-			closeOtherSession(f.db, { userId, sessionId: 'ses_ajena', currentSessionId: 'ses_actual' })
+			closeOtherSession(deps(), { userId, sessionId: 'ses_ajena', currentSessionId: 'ses_actual' })
 		).toBe('not_found');
 		expect(exists('ses_ajena')).toBe(true);
 	});
 
 	it('una sesión inexistente no encuentra nada', () => {
 		expect(
-			closeOtherSession(f.db, { userId, sessionId: 'no_existe', currentSessionId: null })
+			closeOtherSession(deps(), { userId, sessionId: 'no_existe', currentSessionId: null })
 		).toBe('not_found');
 	});
 });
@@ -86,19 +94,22 @@ describe('closeOtherSessions (UX-10)', () => {
 		addSession('ses_c', userId);
 		addSession('ses_ajena', otra);
 
-		const closed = closeOtherSessions(f.db, { userId, currentSessionId: 'ses_actual' });
+		const closed = closeOtherSessions(deps(), { userId, currentSessionId: 'ses_actual' });
 
 		expect(closed).toBe(2);
 		expect(exists('ses_actual')).toBe(true);
 		expect(exists('ses_b')).toBe(false);
 		expect(exists('ses_c')).toBe(false);
 		expect(exists('ses_ajena')).toBe(true);
+		expect(eventsNamed(f.logger, 'accounts.session.revoked').map((item) => item.fields)).toEqual([
+			{ reason: 'user_closed_others', count: 2 }
+		]);
 	});
 
 	it('sin sesión actual legible no cierra nada', () => {
 		addSession('ses_b', userId);
 
-		expect(closeOtherSessions(f.db, { userId, currentSessionId: null })).toBe(0);
+		expect(closeOtherSessions(deps(), { userId, currentSessionId: null })).toBe(0);
 		expect(exists('ses_b')).toBe(true);
 	});
 });

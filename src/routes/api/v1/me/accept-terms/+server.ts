@@ -14,8 +14,8 @@ import { clientIpOf } from '$lib/server/web/actions';
 
 export const POST = apiRoute(async (event) => {
 	const app = requireApp(event);
-	guardEndpoint('me.accept_terms', app);
 	const session = requireAppSession(event);
+	guardEndpoint('me.accept_terms', app);
 	const parsed = AcceptTermsBody.safeParse(await jsonBodyOf(event.request));
 	if (!parsed.success) return validationErrorResponse(firstIssuePath(parsed.error.issues));
 
@@ -23,6 +23,7 @@ export const POST = apiRoute(async (event) => {
 	try {
 		acceptDocuments(composition.legal, {
 			userId: session.userId,
+			appId: app.id,
 			ip: clientIpOf(event.getClientAddress),
 			now: toEpochMs(composition.clock.now()),
 			accepted: parsed.data.documents

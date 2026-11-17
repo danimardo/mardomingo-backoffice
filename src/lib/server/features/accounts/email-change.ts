@@ -253,7 +253,11 @@ export function confirmEmailChange(
 			idempotencyKey: `email-changed-${sha256Hex(token)}`
 		})
 	);
-	deps.logger.emit('accounts.email_change.applied', { sessionsClosed: result.sessionsClosed });
+	deps.logger.emit('accounts.email_change.applied', { count: result.sessionsClosed });
+	deps.logger.emit('accounts.session.revoked', {
+		reason: 'email_changed',
+		count: result.sessionsClosed
+	});
 	return {
 		outcome: 'applied',
 		sessionsClosed: result.sessionsClosed,

@@ -10,6 +10,7 @@ import {
 } from './errors';
 import { ERROR_MESSAGES } from './error-messages';
 import { apiFallback, apiRoute } from './handler';
+import { requireApp } from './session';
 import { API_NO_STORE_HEADERS, jsonResponse } from './headers';
 import { buildOpenApiDocument } from './openapi';
 import { openApiJson } from './openapi.cache';
@@ -122,6 +123,22 @@ describe('apiRoute', () => {
 		expect(body).toMatchObject({ error: { code: 'INTERNAL_ERROR' } });
 		expect(JSON.stringify(body)).not.toContain('datos sensibles');
 		expect(eventsNamed(logger, 'http.request.failed')).toHaveLength(1);
+	});
+});
+
+describe('requireApp (C-31)', () => {
+	it('registra apps.app.rejected con reason y errorCode', () => {
+		const logger = createFakeLogger();
+		const event = makeApiEvent({ logger });
+
+		expect(() => requireApp(event)).toThrow(expect.objectContaining({ code: 'UNKNOWN_APP' }));
+		event.locals.appRejection = 'app_disabled';
+		expect(() => requireApp(event)).toThrow(expect.objectContaining({ code: 'APP_DISABLED' }));
+
+		expect(eventsNamed(logger, 'apps.app.rejected').map((item) => item.fields)).toEqual([
+			{ reason: 'unknown_app', errorCode: 'UNKNOWN_APP' },
+			{ reason: 'app_disabled', errorCode: 'APP_DISABLED' }
+		]);
 	});
 });
 

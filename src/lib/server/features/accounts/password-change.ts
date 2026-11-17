@@ -10,6 +10,7 @@ import { sendAccountEmail } from '$lib/server/features/notifications';
 import { AppError } from '$lib/server/shared/errors';
 import { lockReachedBy, reservePasswordAttempt, sessionAttemptKeyOf } from './password-attempts';
 import { deletePendingEmailChanges, deleteResetTokens } from './pending-tokens';
+import { revokedSince, sessionIdsOf } from './close-session';
 import { clearLoginAttempts } from './repository';
 import type { AccountsDeps } from './service';
 
@@ -48,6 +49,7 @@ export async function changePassword(
 		});
 	}
 
+	const sessionsBefore = sessionIdsOf(deps.db, current.user.id);
 	let owner: { readonly id: string; readonly email: string };
 	try {
 		const result = await deps.auth.api.changePassword({
@@ -80,6 +82,8 @@ export async function changePassword(
 		to: owner.email,
 		idempotencyKey: randomUUID()
 	});
-	deps.logger.emit('accounts.password.changed', { count: 1 });
+	const count = revokedSince(deps.db, owner.id, sessionsBefore);
+	deps.logger.emit('accounts.password.changed', { count });
+	deps.logger.emit('accounts.session.revoked', { reason: 'password_changed', count });
 	return 'changed';
 }

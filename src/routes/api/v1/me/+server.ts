@@ -11,8 +11,8 @@ import { pendingAcceptancesOf } from '$lib/server/features/legal';
 
 export const GET = apiRoute((event) => {
 	const app = requireApp(event);
-	guardEndpoint('me', app);
 	const session = requireAppSession(event);
+	guardEndpoint('me', app);
 	const user = event.locals.user;
 	if (user === null) return new Response(null, { status: 401 });
 
