@@ -928,6 +928,16 @@ Cada fase cierra con su checkpoint y deja algo demostrable: protecciones (US8) �
 - [x] T391 encapsular el contador `seen` de `src/hooks.client.ts` en el estado del layout, o documentarlo como excepción de cliente, frente a la regla «sin estado de módulo» del plan de L01 per plan de L01 «sin estado de módulo» (contradicts) _Hecho en L01 (fase 16): Contador de huellas del navegador documentado como excepción de cliente (la regla es del servidor)._
 - [x] T392 documentar en `contracts/log-events.md` 2.4 que `client.report.failed` solo emite `network` (con `sendBeacon` no se detecta el rechazo), o cambiar el envío para poder detectarlo per log-events 2.4 y T027 (partial) _Hecho en L01 (fase 16): Contrato 2.4 actualizado: client.report.failed solo emite network con sendBeacon._
 
+## Phase 17: Correcciones de la revisión (2026-11-12)
+
+Guía de implementación de cada tarea, con el test que debe fallar primero, el cambio exacto y su verificación:
+`specs/001-cuenta-mardomingo-v4/correcciones.md`. Revisión **parcial**: solo cubre `credits`, `payments` e `invoicing` (L05 y L10).
+
+- [ ] T393 [US4] C-01 (Alta): aceptar `chargeback_opened` en compras `partially_refunded` en `src/lib/server/features/payments/service.ts` (`applyEvent`), con su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-28, data-model 4.5]
+- [ ] T394 C-02 (Media): que `reservedOf` y `freeAccountsOpenHoldsMicro` de `src/lib/server/features/credits/repository.ts` ignoren las reservas caducadas, sin tocar `openHoldOf` ni `chargeAndRelease`, con su T-INT en `credits/credits.int.test.ts` [BE-FR-71]
+- [ ] T395 [US4] C-03 (Media): `chargebackEurCents` = pagado − ya devuelto en `paymentFactsBetween` (`src/lib/server/features/payments/service.ts`), con su T-INT en `payments/payment-facts.int.test.ts` [BE-FR-76]
+- [ ] T396 [US4] C-04 (Baja): reintento idempotente de la rectificativa en el reenvío de un reembolso y evento `payments.refund.corrective_pending` en `src/lib/server/features/payments/{service,events}.ts`, con su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-27]
+
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 
 <!-- Pendiente de CI (WebKit): la CSP bloquea una hoja de estilos sin nonce (`style-src 'self'`) durante la carga de /panel/perfil; en local aparece de forma intermitente y no se ha localizado el origen (no hay `<style>` en el HTML ni inserciones por JavaScript). Pendiente de investigar con la hidratación de Svelte; no se ha relajado la CSP. -->
