@@ -4,14 +4,16 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { clientErrorReportSchema, CLIENT_ERROR_MAX_BYTES } from '$lib/schemas/client-error-report';
 import { getComposition } from '$lib/server/composition.cache';
+import { readTextCapped } from '$lib/server/logging/client-errors.body';
 import { admitClientErrorReport } from '$lib/server/logging/client-errors.cache';
 import { clientIpOf } from '$lib/server/web/actions';
 
 const noContent = () => new Response(null, { status: 204 });
 
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
-	const body = await request.text();
-	if (new TextEncoder().encode(body).byteLength > CLIENT_ERROR_MAX_BYTES) return noContent();
+	// Tope de 4 KB por cabecera y leyendo: el cuerpo que excede se descarta sin procesarlo.
+	const body = await readTextCapped(request, CLIENT_ERROR_MAX_BYTES);
+	if (body === null) return noContent();
 
 	const parsed = parseJson(body);
 	if (parsed === undefined) return noContent();

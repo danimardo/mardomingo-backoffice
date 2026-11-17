@@ -35,3 +35,11 @@ describe('límite de informes del navegador', () => {
 		expect(admitted).toBe(300);
 	});
 });
+
+describe('[C-38] cupo global frente a un visitante abusivo', () => {
+	it('los informes rechazados por el límite del visitante no gastan el cupo global', () => {
+		for (let index = 0; index < 300; index += 1) admitClientErrorReport('visitante-a', 0);
+
+		expect(admitClientErrorReport('visitante-b', 0)).toBe(true);
+	});
+});

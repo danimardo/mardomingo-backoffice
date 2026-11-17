@@ -45,6 +45,14 @@ const DEPLOYED_REQUIRED_KEYS = Object.freeze([
 	'TURNSTILE_SECRET'
 ] as const);
 
+// Variables del proxy: staging y producción deben fijarlas (C-32). adapter-node las lee directamente de `process.env`, así
+// que un valor por defecto del esquema no le llega y, sin ellas, todas las peticiones tendrían la IP del proxy.
+const DEPLOYED_PROXY_KEYS = Object.freeze([
+	'ADDRESS_HEADER',
+	'XFF_DEPTH',
+	'PROTOCOL_HEADER'
+] as const);
+
 // Entero leído de texto (los valores del entorno siempre llegan como cadena).
 const intFromEnv = (min: number, max: number) =>
 	z
@@ -79,9 +87,10 @@ const baseSchema = z.object({
 	CLIENT_LOG_LEVEL: logLevel.optional(),
 	PORT: intFromEnv(1, 65535).default(3000),
 	HOST: z.string().default('0.0.0.0'),
-	ADDRESS_HEADER: z.string().default('x-forwarded-for'),
-	XFF_DEPTH: intFromEnv(0, 10).default(1),
-	PROTOCOL_HEADER: z.string().default('x-forwarded-proto'),
+	// Del proxy: obligatorias en staging y producción (adapter-node las lee de `process.env`; ver `DEPLOYED_PROXY_KEYS`).
+	ADDRESS_HEADER: z.string().optional(),
+	XFF_DEPTH: intFromEnv(0, 10).optional(),
+	PROTOCOL_HEADER: z.string().optional(),
 	/** Sin valor, SvelteKit usa 512K: la comprobación de arranque lo tiene en cuenta (FR-070). */
 	BODY_SIZE_LIMIT: z.string().optional(),
 	MOCK_OPENROUTER_URL: z.url().optional(),
@@ -152,6 +161,16 @@ const envSchema = baseSchema
 			}
 		}
 
+		for (const key of DEPLOYED_PROXY_KEYS) {
+			if (env[key] === undefined) {
+				ctx.addIssue({
+					code: 'custom',
+					path: [key],
+					message: 'Obligatoria en staging y producción (proxy e IP del cliente).'
+				});
+			}
+		}
+
 		if (env.APP_ENV === 'production') {
 			if (TURNSTILE_TEST_KEY.test(env.PUBLIC_TURNSTILE_SITE_KEY)) {
 				ctx.addIssue({
@@ -171,6 +190,10 @@ const envSchema = baseSchema
 	})
 	.transform((env) => ({
 		...env,
+		// Solo en desarrollo y test se admiten los valores por defecto del proxy.
+		ADDRESS_HEADER: env.ADDRESS_HEADER ?? 'x-forwarded-for',
+		XFF_DEPTH: env.XFF_DEPTH ?? 1,
+		PROTOCOL_HEADER: env.PROTOCOL_HEADER ?? 'x-forwarded-proto',
 		// Valores por defecto según el entorno (constitución, «Variables» y Historias 4.3).
 		LOG_LEVEL: env.LOG_LEVEL ?? (env.APP_ENV === 'production' ? 'info' : 'debug'),
 		CAPTCHA_FAKE: env.CAPTCHA_FAKE ?? false,

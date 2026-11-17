@@ -530,7 +530,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
   `XFF_DEPTH=1`, `PROTOCOL_HEADER`; `PORT` 7311 en producción y 7312 en staging; el 3000 está prohibido); BE-FR-45, BE-FR-11.
 - **Ficheros**: `src/lib/server/config/env-schema.ts` (las tres variables con `default`, que solo ve la app: adapter-node lee
   `process.env`), `Dockerfile` (`PORT=3000`, `EXPOSE 3000` y ninguna de las tres variables).
-- **Estado**: confirmado por ejecución: el esquema acepta producción y staging sin las variables, y la imagen no las fija y
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: el esquema aceptaba producción y staging sin las variables, y la imagen no las fija y
   escucha en el 3000. Si el despliegue no las define, `getClientAddress()` devuelve la IP del proxy y todos los usuarios
   comparten los límites por IP.
 - **Cambio** (**decisión del propietario: exigir y fijar**): en staging y producción el arranque falla si falta alguna de las
@@ -567,7 +567,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
 - **Ficheros**: `accounts/auth.ts` (`ipAddressHeaders: ['x-mm-client-ip']`; el comentario dice que se borra si llega del
   cliente, y no se borra), `accounts/password-change.ts` (pasa las cabeceras de la petición a `auth.api.changePassword`),
   `src/hooks.server.ts`.
-- **Estado**: confirmado por ejecución: al cambiar la contraseña con `x-mm-client-ip: 6.6.6.6`, la sesión nueva guarda esa IP,
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. También se quita `x-mm-client-ip` de toda petición en `hooks.server.ts` (sin test HTTP propio). Confirmado por ejecución: al cambiar la contraseña con `x-mm-client-ip: 6.6.6.6`, la sesión nueva guarda esa IP,
   que se ve en `/panel/sesiones` y en la ficha del administrador.
 - **Cambio**: quitar `x-mm-client-ip` de toda petición entrante y, en `changePassword`, pasar cabeceras construidas con la IP
   real (`headersFor`) más la cookie; corregir el comentario de `auth.ts`.
@@ -586,7 +586,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
 
 - **Requisito**: `contracts/web-routes.md` 1.7 («con el tiempo de espera visible»); W11, W12, W27.
 - **Ficheros**: `src/lib/server/web/actions.ts` (`failureOf` solo copia `retryAfterMinutes`), la ruta de W10 (conversión a mano).
-- **Estado**: confirmado por ejecución: `failureOf` no devuelve los minutos cuando el error trae `retryAfterSeconds`.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: `failureOf` no devolvía los minutos cuando el error trae `retryAfterSeconds`.
 - **Cambio**: `failureOf` convierte `retryAfterSeconds` a minutos con `Math.ceil`; quitar la conversión de W10.
 - **Test (primero, debe fallar)**: un `RATE_LIMITED` con `retryAfterSeconds` da sus minutos redondeados hacia arriba.
 
@@ -595,7 +595,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
 - **Requisito**: W52 (límite por visitante y uno global; entrada de 4 KB como máximo).
 - **Ficheros**: `src/lib/server/logging/client-errors.cache.ts` (suma al cupo global antes de mirar el del visitante),
   `src/routes/client-errors/+server.ts` (`request.text()` antes de comprobar el tamaño).
-- **Estado**: confirmado por ejecución (el cupo); la lectura del cuerpo, por lectura.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución (el cupo); la lectura del cuerpo, por lectura. El tope está en `logging/client-errors.body.ts`.
 - **Cambio**: comprobar primero el límite del visitante y después sumar al global; rechazar por `content-length` mayor de 4 KB
   antes de leer, o leer el cuerpo con un tope.
 - **Test (primero, debe fallar)**: los informes rechazados por el límite del visitante no gastan el cupo global.

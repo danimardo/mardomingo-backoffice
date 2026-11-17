@@ -12,7 +12,7 @@ import { lockReachedBy, reservePasswordAttempt, sessionAttemptKeyOf } from './pa
 import { deletePendingEmailChanges, deleteResetTokens } from './pending-tokens';
 import { revokedSince, sessionIdsOf } from './close-session';
 import { clearLoginAttempts } from './repository';
-import type { AccountsDeps } from './service';
+import { headersFor, type AccountsDeps } from './service';
 
 /** Código de Better Auth de «contraseña actual incorrecta» (su mensaje varía entre versiones; se acepta ambos). */
 const WRONG_CURRENT =
@@ -32,10 +32,24 @@ function codeOf(error: unknown): string {
 	return error.message;
 }
 
+/** Solo la credencial de la petición más la IP real: la cabecera interna de la IP nunca la fija el cliente (C-35). */
+function authHeadersOf(request: Headers, remoteIp: string | null): Headers {
+	const headers = headersFor(remoteIp);
+	const cookie = request.get('cookie');
+	if (cookie !== null) headers.set('cookie', cookie);
+	const authorization = request.get('authorization');
+	if (authorization !== null) headers.set('authorization', authorization);
+	return headers;
+}
+
 export async function changePassword(
 	deps: AccountsDeps,
 	headers: Headers,
-	input: { readonly currentPassword: string; readonly newPassword: string }
+	input: {
+		readonly currentPassword: string;
+		readonly newPassword: string;
+		readonly remoteIp?: string | null;
+	}
 ): Promise<'changed' | 'wrong_password'> {
 	const current = await deps.auth.api.getSession({ headers });
 	if (current === null) throw new AppError('UNAUTHENTICATED');
@@ -53,7 +67,7 @@ export async function changePassword(
 	let owner: { readonly id: string; readonly email: string };
 	try {
 		const result = await deps.auth.api.changePassword({
-			headers,
+			headers: authHeadersOf(headers, input.remoteIp ?? null),
 			body: {
 				currentPassword: input.currentPassword,
 				newPassword: input.newPassword,

@@ -1,6 +1,5 @@
 // W10 · `/verificar/reenviar` (contracts/web-routes.md W10; BE-FR-02 CA3). Siempre responde lo mismo, exista o no el
 // email: la respuesta no revela cuentas, y el límite por IP se cuenta en `accounts`.
-import { fail } from '@sveltejs/kit';
 import { ResendSchema } from '$lib/schemas/accounts/resend';
 import { getComposition } from '$lib/server/composition.cache';
 import { parseForm } from '$lib/server/forms';
@@ -20,15 +19,7 @@ export const actions: Actions = {
 			});
 		} catch (error) {
 			if (error instanceof AppError) {
-				// UX-02: con el límite, se dice cuándo se puede volver a pedir el email.
-				const seconds = error.details.retryAfterSeconds;
-				if (error.code === 'RATE_LIMITED' && typeof seconds === 'number') {
-					return fail(error.status, {
-						formError: 'RATE_LIMITED',
-						values: { email: parsed.data.email },
-						retryAfterMinutes: Math.ceil(seconds / 60)
-					});
-				}
+				// UX-02: con el límite, failureOf da los minutos hasta poder volver a pedir el email.
 				return failureOf(error, { email: parsed.data.email });
 			}
 			throw error;

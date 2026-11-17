@@ -117,7 +117,7 @@ const isBadCredentials = (error: unknown): boolean =>
 const isExpiredToken = (error: unknown): boolean => /expired|EXPIRED/.test(betterAuthCode(error));
 
 /** Cabeceras para Better Auth: la IP del cliente va en la cabecera interna que lee `advanced.ipAddress` (R02). */
-function headersFor(remoteIp: string | null): Headers {
+export function headersFor(remoteIp: string | null): Headers {
 	const headers = new Headers();
 	if (remoteIp !== null) headers.set('x-mm-client-ip', remoteIp);
 	return headers;

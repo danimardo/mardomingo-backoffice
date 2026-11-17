@@ -14,14 +14,16 @@ interface Window {
 const perVisitor = new Map<string, Window>();
 let global: Window = { start: 0, count: 0 };
 
-/** Cuenta un informe y devuelve `true` si cabe en los límites de su ventana. */
+/**
+ * Cuenta un informe y devuelve `true` si cabe en los límites de su ventana. Primero el del visitante: un informe que
+ * rechaza no gasta el cupo global.
+ */
 export function admitClientErrorReport(visitor: string, nowMs: number): boolean {
-	if (!admit(global, GLOBAL_LIMIT, nowMs)) return false;
-
 	if (perVisitor.size >= MAX_TRACKED_VISITORS) perVisitor.clear();
 	const window = perVisitor.get(visitor) ?? { start: nowMs, count: 0 };
 	perVisitor.set(visitor, window);
-	return admit(window, PER_VISITOR_LIMIT, nowMs);
+	if (!admit(window, PER_VISITOR_LIMIT, nowMs)) return false;
+	return admit(global, GLOBAL_LIMIT, nowMs);
 }
 
 function admit(window: Window, limit: number, nowMs: number): boolean {

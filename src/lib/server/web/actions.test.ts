@@ -52,3 +52,24 @@ describe('failureOf', () => {
 		expect(failure.data).toEqual({ formError: 'VALIDATION_ERROR', values: {} });
 	});
 });
+
+describe('[C-37] failureOf con RATE_LIMITED', () => {
+	it('convierte retryAfterSeconds en minutos visibles, redondeando hacia arriba', () => {
+		const failure = failureOf(new AppError('RATE_LIMITED', { retryAfterSeconds: 61 }), {
+			email: 'juan@ejemplo.es'
+		});
+
+		expect(failure.status).toBe(429);
+		expect(failure.data).toEqual({
+			formError: 'RATE_LIMITED',
+			values: { email: 'juan@ejemplo.es' },
+			retryAfterMinutes: 2
+		});
+	});
+
+	it('el bloqueo por intentos conserva sus minutos', () => {
+		const failure = failureOf(new AppError('LOGIN_TEMPORARILY_LOCKED', { retryAfterMinutes: 15 }));
+
+		expect(failure.data).toMatchObject({ retryAfterMinutes: 15 });
+	});
+});

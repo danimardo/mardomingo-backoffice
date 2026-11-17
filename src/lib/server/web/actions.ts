@@ -14,7 +14,11 @@ export function clientIpOf(getClientAddress: () => string): string | null {
 
 /** Error de negocio como `fail` con su código y, si lo hay, el tiempo de espera visible. */
 export function failureOf(error: AppError, values: Readonly<Record<string, string>> = {}) {
-	const retry = error.details.retryAfterMinutes;
+	const seconds = error.details.retryAfterSeconds;
+	const retry =
+		error.code === 'RATE_LIMITED' && typeof seconds === 'number'
+			? Math.ceil(seconds / 60)
+			: error.details.retryAfterMinutes;
 	return fail(error.status, {
 		formError: error.code,
 		values,

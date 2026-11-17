@@ -233,6 +233,15 @@ const hostSeparation: Handle = ({ event, resolve }) => {
 	return new Response(null, { status: 404 });
 };
 
+/** Cabecera interna con la IP para Better Auth: la pone `accounts`, nunca el cliente (C-35). */
+const INTERNAL_IP_HEADER = 'x-mm-client-ip';
+
+/** Quita de toda petición entrante la cabecera interna de la IP, para que el cliente no pueda fijarla. */
+const stripInternalHeaders: Handle = ({ event, resolve }) => {
+	event.request.headers.delete(INTERNAL_IP_HEADER);
+	return resolve(event);
+};
+
 /** Comprobación de origen propia del host web (D-01): formularios sin `Origin` del propio sitio → 403. */
 const originCheck: Handle = ({ event, resolve }) => {
 	if (event.url.pathname.startsWith(API_PREFIX)) return resolve(event);
@@ -478,6 +487,7 @@ function setSecurityHeaders(response: Response): void {
 }
 
 export const handle: Handle = sequence(
+	stripInternalHeaders,
 	requestContext,
 	hostSeparation,
 	originCheck,

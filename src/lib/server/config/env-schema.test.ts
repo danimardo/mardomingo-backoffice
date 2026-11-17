@@ -27,7 +27,10 @@ const PROD_BASE: Record<string, string> = {
 	TURNSTILE_SECRET: 'secreto-ficticio-para-validar-produccion',
 	OPENROUTER_API_KEY: 'clave-ficticia-openrouter',
 	MISTRAL_API_KEY: 'clave-ficticia-mistral',
-	RESEND_API_KEY: 'clave-ficticia-resend'
+	RESEND_API_KEY: 'clave-ficticia-resend',
+	ADDRESS_HEADER: 'x-forwarded-for',
+	XFF_DEPTH: '1',
+	PROTOCOL_HEADER: 'x-forwarded-proto'
 };
 
 /** Copia del entorno sin una clave. */

@@ -158,7 +158,12 @@ export interface Accounts {
 	 */
 	changePassword(
 		headers: Headers,
-		input: { readonly currentPassword: string; readonly newPassword: string }
+		input: {
+			readonly currentPassword: string;
+			readonly newPassword: string;
+			/** IP real del cliente (`getClientAddress()`): la sesión nueva la guarda (C-35). */
+			readonly remoteIp?: string | null;
+		}
 	): Promise<'changed' | 'wrong_password'>;
 	register(input: RegisterInput): Promise<{ readonly sentTo: string }>;
 	resendVerification(input: {
