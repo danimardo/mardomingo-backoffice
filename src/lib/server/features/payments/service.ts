@@ -235,7 +235,13 @@ function applyEvent(deps: PaymentsDeps, event: PaymentEvent): void {
 			return;
 		}
 		// Sin acreditación no hay nada que retirar ni factura que rectificar, y bloquear la cuenta sería arbitrario.
-		if (row.status !== 'completed' && row.status !== 'refunded') {
+		// C-01: también `partially_refunded` (se retira lo que queda). `refunded` (decisión del propietario, 2026-11-17): bloquea la
+		// cuenta y pasa a `chargeback` sin movimiento de créditos ni rectificativa, porque ya no queda nada que retirar ni rectificar.
+		const chargeable =
+			row.status === 'completed' ||
+			row.status === 'partially_refunded' ||
+			row.status === 'refunded';
+		if (!chargeable) {
 			deps.logger.emit('payments.webhook.rejected', { reason: 'not_completed' });
 			return;
 		}
