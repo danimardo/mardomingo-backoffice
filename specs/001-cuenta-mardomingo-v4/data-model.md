@@ -921,9 +921,11 @@ Las operaciones se siembran **inactivas**: las activa el administrador.
   (Int > 0). Refinamiento: `ai_requests_per_minute` y `max_concurrent_transcriptions` ≤ global
   (aclaración 2026-10-10). Mantenimiento, versiones y soporte por app son columnas, no claves.
 - `sync_schema`: `{ categories: Record<Nombre, Categoría> }` (al menos una), con
-  `Categoría = { strategy: "items", key: Text, tombstone_ttl_days: Int } | { strategy: "block" } | { strategy: "keyed", keys?: Text[] }`.
+  `Categoría = { strategy: "items", key: Text, tombstone_ttl_days: Int } | { strategy: "block" } | { strategy: "keyed", keys?: Text[] }`,
+  y cualquiera de las tres admite `personal?: true` (D14): marca una categoría con datos personales, que W43 avisa y no
+  preselecciona. Solo se admite `true`: `personal: false` se rechaza, y para desmarcar se quita la clave.
   Perfil `secretario`: `customReplacements` = `items` (clave `from`, 30 días);
-  `coreReplacements`, `quickTexts`, `prompts` = `block`; `preferences` = `keyed` con
+  `coreReplacements`, `quickTexts` = `block`; `prompts` = `block` con `personal: true`; `preferences` = `keyed` con
   `keys: [communicationStyle, messageType, language, targetPersons, processWithLLM, autoCopy, fixAuto, markdownMode, translationTargetLanguage, themePreference]`.
 
 ### 3.3 `sync_documents.data` y `app_defaults.data`

@@ -227,7 +227,7 @@ reverificado.
 
 - **Requisito**: CLAUDE.md (una contradicción se resuelve enmendando un documento).
 - **Ficheros**: `specs/001-cuenta-mardomingo-v4/data-model.md:919`, `specs/001-cuenta-mardomingo-v4/contracts/web-routes.md:617-618`.
-- **Estado**: confirmado por lectura (revisión del PR #47); no reverificado.
+- **Estado**: corregido (T401, 2026-11-17), comprobado contra `apps/json-schemas.ts` y `apps/defaults.ts`.
 - **Cambio**: añadir `personal?: true` a las tres variantes de categoría en `data-model.md`, con la nota de que `false` se rechaza
   (para desmarcar se quita la clave). En W43: «las categorías con `personal: true` muestran un aviso; ninguna casilla viene
   marcada».

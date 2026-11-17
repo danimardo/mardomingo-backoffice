@@ -615,7 +615,8 @@ inexistente responde `error(404)` desde el `load`.
 ### W43 · `/admin/apps/[slug=appSlug]/predeterminados/copiar` — Copiar mis datos (BE-FR-42 CA3–CA4)
 
 - **`load`**: vista previa del documento sincronizado del propio administrador para esa app, por categorías,
-  con una casilla por elemento (ninguna decisión por defecto que favorezca copiar datos personales).
+  con una casilla por elemento (ninguna decisión por defecto que favorezca copiar datos personales): ninguna casilla viene
+  marcada, y las categorías con `personal: true` en el esquema de sincronización muestran además un aviso (D14).
 - **Actions**: `?/copiar` — `items` (lista repetida `categoría:clave`) → solo sustituye las categorías con algún
   elemento seleccionado. Errores: `400 NOTHING_SELECTED`.
 - **Eventos**: `sync.defaults.copied`, `audit.entry.recorded`.
