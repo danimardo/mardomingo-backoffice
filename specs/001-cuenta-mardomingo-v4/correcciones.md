@@ -335,7 +335,7 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 - **Requisito**: BE-FR-67, BE-FR-45.
 - **Fichero**: `src/lib/server/features/accounts/service.ts` (`authenticate`): lee el contador antes de `await signInEmail` y
   escribe después.
-- **Estado**: confirmado por ejecución: 30 intentos simultáneos con `login_max_failures` = 10 llegaron todos a comprobar la
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: 30 intentos simultáneos con `login_max_failures` = 10 llegaron todos a comprobar la
   contraseña, y el último, correcto, entró.
 - **Cambio**: reservar el intento de forma atómica (`immediateTransaction`) antes de comprobar la contraseña; si el login va
   bien, limpiar.
@@ -380,7 +380,7 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 
 - **Requisito**: BE-FR-11.4, BE-FR-45.
 - **Fichero**: `src/lib/server/features/accounts/service.ts` (`register`): `countSignupsFromIp` antes de `await signUpEmail`.
-- **Estado**: confirmado por ejecución: 8 registros simultáneos con límite 3 crean 8 cuentas (el captcha lo dificulta).
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: 8 registros simultáneos con límite 3 crean 8 cuentas (el captcha lo dificulta).
 - **Cambio**: reservar el hueco de forma atómica, con el mismo patrón que C-16.
 - **Test (primero, debe fallar)**: N registros simultáneos desde una IP; como mucho 3 crean cuenta.
 
@@ -406,9 +406,9 @@ decisiones del propietario del mismo día están recogidas en `Historias.md` 2.1
 - **Requisito**: BE-FR-45 (ampliado en `Historias.md` 2.13).
 - **Ficheros**: `src/lib/server/features/accounts/password-change.ts`,
   `src/lib/server/features/privacy/service.ts` (`deleteAccount`).
-- **Estado**: confirmado por lectura.
-- **Cambio** (**decisión del propietario**): limitar los dos por cuenta, con el umbral y la ventana de BE-FR-67 y un contador
-  atómico.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por lectura.
+- **Cambio** (**decisión del propietario**): limitarlos con un contador por cuenta separado del login y compartido con el
+  cambio de email, con el umbral, la ventana y el bloqueo de BE-FR-67 y reserva atómica; un login correcto no lo limpia.
 - **Test (primero, debe fallar)**: tras `login_max_failures` contraseñas actuales erróneas, el siguiente intento se rechaza
   aunque la contraseña sea la correcta.
 

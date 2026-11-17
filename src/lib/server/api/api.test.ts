@@ -54,6 +54,18 @@ describe('formato de error 7.1', () => {
 		expect(await response.json()).toMatchObject({ error: { details: { retryAfterSeconds: 42 } } });
 	});
 
+	it('un bloqueo por intentos fallidos responde 429 con Retry-After en segundos (BE-FR-67)', async () => {
+		const response = appErrorResponse(
+			new AppError('LOGIN_TEMPORARILY_LOCKED', { retryAfterMinutes: 15 })
+		);
+
+		expect(response.status).toBe(429);
+		expect(response.headers.get('Retry-After')).toBe('900');
+		expect(await response.json()).toMatchObject({
+			error: { details: { retryAfterMinutes: 15 } }
+		});
+	});
+
 	it('una validación indica solo el campo, nunca el valor recibido', async () => {
 		const response = validationErrorResponse('messages.1.content');
 		const text = await response.text();

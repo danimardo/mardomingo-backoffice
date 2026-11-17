@@ -47,11 +47,11 @@ export interface AccountsLogFields {
 	'accounts.password.reset_requested': { status: 'sent' | 'suppressed' };
 	'accounts.password.reset_completed': Record<string, never>;
 	'accounts.password.changed': { count: number };
-	'accounts.password.change_rejected': { reason: 'wrong_password' | 'validation' };
+	'accounts.password.change_rejected': { reason: 'wrong_password' | 'validation' | 'locked' };
 	'accounts.email_change.requested': { status: 'sent' | 'suppressed' };
 	'accounts.email_change.applied': { sessionsClosed: number };
 	'accounts.email_change.rejected': {
-		reason: 'wrong_password' | 'expired' | 'used' | 'invalid' | 'taken';
+		reason: 'wrong_password' | 'locked' | 'expired' | 'used' | 'invalid' | 'taken';
 	};
 	'accounts.user.blocked': { reason: 'admin' | 'chargeback' };
 	'accounts.user.unblocked': Record<string, never>;

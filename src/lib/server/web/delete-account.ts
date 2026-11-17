@@ -78,6 +78,13 @@ export async function submitDeleteAccount(
 	if (outcome.status === 'wrong_password') {
 		return { kind: 'failure', failure: failureOf(new AppError('WRONG_PASSWORD')) };
 	}
+	if (outcome.status === 'locked') {
+		// Demasiadas contraseñas erróneas (BE-FR-45; C-24): 429 con los minutos que faltan, como el bloqueo del login.
+		const locked = new AppError('LOGIN_TEMPORARILY_LOCKED', {
+			retryAfterMinutes: outcome.retryAfterMinutes
+		});
+		return { kind: 'failure', failure: failureOf(locked) };
+	}
 	if (outcome.status === 'not_found') {
 		return { kind: 'failure', failure: failureOf(new AppError('NOT_FOUND')) };
 	}

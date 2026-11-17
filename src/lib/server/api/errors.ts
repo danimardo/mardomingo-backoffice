@@ -48,6 +48,16 @@ export function appErrorResponse(error: AppError): Response {
 			headers: { 'Retry-After': String(error.details.retryAfterSeconds) }
 		});
 	}
+	// Bloqueo por intentos fallidos (BE-FR-67): los detalles conservan los minutos y la cabecera los da en segundos.
+	if (
+		error.code === 'LOGIN_TEMPORARILY_LOCKED' &&
+		typeof error.details.retryAfterMinutes === 'number'
+	) {
+		return apiErrorResponse(error.code, {
+			details: { retryAfterMinutes: error.details.retryAfterMinutes },
+			headers: { 'Retry-After': String(error.details.retryAfterMinutes * 60) }
+		});
+	}
 	return apiErrorResponse(error.code, { details: error.details });
 }
 

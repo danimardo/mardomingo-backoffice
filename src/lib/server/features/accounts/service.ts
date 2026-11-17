@@ -24,19 +24,23 @@ import type { IdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import type { Auth } from './auth';
 import { DISPOSABLE_DOMAINS_V1 } from './disposable-domains';
-import { isLoginLocked, minutesUntilUnlock, signupIpLimitReached } from './domain/abuse';
 import { normalizeEmail } from './domain/email';
 import { safeRedirect } from './domain/redirect';
 import { hashNormalizedEmail } from './email-hash';
 import {
+	lockReachedBy,
+	loginAttemptKeyOf,
+	refundPasswordAttempt,
+	reservePasswordAttempt
+} from './password-attempts';
+import {
 	bumpRateCounter,
 	type AuthRateScope,
 	clearLoginAttempts,
-	countSignupsFromIp,
 	insertDisposableDomains,
 	isDisposableDomain,
-	readLoginAttempt,
-	recordLoginFailure,
+	releaseSignupSlot,
+	reserveSignupSlot,
 	setSignupMetadata
 } from './repository';
 import { deletePendingEmailChanges, deleteResetTokens } from './pending-tokens';
@@ -78,7 +82,8 @@ export interface LoginInput {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
-const LOGIN_WINDOW_MINUTES = 15;
+/** Una reserva de alta en curso deja de contar a los 10 minutos de la última (C-21): un alta dura segundos. */
+const SIGNUP_PENDING_TTL_MS = 10 * 60 * 1000;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Errores de Better Auth: se leen en un único sitio y se traducen a códigos de la aplicación.
@@ -160,16 +165,41 @@ export async function register(
 	if (isDisposableDomain(deps.db, emailDomain(input.email)))
 		return reject('disposable_domain', 'DISPOSABLE_DOMAIN');
 
-	if (
-		input.remoteIp !== null &&
-		signupIpLimitReached(
-			countSignupsFromIp(deps.db, input.remoteIp, now),
-			numberSetting(deps, 'registrations_per_ip_24h')
-		)
-	) {
-		return reject('ip_limit', 'REGISTRATION_IP_LIMIT');
+	// Reserva atómica del hueco antes de crear la cuenta (C-21). Sin IP conocida no hay límite (como hasta ahora).
+	const ip = input.remoteIp;
+	if (ip !== null) {
+		const limit = numberSetting(deps, 'registrations_per_ip_24h');
+		const reserved = immediateTransaction(deps.db, (tx) =>
+			reserveSignupSlot(tx, ip, now, { limit, pendingTtlMs: SIGNUP_PENDING_TTL_MS })
+		);
+		if (!reserved) return reject('ip_limit', 'REGISTRATION_IP_LIMIT');
 	}
+	// Si el alta se crea, el hueco se suelta en la transacción que escribe `signup_ip` y pasa a contar como alta creada. Si no
+	// se crea por cualquier motivo (versiones legales, email ya registrado, error), se suelta aquí: hoy solo cuentan las
+	// cuentas creadas, y un intento que no crea nada no debe gastar hueco.
+	const slot = { held: ip !== null };
+	try {
+		return await createAccount(deps, input, now, reject, slot);
+	} finally {
+		if (ip !== null && slot.held) {
+			immediateTransaction(deps.db, (tx) => {
+				releaseSignupSlot(tx, ip);
+			});
+		}
+	}
+}
 
+/**
+ * Versiones legales → alta en Better Auth → metadatos y aceptaciones. `slot.held` pasa a `false` cuando la transacción que
+ * escribe `signup_ip` ya ha soltado el hueco reservado.
+ */
+async function createAccount(
+	deps: AccountsDeps,
+	input: RegisterInput,
+	now: EpochMs,
+	reject: (reason: 'legal_version_changed', code: ErrorCode) => never,
+	slot: { held: boolean }
+): Promise<{ readonly sentTo: string }> {
 	const current = currentVersions(deps.legal, now, ['terms', 'privacy', 'aup']);
 	const sameVersions =
 		current.get('terms')?.version === input.versions.terms &&
@@ -211,6 +241,8 @@ export async function register(
 			signupAppId: appId,
 			signupIp: input.remoteIp
 		});
+		// El hueco en curso pasa a ser un alta creada en la misma transacción (C-21).
+		if (input.remoteIp !== null) releaseSignupSlot(tx, input.remoteIp);
 		recordAcceptances(tx, deps.legal, {
 			userId: created.user.id,
 			appId: null,
@@ -226,6 +258,7 @@ export async function register(
 			]
 		});
 	});
+	slot.held = false;
 
 	// El envío lo hace Better Auth con su token; el callback de `auth.ts` construye el enlace y lo entrega a notifications.
 	await deps.auth.api.sendVerificationEmail({ body: { email: input.email } });
@@ -353,15 +386,15 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 			numberSetting(deps, 'login_per_ip_15min')
 		);
 	}
-	const hash = hashNormalizedEmail(normalizeEmail(input.email), deps.emailHashKey);
-	const state = readLoginAttempt(deps.db, hash);
-	if (state !== undefined && isLoginLocked(state.lockedUntil, now)) {
+	// Reserva atómica antes de comprobar la contraseña (C-16): el mismo camino y las mismas escrituras exista o no la cuenta.
+	const attempt = reservePasswordAttempt(deps, loginAttemptKeyOf(deps, input.email));
+	if (attempt.kind === 'locked') {
 		deps.logger.emit('accounts.login.locked', {
 			reason: 'too_many_failures',
-			count: state.failures
+			count: attempt.failures
 		});
 		throw new AppError('LOGIN_TEMPORARILY_LOCKED', {
-			retryAfterMinutes: minutesUntilUnlock(state.lockedUntil, now)
+			retryAfterMinutes: attempt.retryAfterMinutes
 		});
 	}
 
@@ -372,7 +405,9 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 			headers: headersFor(input.remoteIp)
 		}));
 	} catch (error) {
+		// Better Auth solo responde «sin verificar» o «bloqueada» tras comprobar la contraseña: no fue un fallo.
 		if (isNotVerified(error)) {
+			refundPasswordAttempt(deps, attempt);
 			deps.logger.emit('accounts.login.failed', {
 				reason: 'not_verified',
 				errorCode: 'EMAIL_NOT_VERIFIED'
@@ -380,38 +415,32 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 			throw new AppError('EMAIL_NOT_VERIFIED');
 		}
 		if (isBanned(error)) {
+			refundPasswordAttempt(deps, attempt);
 			deps.logger.emit('accounts.login.failed', {
 				reason: 'blocked',
 				errorCode: 'ACCOUNT_BLOCKED'
 			});
 			throw new AppError('ACCOUNT_BLOCKED');
 		}
+		// Un error inesperado deja el intento contado (falla cerrado; ver `password-attempts.ts`).
 		if (!isBadCredentials(error)) throw error;
-		const after = immediateTransaction(deps.db, (tx) =>
-			recordLoginFailure(tx, hash, now, {
-				maxFailures: numberSetting(deps, 'login_max_failures'),
-				lockMinutes: numberSetting(deps, 'login_lock_minutes'),
-				windowMinutes: LOGIN_WINDOW_MINUTES
-			})
-		);
 		deps.logger.emit('accounts.login.failed', {
 			reason: 'invalid_credentials',
 			errorCode: 'INVALID_CREDENTIALS'
 		});
-		if (isLoginLocked(after.lockedUntil, now)) {
+		const lockMinutes = lockReachedBy(attempt);
+		if (lockMinutes !== null) {
 			deps.logger.emit('accounts.login.locked', {
 				reason: 'too_many_failures',
-				count: after.failures
+				count: attempt.state.failures
 			});
-			throw new AppError('LOGIN_TEMPORARILY_LOCKED', {
-				retryAfterMinutes: minutesUntilUnlock(after.lockedUntil, now)
-			});
+			throw new AppError('LOGIN_TEMPORARILY_LOCKED', { retryAfterMinutes: lockMinutes });
 		}
 		throw new AppError('INVALID_CREDENTIALS');
 	}
 
 	immediateTransaction(deps.db, (tx) => {
-		clearLoginAttempts(tx, hash);
+		clearLoginAttempts(tx, attempt.key);
 	});
 	return token;
 }

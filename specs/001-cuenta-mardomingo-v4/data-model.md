@@ -606,7 +606,8 @@ Contadores propios de `accounts` para los límites de autenticación por IP. Sus
 
 - PK (`scope`, `ip`). Índice (`window_start`) (purga).
 - Los límites salen de `settings`; superarlos → `RATE_LIMITED` (API) o error con tiempo de espera
-  (web). Las altas por IP en 24 h (BE-FR-11.4) se cuentan sobre `user.signup_ip`.
+  (web). Las altas por IP en 24 h (BE-FR-11.4) se cuentan sobre `user.signup_ip` más las altas en curso, que se reservan de
+  forma atómica en el ámbito `signup` antes de crear la cuenta y se liberan al crearla o al fallar (caducan a los 10 min; C-21).
 
 #### `login_attempts` (BE-FR-67)
 
@@ -618,6 +619,10 @@ Contadores propios de `accounts` para los límites de autenticación por IP. Sus
 | `locked_until`          | EpochMs | sí   | —       | Fin del bloqueo temporal                                       |
 
 - PK `email_normalized_hash`. Índice (`window_start`) (purga).
+- Dos tipos de clave (C-16, C-24): el HMAC del email normalizado para el login, y `session:` más el HMAC de `user:<id>` para
+  las operaciones de sesión que comprueban la contraseña actual (cambio de contraseña, cambio de email y borrado de cuenta).
+  Comparten umbral, ventana y bloqueo; cada acierto limpia solo su contador. El intento se reserva de forma atómica antes de
+  comprobar la contraseña y cuenta como fallo provisional; un error inesperado queda contado.
 
 #### `disposable_domains` (BE-FR-11.2)
 

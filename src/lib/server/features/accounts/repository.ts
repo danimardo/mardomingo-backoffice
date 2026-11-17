@@ -4,7 +4,13 @@ import { and, count, eq, gte, sql } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
-import { nextLoginAttempt } from './domain/abuse';
+import {
+	isLoginLocked,
+	nextLoginAttempt,
+	refundLoginAttempt,
+	signupIpLimitReached,
+	type LoginAttemptResult
+} from './domain/abuse';
 import {
 	authRateLimits,
 	disposableDomains,
@@ -19,15 +25,58 @@ export type AuthRateScope = (typeof AUTH_RATE_SCOPES)[number];
 const DAY_MS = 86_400_000;
 
 /** Altas registradas desde una IP en las últimas 24 h (BE-FR-11.4), contadas sobre `user.signup_ip`. */
-export function countSignupsFromIp(db: Db, ip: string, now: EpochMs): number {
+function countSignupsFromIp(tx: Tx, ip: string, now: EpochMs): number {
 	const since = toEpochMs(now - DAY_MS);
 	return (
-		db
+		tx
 			.select({ total: count() })
 			.from(user)
 			.where(and(eq(user.signupIp, ip), gte(user.createdAt, new Date(since))))
 			.get()?.total ?? 0
 	);
+}
+
+const signupSlotOf = (ip: string) =>
+	and(eq(authRateLimits.scope, 'signup'), eq(authRateLimits.ip, ip));
+
+/**
+ * Reserva atómica de un hueco de alta desde una IP (BE-FR-11.4, BE-FR-45; C-21). Cuenta las altas ya creadas en 24 h más las
+ * que están en curso (fila `signup` de `auth_rate_limits`) y, si caben, suma una en curso. `releaseSignupSlot` la quita al
+ * terminar: si el alta se creó, en la misma transacción que escribe `signup_ip`, así que el hueco pasa de «en curso» a
+ * «creada» sin un instante en que no cuente. Las reservas en curso dejan de contar `pendingTtlMs` después de la última (un
+ * proceso caído a mitad de un alta no retiene el hueco para siempre).
+ */
+export function reserveSignupSlot(
+	tx: Tx,
+	ip: string,
+	now: EpochMs,
+	options: { readonly limit: number; readonly pendingTtlMs: number }
+): boolean {
+	const row = tx.select().from(authRateLimits).where(signupSlotOf(ip)).get();
+	const pending = row !== undefined && row.windowStart > now - options.pendingTtlMs ? row.count : 0;
+	if (signupIpLimitReached(countSignupsFromIp(tx, ip, now) + pending, options.limit)) return false;
+	tx.insert(authRateLimits)
+		.values({ scope: 'signup', ip, count: pending + 1, windowStart: now })
+		.onConflictDoUpdate({
+			target: [authRateLimits.scope, authRateLimits.ip],
+			set: { count: pending + 1, windowStart: now }
+		})
+		.run();
+	return true;
+}
+
+/** Quita una reserva de alta en curso (`reserveSignupSlot`); sin reservas en curso, la fila desaparece. */
+export function releaseSignupSlot(tx: Tx, ip: string): void {
+	const row = tx.select().from(authRateLimits).where(signupSlotOf(ip)).get();
+	if (row === undefined) return;
+	if (row.count <= 1) {
+		tx.delete(authRateLimits).where(signupSlotOf(ip)).run();
+		return;
+	}
+	tx.update(authRateLimits)
+		.set({ count: row.count - 1 })
+		.where(signupSlotOf(ip))
+		.run();
 }
 
 /** ¿Está el dominio en la lista de dominios desechables? (BE-FR-11.2). Se compara en minúsculas. */
@@ -84,27 +133,27 @@ export function readRateCounter(
 	return current.count;
 }
 
-export interface LoginAttemptState {
-	readonly failures: number;
-	readonly lockedUntil: EpochMs | null;
-}
+export type LoginAttemptReservation =
+	| { readonly kind: 'locked'; readonly failures: number; readonly lockedUntil: EpochMs }
+	| { readonly kind: 'reserved'; readonly state: LoginAttemptResult };
 
-/** Estado de los intentos de un email (por su hash), exista o no la cuenta (BE-FR-67 CA1). */
-export function readLoginAttempt(db: Db, emailHash: string): LoginAttemptState | undefined {
-	const row = db
+function loginAttemptOf(tx: Tx, emailHash: string): LoginAttemptResult | undefined {
+	const row = tx
 		.select()
 		.from(loginAttempts)
 		.where(eq(loginAttempts.emailNormalizedHash, emailHash))
 		.get();
 	if (row === undefined) return undefined;
-	return { failures: row.failures, lockedUntil: row.lockedUntil };
+	return { failures: row.failures, windowStart: row.windowStart, lockedUntil: row.lockedUntil };
 }
 
 /**
- * Registra un fallo: la ventana es de `windowMinutes` desde el primer fallo; al llegar a `maxFailures` se bloquea
- * `lockMinutes`. Devuelve el estado resultante.
+ * Reserva atómica de un intento con contraseña (BE-FR-45, BE-FR-67; C-16), exista o no la cuenta. Con un bloqueo vigente no
+ * suma nada. Si no, cuenta el intento como fallo ANTES de comprobar la contraseña: la ventana es de `windowMinutes` desde el
+ * primer fallo y al llegar a `maxFailures` se bloquea `lockMinutes`. Un acierto lo borra después (`clearLoginAttempts`) y un
+ * intento que no fue un fallo se devuelve (`releaseLoginAttempt`).
  */
-export function recordLoginFailure(
+export function reserveLoginAttempt(
 	tx: Tx,
 	emailHash: string,
 	now: EpochMs,
@@ -113,12 +162,11 @@ export function recordLoginFailure(
 		readonly lockMinutes: number;
 		readonly windowMinutes: number;
 	}
-): LoginAttemptState {
-	const current = tx
-		.select()
-		.from(loginAttempts)
-		.where(eq(loginAttempts.emailNormalizedHash, emailHash))
-		.get();
+): LoginAttemptReservation {
+	const current = loginAttemptOf(tx, emailHash);
+	if (current !== undefined && isLoginLocked(current.lockedUntil, now)) {
+		return { kind: 'locked', failures: current.failures, lockedUntil: current.lockedUntil };
+	}
 	const next = nextLoginAttempt(current, now, options);
 	tx.insert(loginAttempts)
 		.values({ emailNormalizedHash: emailHash, ...next })
@@ -127,7 +175,16 @@ export function recordLoginFailure(
 			set: next
 		})
 		.run();
-	return { failures: next.failures, lockedUntil: next.lockedUntil };
+	return { kind: 'reserved', state: next };
+}
+
+/** Devuelve un intento reservado que no fue un fallo (`refundLoginAttempt`). */
+export function releaseLoginAttempt(tx: Tx, emailHash: string, reserved: LoginAttemptResult): void {
+	const next = refundLoginAttempt(loginAttemptOf(tx, emailHash), reserved);
+	if (next === undefined) return;
+	const where = eq(loginAttempts.emailNormalizedHash, emailHash);
+	if (next === null) tx.delete(loginAttempts).where(where).run();
+	else tx.update(loginAttempts).set(next).where(where).run();
 }
 
 /** Un login correcto o una recuperación completada ponen el contador a cero (BE-FR-67 CA2). */

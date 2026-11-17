@@ -144,10 +144,17 @@ export const actions: Actions = {
 		const parsed = parseForm(ChangePasswordSchema, await request.formData());
 		if (!parsed.ok) return parsed.failure;
 
-		const outcome = await getComposition().accounts.changePassword(request.headers, {
-			currentPassword: parsed.data.currentPassword,
-			newPassword: parsed.data.newPassword
-		});
+		let outcome;
+		try {
+			outcome = await getComposition().accounts.changePassword(request.headers, {
+				currentPassword: parsed.data.currentPassword,
+				newPassword: parsed.data.newPassword
+			});
+		} catch (error) {
+			// Demasiadas contraseñas actuales erróneas (C-24): 429 `LOGIN_TEMPORARILY_LOCKED` con los minutos que faltan.
+			if (error instanceof AppError) return failureOf(error);
+			throw error;
+		}
 		if (outcome === 'wrong_password') {
 			return fail(400, { errors: { currentPassword: 'validation_invalid' }, values: {} });
 		}

@@ -1,13 +1,19 @@
 // Cambio de email de la cuenta (W27 y W14; BE-FR-66, BE-FR-45; T266). Dos pasos: pedir (contraseña actual, límite por IP y un
 // enlace de 24 h a la dirección NUEVA) y confirmar (el enlace aplica el cambio, cierra todas las sesiones y avisa a la dirección
 // ANTERIOR). No hay bienvenida nueva: el alta ya se concedió. Una dirección de otra cuenta responde igual que una libre, sin email.
+// La contraseña actual se limita con el contador de sesión de la cuenta, compartido con el cambio de contraseña y el borrado
+// (BE-FR-45, BE-FR-67; C-24; ver `password-attempts.ts`): con el bloqueo vigente, o con el fallo que alcanza el umbral, se
+// lanza `LOGIN_TEMPORARILY_LOCKED` con los minutos que faltan.
 import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, ne } from 'drizzle-orm';
 import { verifyPassword } from 'better-auth/crypto';
 import { immediateTransaction } from '$lib/server/db/tx';
 import { sendAccountEmail } from '$lib/server/features/notifications';
+import { AppError } from '$lib/server/shared/errors';
 import { normalizeEmail } from './domain/email';
+import { lockReachedBy, reservePasswordAttempt, sessionAttemptKeyOf } from './password-attempts';
 import { deleteResetTokens } from './pending-tokens';
+import { clearLoginAttempts } from './repository';
 import { account, session, user, verification } from './schema';
 import { ipRateLimited, type AccountsDeps } from './service';
 
@@ -63,6 +69,15 @@ export async function requestEmailChange(
 		ipRateLimited(deps, 'email_change', input.remoteIp, now, HOUR_MS, EMAIL_CHANGE_PER_IP_HOUR);
 	}
 
+	// Reserva atómica antes de comprobar la contraseña actual (C-24).
+	const attempt = reservePasswordAttempt(deps, sessionAttemptKeyOf(deps, input.userId));
+	if (attempt.kind === 'locked') {
+		deps.logger.emit('accounts.email_change.rejected', { reason: 'locked' });
+		throw new AppError('LOGIN_TEMPORARILY_LOCKED', {
+			retryAfterMinutes: attempt.retryAfterMinutes
+		});
+	}
+
 	const rows = deps.db
 		.select({ email: user.email, password: account.password })
 		.from(user)
@@ -76,9 +91,17 @@ export async function requestEmailChange(
 		passwordHash != null &&
 		(await verifyPassword({ hash: passwordHash, password: input.currentPassword }));
 	if (!valid) {
+		const lockMinutes = lockReachedBy(attempt);
+		if (lockMinutes !== null) {
+			deps.logger.emit('accounts.email_change.rejected', { reason: 'locked' });
+			throw new AppError('LOGIN_TEMPORARILY_LOCKED', { retryAfterMinutes: lockMinutes });
+		}
 		deps.logger.emit('accounts.email_change.rejected', { reason: 'wrong_password' });
 		return 'wrong_password';
 	}
+	immediateTransaction(deps.db, (tx) => {
+		clearLoginAttempts(tx, attempt.key);
+	});
 
 	const newNormalized = normalizeEmail(input.newEmail);
 	const taken = deps.db

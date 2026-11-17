@@ -43,12 +43,13 @@ import { changePassword } from './password-change';
 import {
 	anonymizeUser,
 	clearSessionCookie,
+	checkCurrentPassword,
 	exportProfile,
-	passwordMatches,
 	revokeAllSessions,
+	type PasswordCheck,
 	type ProfileExport
 } from './erasure';
-export type { ProfileExport } from './erasure';
+export type { PasswordCheck, ProfileExport } from './erasure';
 import {
 	confirmEmailChange,
 	requestEmailChange,
@@ -110,8 +111,11 @@ export interface AccountsConfig {
 export type TokenKind = 'verification' | 'reset';
 
 export interface Accounts {
-	/** ¿Es la contraseña la de la cuenta? Para confirmar acciones destructivas (BE-FR-07). */
-	passwordMatches(userId: string, password: string): Promise<boolean>;
+	/**
+	 * Comprueba la contraseña actual para confirmar acciones destructivas (BE-FR-07), con el contador de sesión de la cuenta
+	 * (BE-FR-45, BE-FR-67; C-24), aparte del login: `locked` con los minutos que faltan si se ha superado.
+	 */
+	checkCurrentPassword(userId: string, password: string): Promise<PasswordCheck>;
 	/** Borrado de la cuenta: cierra todas las sesiones de todas las apps. Solo `privacy`. */
 	revokeAllSessions(userId: string): number;
 	/** Borrado de la cuenta: anonimiza `user` y borra credenciales, tokens y actividad. Solo `privacy`. */
@@ -132,7 +136,10 @@ export interface Accounts {
 	clearInactivityWarning(userId: string): void;
 	/** Perfil y dispositivos para la exportación RGPD (BE-FR-08). */
 	exportProfile(userId: string): ProfileExport | null;
-	/** Pide el cambio de email: contraseña actual, enlace de 24 h a la dirección nueva (W27, T266). */
+	/**
+	 * Pide el cambio de email: contraseña actual, enlace de 24 h a la dirección nueva (W27, T266). Superado el límite de intentos
+	 * de sesión de la cuenta lanza `AppError('LOGIN_TEMPORARILY_LOCKED')` con `retryAfterMinutes` (C-24).
+	 */
 	requestEmailChange(input: {
 		readonly userId: string;
 		readonly currentPassword: string;
@@ -141,7 +148,10 @@ export interface Accounts {
 	}): Promise<EmailChangeRequestOutcome>;
 	/** Aplica el cambio desde el enlace de W14: cierra todas las sesiones y avisa a la dirección anterior (T266). */
 	confirmEmailChange(token: string): Promise<EmailChangeConfirmOutcome>;
-	/** Cambio de contraseña con la actual; cierra las demás sesiones (W27, T266). */
+	/**
+	 * Cambio de contraseña con la actual; cierra las demás sesiones (W27, T266). Superado el límite de intentos de sesión
+	 * de la cuenta lanza `AppError('LOGIN_TEMPORARILY_LOCKED')` con `retryAfterMinutes` (C-24).
+	 */
 	changePassword(
 		headers: Headers,
 		input: { readonly currentPassword: string; readonly newPassword: string }
@@ -230,7 +240,7 @@ export function createAccounts(config: AccountsConfig): Accounts {
 	return {
 		auth,
 		changePassword: (headers, input) => changePassword(deps, headers, input),
-		passwordMatches: (userId, password) => passwordMatches(deps, userId, password),
+		checkCurrentPassword: (userId, password) => checkCurrentPassword(deps, userId, password),
 		revokeAllSessions: (userId) => revokeAllSessions(deps, userId),
 		anonymizeUser: (userId) => anonymizeUser(deps, userId),
 		clearSessionCookie: (headers) => clearSessionCookie(deps, headers),

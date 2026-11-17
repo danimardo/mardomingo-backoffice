@@ -966,9 +966,9 @@ Hallazgos C-15 a C-25 de `correcciones.md`, con las decisiones del propietario r
 - [x] T407 [US1] C-15 (Media): anular los cambios de email pendientes al cambiar o recuperar la contraseña, y los enlaces de recuperación al aplicar un cambio de email; aviso al email actual al solicitar el cambio, en `src/lib/server/features/accounts/` [BE-FR-05, BE-FR-66 CA2 y CA6] _Hecho (2026-11-17): tests rojos y verdes con test:related; verify:batch en verde._
 - [x] T408 [US1] C-18 (Media): aviso de seguridad tras `changePassword` en `accounts/password-change.ts` [BE-FR-05] _Hecho (2026-11-17): tests rojos y verdes con test:related; verify:batch en verde._
 - [x] T409 [US1] C-20 (Baja): anular todos los enlaces de recuperación al recuperar o cambiar la contraseña en `accounts/service.ts` [BE-FR-05] _Hecho (2026-11-17): tests rojos y verdes con test:related; verify:batch en verde._
-- [ ] T410 [US1] C-16 (Media): reserva atómica del intento de login antes de comprobar la contraseña en `accounts/service.ts` (`authenticate`) [BE-FR-67, BE-FR-45]
-- [ ] T411 [US1] C-21 (Baja): reserva atómica del hueco de registro por IP en `accounts/service.ts` (`register`) [BE-FR-11.4, BE-FR-45]
-- [ ] T412 [US1] C-24 (Baja): límite por cuenta del cambio de contraseña y de la eliminación de la cuenta [BE-FR-45]
+- [x] T410 [US1] C-16 (Media): reserva atómica del intento de login antes de comprobar la contraseña en `accounts/service.ts` (`authenticate`) [BE-FR-67, BE-FR-45] _Hecho (2026-11-17): reserva atómica con tests de concurrencia en rojo y verdes con test:related._
+- [x] T411 [US1] C-21 (Baja): reserva atómica del hueco de registro por IP en `accounts/service.ts` (`register`) [BE-FR-11.4, BE-FR-45] _Hecho (2026-11-17): reserva atómica con tests de concurrencia en rojo y verdes con test:related._
+- [x] T412 [US1] C-24 (Baja): límite por cuenta del cambio de contraseña y de la eliminación de la cuenta [BE-FR-45] _Hecho (2026-11-17): contador por cuenta separado del login, compartido con el cambio de email (decisión del propietario); `Retry-After` en `LOGIN_TEMPORARILY_LOCKED`._
 - [ ] T413 [US1] C-17 (Media): enviar los emails de cuenta sin esperar su resultado en `accounts/service.ts` [BE-FR-01 CA5]
 - [ ] T414 [US1] C-19 (Baja): la confirmación del cambio de email sigue W14 (sesión actual, 303 con aviso y 400) [BE-FR-66 CA5]
 - [ ] T415 C-22 (Baja): rechazar que un administrador bloquee su propia cuenta en `accounts/admin-users.ts`

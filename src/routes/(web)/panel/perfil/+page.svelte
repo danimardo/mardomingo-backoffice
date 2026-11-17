@@ -6,10 +6,13 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import PasswordField from '$lib/components/ui/PasswordField.svelte';
+	import { formStateOf } from '$lib/components/accounts/form-state';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+	// Error de negocio de las acciones de credenciales (p. ej. demasiados intentos, C-24), con su texto del catálogo.
+	const formError = $derived(formStateOf(form).formError);
 	const billingErrorText = $derived(billingMessageOf(form?.billingError ?? null));
 	const thresholdText = $derived(
 		data.threshold === null ? '' : String(data.threshold / 1_000_000).replace('.', ',')
@@ -57,6 +60,9 @@
 {/if}
 {#if data.saved === 'billing_saved'}
 	<Banner level="info">{m.profile_billing_saved()}</Banner>
+{/if}
+{#if formError !== ''}
+	<Banner level="critical">{formError}</Banner>
 {/if}
 
 <section aria-labelledby="perfil-cuenta">
