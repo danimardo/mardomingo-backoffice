@@ -169,6 +169,11 @@ jobs:
       - name: 10. Catálogo aislado
         run: pnpm verify:catalog
 
+      # 10. Contraste de los tokens (T454, DS-11): todos los pares de color cumplen WCAG 2.2 AA en ambos temas y la región
+      # generada de `tokens.css` coincide con `scripts/generate-tokens.mjs` (nadie la edita a mano). Dentro de la puerta 10.
+      - name: 10. Contraste de tokens
+        run: pnpm tokens:check
+
   # Humo tras el despliegue de staging (T374): el humo está en `deploy-smoke.yml`, y `workflow_run` no sirve porque GitHub
   # solo lo dispara desde el workflow del branch por defecto (`main`). Aquí se llama como reutilizable, solo en `staging`.
   humo-staging:

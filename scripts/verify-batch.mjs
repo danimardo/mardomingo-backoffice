@@ -97,6 +97,8 @@ if (forPrettier.length > 0)
 	step('prettier de lo modificado', ['exec', 'prettier', '--check', ...forPrettier]);
 // Barato y sin depender de lo modificado: un import del catálogo puede aparecer en cualquier fichero.
 step('catálogo aislado (verify:catalog)', ['verify:catalog']);
+// Contraste AA de los tokens y región generada al día (T454): menos de un segundo, se ejecuta siempre.
+step('contraste de tokens (tokens:check)', ['tokens:check']);
 step('lint:changed', ['lint:changed']);
 step('check', ['check']);
 const wide = changed.some((file) => WIDE.some((pattern) => pattern.test(file)));
