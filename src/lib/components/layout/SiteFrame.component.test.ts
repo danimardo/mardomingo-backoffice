@@ -77,7 +77,7 @@ describe('SiteHeader', () => {
 });
 
 describe('SiteFooter', () => {
-	const props = { redirectTo: '/', theme: 'system', effects: 'normal' } as const;
+	const props = { redirectTo: '/', theme: 'system' } as const;
 
 	it('enlaza a los cuatro documentos legales', () => {
 		render(SiteFooter, { props });

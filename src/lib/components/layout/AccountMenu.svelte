@@ -54,18 +54,31 @@
 		align-items: center;
 		min-height: 44px;
 		padding: 0 var(--space-3);
-		color: var(--color-text-primary);
 		text-decoration: none;
 		cursor: pointer;
 	}
 
-	a {
-		text-decoration: underline;
+	a,
+	summary {
+		border-radius: 999px;
+		color: var(--color-text-secondary);
+		font-size: var(--font-size-sm);
 	}
 
 	a:hover,
 	summary:hover {
-		text-decoration: underline;
+		color: var(--color-text-primary);
+		background: var(--hover-tint);
+	}
+
+	.session li:last-child a {
+		background: var(--surface-button-primary);
+		color: var(--color-on-primary);
+	}
+
+	.session li:last-child a:hover {
+		background: var(--interactive-hover);
+		color: var(--color-on-primary);
 	}
 
 	a:focus-visible,

@@ -1,49 +1,109 @@
 <script lang="ts">
-	// Bloque principal de la landing (W01; T348). Composición abierta, sin caja: el titular y los accesos van directamente
-	// sobre el fondo ambiental, centrados y con mucho espacio. Al no haber superficie de cristal, no hay nada que sustituir
-	// con efectos reducidos; el contraste del texto se mide contra el fondo de la página (DS-09).
+	// Bloque principal de la landing (W01; T348). Marco redondeado con degradado ambiental y la maqueta del panel asomando
+	// por abajo; sin superficie de cristal propia, así que no hay nada que sustituir con efectos reducidos. Los colores son
+	// tokens mezclados con el fondo de la página, por lo que sirven en claro y en oscuro (DS-09: el texto va sobre esa mezcla).
 	import type { Snippet } from 'svelte';
 
 	interface Props {
+		eyebrow: string;
 		title: string;
 		lead: string;
+		note: string;
 		children?: Snippet;
+		mockup?: Snippet;
 	}
 
-	let { title, lead, children }: Props = $props();
+	let { eyebrow, title, lead, note, children, mockup }: Props = $props();
 </script>
 
 <section class="hero" aria-labelledby="hero-titulo">
-	<h1 id="hero-titulo">{title}</h1>
-	<p class="lead">{lead}</p>
-	{@render children?.()}
+	<div class="copy">
+		<p class="eyebrow">{eyebrow}</p>
+		<h1 id="hero-titulo">{title}</h1>
+		<p class="lead">{lead}</p>
+		{@render children?.()}
+		<p class="note">{note}</p>
+	</div>
+	{@render mockup?.()}
 </section>
 
 <style>
+	/* El marco se sale de la columna del contenido, hasta un ancho máximo. */
 	.hero {
+		position: relative;
+		display: grid;
+		gap: var(--space-12);
+		box-sizing: border-box;
+		width: min(100vw - var(--space-8), 72rem);
+		margin: calc(-1 * var(--space-20)) 0 var(--space-12)
+			calc(50% - min(50vw - var(--space-4), 36rem));
+		padding: var(--space-24) var(--space-6) 0;
+		overflow: hidden;
+		border-radius: var(--space-8);
+		background:
+			radial-gradient(
+				60% 70% at 8% 85%,
+				color-mix(in oklab, var(--warning-300) 70%, transparent),
+				transparent 70%
+			),
+			radial-gradient(
+				55% 65% at 95% 30%,
+				color-mix(in oklab, var(--primary-300) 65%, transparent),
+				transparent 70%
+			),
+			radial-gradient(
+				70% 80% at 40% 0%,
+				color-mix(in oklab, var(--accent-300) 70%, transparent),
+				transparent 75%
+			),
+			color-mix(in oklab, var(--primary-100) 40%, var(--color-bg-base));
+	}
+
+	@media (max-width: 40rem) {
+		.hero {
+			padding-top: calc(var(--space-24) + var(--space-12));
+		}
+	}
+
+	.copy {
 		display: grid;
 		justify-items: center;
-		gap: var(--space-6);
-		padding: clamp(var(--space-12), 14vh, 9rem) 0 clamp(var(--space-10), 10vh, 6rem);
+		gap: var(--space-4);
 		text-align: center;
+	}
+
+	.eyebrow {
+		margin: 0;
+		padding: var(--space-1) var(--space-4);
+		border-radius: 999px;
+		background: color-mix(in oklab, var(--color-bg-base) 60%, transparent);
+		font-size: var(--font-size-sm);
+		font-weight: var(--font-weight-control);
+		color: var(--color-text-secondary);
 	}
 
 	h1 {
 		margin: 0;
-		max-width: 16ch;
-		font-size: clamp(2.75rem, 8vw, 5.5rem);
+		max-width: 14ch;
+		font-size: clamp(2.5rem, 7vw, 4.75rem);
 		font-weight: var(--font-weight-title);
-		line-height: 1.02;
+		line-height: 1.04;
 		letter-spacing: -0.035em;
 		text-wrap: balance;
 	}
 
 	.lead {
-		margin: 0;
-		max-width: 34rem;
-		font-size: clamp(var(--font-size-lg), 2.4vw, var(--font-size-2xl));
+		margin: 0 0 var(--space-2);
+		max-width: 32rem;
+		font-size: clamp(var(--font-size-lg), 2.2vw, var(--font-size-xl));
 		line-height: 1.4;
 		color: var(--color-text-secondary);
 		text-wrap: balance;
+	}
+
+	.note {
+		margin: 0;
+		font-size: var(--font-size-sm);
+		color: var(--color-text-secondary);
 	}
 </style>

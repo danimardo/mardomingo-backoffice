@@ -30,17 +30,27 @@
 </header>
 
 <style>
+	/* Píldora flotante y centrada sobre el contenido (sin barra a todo el ancho). Cristal con alternativa opaca. */
 	.chrome {
+		position: fixed;
+		top: var(--space-4);
+		left: 50%;
+		z-index: 10;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: var(--space-4);
-		flex-wrap: wrap;
-		padding: var(--space-3) var(--space-6);
+		gap: var(--space-2) var(--space-6);
+		box-sizing: border-box;
+		width: max-content;
+		max-width: calc(100% - var(--space-6));
+		padding: var(--space-1) var(--space-2) var(--space-1) var(--space-5);
+		transform: translateX(-50%);
 		background: var(--sidebar-bg);
-		border-bottom: 1px solid var(--sidebar-border);
-		backdrop-filter: blur(var(--blur-sidebar));
-		-webkit-backdrop-filter: blur(var(--blur-sidebar));
+		border: 1px solid var(--sidebar-border);
+		border-radius: 999px;
+		box-shadow: var(--shadow-card-hero);
+		backdrop-filter: blur(var(--blur-sidebar)) saturate(var(--material-saturate));
+		-webkit-backdrop-filter: blur(var(--blur-sidebar)) saturate(var(--material-saturate));
 	}
 
 	@supports not (backdrop-filter: blur(1px)) {
@@ -53,17 +63,18 @@
 		display: inline-flex;
 		align-items: center;
 		min-height: 44px;
-		font-size: var(--font-size-lg);
-		font-weight: var(--font-weight-title);
+		font-size: var(--font-size-md);
+		font-weight: var(--font-weight-subtitle);
+		letter-spacing: -0.01em;
+		white-space: nowrap;
 		color: var(--color-text-primary);
-		text-decoration: underline;
+		text-decoration: none;
 	}
 
 	nav {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: var(--space-2);
+		gap: var(--space-1);
 	}
 
 	nav > a {
@@ -71,17 +82,30 @@
 		align-items: center;
 		min-height: 44px;
 		padding: 0 var(--space-3);
-		color: var(--color-text-primary);
-		text-decoration: underline;
+		border-radius: 999px;
+		color: var(--color-text-secondary);
+		font-size: var(--font-size-sm);
+		text-decoration: none;
 	}
 
+	nav > a:hover,
 	nav > a[aria-current='page'] {
-		font-weight: var(--font-weight-control);
+		color: var(--color-text-primary);
+		background: var(--hover-tint);
 	}
 
 	nav > a:focus-visible,
 	.brand:focus-visible {
 		outline: 2px solid var(--color-focus-ring);
 		outline-offset: 2px;
+	}
+
+	@media (max-width: 40rem) {
+		.chrome {
+			flex-wrap: wrap;
+			justify-content: center;
+			padding: var(--space-1) var(--space-3);
+			border-radius: var(--radius-xl);
+		}
 	}
 </style>

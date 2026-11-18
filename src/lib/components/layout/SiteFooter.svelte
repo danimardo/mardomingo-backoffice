@@ -1,27 +1,23 @@
 <script lang="ts">
-	// Estados: el selector de tema y el de efectos (`ThemeToggle` y `EffectsToggle`) muestran la elección actual. Teclado: son
-	// formularios, sin JavaScript. Temas y efectos reducidos: sus colores son tokens.
-	// Pie: texto de la marca, enlaces a los documentos legales y soporte, y los controles de apariencia, que vuelven a la
-	// página actual tras enviarse. Los documentos legales están siempre a un enlace (BE-FR-60, BE-FR-70 CA2).
+	// Estados: el selector de tema (`ThemeToggle`) muestra la elección actual. Teclado: es un formulario. Temas: colores de tokens.
+	// Pie mínimo: una fila con los enlaces legales, el soporte y el selector de tema, que vuelve a la página actual tras
+	// enviarse. Los documentos legales están siempre a un enlace (BE-FR-60, BE-FR-70 CA2).
 	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
-	import EffectsToggle from './EffectsToggle.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
-	import type { Effects, Theme } from '$lib/appearance/preferences';
+	import type { Theme } from '$lib/appearance/preferences';
 
 	interface Props {
 		redirectTo: string;
 		theme: Theme;
-		effects: Effects;
 		supportEmail?: string | null;
 	}
 
-	let { redirectTo, theme, effects, supportEmail = null }: Props = $props();
+	let { redirectTo, theme, supportEmail = null }: Props = $props();
 </script>
 
 <footer class="footer">
 	<div class="info">
-		<p>{m.layout_footer_text()}</p>
 		<nav aria-label={m.layout_footer_nav_label()}>
 			<ul>
 				<li><a href={resolve('/terminos')}>{m.layout_footer_terms()}</a></li>
@@ -36,23 +32,20 @@
 	</div>
 	<div class="controls">
 		<ThemeToggle current={theme} {redirectTo} />
-		<EffectsToggle current={effects} {redirectTo} />
 	</div>
 </footer>
 
 <style>
-	/* Pie ordenado en dos columnas (información y apariencia) con el mismo ancho que el contenido (`main`), que pasan a una sola en pantallas
-	   estrechas. Las filas se alinean arriba y los controles se apilan, sin que nada se salga de la caja. */
 	.footer {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
-		align-items: start;
-		gap: var(--space-6) var(--space-8);
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4) var(--space-8);
 		box-sizing: border-box;
-		width: min(100%, 60rem);
+		width: min(100%, 68rem);
 		margin: auto auto 0;
 		padding: var(--space-8) var(--space-6);
-		border-top: 1px solid var(--border-subtle);
 		color: var(--color-text-muted);
 		font-size: var(--font-size-sm);
 	}
@@ -62,8 +55,10 @@
 	}
 
 	.info {
-		display: grid;
-		gap: var(--space-2);
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1) var(--space-6);
 	}
 
 	.info ul {
@@ -80,22 +75,16 @@
 		align-items: center;
 		min-height: 44px;
 		color: inherit;
+		text-decoration: none;
+	}
+
+	.info a:hover {
+		color: var(--color-text-primary);
+		text-decoration: underline;
 	}
 
 	.info a:focus-visible {
 		outline: 2px solid var(--color-focus-ring);
 		outline-offset: 2px;
-	}
-
-	.controls {
-		display: grid;
-		justify-items: start;
-		gap: var(--space-4);
-	}
-
-	@media (max-width: 48rem) {
-		.footer {
-			grid-template-columns: minmax(0, 1fr);
-		}
 	}
 </style>

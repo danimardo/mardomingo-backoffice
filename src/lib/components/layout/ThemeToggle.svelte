@@ -1,10 +1,9 @@
 <script lang="ts">
-	// Selector de tema (UX-TEMA; DS-03). Es un formulario que envía a `/preferencias?/tema`: funciona sin JavaScript
-	// y, con JavaScript, la página se actualiza sin recargar. La opción actual va marcada con `aria-pressed`.
+	// Selector de tema (UX-TEMA; DS-03). Es un formulario que envía a `/preferencias?/tema`: con JavaScript, la página se
+	// actualiza sin recargar. Control segmentado compacto; la opción actual va marcada con `aria-pressed`.
 	import { enhance } from '$app/forms';
 	import type { Theme } from '$lib/appearance/preferences';
 	import * as m from '$lib/paraglide/messages.js';
-	import Button from '../ui/Button.svelte';
 
 	interface Props {
 		current: Theme;
@@ -22,37 +21,61 @@
 
 <form method="POST" action="/preferencias?/tema" use:enhance>
 	<fieldset class="group">
-		<legend>{m.theme_group()}</legend>
+		<legend class="sr-only">{m.theme_group()}</legend>
 		<input type="hidden" name="redirectTo" value={redirectTo} />
 		{#each options as option (option.value)}
-			<Button
+			<button
 				type="submit"
 				name="theme"
 				value={option.value}
-				variant={option.value === current ? 'primary' : 'secondary'}
-				pressed={option.value === current}
+				aria-pressed={option.value === current}
+				class:current={option.value === current}
 			>
 				{option.label()}
-			</Button>
+			</button>
 		{/each}
 	</fieldset>
 </form>
 
 <style>
 	.group {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-2);
+		display: inline-flex;
+		gap: var(--space-1);
 		margin: 0;
-		padding: 0;
-		border: none;
+		padding: var(--space-1);
+		border: 1px solid var(--border-subtle);
+		border-radius: var(--radius-xl);
+		background: var(--surface-solid-card);
 	}
 
-	legend {
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	button {
+		padding: var(--space-1) var(--space-3);
+		border: none;
+		border-radius: var(--radius-lg);
+		background: transparent;
+		color: var(--color-text-secondary);
+		font: inherit;
 		font-size: var(--font-size-sm);
 		font-weight: var(--font-weight-control);
-		color: var(--color-text-secondary);
-		padding: 0;
-		margin-bottom: var(--space-2);
+		cursor: pointer;
+	}
+
+	button.current {
+		background: var(--surface-button-primary);
+		color: var(--color-on-primary);
+	}
+
+	button:focus-visible {
+		outline: 2px solid var(--color-focus-ring);
+		outline-offset: 2px;
 	}
 </style>

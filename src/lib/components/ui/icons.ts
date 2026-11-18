@@ -18,6 +18,14 @@ import Search from '@lucide/svelte/icons/search';
 import Settings from '@lucide/svelte/icons/settings';
 import Shield from '@lucide/svelte/icons/shield-check';
 import Trash from '@lucide/svelte/icons/trash-2';
+import History from '@lucide/svelte/icons/history';
+import Layers from '@lucide/svelte/icons/layers';
+import Lock from '@lucide/svelte/icons/lock';
+import Receipt from '@lucide/svelte/icons/receipt';
+import Sparkles from '@lucide/svelte/icons/sparkles';
+import Support from '@lucide/svelte/icons/life-buoy';
+import User from '@lucide/svelte/icons/user-round';
+import Wallet from '@lucide/svelte/icons/wallet';
 import X from '@lucide/svelte/icons/x';
 import XCircle from '@lucide/svelte/icons/circle-x';
 
@@ -50,7 +58,15 @@ const ICON_TABLE = Object.freeze({
 	copy: Copy,
 	edit: Edit,
 	trash: Trash,
-	filter: Filter
+	filter: Filter,
+	history: History,
+	layers: Layers,
+	lock: Lock,
+	receipt: Receipt,
+	sparkles: Sparkles,
+	support: Support,
+	user: User,
+	wallet: Wallet
 } as const);
 
 export type IconName = keyof typeof ICON_TABLE;

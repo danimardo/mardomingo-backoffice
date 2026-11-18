@@ -22,7 +22,15 @@ const names: IconName[] = [
 	'copy',
 	'edit',
 	'trash',
-	'filter'
+	'filter',
+	'history',
+	'layers',
+	'lock',
+	'receipt',
+	'sparkles',
+	'support',
+	'user',
+	'wallet'
 ];
 
 describe('Icon', () => {

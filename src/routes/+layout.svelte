@@ -60,7 +60,6 @@
 <SiteFooter
 	redirectTo={`${page.url.pathname}${page.url.search}`}
 	theme={appearance.theme}
-	effects={appearance.effects}
 	supportEmail={data.supportEmail}
 />
 
@@ -69,7 +68,7 @@
 		flex: 1;
 		width: min(100%, 60rem);
 		margin: 0 auto;
-		padding: var(--space-8) var(--space-6);
+		padding: var(--space-24) var(--space-6) var(--space-8);
 	}
 
 	main:focus {
