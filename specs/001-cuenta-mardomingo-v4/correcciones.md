@@ -65,6 +65,20 @@ de corregir).
 | C-37 | Baja     | web      | La web no muestra el tiempo de espera en los 429 `RATE_LIMITED`                          | T429  |
 | C-38 | Baja     | logging  | En `/client-errors` un visitante agota el cupo global y el cuerpo se lee entero          | T430  |
 | C-39 | Baja     | ai       | En `/ai/*` la frecuencia se cuenta antes que la idempotencia y la validación             | T431  |
+| C-40 | Alta     | sync     | La copia de W43 borra de los predeterminados las categorías no seleccionadas             | T432  |
+| C-41 | Media    | sync     | W42 y W43 no piden motivo y su auditoría no guarda valores                               | T433  |
+| C-42 | Media    | web      | W42 pierde el JSON editado al fallar la validación y no dice qué categoría falla         | T434  |
+| C-43 | Media    | sync     | Un GET o PUT de `/sync` durante el borrado de la cuenta recrea el documento              | T435  |
+| C-44 | Baja     | sync     | Los eventos de `sync` y de W43 no siguen el catálogo de logging                          | T436  |
+| C-45 | Baja     | sync     | La siembra no filtra por el esquema vigente                                              | T437  |
+| C-46 | Baja     | sync     | La limpieza de marcas de borrado carga en memoria todos los documentos                   | —     |
+| C-47 | Media    | web      | Los periodos del panel se cortan en días UTC y no en días de Madrid                      | T438  |
+| C-48 | Media    | pricing  | El tipo de cambio manual no tiene rango ni validación de tipo                            | T439  |
+| C-49 | Media    | freno    | El freno global convierte con el ajuste fijo y no con el tipo vigente                    | T440  |
+| C-50 | Baja     | accounts | Cerrar una sesión inexistente o ajena no da 404 y se audita igualmente                   | T441  |
+| C-51 | Baja     | web      | Varias acciones auditadas no enlazan con su entrada de auditoría (UX-13)                 | T442  |
+| C-52 | Baja     | apps     | Editar, aplicar al grupo y activar una operación aceptan un motivo vacío                 | T443  |
+| C-53 | Baja     | web      | Una `pagina` enorme en los filtros GET del panel da 500                                  | T444  |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -611,3 +625,180 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
   concurrencia (paso 12), después de la validación.
 - **Test (primero, debe fallar)**: los reintentos con clave entregada dan `DUPLICATE_REQUEST` y no gastan cupo; una operación
   inexistente da `VALIDATION_ERROR` y no gasta cupo.
+
+C-40 a C-53 proceden de las revisiones de `sync` y de `admin` (2026-11-18), hechas con Opus por lectura. Todos los hallazgos con
+test se confirmaron después por ejecución: de los 21 tests de integración, 19 fallan y 2 pasan (son de control), y los 15 tests
+HTTP fallan los 15. C-46 es una sospecha sin test: hay que medirla con `pnpm perf:seed` antes de tocarla, y no tiene tarea.
+Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C-47 a C-53. Las decisiones del propietario
+(2026-11-18) están en cada ficha (C-41, C-43, C-45, C-48 y C-49).
+
+## C-40 (Alta) — La copia de W43 borra de los predeterminados las categorías no seleccionadas
+
+- **Requisito**: BE-FR-42 CA3, FR-067; `contracts/web-routes.md` W43 («solo sustituye las categorías con algún elemento seleccionado»).
+- **Ficheros**: `src/lib/server/features/sync/service.ts` (`applyCopyAsDefaults`, líneas 235–240: escribe con `writeDefaults` el
+  resultado de `applyCopy`, que solo contiene lo seleccionado, y el upsert sustituye el documento entero).
+- **Estado**: confirmado por ejecución. Con una selección parcial, los predeterminados quedan solo con las categorías copiadas;
+  con una selección que no casa con nada (categoría o elementos que ya no existen) se guarda `{}` y se audita una copia.
+- **Cambio**: dentro de la transacción, fusionar `{ ...actuales, ...copied }` y lanzar `NOTHING_SELECTED` si `copied` está
+  vacío. No necesita decisión.
+- **Test (primero, debe fallar)**: `src/lib/server/features/sync/copy-defaults-keeps-unselected.int.test.ts` (el primer caso deja
+  solo `prompts` y el segundo deja `{}` y audita una copia).
+
+## C-41 (Media) — W42 y W43 no piden motivo y su auditoría no guarda valores
+
+- **Requisito**: BE-FR-55 (valores anterior y nuevo, y motivo); `contracts/web-routes.md` 1.4 (el motivo es obligatorio); T321
+  cuenta estas dos acciones en la matriz de motivo obligatorio.
+- **Ficheros**: `sync/service.ts` (`updateDefaults` y `applyCopyAsDefaults`, líneas 192–204 y 241–253: `before: null`,
+  `after: null` y un texto fijo como `reason`), las rutas de W42 y W43 (no leen `motivo`). La matriz de `admin-motivo.test.ts`
+  pasa por casualidad: con `motivo=&confirmado=true` falla antes `JSON.parse('')` (W42) o `NOTHING_SELECTED` (W43).
+- **Estado**: confirmado por ejecución. Con datos válidos y motivo vacío responde 303 y audita; con motivo, `reason` sigue
+  siendo el texto fijo.
+- **Cambio** (**decisión del propietario**): la auditoría guarda un resumen sin contenido (categorías cambiadas, número de
+  elementos y un hash), no el JSON completo (puede romper la acción y mete datos personales en una tabla inmutable); y el
+  motivo es obligatorio en W42 y W43 (`requireReason`).
+- **Test (primero, debe fallar)**: `tests/http/admin-predeterminados-motivo.test.ts`.
+
+## C-42 (Media) — W42 pierde el JSON editado al fallar la validación y no dice qué categoría falla
+
+- **Requisito**: constitución, «Lo escrito no se pierde» y helper de formularios (`values` reenvía lo escrito); los mensajes de
+  error explican qué ha pasado y dónde.
+- **Ficheros**: la ruta de W42 `predeterminados/+page.server.ts` (líneas 53–60: `fail(400, { errors: { datos } })` o
+  `failureOf(cause)` sin `values`; se descarta `verdict.field`) y su `+page.svelte` (líneas 28–30: pinta siempre
+  `data.defaultsJson`).
+- **Estado**: confirmado por ejecución. La respuesta 400 no contiene el texto enviado.
+- **Cambio**: devolver `values` con el JSON enviado, pintarlo en la página y mostrar la categoría que falla. No necesita decisión.
+- **Test (primero, debe fallar)**: `tests/http/admin-predeterminados-conserva-texto.test.ts`.
+
+## C-43 (Media) — Un GET o PUT de `/sync` durante el borrado de la cuenta recrea el documento
+
+- **Requisito**: BE-FR-07 CA1 (se borran los documentos sincronizados); RGPD, art. 17.
+- **Ficheros**: `sync/service.ts` (`getSyncDocument` y `putSyncDocument`, líneas 87–141: no comprueban en su transacción que la
+  cuenta siga viva), `src/routes/api/v1/sync/+server.ts` (líneas 33–49: valida la sesión y después hace `await jsonBodyOf(...)`,
+  hueco en el que puede confirmarse `deleteAccount`). La retención no mira `sync_documents`, así que nada lo borra después.
+- **Estado**: la carrera es una sospecha razonable, pero que el servicio no comprueba la cuenta borrada está confirmado por
+  ejecución: tras el borrado, la llamada al servicio de una petición que ya había pasado la sesión deja una fila de
+  `sync_documents` con el dato enviado.
+- **Cambio** (**decisión del propietario**): triggers `BEFORE INSERT` y `BEFORE UPDATE` en `sync_documents` que abortan si
+  `user.deleted_at` no es nulo, con su migración.
+- **Test (primero, debe fallar)**: `src/lib/server/features/privacy/sync-after-delete.int.test.ts`.
+
+## C-44 (Baja) — Los eventos de `sync` y de W43 no siguen el catálogo de logging
+
+- **Requisito**: `contracts/log-events.md` 3.10; `contracts/api-v1` E10 y E11; `contracts/web-routes.md:623`.
+- **Ficheros**: `sync/events.ts` (líneas 5–12), `sync/service.ts` (líneas 76–206).
+- **Estado**: confirmado por ejecución. Faltan `sync.document.read` (debug, `durationMs`) y `sync.document.written` (info,
+  `durationMs`); `sync.document.rejected` usa `reason: 'validation'` en lugar de `schema_invalid`, no lleva `errorCode` y no se
+  emite con `if_match_invalid`; `sync.tombstones.purged` lleva `removed` (uno por documento) en lugar de `count`;
+  `sync.defaults.updated` y `sync.defaults.copied` no llevan `count`.
+- **Cambio**: alinear los eventos con el catálogo. Si `read` y `written` se emiten en la ruta (donde se mide `durationMs`), el
+  primer caso del test pasa a `tests/http/api-sync.test.ts`. No necesita decisión.
+- **Test (primero, debe fallar)**: `src/lib/server/features/sync/log-events-contract.int.test.ts`.
+
+## C-45 (Baja) — La siembra no filtra por el esquema vigente
+
+- **Requisito**: BE-FR-39, BE-FR-40; `data-model.md` 3.3 («objeto con solo las categorías declaradas»).
+- **Ficheros**: `sync/service.ts` (`documentOrSeed`, líneas 81–84), W40 (esquema de la app).
+- **Estado**: confirmado por ejecución. Si el administrador quita o cambia la estrategia de una categoría en W40 después de
+  guardar los predeterminados (`apps` no puede revalidar `app_defaults`, que es de `sync`), se siembra un documento que el
+  propio servidor rechaza: el cliente que lo devuelve tal cual recibe `VALIDATION_ERROR` en cada PUT.
+- **Cambio** (**decisión del propietario**): filtrar la siembra por el esquema vigente, y que W40 avise si el cambio invalida
+  los predeterminados.
+- **Test (primero, debe fallar)**: `src/lib/server/features/sync/seed-undeclared-categories.int.test.ts` (el documento sembrado
+  contiene `retirada` y su reenvío responde `VALIDATION_ERROR`).
+
+## C-46 (Baja) — La limpieza de marcas de borrado carga en memoria todos los documentos
+
+- **Requisito**: rendimiento de `sync` (retención de marcas de borrado).
+- **Ficheros**: `sync/service.ts` y `sync/repository.ts` (limpieza de `tombstones`).
+- **Estado**: sospecha. Sin test y **sin tarea**: hay que medirla con `pnpm perf:seed` (antes y después) antes de tocar nada.
+- **Cambio**: solo si la medición lo justifica, procesar por lotes o filtrar en SQL.
+- **Test**: ninguno hasta medir.
+
+## C-47 (Media) — Los periodos del panel se cortan en días UTC y no en días de Madrid
+
+- **Requisito**: `Historias.md` 4.3 (los cortes diarios usan la zona `Europe/Madrid`); BE-FR-76 (por periodo); BE-FR-54.
+- **Ficheros**: `bounds()` de facturación, exportación contable, estadísticas y filtro de auditoría
+  (`Date.parse(`${desde}T00:00:00Z`)` y `${hasta}T23:59:59Z`); la fecha de cada fila del CSV es el día civil de Madrid
+  (`civilDateOf`).
+- **Estado**: confirmado por ejecución. Una venta del 1 de febrero a las 00:30 de Madrid (31-ene 23:30 UTC) no sale en el
+  periodo 01-02..01-02, y una del 2 de febrero a las 00:30 sí sale en él, con fecha «2026-02-02» en un CSV del día 1. Además,
+  el fin `23:59:59.000Z` deja fuera el último segundo.
+- **Cambio**: una función común que devuelva `[madridMidnight(desde), madridMidnight(addDays(hasta, 1)))` y se use en los
+  cuatro periodos. No necesita decisión.
+- **Test (primero, debe fallar)**: `tests/http/admin-periodo-madrid.test.ts` (las dos primeras aserciones).
+
+## C-48 (Media, dinero) — El tipo de cambio manual no tiene rango ni validación de tipo
+
+- **Requisito**: BE-FR-61 CA2 (el panel valida tipos, rangos y coherencias); BE-FR-87 CA3.
+- **Ficheros**: `admin/economia/+page.server.ts` (`?/fijarTipoCambioManual` pasa `Number(form.usdEurPpm)`), `pricing/service.ts`
+  (`setManualFx`), `pricing/domain/charge.ts` (usa este tipo).
+- **Estado**: confirmado por ejecución. Un valor absurdo (920 en lugar de 920 000) se guarda y cada operación se cobra unas
+  1000 veces menos; un decimal, NaN o un negativo lanza `InvalidAmountError` y un 0 viola `fx_rates_usd_eur_positive`: la acción
+  responde 500 en lugar de 400.
+- **Cambio** (**decisión del propietario**): entero entre 500 000 y 2 000 000 ppm (0,50 a 2,00 €/USD), con `VALIDATION_ERROR`
+  en el campo, y vista previa «antes → después» antes de confirmar.
+- **Test (primero, debe fallar)**: `src/lib/server/features/pricing/fx-manual-range.int.test.ts`.
+
+## C-49 (Media, dinero) — El freno global convierte con el ajuste fijo y no con el tipo vigente
+
+- **Requisito**: BE-FR-87 CA1 (las operaciones usan el tipo vigente en el momento del cobro); `data-model.md` 2.5
+  (`settings.fx_usd_eur` solo vale mientras no haya filas de `fx_rates`); BE-FR-46 (el freno es en euros).
+- **Ficheros**: `src/lib/server/features/protections/service.ts:206` (`numberSetting(deps, 'fx_usd_eur')`, que nadie
+  actualiza), el puerto `dailyCosts` que da `ai`, `tests/builders/protections.ts`.
+- **Estado**: confirmado por ejecución. Con un tipo vigente de 2,0 €/USD, 3 USD son 600 céntimos (por encima de los 500 del
+  freno), pero el freno calcula 276 (a 0,92) y no salta.
+- **Cambio** (**decisión del propietario**): el puerto `dailyCosts` que da `ai` devuelve los céntimos ya convertidos con el
+  tipo vigente de cada operación (`fx_rate_id`), sin aristas nuevas; ajustar `tests/builders/protections.ts`.
+- **Test (primero, debe fallar)**: `src/lib/server/features/protections/brake-fx.int.test.ts` (la petición pasa en lugar de
+  responder `SERVICE_LIMITED`); adaptarlo al puerto nuevo.
+
+## C-50 (Baja) — Cerrar una sesión inexistente o ajena no da 404 y se audita igualmente
+
+- **Requisito**: `contracts/web-routes.md` W35 (`?/cerrarSesiones` con errores `404`); BE-FR-55 (la auditoría registra cambios reales).
+- **Ficheros**: `accounts/admin-users.ts` (`closeUserSessions`, líneas 224–247: filtra por cuenta y sesión, borra 0 filas y
+  escribe `accounts.session.close` con `before: { sessions: 0 }`), la acción de `admin/usuarios/[userId]/+page.server.ts`.
+- **Estado**: confirmado por ejecución. Devuelve 0 en lugar de lanzar `NOT_FOUND` y queda una entrada de auditoría.
+- **Cambio**: `NOT_FOUND` sin auditar si `changes === 0`. No necesita decisión.
+- **Test (primero, debe fallar)**: `src/lib/server/features/accounts/admin-sessions-close.int.test.ts`.
+
+## C-51 (Baja) — Varias acciones auditadas no enlazan con su entrada de auditoría (UX-13)
+
+- **Requisito**: UX-13 (`Historias.md` 16: al guardar se enlaza la entrada de auditoría; nombra el reembolso y el cierre de
+  sesiones); `contracts/web-routes.md` sección 4 (`?aviso=saved&auditoria=<entryId>`).
+- **Ficheros**: solo bloquear, desbloquear, tester y el ajuste usan `savedRedirect`. Sin enlace: `cerrarSesiones`
+  (`usuarios/[userId]/+page.server.ts:276-277`), reembolso (`reembolso/+page.server.ts:162-164`, `?aviso=reembolso_aplicado`),
+  economía (138, 154, 169, 187), protecciones (91, 124, 134), apps, operación, anuncios, legal y predeterminados. Los servicios
+  afectados no devuelven el id de la entrada (`closeUserSessions` devuelve el número de sesiones; `setManualFx`,
+  `updateSetting` y otros devuelven `void`).
+- **Estado**: confirmado por ejecución. Las dos redirecciones del test no llevan `aviso=saved` ni `auditoria=`.
+- **Cambio**: los servicios devuelven el id de su entrada de auditoría y las acciones redirigen con `savedRedirect`.
+  Prioridad: reembolso y cierre de sesiones. `payments/service.ts` solo después de cerrar las fases 18 y 19, que ya están
+  cerradas (commit a8b092c): se puede hacer.
+- **Test (primero, debe fallar)**: `tests/http/admin-enlace-auditoria.test.ts`. El tipo manual se fija a 920 000 ppm (el valor
+  por defecto) para no cambiar el cobro de las demás pruebas HTTP.
+
+## C-52 (Baja) — Editar, aplicar al grupo y activar una operación aceptan un motivo vacío
+
+- **Requisito**: FR-094 y BE-FR-55 (motivo en toda acción que modifica datos); `contracts/web-routes.md` W41 (exige motivo y
+  confirmación).
+- **Ficheros**: `apps/operation-settings.ts:38` (`updateOperationSettings`), `apps/activation.ts:25` (`activateOperation`; en
+  cambio `deactivateOperation` sí lo exige, línea 67), las acciones `?/guardarOperacion`, `?/aplicarAlGrupo` y `?/activar` de
+  `operaciones/[key]/+page.server.ts` (104–109, 178–183 y 221–226). La propuesta R08 da por hecho que «apps, operaciones y
+  freno» ya exigen motivo (solo les falta el máximo): estas dos funciones no.
+- **Estado**: confirmado por ejecución. Las dos llamadas con motivo vacío terminan sin error y dejan auditoría con motivo `''`.
+- **Cambio**: exigir el motivo con `requireReason`. El tope de longitud del motivo queda con R08 y D09 (decisión pendiente ya
+  registrada). **Nota documental (W41)**: `contracts/web-routes.md:607` dice que `aplicarAlGrupo` aplica el modelo, y el código
+  aplica tiempo máximo, tokens, temperatura y coste máximo (T311); hay que enmendar el contrato (lo hace el propietario).
+- **Test (primero, debe fallar)**: `src/lib/server/features/apps/operation-reason.int.test.ts`.
+
+## C-53 (Baja) — Una `pagina` enorme en los filtros GET del panel da 500
+
+- **Requisito**: UX-09 (filtros y paginación en la URL); constitución, validación de entradas (un parámetro inválido se trata, no
+  rompe la página).
+- **Ficheros**: `admin/usuarios/+page.server.ts:19`, `admin/auditoria/+page.server.ts:30` y `pageNumber` en
+  `src/lib/shared/paging.ts:7-9` (`Math.max(1, Number.parseInt(x, 10) || 1)`, sin tope).
+- **Estado**: confirmado por ejecución (el informe lo daba por sospecha): responde 500. Con «1e400» en cifras da `Infinity` y con
+  «100000000000000000000» da 1e20; el desplazamiento llega a SQLite como REAL no representable y lo rechaza en `LIMIT`/`OFFSET`
+  («datatype mismatch»).
+- **Cambio**: exigir entero seguro y un máximo en `pageNumber`; fuera de rango, la última página o la lista vacía (200) o 400.
+- **Test (primero, debe fallar)**: `tests/http/admin-paginacion-limites.test.ts` (500 en lugar de 200 o 400).

@@ -1074,3 +1074,22 @@ _Entorno aislado 2026-10-23 (T368, decisión del propietario): Stryker y su runn
 _Depuración 2026-10-23 (T368, con Vitest 4 en `tools/mutacion`): (1) un segundo `ctx.start` con `related` apuntando al módulo mutado deja la lista de ficheros vacía (`VITEST_FILES_NOT_FOUND`, que el runner traga como 0 pruebas); se corrige en la config del piloto con `vitest.related: false`, pero entonces el dry run supera los 5 min y hace falta `dryRunTimeoutMinutes`. (2) En la fase de mutantes aparecía `EPERM` al borrar `tests/.tmp/integration` dentro de la sandbox; se añaden reintentos al borrado en `tests/setup/integration.global-setup.ts` (verificado: `daily-cap.int.test.ts` 5/5). (3) Sin resolver: las pruebas se cargan en la fase de mutantes (93–146 por ejecución) pero el resultado sigue en 0 pruebas por mutante. Los `testIds` de los mutantes de `daily-cap.ts` apuntan a ficheros de pagos y los nombres con acentos llegan corruptos (`m�s`). La configuración de `stryker.config.mjs` queda como estaba (solo cambia el plugin); la línea base sigue **no válida**.
 _Mutación manual 2026-10-23 (T368, decisión del propietario): 17 mutantes en `ledger.ts`, `daily-cap.ts` y `low-balance.ts`. Vivos al principio: 4 en `ledger.ts`; se añaden 3 tests de frontera (`ledger.test.ts`: saldo mínimo exacto, cabida exacta y cobro que agota una bolsa). Quedan 16 muertos y 1 equivalente (`maxDebt - debt` con deuda cero es igual a `maxDebt`; con deuda > 0 la reserva ya se rechaza). Dominio de créditos: 54 tests en verde. Esto no es el porcentaje de Stryker.
 _Decisión del propietario 2026-10-27 (T368): aparcar la mutación automática hasta que haya una versión del runner de Stryker compatible con proyectos de Vitest. Mientras tanto, la mutación se hace a mano sobre el dominio (como en 2026-10-23) y la línea base del 11 % queda registrada como **no válida**. T368 sigue abierta con esta nota; `pnpm test:mutation` no forma parte de `validate` ni de ninguna puerta._
+
+## Phase 23: Correcciones de las revisiones de sync y admin (2026-11-18)
+
+Hallazgos C-40 a C-53 de `correcciones.md` (C-46 es una sospecha sin tarea: se mide antes con `pnpm perf:seed`), con las
+decisiones del propietario del 2026-11-18 (C-41, C-43, C-45, C-48 y C-49). Se corrigen en serie y con el test primero.
+
+- [ ] T432 [US6] C-40 (Alta): la copia de W43 conserva las categorías no seleccionadas y lanza `NOTHING_SELECTED` si no copia nada, en `sync/service.ts` [BE-FR-42 CA3]
+- [ ] T433 [US6] C-41 (Media): motivo obligatorio en W42 y W43 y auditoría con resumen sin contenido (categorías, número de elementos y hash) [BE-FR-55]
+- [ ] T434 [US6] C-42 (Media): W42 conserva el JSON escrito y nombra la categoría que falla [BE-FR-42]
+- [ ] T435 [US6] C-43 (Media): triggers `BEFORE INSERT/UPDATE` en `sync_documents` que abortan si el usuario está borrado, con migración [BE-FR-07 CA1]
+- [ ] T436 [US6] C-44 (Baja): eventos de `sync` y de W43 según `log-events.md` 3.10 [BE-FR-41, BE-FR-42]
+- [ ] T437 [US6] C-45 (Baja): la siembra filtra por el esquema vigente y W40 avisa si el cambio invalida los predeterminados [BE-FR-39, BE-FR-40]
+- [ ] T438 [US7] C-47 (Media): periodos del panel por días de Madrid con una función común (facturación, exportación, estadísticas y auditoría) [BE-FR-76, BE-FR-54]
+- [ ] T439 [US7] C-48 (Media): tipo de cambio manual entero entre 500 000 y 2 000 000 ppm con `VALIDATION_ERROR` y vista previa [BE-FR-61 CA2, BE-FR-87 CA3]
+- [ ] T440 [US8] C-49 (Media): el freno global usa los céntimos que devuelve el puerto `dailyCosts` de `ai`, con el tipo vigente de cada operación [BE-FR-87 CA1, BE-FR-46]
+- [ ] T441 [US7] C-50 (Baja): cerrar una sesión inexistente o ajena da `NOT_FOUND` sin auditar, en `accounts/admin-users.ts` [BE-FR-55]
+- [ ] T442 [US7] C-51 (Baja): las acciones auditadas redirigen con `?aviso=saved&auditoria=<id>`, empezando por el reembolso y el cierre de sesiones (UX-13) [BE-FR-55]
+- [ ] T443 [US7] C-52 (Baja): `requireReason` al editar, aplicar al grupo y activar una operación [BE-FR-55]
+- [ ] T444 [US7] C-53 (Baja): `pageNumber` exige entero seguro y un máximo, y una `pagina` enorme no da 500 [UX-09]
