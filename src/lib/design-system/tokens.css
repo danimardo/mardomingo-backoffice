@@ -760,8 +760,9 @@
 
 /* ---------------------------------------------------------------- tokens estructurales (a mano) */
 :root {
-	/* --- Tipografía (DS-04). La pila de fuentes no cambia hasta T455 (Poppins). Cuerpo 1rem = 16 px. --- */
-	--font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	/* --- Tipografía (DS-04). Poppins propia (T455, @font-face en app.css) con pila de respaldo. Poppins solo tiene 400/500/600/700. Cuerpo 1rem = 16 px. --- */
+	--font-ui:
+		'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 	--font-sans: var(--font-ui);
 	--font-mono: ui-monospace, 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
 	--font-size-2xs: 0.75rem;
@@ -773,8 +774,8 @@
 	--font-size-2xl: 1.5rem;
 	--font-size-3xl: 2rem;
 	--font-size-4xl: 2.5rem;
-	--font-weight-body: 450;
-	--font-weight-control: 550;
+	--font-weight-body: 400;
+	--font-weight-control: 500;
 	--font-weight-subtitle: 600;
 	--font-weight-title: 700;
 

@@ -32,6 +32,22 @@
 </script>
 
 <svelte:head>
+	<!-- Poppins propia: solo se precargan los pesos de la portada (400 cuerpo y 600 subtítulos). crossorigin es obligatorio
+	     para fuentes aunque sean del mismo origen; la CSP (font-src 'self') ya lo permite. -->
+	<link
+		rel="preload"
+		as="font"
+		type="font/woff2"
+		href="/fonts/poppins/poppins-latin-400-normal.woff2"
+		crossorigin="anonymous"
+	/>
+	<link
+		rel="preload"
+		as="font"
+		type="font/woff2"
+		href="/fonts/poppins/poppins-latin-600-normal.woff2"
+		crossorigin="anonymous"
+	/>
 	<title>{m.layout_home_title()}</title>
 </svelte:head>
 
