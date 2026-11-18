@@ -7,6 +7,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -23,6 +24,15 @@
 
 <h1>{m.admin_defaults_title()}: {data.app.name}</h1>
 <p>{m.admin_defaults_intro()}</p>
+
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
 
 {#if form?.formError}
 	<Banner level="critical">{m.admin_defaults_error()}</Banner>
@@ -44,9 +54,9 @@
 		id="motivo"
 		name="motivo"
 		label={m.admin_defaults_reason()}
-		value={form?.values.motivo ?? ''}
-		error={errors.motivo ? m.validation_required() : ''}
 		required
+		maxlength={REASON_MAX_LENGTH}
+		{...reasonFieldOf(form)}
 	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_defaults_confirm()}</Checkbox>
 	<p><Button type="submit" variant="primary">{m.admin_defaults_save()}</Button></p>

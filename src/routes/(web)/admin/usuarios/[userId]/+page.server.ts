@@ -22,6 +22,7 @@ import {
 	unblockUser
 } from '$lib/server/features/accounts';
 import { isConfirmed, savedEntryOf, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { failureOf } from '$lib/server/web/actions';
 import { AppError } from '$lib/server/shared/errors';
 import type { Actions, PageServerLoad } from './$types';
@@ -191,6 +192,9 @@ export const actions: Actions = {
 		if (typeof accion !== 'string' || !PREVIEWABLE.includes(accion)) {
 			return fail(400, { formError: 'VALIDATION_ERROR' });
 		}
+		// El motivo que la acción rechazaría se rechaza ya en la vista previa, junto al campo de esa acción (C-55).
+		const rejected = reasonRejection(reasonOf(form), { scope: accion });
+		if (rejected !== null) return rejected;
 		const account = accountView(getComposition().adminUsers, params.userId);
 		if (account === null) error(404);
 		return {
@@ -206,6 +210,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'bloquear' });
+		if (rejected !== null) return rejected;
 		try {
 			const entryId = blockUser(getComposition().adminUsers, {
 				adminId: admin.id,
@@ -224,6 +230,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'desbloquear' });
+		if (rejected !== null) return rejected;
 		try {
 			const entryId = unblockUser(getComposition().adminUsers, {
 				adminId: admin.id,
@@ -242,6 +250,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'tester' });
+		if (rejected !== null) return rejected;
 		try {
 			const entryId = setTester(getComposition().adminUsers, {
 				adminId: admin.id,
@@ -261,6 +271,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'cerrarSesiones' });
+		if (rejected !== null) return rejected;
 		const sessionValue = form.get('sesion');
 		try {
 			const { entryId } = closeUserSessions(getComposition().adminUsers, {

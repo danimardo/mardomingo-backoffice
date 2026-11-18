@@ -7,6 +7,7 @@
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -22,6 +23,15 @@
 <p>{data.app.slug} · {data.app.status}</p>
 {#if data.app.description}
 	<p>{data.app.description}</p>
+{/if}
+
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
 {/if}
 
 {#if form?.formError}
@@ -89,7 +99,14 @@
 			hint={m.admin_apps_hint_json()}
 			required
 		/>
-		<TextField id="motivo-datos" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo-datos"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'guardarApp')}
+		/>
 		<Checkbox id="confirmado-datos" name="confirmado" value="true"
 			>{m.admin_apps_confirm()}</Checkbox
 		>
@@ -120,7 +137,14 @@
 			value="true"
 			checked={data.versions.enforceVersion}>{m.admin_apps_versions_enforce()}</Checkbox
 		>
-		<TextField id="motivo-versiones" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo-versiones"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'guardarVersiones')}
+		/>
 		<Checkbox id="confirmado-versiones" name="confirmado" value="true"
 			>{m.admin_apps_confirm()}</Checkbox
 		>
@@ -160,7 +184,13 @@
 			hint={m.admin_apps_hint_json()}
 			required
 		/>
-		<TextField id="motivo-operacion" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo-operacion"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+		/>
 		<Checkbox id="confirmado-operacion" name="confirmado" value="true"
 			>{m.admin_apps_confirm()}</Checkbox
 		>
@@ -202,7 +232,14 @@
 					value={form.maintenancePreview.after.active ? 'true' : 'false'}
 				/>
 				<input type="hidden" name="mensaje" value={form.maintenancePreview.after.message} />
-				<TextField id="motivo-mantenimiento" name="motivo" label={m.admin_apps_reason()} required />
+				<TextField
+					id="motivo-mantenimiento"
+					name="motivo"
+					label={m.admin_apps_reason()}
+					required
+					maxlength={REASON_MAX_LENGTH}
+					{...reasonFieldOf(form, 'guardarMantenimiento')}
+				/>
 				<Checkbox id="confirmado-mantenimiento" name="confirmado" value="true"
 					>{m.admin_apps_confirm()}</Checkbox
 				>
@@ -224,7 +261,14 @@
 			hint={m.admin_apps_hint_overrides()}
 			required
 		/>
-		<TextField id="motivo" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'guardarSobrescrituras')}
+		/>
 		<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_apps_confirm()}</Checkbox>
 		<p><Button type="submit" variant="primary">{m.admin_apps_save()}</Button></p>
 	</form>

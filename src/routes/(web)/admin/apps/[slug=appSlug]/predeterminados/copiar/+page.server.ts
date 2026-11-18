@@ -2,14 +2,16 @@
 // documento sincronizado de la cuenta del propio administrador a los predeterminados de la app; cualquier otro origen responde 403.
 // La vista previa lista las categorías y sus elementos sin preselección; `copiar` solo sustituye las categorías con algún elemento
 // marcado, conserva las demás y exige al menos uno (400 NOTHING_SELECTED, también si lo marcado ya no existe; C-40). Exige motivo
-// y confirmación (BE-FR-55; C-41). Requiere rol de administrador. Deja auditoría por cada copia, sin el contenido copiado.
+// y confirmación (BE-FR-55; C-41). Requiere rol de administrador. Deja auditoría por cada copia, sin el contenido copiado, y vuelve a W42
+// con `?aviso=saved&auditoria=<id>` (UX-13; C-54).
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import { findActiveAppBySlug } from '$lib/server/features/apps';
 import { applyCopyAsDefaults, previewCopyAsDefaults } from '$lib/server/features/sync';
-import { isConfirmed } from '$lib/server/forms/confirmation';
+import { isConfirmed, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
 import type { Actions, PageServerLoad } from './$types';
@@ -63,8 +65,12 @@ export const actions: Actions = {
 			.filter((item) => item.elements.length > 0);
 		if (selection.length === 0) return fail(400, { formError: 'NOTHING_SELECTED' });
 		const reason = form.get('motivo');
+		// Motivo de 1 a 500 caracteres (C-55): el error va junto al campo y se conserva lo escrito.
+		const rejected = reasonRejection(typeof reason === 'string' ? reason : '');
+		if (rejected !== null) return rejected;
+		let entryId: string;
 		try {
-			applyCopyAsDefaults(composition.sync, {
+			entryId = applyCopyAsDefaults(composition.sync, {
 				adminId: admin.id,
 				userId: source,
 				appId: app.id,
@@ -76,7 +82,9 @@ export const actions: Actions = {
 				if (cause.code === 'VALIDATION_ERROR' && cause.details.field === 'reason') {
 					return fail(400, {
 						formError: 'VALIDATION_ERROR',
-						errors: { motivo: 'validation_required' }
+						errors: { motivo: 'validation_required' },
+						values: { motivo: typeof reason === 'string' ? reason : '' },
+						scope: null
 					});
 				}
 				return failureOf(cause);
@@ -84,6 +92,6 @@ export const actions: Actions = {
 			throw cause;
 		}
 		const back = `/admin/apps/${encodeURIComponent(params.slug)}/predeterminados`;
-		redirect(303, back);
+		redirect(303, savedRedirect(back, entryId));
 	}
 };

@@ -357,7 +357,7 @@ describe('altas sin redesplegar (BE-FR-62 CA2)', () => {
 	});
 
 	it('un slug nuevo se puede crear sin tocar las demás apps', () => {
-		const id = createApp(ctx.deps, ctx.adminId, {
+		const { id } = createApp(ctx.deps, ctx.adminId, {
 			slug: 'tercera-app',
 			name: 'Tercera',
 			clientTypes: ['desktop'],
@@ -418,8 +418,12 @@ describe('plantillas inmutables por versión (BE-FR-78, BE-FR-79)', () => {
 			variables: []
 		};
 
-		expect(createTemplateVersion(ctx.deps, { actorId: ctx.adminId, operationId, body })).toBe(1);
-		expect(createTemplateVersion(ctx.deps, { actorId: ctx.adminId, operationId, body })).toBe(2);
+		const first = createTemplateVersion(ctx.deps, { actorId: ctx.adminId, operationId, body });
+		expect(first.version).toBe(1);
+		expect(first.entryId).toMatch(/^aud_/);
+		expect(
+			createTemplateVersion(ctx.deps, { actorId: ctx.adminId, operationId, body }).version
+		).toBe(2);
 	});
 
 	it('una operación en modo libre no admite plantillas', () => {

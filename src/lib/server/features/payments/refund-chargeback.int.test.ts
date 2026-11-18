@@ -703,6 +703,19 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 				})
 			)
 		).toMatchObject({ code: 'VALIDATION_ERROR' });
+		// Más de 500 caracteres tras recortar tampoco vale (C-55).
+		expect(
+			errorOf(() =>
+				f.payments.refund({
+					adminId,
+					paymentId,
+					amountEurCents: 1000,
+					creditsToRemoveMicro: 10_500 * CREDIT,
+					reason: 'x'.repeat(501),
+					idempotencyKey: randomUUID()
+				})
+			)
+		).toMatchObject({ code: 'VALIDATION_ERROR', details: { field: 'reason' } });
 		expect(paymentOf(paymentId)).toMatchObject({ status: 'completed' });
 	});
 

@@ -75,8 +75,9 @@ function changeSchema(schema: unknown): void {
 }
 
 describe('motivo obligatorio (C-41, BE-FR-55)', () => {
-	it.each(['', '   '])(
-		'guardar predeterminados con el motivo «%s» no escribe ni audita',
+	// Más de 500 caracteres tras recortar tampoco vale (C-55).
+	it.each(['', '   ', 'x'.repeat(501)])(
+		'guardar predeterminados con el motivo %# no escribe ni audita',
 		(reason) => {
 			expect(
 				codeOf(() => {

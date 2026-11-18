@@ -18,6 +18,7 @@ import {
 import type { Logger } from '$lib/server/logging/logger';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import { computeCharge, marginFor } from './domain/charge';
 import {
 	currentFx,
@@ -163,8 +164,7 @@ export function setManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly usdEurPpm: number; readonly reason: string }
 ): string {
-	const reason = input.reason.trim();
-	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	requireManualFxPpm(input.usdEurPpm);
 	const now = deps.clock.now();
 	const entryId = immediateTransaction(deps.db, (tx) => {
@@ -190,7 +190,7 @@ export function setManualFx(
 				entityId: id,
 				before: { usdEurPpm: before },
 				after: { usdEurPpm: input.usdEurPpm },
-				reason: input.reason
+				reason
 			},
 			deps.audit
 		);
@@ -207,7 +207,7 @@ export function clearManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly reason: string }
 ): { readonly ok: true; readonly entryId: string } | { readonly ok: false } {
-	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	const now = deps.clock.now();
 	const outcome = immediateTransaction(
 		deps.db,
@@ -241,7 +241,7 @@ export function clearManualFx(
 					entityId: null,
 					before: { usdEurPpm: before },
 					after: { usdEurPpm: last.usdEurPpm },
-					reason: input.reason
+					reason
 				},
 				deps.audit
 			);
@@ -324,8 +324,7 @@ export function setManualPrice(
 		readonly reason: string;
 	}
 ): string {
-	const reason = input.reason.trim();
-	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	if (input.microUsd !== null && (!Number.isInteger(input.microUsd) || input.microUsd < 0)) {
 		throw new AppError('VALIDATION_ERROR', { field: 'microUsd' });
 	}

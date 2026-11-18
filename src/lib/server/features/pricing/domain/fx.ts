@@ -33,7 +33,7 @@ export function parseRatePpm(text: string): number {
 }
 
 /**
- * `fx_usd_eur = (1 / tipo_BCE) × (1 + colchón)`, en ppm. El cociente se redondea al ppm más cercano (mitad hacia arriba).
+ * Tipo USD→EUR `= (1 / tipo_BCE) × (1 + colchón)`, en ppm. El cociente se redondea al ppm más cercano (mitad hacia arriba).
  * El colchón llega en ppm (30.000 = 3 %).
  */
 export function fxUsdEurPpm(input: {

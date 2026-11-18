@@ -96,3 +96,34 @@ sync_documents_deleted_user_no_update;` (al volver a la imagen actual no se recr
   sentencias de `drizzle/0019_sync_documents_cuenta_borrada.sql`).
 
 > **NO VERIFICADO.** La consulta previa y la vuelta atrás no se han ejecutado en staging.
+
+## 0020 · Retirada de `settings.fx_usd_eur` (T447, C-56)
+
+- **Qué hace**: `0020_settings_sin_fx_usd_eur.sql` borra la fila `fx_usd_eur` de `settings`. Desde C-49 (T440) nadie la
+  leía: el tipo USD→EUR sale de `fx_rates` y, sin filas, de `DEFAULT_FX_USD_EUR_PPM` (920.000). No toca el esquema y no
+  falla si la fila no existe.
+- **Por qué no puede quedarse**: la imagen nueva ya no conoce la clave, y `readSettings` trata una clave desconocida como
+  dato corrupto, con lo que fallarían todas las lecturas de parámetros globales. La migración se aplica al arrancar, antes
+  del _seed_ y de atender peticiones, así que con el orden normal no hay ventana. Además, el _seed_ de la imagen nueva borra
+  la clave en cada arranque (`RETIRED_SETTING_KEYS`), para el caso de la vuelta atrás.
+- **Antes de desplegar** (opcional, solo lectura): ver el valor que se va a borrar, por si hace falta reponerlo:
+
+  ```sql
+  SELECT key, value, updated_at FROM settings WHERE key = 'fx_usd_eur';
+  ```
+
+  Si el valor no es el sembrado (`920000`), anotarlo: no lo lee nadie, pero es el que habría que reponer al volver atrás.
+
+- **Volver a una imagen anterior**: compatible sin cambios. La imagen anterior siembra de nuevo `fx_usd_eur` al arrancar
+  (`INSERT … ON CONFLICT DO NOTHING`) con su valor por defecto, y no la lee para cobrar ni para el freno. Si se quiere el
+  valor anotado antes de desplegar, con la imagen anterior ya en marcha:
+
+  ```sql
+  UPDATE settings SET value = '<valor anotado>' WHERE key = 'fx_usd_eur';
+  ```
+
+- **Al volver a la imagen actual**: la migración 0020 consta como aplicada y no se repite, pero el _seed_ borra la fila
+  resembrada al arrancar, antes de que nadie lea los parámetros. No hay que hacer nada a mano.
+
+> **NO VERIFICADO.** La consulta previa y la vuelta atrás no se han ejecutado en staging; el borrado por el _seed_ tras
+> volver adelante está cubierto por `apps/seed.int.test.ts`.

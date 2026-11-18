@@ -7,6 +7,7 @@
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import { resolve } from '$app/paths';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -55,6 +56,8 @@
 				name="motivo"
 				label={m.admin_economy_reason()}
 				required
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, `guardarParametros:${setting.key}`)}
 			/>
 			<Checkbox id={`confirmado-${setting.key}`} name="confirmado" value="true"
 				>{m.admin_economy_confirm()}</Checkbox
@@ -82,6 +85,7 @@
 						name="motivo"
 						label={m.admin_economy_reason()}
 						required
+						maxlength={REASON_MAX_LENGTH}
 					/>
 					<Checkbox id="confirmado-vista-previa" name="confirmado" value="true"
 						>{m.admin_economy_confirm()}</Checkbox
@@ -139,9 +143,9 @@
 			id="motivo-fx"
 			name="motivo"
 			label={m.admin_economy_reason()}
-			value={values.motivo ?? ''}
-			error={errors.motivo === 'validation_required' ? m.validation_required() : ''}
 			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'tipoCambioManual')}
 		/>
 		<p><Button type="submit" variant="secondary">{m.admin_economy_preview()}</Button></p>
 	</form>
@@ -164,6 +168,7 @@
 					label={m.admin_economy_reason()}
 					value={form.fxPreview.reason}
 					required
+					maxlength={REASON_MAX_LENGTH}
 				/>
 				<Checkbox id="confirmado-fx" name="confirmado" value="true"
 					>{m.admin_economy_confirm()}</Checkbox
@@ -173,7 +178,14 @@
 		</section>
 	{/if}
 	<form method="POST" action="?/quitarTipoCambioManual">
-		<TextField id="motivo-quitar-fx" name="motivo" label={m.admin_economy_reason()} required />
+		<TextField
+			id="motivo-quitar-fx"
+			name="motivo"
+			label={m.admin_economy_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'quitarTipoCambioManual')}
+		/>
 		<Checkbox id="confirmado-quitar-fx" name="confirmado" value="true"
 			>{m.admin_economy_confirm()}</Checkbox
 		>
@@ -184,14 +196,28 @@
 <section aria-labelledby="precio-manual">
 	<h2 id="precio-manual">{m.admin_economy_price()}</h2>
 	<form method="POST" action="?/guardarPrecioOrientativo">
-		<TextField id="operacion" name="operacion" label={m.admin_economy_operation()} required />
+		<TextField
+			id="operacion"
+			name="operacion"
+			label={m.admin_economy_operation()}
+			value={form?.scope === 'guardarPrecioOrientativo' ? (values.operacion ?? '') : ''}
+			required
+		/>
 		<TextField
 			id="microUsd"
 			name="microUsd"
 			label={m.admin_economy_micro_usd()}
 			hint={m.admin_economy_micro_usd_hint()}
+			value={form?.scope === 'guardarPrecioOrientativo' ? (values.microUsd ?? '') : ''}
 		/>
-		<TextField id="motivo-precio" name="motivo" label={m.admin_economy_reason()} required />
+		<TextField
+			id="motivo-precio"
+			name="motivo"
+			label={m.admin_economy_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'guardarPrecioOrientativo')}
+		/>
 		<Checkbox id="confirmado-precio" name="confirmado" value="true"
 			>{m.admin_economy_confirm()}</Checkbox
 		>

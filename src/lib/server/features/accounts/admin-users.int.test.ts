@@ -162,6 +162,16 @@ describe('bloqueo y desbloqueo (BE-FR-50)', () => {
 });
 
 describe('rol tester (BE-FR-18)', () => {
+	it('un motivo de más de 500 caracteres tras recortar no cambia el rol ni audita (C-55)', () => {
+		const roleBefore = f.db.select().from(user).where(eq(user.id, targetId)).get()?.role;
+
+		expect(() =>
+			setTester(deps, { adminId, userId: targetId, on: true, reason: 'x'.repeat(501) })
+		).toThrow(expect.objectContaining({ code: 'VALIDATION_ERROR', details: { field: 'reason' } }));
+		expect(f.db.select().from(user).where(eq(user.id, targetId)).get()?.role).toBe(roleBefore);
+		expect(auditRows()).toEqual([]);
+	});
+
 	it('marca y desmarca tester con auditoría anterior → nuevo, sin tocar otros roles', () => {
 		f.db.update(user).set({ role: 'user,editor' }).where(eq(user.id, targetId)).run();
 

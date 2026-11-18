@@ -71,7 +71,8 @@ async function setMaintenance(page: Page, next: { active: boolean; message: stri
 	await section.locator('#motivo-mantenimiento').fill('Prueba E2E de mantenimiento');
 	await section.locator('#confirmado-mantenimiento').check();
 	await section.getByRole('button', { name: 'Guardar mantenimiento' }).click();
-	await page.waitForURL(/\/admin\/apps\/secretario$/);
+	// Guardar vuelve a la ficha con el aviso y el enlace a la auditoría (UX-13; C-54).
+	await page.waitForURL(/\/admin\/apps\/secretario\?aviso=saved&auditoria=aud_/);
 	await page.waitForLoadState('networkidle');
 }
 
@@ -160,7 +161,7 @@ test('@BE-FR-42 copiar una sola casilla a predeterminados sustituye solo su cate
 	await page.getByRole('textbox', { name: /Motivo/ }).fill('Prueba E2E de copia');
 	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
 	await page.getByRole('button', { name: 'Copiar los elementos marcados' }).click();
-	await page.waitForURL(/\/predeterminados$/);
+	await page.waitForURL(/\/predeterminados\?aviso=saved&auditoria=aud_/);
 	await page.waitForLoadState('networkidle');
 	const after = objectOf(JSON.parse(await page.locator('#datos').inputValue()));
 

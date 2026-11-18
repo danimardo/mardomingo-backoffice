@@ -58,7 +58,8 @@ test('@BE-FR-70 un administrador publica una versión informativa y aparece como
 	await loginAsAdmin(page);
 	await publish(page, { document: 'cookies', version: '2026-12-01', reacceptance: false });
 
-	await expect(page).toHaveURL(/\/admin\/legal$/);
+	// Publicar vuelve con el aviso y el enlace a la auditoría (UX-13; C-54).
+	await expect(page).toHaveURL(/\/admin\/legal\?aviso=saved&auditoria=aud_/);
 	await expect(page.getByText('cookies · 2026-12-01')).toBeVisible();
 });
 

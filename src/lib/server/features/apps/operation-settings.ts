@@ -7,7 +7,8 @@ import { immediateTransaction } from '$lib/server/db/tx';
 import { recordEntry } from '$lib/server/features/audit';
 import { AppError } from '$lib/server/shared/errors';
 import { toMicro } from '$lib/shared/money';
-import { requireReason, type AppsDeps } from './service';
+import { requireReason } from '$lib/server/shared/reason';
+import type { AppsDeps } from './service';
 import { appOperations } from './schema';
 
 export const OperationSafeSettings = z.strictObject({
@@ -35,7 +36,11 @@ export interface UpdateOperationSettingsInput {
 	readonly reason: string;
 }
 
-export function updateOperationSettings(deps: AppsDeps, input: UpdateOperationSettingsInput): void {
+/** Guarda los parámetros seguros de la operación. Devuelve el id de la entrada de auditoría (UX-13; C-54). */
+export function updateOperationSettings(
+	deps: AppsDeps,
+	input: UpdateOperationSettingsInput
+): string {
 	const reason = requireReason(input.reason);
 	const parsed = OperationSafeSettings.safeParse(input.settings);
 	if (!parsed.success) {
@@ -43,7 +48,7 @@ export function updateOperationSettings(deps: AppsDeps, input: UpdateOperationSe
 	}
 	const next = parsed.data;
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const before = tx
 			.select({
 				timeoutMs: appOperations.timeoutMs,
@@ -65,7 +70,7 @@ export function updateOperationSettings(deps: AppsDeps, input: UpdateOperationSe
 			})
 			.where(eq(appOperations.id, input.operationId))
 			.run();
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -80,4 +85,5 @@ export function updateOperationSettings(deps: AppsDeps, input: UpdateOperationSe
 		);
 	});
 	deps.logger.emit('apps.operation.updated', {});
+	return entryId;
 }

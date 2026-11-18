@@ -99,7 +99,6 @@ const Maintenance = z.strictObject({ active: z.boolean(), message: z.string() })
 export const SETTING_SCHEMAS = Object.freeze({
 	credits_per_eur_purchase: PositiveInt,
 	credits_per_eur_usage: PositiveInt,
-	fx_usd_eur: PositiveInt,
 	fx_buffer_pct: Ppm,
 	fx_stale_alert_days: PositiveInt,
 	margin_global: z.int().min(1_000_000),

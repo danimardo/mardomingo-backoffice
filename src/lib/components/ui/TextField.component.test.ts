@@ -37,6 +37,14 @@ describe('TextField', () => {
 		expect(input.getAttribute('aria-describedby')).toBe('nombre-hint');
 	});
 
+	it('pasa la longitud máxima al navegador solo si se indica (C-55)', () => {
+		render(TextField, { props: { id: 'motivo', name: 'motivo', label: 'Motivo', maxlength: 500 } });
+		render(TextField, { props: { id: 'nombre', name: 'nombre', label: 'Nombre' } });
+
+		expect(screen.getByLabelText('Motivo').getAttribute('maxlength')).toBe('500');
+		expect(screen.getByLabelText('Nombre').getAttribute('maxlength')).toBeNull();
+	});
+
 	it('pasa el autocompletado al navegador', () => {
 		render(TextField, {
 			props: {

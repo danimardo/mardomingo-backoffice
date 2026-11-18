@@ -7,11 +7,13 @@
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import { formatCredits, formatEuros } from '$lib/components/payments/format';
+	import { REASON_MAX_LENGTH } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+	const values = $derived<Readonly<Record<string, string>>>(form?.values ?? {});
 
 	/** Texto de un error de campo. El servidor devuelve códigos concretos; `validation_invalid` queda como respaldo genérico. */
 	function fieldErrorText(code: string | undefined): string {
@@ -19,6 +21,8 @@
 		switch (code) {
 			case 'validation_required':
 				return m.validation_required();
+			case 'reason_too_long':
+				return m.validation_reason_too_long();
 			case 'amount_invalid':
 				return m.admin_refund_amount_invalid();
 			case 'credits_invalid':
@@ -65,6 +69,7 @@
 		<TextField
 			id="importe"
 			name="importe"
+			value={values.importe ?? ''}
 			label={m.admin_refund_amount_cents()}
 			error={fieldErrorText(errors.importe)}
 			required
@@ -73,6 +78,7 @@
 	<TextField
 		id="creditos"
 		name="creditos"
+		value={values.creditos ?? ''}
 		label={m.admin_adjust_amount()}
 		error={fieldErrorText(errors.creditos)}
 		required
@@ -80,9 +86,11 @@
 	<TextField
 		id="motivo"
 		name="motivo"
+		value={values.motivo ?? ''}
 		label={m.admin_refund_reason()}
 		error={fieldErrorText(errors.motivo)}
 		required
+		maxlength={REASON_MAX_LENGTH}
 	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_refund_confirm()}</Checkbox>
 	<p>

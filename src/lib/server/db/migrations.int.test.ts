@@ -314,3 +314,45 @@ describe('T435 (C-43): `sync_documents` rechaza las filas de una cuenta borrada'
 		).toThrow(/^sync_documents_user_deleted$/);
 	});
 });
+
+describe('T447 (C-56): la migración 0020 borra `settings.fx_usd_eur`, que ya no lee nadie', () => {
+	function settingKeys(open: OpenedDatabase): string[] {
+		return open.sqlite
+			.prepare<[], { key: string }>('SELECT key FROM settings ORDER BY key')
+			.all()
+			.map((row) => row.key);
+	}
+
+	it('borra la fila sembrada y deja intactos los demás parámetros', () => {
+		const open = openDatabase(join(dir, 'app.db'));
+		opened = open;
+		migrate(open.db, { migrationsFolder: migrationsUpTo('0019_sync_documents_cuenta_borrada') });
+		open.sqlite.exec(
+			`INSERT INTO settings (key, value, updated_at) VALUES ('fx_usd_eur', '920000', 1000);
+			 INSERT INTO settings (key, value, updated_at) VALUES ('max_debt', '200000000', 1000);`
+		);
+
+		migrate(open.db, { migrationsFolder: 'drizzle' });
+
+		expect(settingKeys(open)).toEqual(['max_debt']);
+		expect(
+			open.sqlite
+				.prepare<[], { value: string }>("SELECT value FROM settings WHERE key = 'max_debt'")
+				.get()
+		).toEqual({ value: '200000000' });
+	});
+
+	it('sin la fila (base nueva o ya borrada) no falla ni cambia nada', () => {
+		const open = openDatabase(join(dir, 'app.db'));
+		opened = open;
+		migrate(open.db, { migrationsFolder: migrationsUpTo('0019_sync_documents_cuenta_borrada') });
+		open.sqlite.exec(
+			"INSERT INTO settings (key, value, updated_at) VALUES ('max_debt', '200000000', 1000);"
+		);
+
+		expect(() => {
+			migrate(open.db, { migrationsFolder: 'drizzle' });
+		}).not.toThrow();
+		expect(settingKeys(open)).toEqual(['max_debt']);
+	});
+});

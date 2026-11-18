@@ -16,6 +16,7 @@ import type { InvoicingService } from '$lib/server/features/invoicing';
 import { isOwnWithdrawalWaiver, type LegalDeps } from '$lib/server/features/legal';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs } from '$lib/shared/time';
 import { civilDateOf } from '$lib/shared/dates';
@@ -434,8 +435,7 @@ function releaseRefundKey(deps: PaymentsDeps, key: string): void {
  * esa compra hasta revisarla a mano.
  */
 export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome {
-	const reason = input.reason.trim();
-	if (reason.length === 0) throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	const claim = immediateTransaction(deps.db, (tx: Tx): RefundClaim => {
 		const previous = findRefundKey(tx, input.idempotencyKey);
 		if (previous !== undefined) return { kind: 'repeated', key: previous };
@@ -479,7 +479,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 					userId: row.userId,
 					paymentId: row.id,
 					amountMicro: input.creditsToRemoveMicro,
-					reason: input.reason
+					reason
 				});
 				// Si los créditos no caben, `credits` no ha escrito nada: la transacción no cambia nada más.
 				if (!withdrawal.ok) return withdrawal;

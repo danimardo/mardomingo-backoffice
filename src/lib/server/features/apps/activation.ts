@@ -5,7 +5,8 @@ import { eq } from 'drizzle-orm';
 import { immediateTransaction } from '$lib/server/db/tx';
 import { recordEntry } from '$lib/server/features/audit';
 import { AppError } from '$lib/server/shared/errors';
-import { requireReason, type AppsDeps } from './service';
+import { requireReason } from '$lib/server/shared/reason';
+import type { AppsDeps } from './service';
 import { appOperations } from './schema';
 
 export type ActivationRejection = 'no_model' | 'model_unknown' | 'model_incapable' | 'no_price';
@@ -21,15 +22,18 @@ export interface ActivateOperationInput {
 	readonly reason: string;
 }
 
-/** Activa la operación si la comprobación lo permite. Exige motivo (C-52). Rechaza sin cambios y deja rastro si no. */
-export function activateOperation(deps: AppsDeps, input: ActivateOperationInput): void {
+/**
+ * Activa la operación si la comprobación lo permite. Exige motivo (C-52). Rechaza sin cambios y deja rastro si no. Devuelve el id
+ * de la entrada de auditoría (UX-13; C-54).
+ */
+export function activateOperation(deps: AppsDeps, input: ActivateOperationInput): string {
 	const reason = requireReason(input.reason);
 	if (!input.check.ok) {
 		deps.logger.emit('apps.operation.activation_rejected', { reason: input.check.reason });
 		throw new AppError('VALIDATION_ERROR', { field: 'activation', reason: input.check.reason });
 	}
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const before = tx
 			.select({ active: appOperations.active })
 			.from(appOperations)
@@ -40,7 +44,7 @@ export function activateOperation(deps: AppsDeps, input: ActivateOperationInput)
 			.set({ active: true, updatedAt: now })
 			.where(eq(appOperations.id, input.operationId))
 			.run();
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -55,6 +59,7 @@ export function activateOperation(deps: AppsDeps, input: ActivateOperationInput)
 		);
 	});
 	deps.logger.emit('apps.operation.activated', {});
+	return entryId;
 }
 
 export interface DeactivateOperationInput {
@@ -64,10 +69,10 @@ export interface DeactivateOperationInput {
 }
 
 /** Desactiva una operación. No exige comprobación: quitar una operación del servicio siempre es seguro (W41). */
-export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationInput): void {
+export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationInput): string {
 	const reason = requireReason(input.reason);
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const before = tx
 			.select({ active: appOperations.active })
 			.from(appOperations)
@@ -78,7 +83,7 @@ export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationIn
 			.set({ active: false, updatedAt: now })
 			.where(eq(appOperations.id, input.operationId))
 			.run();
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -93,4 +98,5 @@ export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationIn
 		);
 	});
 	deps.logger.emit('apps.operation.deactivated', {});
+	return entryId;
 }

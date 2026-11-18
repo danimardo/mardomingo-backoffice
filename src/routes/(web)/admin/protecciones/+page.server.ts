@@ -1,6 +1,7 @@
 // W44 · `/admin/protecciones` (contracts/web-routes.md W44; BE-FR-43, BE-FR-46, BE-FR-53; T313). Límites globales de protección y el
 // freno de coste diario. Cambiar un límite pasa por `apps.updateSetting`, que valida, respeta los techos y audita antes y después.
-// Liberar el freno exige confirmación y motivo, y queda en la auditoría. Requiere rol de administrador.
+// Liberar el freno exige confirmación y motivo, y queda en la auditoría. Requiere rol de administrador. Cada cambio vuelve con
+// `?aviso=saved&auditoria=<id>` y la página enlaza con esa entrada (UX-13; C-54).
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
@@ -13,7 +14,8 @@ import {
 } from '$lib/server/features/apps';
 import { brakeStatus, releaseBrake } from '$lib/server/features/protections';
 import { setMistralBillingError } from '$lib/server/features/notifications';
-import { isConfirmed } from '$lib/server/forms/confirmation';
+import { isConfirmed, savedEntryOf, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
 import type { Actions, PageServerLoad } from './$types';
@@ -59,11 +61,12 @@ function textOf(form: FormData, key: string): string {
 	return typeof value === 'string' ? value : '';
 }
 
-export const load: PageServerLoad = ({ locals, setHeaders }) => {
+export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	adminOrThrow(locals);
 	setHeaders({ 'cache-control': 'private, no-store' });
 	const composition = getComposition();
 	return {
+		saved: savedEntryOf(url),
 		brake: brakeStatus(composition.brake),
 		limits: PROTECTION_LIMITS.map((key) => ({
 			key,
@@ -77,10 +80,12 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
-		const reason = textOf(form, 'motivo').trim();
-		if (reason === '') return fail(400, { errors: { motivo: 'validation_required' } });
+		const reason = textOf(form, 'motivo');
+		// Motivo de 1 a 500 caracteres (C-55), con el error junto a su campo.
+		const rejected = reasonRejection(reason, { scope: 'fijarAlertaMistral' });
+		if (rejected !== null) return rejected;
 		const composition = getComposition();
-		await setMistralBillingError(
+		const entryId = await setMistralBillingError(
 			{ ...composition.pricing.alerts, audit: composition.pricing.audit },
 			{
 				adminId: admin.id,
@@ -89,7 +94,7 @@ export const actions: Actions = {
 			}
 		);
 		const back = resolve('/admin/protecciones');
-		redirect(303, back);
+		redirect(303, savedRedirect(back, entryId));
 	},
 	previsualizarLimites: async ({ locals, request }) => {
 		adminOrThrow(locals);
@@ -105,8 +110,11 @@ export const actions: Actions = {
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const key = textOf(form, 'clave');
 		if (!isLimitKey(key)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: `guardarLimites:${key}` });
+		if (rejected !== null) return rejected;
+		let entryId: string;
 		try {
-			updateSetting(getComposition().apps, {
+			entryId = updateSetting(getComposition().apps, {
 				actorId: admin.id,
 				key,
 				value: Number(textOf(form, 'valor')),
@@ -122,16 +130,18 @@ export const actions: Actions = {
 			throw cause;
 		}
 		const back = resolve('/admin/protecciones');
-		redirect(303, back);
+		redirect(303, savedRedirect(back, entryId));
 	},
 	liberarFreno: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
-		const reason = textOf(form, 'motivo').trim();
-		if (reason === '') return fail(400, { errors: { motivo: 'validation_required' } });
-		releaseBrake(getComposition().brake, admin.id);
+		const reason = textOf(form, 'motivo');
+		const rejected = reasonRejection(reason, { scope: 'liberarFreno' });
+		if (rejected !== null) return rejected;
+		const entryId = releaseBrake(getComposition().brake, { adminId: admin.id, reason });
 		const back = resolve('/admin/protecciones');
-		redirect(303, back);
+		// Si el freno ya no estaba activo, nada cambia ni se audita: vuelve sin aviso.
+		redirect(303, entryId === null ? back : savedRedirect(back, entryId));
 	}
 };

@@ -12,6 +12,7 @@ import { isConfirmed, savedRedirect } from '$lib/server/forms/confirmation';
 import { failureOf } from '$lib/server/web/actions';
 import { AppError } from '$lib/server/shared/errors';
 import { parseDecimalEs } from '$lib/schemas/common/decimal-es';
+import { reasonIssueOf } from '$lib/shared/reason';
 import type { Actions, PageServerLoad } from './$types';
 
 const KEY_PATTERN = /^[A-Za-z0-9-]{16,64}$/;
@@ -71,8 +72,10 @@ function parse(
 	const errors: Record<string, string> = {};
 	if (amount === null) errors.importe = 'amount_invalid';
 	if (credits === null) errors.creditos = 'credits_invalid';
-	if (reason === '') errors.motivo = 'validation_required';
-	if (amount === null || credits === null || reason === '') return { ok: false, errors };
+	// Regla única del motivo (1–500 tras recortar; C-55).
+	const reasonIssue = reasonIssueOf(reason);
+	if (reasonIssue !== null) errors.motivo = reasonIssue;
+	if (amount === null || credits === null || reasonIssue !== null) return { ok: false, errors };
 	return { ok: true, value: { amountEurCents: amount, creditsToRemoveMicro: credits, reason } };
 }
 
@@ -100,13 +103,22 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 	};
 };
 
+/** Valores enviados, para volver a pintarlos si el formulario no se acepta (C-55: no se pierde lo escrito). */
+function submitted(form: FormData) {
+	return {
+		importe: textOf(form, 'importe'),
+		creditos: textOf(form, 'creditos'),
+		motivo: textOf(form, 'motivo')
+	};
+}
+
 export const actions: Actions = {
 	previsualizarReembolso: async ({ locals, params, request }) => {
 		adminOrThrow(locals);
 		const form = await request.formData();
 		const purchase = purchaseOrThrow(params.userId, params.paymentId);
 		const parsed = parse(form, purchase.simulated);
-		if (!parsed.ok) return fail(400, { errors: parsed.errors });
+		if (!parsed.ok) return fail(400, { errors: parsed.errors, values: submitted(form) });
 		const preview = getComposition().payments.refundPreview({
 			paymentId: params.paymentId,
 			amountEurCents: parsed.value.amountEurCents,
@@ -145,7 +157,7 @@ export const actions: Actions = {
 		const idempotencyKey = textOf(form, 'clave');
 		if (!KEY_PATTERN.test(idempotencyKey)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const parsed = parse(form, purchase.simulated);
-		if (!parsed.ok) return fail(400, { errors: parsed.errors });
+		if (!parsed.ok) return fail(400, { errors: parsed.errors, values: submitted(form) });
 		let auditEntryId: string | null;
 		try {
 			({ auditEntryId } = getComposition().payments.refund({

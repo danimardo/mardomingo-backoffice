@@ -14,7 +14,7 @@ let counter = 0;
 /** Crea una operación `plantilla` inactiva y publica su primera versión con un mensaje de sistema y una variable de texto. */
 export function seededPromptTemplate(deps: AppsDeps, actorId: string): SeededPromptTemplate {
 	counter += 1;
-	const operationId = createOperation(deps, actorId, SEEDED_APP_ID, {
+	const { id: operationId } = createOperation(deps, actorId, SEEDED_APP_ID, {
 		key: `plantilla_prueba_${String(counter)}`,
 		name: `Plantilla de prueba ${String(counter)}`,
 		kind: 'chat',
@@ -26,7 +26,7 @@ export function seededPromptTemplate(deps: AppsDeps, actorId: string): SeededPro
 		capabilities: { image_input: false, structured_output: false, tools: false },
 		active: false
 	});
-	const version = createTemplateVersion(deps, {
+	const { version } = createTemplateVersion(deps, {
 		actorId,
 		operationId,
 		body: {

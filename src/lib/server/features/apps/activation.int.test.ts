@@ -57,8 +57,8 @@ describe('activación de operaciones (T311)', () => {
 		).toEqual([]);
 	});
 
-	it('una aceptación activa la operación y queda auditada', () => {
-		activateOperation(deps(), {
+	it('una aceptación activa la operación, queda auditada y devuelve el id de la entrada (C-54)', () => {
+		const entryId = activateOperation(deps(), {
 			actorId: adminId,
 			operationId,
 			check: { ok: true },
@@ -70,6 +70,7 @@ describe('activación de operaciones (T311)', () => {
 			f.db.select().from(adminAudit).where(eq(adminAudit.action, 'apps.operation.activate')).all()
 		).toEqual([
 			expect.objectContaining({
+				id: entryId,
 				action: 'apps.operation.activate',
 				entity: 'operation',
 				entityId: operationId,

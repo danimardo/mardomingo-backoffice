@@ -14,6 +14,7 @@ import type { Credits } from '$lib/server/features/credits';
 import { alertKeys, raiseAlert, type AlertDeps } from '$lib/server/features/notifications';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import { addDays, civilDateOf, madridMidnight } from '$lib/shared/dates';
 import { toEpochMs, type CivilDate, type EpochMs } from '$lib/shared/time';
 import { maintenanceVerdict, versionVerdict, type EndpointName } from './domain/access';
@@ -279,33 +280,41 @@ export interface BrakeReleaseDeps {
 }
 
 /**
- * Liberación manual del freno por un administrador, con auditoría (BE-FR-46 CA2). Devuelve `false` si el freno no está
- * activo hoy. La interfaz de administración es de L13.
+ * Liberación manual del freno por un administrador, con su motivo en la auditoría (BE-FR-46 CA2, BE-FR-55). Devuelve el id de la
+ * entrada, que W44 enlaza al guardar (UX-13; C-54), o `null` si el freno no está activo hoy (nada cambia ni se audita).
  */
-export function releaseBrake(deps: BrakeReleaseDeps, adminId: string): boolean {
+export function releaseBrake(
+	deps: BrakeReleaseDeps,
+	input: { readonly adminId: string; readonly reason: string }
+): string | null {
+	// Motivo de 1 a 500 caracteres antes de escribir (C-55); se audita recortado.
+	const reason = requireReason(input.reason);
 	const now = toEpochMs(deps.clock.now());
 	const day = civilDateOf(now);
-	const released = immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const stored = readBrakeState(tx);
-		if (stored === null || stored.day !== day || !stored.active) return false;
-		writeBrakeState(tx, { ...stored, active: false, releasedAt: now, releasedBy: adminId }, now);
-		recordEntry(
+		if (stored === null || stored.day !== day || !stored.active) return null;
+		writeBrakeState(
+			tx,
+			{ ...stored, active: false, releasedAt: now, releasedBy: input.adminId },
+			now
+		);
+		return recordEntry(
 			tx,
 			{
-				adminId,
+				adminId: input.adminId,
 				action: 'protections.brake.released',
 				entity: 'protection_state',
 				entityId: GLOBAL_BRAKE_KEY,
 				before: { active: true },
 				after: { active: false },
-				reason: 'manual'
+				reason
 			},
 			deps.audit
 		);
-		return true;
 	});
-	if (released) deps.logger.emit('protections.brake.released', { reason: 'manual' });
-	return released;
+	if (entryId !== null) deps.logger.emit('protections.brake.released', { reason: 'manual' });
+	return entryId;
 }
 
 function numberSetting(

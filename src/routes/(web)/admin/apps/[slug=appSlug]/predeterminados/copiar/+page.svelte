@@ -8,15 +8,11 @@
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import CheckboxGroup from '$lib/components/ui/CheckboxGroup.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	// Solo el rechazo por motivo vacío trae `errors` (C-41).
-	const motivoError = $derived.by(() => {
-		const errors: unknown = form && 'errors' in form ? form.errors : undefined;
-		return typeof errors === 'object' && errors !== null && 'motivo' in errors;
-	});
 </script>
 
 <svelte:head>
@@ -44,7 +40,8 @@
 {/if}
 
 {#if data.categories.length > 0}
-	<form method="POST" action="?/copiar">
+	<!-- `vista=propia` en la acción: si se rechaza, la página vuelve a listar las categorías y el formulario (C-55). -->
+	<form method="POST" action="?vista=propia&/copiar">
 		{#each data.categories as category (category.category)}
 			<CheckboxGroup
 				id={`sel-${category.category}`}
@@ -60,8 +57,9 @@
 			id="motivo"
 			name="motivo"
 			label={m.admin_defaults_reason()}
-			error={motivoError ? m.validation_required() : ''}
 			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form)}
 		/>
 		<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_defaults_confirm()}</Checkbox>
 		<p><Button type="submit" variant="primary">{m.admin_defaults_copy_submit()}</Button></p>

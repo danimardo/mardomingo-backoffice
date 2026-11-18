@@ -89,6 +89,17 @@ Cada `load`, cada _action_ y cada `+server.ts` protegido llama a su _guard_. El 
   2. `?/<acción>` con los mismos campos ocultos y `confirmado=true` ejecuta.
      El foco inicial de la confirmación no está en la acción destructiva. Los textos libres (motivo) **nunca**
      viajan por GET.
+- **Motivo de las acciones de administración** (BE-FR-55, FR-094; C-55, cierra R08 y D09): toda acción de
+  administración que pide `motivo` lo exige de **1 a 500 caracteres tras recortar** los espacios de los extremos, con
+  una sola regla (`$lib/shared/reason`): `requireReason` en los servicios (`VALIDATION_ERROR` con
+  `details.field = "reason"`) y `reasonRejection` (`$lib/server/forms/reason`) en la _action_, antes del servicio.
+  Un motivo vacío o de más de 500 caracteres responde `400` con `errors.motivo` (`validation_required` o
+  `reason_too_long`), `values.motivo` con lo escrito y `scope` (el formulario que falló, cuando la página tiene
+  varios); la página pinta junto a su campo «Este campo es obligatorio.» o «El motivo no puede tener más de 500
+  caracteres.» y conserva el texto (`reasonFieldOf`, `$lib/schemas/common/reason`). Los campos de motivo llevan
+  `maxlength="500"`. No se escribe nada ni se audita, y la auditoría guarda el motivo recortado. Aplica a W35–W38,
+  W40–W44 y W49 (W39 y W48 no piden motivo). La vista previa del detalle de usuario (W35) y la del tipo de cambio
+  manual (W38) ya rechazan el motivo que la acción rechazaría.
 - Con JavaScript: botón desactivado con `aria-busy="true"` durante el envío; ante un fallo, foco al resumen
   de errores o al primer campo inválido y anuncio con `aria-live`.
 - **Comprobación de origen (D-01)**: la comprobación CSRF propia de SvelteKit está desactivada (rechazaría
@@ -513,6 +524,15 @@ es barrera, D4). Toda _action_ que modifica datos se audita (BE-FR-55) y, al
 guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace a la entrada de auditoría
 (UX-13). Los modelos de vista de administración **sí** pueden mostrar modelos y costes reales.
 
+**Aviso con enlace a la auditoría** (C-51, C-54): cada servicio auditado devuelve el id de su entrada y la _action_ redirige
+con `savedRedirect(<página>, <entryId>)`; el `load` lo lee con `savedEntryOf(url)` y la página muestra «Cambio guardado.»
+con el enlace a W47. Lo hacen W35–W38 y, desde C-54, W39 (`?/crearApp`), W40 (`?/guardarApp`, `?/guardarVersiones`,
+`?/guardarMantenimiento`, `?/guardarSobrescrituras`, `?/crearOperacion`), W41 (`?/activar`, `?/desactivar`,
+`?/guardarOperacion`, `?/guardarPlantilla` y `?/aplicarAlGrupo`, que enlaza la entrada de la operación de la ficha),
+W42 y W43 (vuelven a W42), W44 (`?/guardarLimites`, `?/fijarAlertaMistral`, `?/liberarFreno`), W48 (`?/publicar`) y
+W49 (`?/crear`, `?/guardar`, `?/desactivar`; sustituye a `?aviso=anuncio_creado`). Una acción que no cambia nada y no
+audita (liberar un freno que ya no está activo, desactivar un anuncio ya inactivo) vuelve sin aviso.
+
 ### W33 · `/admin` — Resumen
 
 - **`load`**: alertas activas (`alerts_state`), estado del freno global, avisos de modelos retirados o con
@@ -629,8 +649,8 @@ inexistente responde `error(404)` desde el `load`.
   servicio (`requireReason` de `apps`; `VALIDATION_ERROR` en `reason`). Sin motivo (vacío o solo espacios) responden
   `400` con `errors.motivo = "validation_required"` y `scope` (`activar`, `desactivar`, `operacion` o `grupo`), y la
   página muestra «Este campo es obligatorio.» en el campo de ese formulario, como W42 y W43. No se escribe nada: en
-  `?/aplicarAlGrupo` ningún miembro cambia. La auditoría guarda el motivo sin los espacios de los extremos. No hay
-  longitud máxima del motivo mientras R08/D09 siga abierto.
+  `?/aplicarAlGrupo` ningún miembro cambia. La auditoría guarda el motivo sin los espacios de los extremos. Más de
+  500 caracteres responde igual con `errors.motivo = "reason_too_long"` (C-55, regla común de 1.4).
 - **Eventos**: `apps.operation.activation_rejected`, `apps.template.versioned`, `apps.settings.updated`,
   `audit.entry.recorded`.
 
@@ -651,7 +671,9 @@ inexistente responde `error(404)` desde el `load`.
 - **Actions**: `?/copiar` — `usuario`, `sel:<categoría>` (repetido, un valor por elemento marcado), `motivo` y
   `confirmado` → solo sustituye las categorías con algún elemento copiado y conserva las demás tal como estaban
   (C-40). Errores: `400 NOTHING_SELECTED` (nada marcado, o nada de lo marcado existe ya en el documento de origen);
-  `400 VALIDATION_ERROR` con `errors.motivo` si falta el motivo (C-41). Auditoría como en W42.
+  `400` con `errors.motivo` si falta el motivo o pasa de 500 caracteres (C-41, C-55). El formulario se envía a
+  `?vista=propia&/copiar` para que, si se rechaza, la página vuelva a listar las categorías y pinte el error junto
+  al motivo (C-55). Auditoría como en W42.
 - **Eventos**: `sync.defaults.copied`, `audit.entry.recorded`.
 
 ### W44 · `/admin/protecciones` — Protecciones (BE-FR-43, 46, 47, 53; UX-14; FR-091)

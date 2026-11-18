@@ -7,7 +7,7 @@ import { seedDefaults } from '$lib/server/seed';
 import { createIdGenerator } from '$lib/server/shared/ids';
 import { seededRandomBytes } from '../../../../../tests/builders/ids';
 import { apps, appOperations, settings } from './schema';
-import { updateSetting } from './index';
+import { getSetting, updateSetting } from './index';
 import { packs } from '../payments/schema';
 import { SEEDED_APP_ID } from '../../../../../tests/setup/integration.global-setup';
 
@@ -34,7 +34,8 @@ describe('datos iniciales', () => {
 		seedDefaults(database.db, fixedClock(), createIdGenerator(seededRandomBytes(5)));
 
 		expect(counts(database.db)).toEqual(first);
-		expect(first).toEqual({ settings: 48, apps: 1, operations: 11, packs: 3 });
+		// 47 parámetros: `fx_usd_eur` ya no se siembra (C-56).
+		expect(first).toEqual({ settings: 47, apps: 1, operations: 11, packs: 3 });
 	});
 
 	it('no sobrescribe un parámetro que el administrador ya cambió', () => {
@@ -55,6 +56,27 @@ describe('datos iniciales', () => {
 			.all()
 			.find((s) => s.key === 'max_text_chars');
 		expect(row?.value).toBe(150_000);
+	});
+
+	it('borra `fx_usd_eur` si una imagen anterior lo volvió a sembrar, y los parámetros se siguen leyendo (C-56)', () => {
+		database = copyOfTemplate();
+		// Vuelta atrás a una imagen anterior a la 0020 y otra vez adelante: la 0020 ya consta como aplicada y no se repite.
+		database.sqlite
+			.prepare(
+				"INSERT INTO settings (key, value, updated_at) VALUES ('fx_usd_eur', '920000', 1000)"
+			)
+			.run();
+
+		seedDefaults(database.db, fixedClock(), createIdGenerator(seededRandomBytes(5)));
+
+		expect(
+			database.db
+				.select()
+				.from(settings)
+				.all()
+				.map((row) => row.key)
+		).not.toContain('fx_usd_eur');
+		expect(getSetting(appsTestContext(database.db).deps, 'max_debt')).toBe(200_000_000);
 	});
 
 	it('siembra secretario con su perfil, sus once operaciones inactivas y los modelos aprobados (T079)', () => {

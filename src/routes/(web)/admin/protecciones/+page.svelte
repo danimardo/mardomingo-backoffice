@@ -6,11 +6,11 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
 </script>
 
 <svelte:head>
@@ -19,6 +19,15 @@
 
 <h1>{m.admin_protections_title()}</h1>
 <p>{m.admin_protections_intro()}</p>
+
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
 
 {#if form?.formError}
 	<Banner level="critical">{m.admin_protections_error()}</Banner>
@@ -51,8 +60,9 @@
 				id="motivo-freno"
 				name="motivo"
 				label={m.admin_protections_reason()}
-				error={errors.motivo ?? ''}
 				required
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, 'liberarFreno')}
 			/>
 			<Checkbox id="confirmado-freno" name="confirmado" value="true"
 				>{m.admin_protections_confirm()}</Checkbox
@@ -69,7 +79,14 @@
 		<Checkbox id="error-mistral" name="error" value="true"
 			>{m.admin_protections_mistral_error()}</Checkbox
 		>
-		<TextField id="motivo-mistral" name="motivo" label={m.admin_protections_reason()} required />
+		<TextField
+			id="motivo-mistral"
+			name="motivo"
+			label={m.admin_protections_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'fijarAlertaMistral')}
+		/>
 		<Checkbox id="confirmado-mistral" name="confirmado" value="true"
 			>{m.admin_protections_confirm()}</Checkbox
 		>
@@ -88,7 +105,13 @@
 				label={`${limit.key} (${m.admin_protections_current()}: ${limit.value})`}
 			/>
 			<p>{m.admin_economy_scope_global()}</p>
-			<TextField id={`motivo-${limit.key}`} name="motivo" label={m.admin_protections_reason()} />
+			<TextField
+				id={`motivo-${limit.key}`}
+				name="motivo"
+				label={m.admin_protections_reason()}
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, `guardarLimites:${limit.key}`)}
+			/>
 			<Checkbox id={`confirmado-${limit.key}`} name="confirmado" value="true"
 				>{m.admin_protections_confirm()}</Checkbox
 			>
@@ -116,6 +139,7 @@
 						name="motivo"
 						label={m.admin_protections_reason()}
 						required
+						maxlength={REASON_MAX_LENGTH}
 					/>
 					<Checkbox id="confirmado-vista-previa" name="confirmado" value="true"
 						>{m.admin_protections_confirm()}</Checkbox

@@ -70,7 +70,7 @@ export const SECOND_APP: NewApp = {
 };
 
 export function addSecondApp(ctx: AppsTestContext, overrides: Partial<NewApp> = {}): string {
-	return createApp(ctx.deps, ctx.adminId, { ...SECOND_APP, ...overrides });
+	return createApp(ctx.deps, ctx.adminId, { ...SECOND_APP, ...overrides }).id;
 }
 
 /** Operación de chat activa con modelo, lista para usarse en una petición. */
@@ -90,5 +90,5 @@ export function chatOperation(key: string, overrides: Partial<NewOperation> = {}
 }
 
 export function addOperation(ctx: AppsTestContext, appId: string, input: NewOperation): string {
-	return createOperation(ctx.deps, ctx.adminId, appId, input);
+	return createOperation(ctx.deps, ctx.adminId, appId, input).id;
 }

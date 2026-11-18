@@ -16,6 +16,8 @@
 		error?: string;
 		required?: boolean;
 		disabled?: boolean;
+		/** Longitud máxima que el navegador deja escribir (p. ej. el motivo, C-55); sin valor, no hay límite. */
+		maxlength?: number;
 	}
 
 	let {
@@ -28,7 +30,8 @@
 		hint = '',
 		error = '',
 		required = false,
-		disabled = false
+		disabled = false,
+		maxlength
 	}: Props = $props();
 
 	const describedBy = $derived(
@@ -50,6 +53,7 @@
 		{autocomplete}
 		{required}
 		{disabled}
+		{maxlength}
 		bind:value
 		aria-invalid={error !== '' ? 'true' : undefined}
 		aria-describedby={describedBy}

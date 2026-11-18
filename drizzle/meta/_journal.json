@@ -141,6 +141,13 @@
       "when": 1794985506764,
       "tag": "0019_sync_documents_cuenta_borrada",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794995473748,
+      "tag": "0020_settings_sin_fx_usd_eur",
+      "breakpoints": true
     }
   ]
 }

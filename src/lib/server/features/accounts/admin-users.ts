@@ -8,6 +8,7 @@ import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { session, user } from './schema';
 
@@ -94,14 +95,6 @@ function loadUser(tx: Tx, userId: string) {
 	if (row === undefined) throw new AppError('NOT_FOUND');
 	if (row.deletedAt !== null) throw new AppError('NOT_FOUND', { reason: 'deleted' });
 	return row;
-}
-
-function requireReason(reason: string): string {
-	const trimmed = reason.trim();
-	if (trimmed === '' || trimmed.length > 500) {
-		throw new AppError('VALIDATION_ERROR', { field: 'reason' });
-	}
-	return trimmed;
 }
 
 interface AuditInput {
@@ -193,7 +186,7 @@ export function setTester(
 	deps: AdminUsersDeps,
 	input: { adminId: string; userId: string; on: boolean; reason: string }
 ): string | null {
-	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	return immediateTransaction(deps.db, (tx) => {
 		const current = loadUser(tx, input.userId);
 		const roles = current.role.split(',').filter((role) => role !== '');
@@ -213,7 +206,7 @@ export function setTester(
 			userId: input.userId,
 			before: { tester: has },
 			after: { tester: input.on },
-			reason: input.reason
+			reason
 		});
 		deps.logger.emit('accounts.role.changed', { status: input.on ? 'tester_on' : 'tester_off' });
 		return id;

@@ -23,6 +23,7 @@ import {
 } from '$lib/server/features/pricing';
 import * as m from '$lib/paraglide/messages.js';
 import { isConfirmed, savedEntryOf, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
 import type { Actions, PageServerLoad } from './$types';
@@ -106,13 +107,16 @@ function eurPerUsdOf(ppm: number): string {
 	return EUR_PER_USD.format(ppm / 1_000_000);
 }
 
+/** Formulario del tipo manual en la página (vista previa y confirmación comparten campo de motivo). */
+const FX_SCOPE = 'tipoCambioManual';
+
 /** Error de un campo del tipo manual (C-48): el tipo fuera de rango o el motivo vacío, con lo escrito para no perderlo. */
 function fxFailure(cause: AppError, values: Readonly<Record<string, string>>) {
 	if (cause.code === 'VALIDATION_ERROR' && cause.details.field === 'usdEurPpm') {
-		return fail(400, { errors: { usdEurPpm: 'fx_out_of_range' }, values });
+		return fail(400, { errors: { usdEurPpm: 'fx_out_of_range' }, values, scope: FX_SCOPE });
 	}
 	if (cause.code === 'VALIDATION_ERROR' && cause.details.field === 'reason') {
-		return fail(400, { errors: { motivo: 'validation_required' }, values });
+		return fail(400, { errors: { motivo: 'validation_required' }, values, scope: FX_SCOPE });
 	}
 	return failureOf(cause, values);
 }
@@ -153,6 +157,9 @@ export const actions: Actions = {
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const key = textOf(form, 'clave');
 		if (!isEconomyKey(key)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		// Motivo de 1 a 500 caracteres (C-55): el error va al formulario de ese parámetro.
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: `guardarParametros:${key}` });
+		if (rejected !== null) return rejected;
 		let entryId: string;
 		try {
 			entryId = updateSetting(getComposition().apps, {
@@ -175,6 +182,9 @@ export const actions: Actions = {
 		const values = { usdEurPpm: textOf(form, 'usdEurPpm'), motivo: textOf(form, 'motivo') };
 		try {
 			const preview = previewManualFx(getComposition().pricing, fxPpmOf(form));
+			// La vista previa ya rechaza el motivo que la confirmación rechazaría (C-55).
+			const rejected = reasonRejection(values.motivo, { scope: FX_SCOPE, values });
+			if (rejected !== null) return rejected;
 			return {
 				fxPreview: {
 					beforePpm: preview.beforePpm,
@@ -194,6 +204,8 @@ export const actions: Actions = {
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const values = { usdEurPpm: textOf(form, 'usdEurPpm'), motivo: textOf(form, 'motivo') };
+		const rejected = reasonRejection(values.motivo, { scope: FX_SCOPE, values });
+		if (rejected !== null) return rejected;
 		let entryId: string;
 		try {
 			entryId = setManualFx(getComposition().pricing, {
@@ -212,6 +224,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: 'quitarTipoCambioManual' });
+		if (rejected !== null) return rejected;
 		let outcome: ReturnType<typeof clearManualFx>;
 		try {
 			outcome = clearManualFx(getComposition().pricing, {
@@ -231,6 +245,11 @@ export const actions: Actions = {
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const micro = textOf(form, 'microUsd');
+		const rejected = reasonRejection(textOf(form, 'motivo'), {
+			scope: 'guardarPrecioOrientativo',
+			values: { operacion: textOf(form, 'operacion'), microUsd: micro }
+		});
+		if (rejected !== null) return rejected;
 		let entryId: string;
 		try {
 			entryId = setManualPrice(getComposition().pricing, {

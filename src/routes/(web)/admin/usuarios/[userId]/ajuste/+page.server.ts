@@ -20,10 +20,10 @@ import { previewAdjustment } from '$lib/server/web/balance-adjustment';
 import { failureOf } from '$lib/server/web/actions';
 import { AppError } from '$lib/server/shared/errors';
 import { toMicro } from '$lib/shared/money';
+import { reasonIssueOf } from '$lib/shared/reason';
 import { toEpochMs } from '$lib/shared/time';
 import type { Actions, PageServerLoad } from './$types';
 
-const MAX_REASON = 500;
 const KEY_PATTERN = /^[A-Za-z0-9-]{16,64}$/;
 
 function adminOrThrow(locals: App.Locals) {
@@ -79,8 +79,9 @@ function parse(
 	const direction = form.get('tipo') === 'debit' ? 'debit' : 'credit';
 	const kind = form.get('bolsa') === 'paid' ? 'paid' : 'free';
 	const reason = textOf(form, 'motivo').trim();
-	if (reason === '') errors.motivo = 'validation_required';
-	else if (reason.length > MAX_REASON) errors.motivo = 'reason_too_long';
+	// Regla única del motivo (1–500 tras recortar; C-55).
+	const reasonIssue = reasonIssueOf(reason);
+	if (reasonIssue !== null) errors.motivo = reasonIssue;
 	let expiresAt: number | null = null;
 	if (direction === 'credit' && kind === 'free') {
 		const verdict = freeExpiryOf(textOf(form, 'vence'), nowMs);

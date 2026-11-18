@@ -15,6 +15,7 @@ import {
 } from '$lib/server/features/apps';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import {
 	applyCopy,
@@ -249,13 +250,6 @@ export function staleDefaultCategories(deps: SyncDeps, appId: string): string[] 
 	return invalidCategories(schema, getDefaults(deps, appId));
 }
 
-/** El motivo es obligatorio en toda acción auditada del administrador (BE-FR-55, `contracts/web-routes.md` 1.4; C-41). */
-function requireReason(reason: string): string {
-	const trimmed = reason.trim();
-	if (trimmed === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
-	return trimmed;
-}
-
 /** Instantánea sin contenido de unos predeterminados (C-41): categorías, elementos y SHA-256 del JSON canónico. */
 function snapshotOf(schema: SyncSchema, data: SyncData) {
 	return {
@@ -266,7 +260,8 @@ function snapshotOf(schema: SyncSchema, data: SyncData) {
 
 /**
  * Escribe los predeterminados y su auditoría en la misma transacción. `before` y `after` resumen los dos documentos sin su
- * contenido, y `after.changed` nombra las categorías cambiadas (BE-FR-55; decisión del propietario de C-41).
+ * contenido, y `after.changed` nombra las categorías cambiadas (BE-FR-55; decisión del propietario de C-41). Devuelve el id de la
+ * entrada, que la página enlaza al guardar (UX-13; C-54).
  */
 function writeAuditedDefaults(
 	tx: Tx,
@@ -281,9 +276,9 @@ function writeAuditedDefaults(
 		readonly reason: string;
 		readonly now: EpochMs;
 	}
-): void {
+): string {
 	writeDefaults(tx, input.appId, input.next, input.now);
-	recordEntry(
+	return recordEntry(
 		tx,
 		{
 			adminId: input.adminId,
@@ -310,7 +305,7 @@ export function updateDefaults(
 		readonly data: unknown;
 		readonly reason: string;
 	}
-): void {
+): string {
 	const reason = requireReason(input.reason);
 	const { schema, maxBytes } = schemaAndLimit(deps, input.appId);
 	const verdict = validateDocument(schema, input.data, maxBytes);
@@ -318,7 +313,7 @@ export function updateDefaults(
 	if (!isRecord(input.data)) throw new AppError('VALIDATION_ERROR', { field: 'data' });
 	const data = input.data;
 	const now = toEpochMs(deps.clock.now());
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) =>
 		writeAuditedDefaults(tx, deps, {
 			adminId: input.adminId,
 			appId: input.appId,
@@ -328,9 +323,10 @@ export function updateDefaults(
 			next: data,
 			reason,
 			now
-		});
-	});
+		})
+	);
 	deps.logger.emit('sync.defaults.updated', { count: Object.keys(data).length });
+	return entryId;
 }
 
 /** Vista previa de la copia: categorías y elementos del documento propio de la cuenta (BE-FR-42 CA3). */
@@ -358,7 +354,7 @@ export function applyCopyAsDefaults(
 		readonly selection: readonly Selection[];
 		readonly reason: string;
 	}
-): void {
+): string {
 	const reason = requireReason(input.reason);
 	const { schema, maxBytes } = schemaAndLimit(deps, input.appId);
 	const stored = immediateTransaction(deps.db, (tx) => findDocument(tx, input.userId, input.appId));
@@ -370,13 +366,13 @@ export function applyCopyAsDefaults(
 	const verdict = validateDocument(schema, copied, maxBytes);
 	if (!verdict.ok) throw new AppError('VALIDATION_ERROR', { field: verdict.field });
 	const now = toEpochMs(deps.clock.now());
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		// Las categorías no copiadas se conservan aunque el esquema vigente ya no las admita: W40 lo avisa y la siembra las
 		// omite (C-45); aquí solo se sustituye lo seleccionado.
 		const previous = findDefaults(tx, input.appId);
 		const next = { ...previous, ...copied };
 		if (documentBytes(next) > maxBytes) throw new AppError('PAYLOAD_TOO_LARGE');
-		writeAuditedDefaults(tx, deps, {
+		return writeAuditedDefaults(tx, deps, {
 			adminId: input.adminId,
 			appId: input.appId,
 			action: 'sync.defaults.copied',
@@ -388,4 +384,5 @@ export function applyCopyAsDefaults(
 		});
 	});
 	deps.logger.emit('sync.defaults.copied', { count: Object.keys(copied).length });
+	return entryId;
 }

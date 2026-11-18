@@ -148,7 +148,7 @@ Ningún informe declara un escenario como comprobado sin haberlo ejecutado.
   2. `POST /api/v1/auth/login` con `X-App-Id: secretario`, `X-App-Version: 4.0.0`,
      `X-Device-Name: PC-PRUEBA`.
   3. `POST /api/v1/ai/chat` `{ "operation": "fix", "messages": [...] }` con el Bearer; el proveedor simulado
-     devuelve `usage.cost = 0.0004` USD (valores por defecto: `fx_usd_eur = 0,92`, comisión 5,5 %, margen
+     devuelve `usage.cost = 0.0004` USD (valores por defecto: tipo USD→EUR 0,92 sin filas en `fx_rates`, comisión 5,5 %, margen
      2,0).
   4. `GET /api/v1/me`.
   5. Repetir 3 con el mismo token y `X-App-Id` de otra app sembrada en test.

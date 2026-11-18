@@ -13,10 +13,16 @@ import type {
 } from './json-schemas';
 import type { OPERATION_KINDS } from './schema';
 
+/**
+ * Claves de `settings` retiradas: ya no tienen esquema y el _seed_ las borra si siguen en la BD (p. ej. tras volver a una
+ * imagen anterior que las sembraba y desplegar de nuevo, cuando su migración ya consta como aplicada). `fx_usd_eur`: C-56,
+ * migración 0020.
+ */
+export const RETIRED_SETTING_KEYS: readonly string[] = Object.freeze(['fx_usd_eur']);
+
 export const DEFAULT_SETTINGS = Object.freeze({
 	credits_per_eur_purchase: 1000,
 	credits_per_eur_usage: 1000,
-	fx_usd_eur: 920_000,
 	fx_buffer_pct: 30_000,
 	fx_stale_alert_days: 3,
 	margin_global: 2_000_000,

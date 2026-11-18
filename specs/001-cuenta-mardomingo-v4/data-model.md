@@ -348,14 +348,15 @@ tiempo se inyecta).
 - CHECK `usd_eur_ppm > 0`; `source = 'manual' OR (ecb_rate_ppm > 0 AND ecb_date IS NOT NULL AND buffer_ppm IS NOT NULL)`; `source = 'ecb' OR created_by IS NOT NULL`.
 - Índice (`effective_from`). Vigente = fila con mayor `effective_from` ≤ ahora; el manual está
   activo mientras la última fila sea `manual` (desactivarlo inserta una fila `ecb` con el último
-  valor del BCE). Sin filas, se usa `settings.fx_usd_eur` (0,92) (hueco H-25).
+  valor del BCE). Sin filas, se usa `DEFAULT_FX_USD_EUR_PPM` (920.000 = 0,92) del dominio de `pricing`
+  (hueco H-25; C-56 retiró `settings.fx_usd_eur`, migración 0020).
 - Tipo manual (C-48): el servicio de `pricing` solo admite un entero entre 500.000 y 2.000.000 ppm (0,50 a 2,00 EUR
   por USD); fuera de ese rango, `VALIDATION_ERROR` en `usdEurPpm` y no se inserta la fila. No es un CHECK de la tabla:
   el BCE con su colchón puede quedar fuera del rango manual sin que la fila sea inválida.
 - Freno global (C-49): el coste del día de las cuentas gratuitas se convierte con el `fx_rate_id` de cada operación
   (el tipo vigente cuando se cobró). El puerto `dailyCosts` que monta `ai` ya entrega céntimos de euro; una operación
-  sin `fx_rate_id` se convierte con el tipo vigente ahora (sin filas, 920.000, como el cobro). `protections` ya no lee
-  `settings.fx_usd_eur`.
+  sin `fx_rate_id` se convierte con el tipo vigente ahora (sin filas, 920.000, como el cobro). Ni `protections` ni
+  `pricing` leen ya `settings.fx_usd_eur`, y la clave se retiró (C-56, migración 0020).
 - Histórico de solo inserción por diseño (no declarado inmutable en Historias).
 
 ### 2.6 `credits`
@@ -916,37 +917,39 @@ Las operaciones se siembran **inactivas**: las activa el administrador.
 
 ### 3.1 `settings.value` (por clave)
 
-| Clave                                                                                                                | Tipo del valor                                    | Defecto (seed)                   |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------- |
-| `credits_per_eur_purchase`, `credits_per_eur_usage`                                                                  | Int > 0 (créditos por euro)                       | 1.000                            |
-| `fx_usd_eur`                                                                                                         | Ppm > 0 (valor inicial hasta la primera consulta) | 920.000                          |
-| `fx_buffer_pct`                                                                                                      | Ppm                                               | 30.000                           |
-| `fx_stale_alert_days`                                                                                                | Int > 0                                           | 3                                |
-| `margin_global`                                                                                                      | Ppm ≥ 1.000.000                                   | 2.000.000                        |
-| `provider_fee_pct_openrouter` / `provider_fee_pct_mistral`                                                           | Ppm                                               | 55.000 / 0                       |
-| `voxtral_price_per_minute_usd`                                                                                       | MicroUsd                                          | tarifa vigente                   |
-| `welcome_credits`                                                                                                    | Micro                                             | 1.000.000.000                    |
-| `free_credits_expiry_days` / `free_expiry_warning_days`                                                              | Int > 0                                           | 30 / 7                           |
-| `min_balance_to_operate`                                                                                             | Micro                                             | 5.000.000                        |
-| `max_debt`                                                                                                           | Micro                                             | 200.000.000                      |
-| `hold_ttl_seconds`                                                                                                   | Int > 0                                           | 600                              |
-| `chars_per_token_estimate` / `image_input_token_estimate`                                                            | Int > 0                                           | 3 / 1.500                        |
-| `idempotency_window_minutes`                                                                                         | Int > 0                                           | 10                               |
-| `daily_cap_no_purchase`                                                                                              | Micro                                             | 400.000.000                      |
-| `registrations_per_ip_24h`, `login_max_failures`, `login_lock_minutes`                                               | Int > 0                                           | 3, 10, 15                        |
-| `login_per_ip_15min`, `resend_verification_per_ip_hour`, `password_reset_per_ip_hour`, `signup_attempts_per_ip_hour` | Int > 0                                           | 30, 5, 5, 10                     |
-| `resend_verification_per_email_hour`, `password_reset_per_email_hour`                                                | Int > 0                                           | 3, 3                             |
-| `unverified_account_ttl_days`, `min_age`, `inactive_account_years`, `inactive_account_notice_days`                   | Int > 0                                           | 7, 18, 3, 30                     |
-| `ai_requests_per_minute`, `max_concurrent_transcriptions`                                                            | Int > 0                                           | 30, 2                            |
-| `max_audio_seconds`, `audio_duration_tolerance_seconds`, `max_audio_mb`                                              | Int > 0                                           | 300, 10, 10                      |
-| `max_text_chars`, `max_image_mb`, `max_sync_doc_kb`                                                                  | Int > 0                                           | 200.000, 10, 1.024               |
-| `global_daily_free_cost_brake_eur`                                                                                   | EurCents                                          | 500                              |
-| `maintenance`                                                                                                        | `{ active: Bool, message: Text }`                 | `{ active: false, message: "" }` |
-| `openrouter_balance_alert_usd`                                                                                       | MicroUsd                                          | 10.000.000                       |
-| `model_price_change_alert_pct`                                                                                       | Ppm                                               | 200.000                          |
-| `price_reference_window_days`, `price_reference_min_samples`                                                         | Int > 0                                           | 30, 50                           |
-| `flagged_ops_alert_per_day`                                                                                          | Int > 0                                           | 3                                |
-| `support_email`                                                                                                      | email                                             | `soporte@mardomingo.com`         |
+| Clave                                                                                                                | Tipo del valor                    | Defecto (seed)                   |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------- | -------------------------------- |
+| `credits_per_eur_purchase`, `credits_per_eur_usage`                                                                  | Int > 0 (créditos por euro)       | 1.000                            |
+| `fx_buffer_pct`                                                                                                      | Ppm                               | 30.000                           |
+| `fx_stale_alert_days`                                                                                                | Int > 0                           | 3                                |
+| `margin_global`                                                                                                      | Ppm ≥ 1.000.000                   | 2.000.000                        |
+| `provider_fee_pct_openrouter` / `provider_fee_pct_mistral`                                                           | Ppm                               | 55.000 / 0                       |
+| `voxtral_price_per_minute_usd`                                                                                       | MicroUsd                          | tarifa vigente                   |
+| `welcome_credits`                                                                                                    | Micro                             | 1.000.000.000                    |
+| `free_credits_expiry_days` / `free_expiry_warning_days`                                                              | Int > 0                           | 30 / 7                           |
+| `min_balance_to_operate`                                                                                             | Micro                             | 5.000.000                        |
+| `max_debt`                                                                                                           | Micro                             | 200.000.000                      |
+| `hold_ttl_seconds`                                                                                                   | Int > 0                           | 600                              |
+| `chars_per_token_estimate` / `image_input_token_estimate`                                                            | Int > 0                           | 3 / 1.500                        |
+| `idempotency_window_minutes`                                                                                         | Int > 0                           | 10                               |
+| `daily_cap_no_purchase`                                                                                              | Micro                             | 400.000.000                      |
+| `registrations_per_ip_24h`, `login_max_failures`, `login_lock_minutes`                                               | Int > 0                           | 3, 10, 15                        |
+| `login_per_ip_15min`, `resend_verification_per_ip_hour`, `password_reset_per_ip_hour`, `signup_attempts_per_ip_hour` | Int > 0                           | 30, 5, 5, 10                     |
+| `resend_verification_per_email_hour`, `password_reset_per_email_hour`                                                | Int > 0                           | 3, 3                             |
+| `unverified_account_ttl_days`, `min_age`, `inactive_account_years`, `inactive_account_notice_days`                   | Int > 0                           | 7, 18, 3, 30                     |
+| `ai_requests_per_minute`, `max_concurrent_transcriptions`                                                            | Int > 0                           | 30, 2                            |
+| `max_audio_seconds`, `audio_duration_tolerance_seconds`, `max_audio_mb`                                              | Int > 0                           | 300, 10, 10                      |
+| `max_text_chars`, `max_image_mb`, `max_sync_doc_kb`                                                                  | Int > 0                           | 200.000, 10, 1.024               |
+| `global_daily_free_cost_brake_eur`                                                                                   | EurCents                          | 500                              |
+| `maintenance`                                                                                                        | `{ active: Bool, message: Text }` | `{ active: false, message: "" }` |
+| `openrouter_balance_alert_usd`                                                                                       | MicroUsd                          | 10.000.000                       |
+| `model_price_change_alert_pct`                                                                                       | Ppm                               | 200.000                          |
+| `price_reference_window_days`, `price_reference_min_samples`                                                         | Int > 0                           | 30, 50                           |
+| `flagged_ops_alert_per_day`                                                                                          | Int > 0                           | 3                                |
+| `support_email`                                                                                                      | email                             | `soporte@mardomingo.com`         |
+
+Claves retiradas (C-56): `fx_usd_eur` (migración 0020). El _seed_ borra en cada arranque las de `RETIRED_SETTING_KEYS`
+(`apps/defaults.ts`), porque `readSettings` trata una clave sin esquema como dato corrupto.
 
 ### 3.2 Configuración de `apps`
 
@@ -1352,7 +1355,8 @@ Cerrados por las correcciones tras `/speckit-analyze` (2026-10-10):
 - **H-24 Caducidad del identificador de intento de compra**: no está definida; sin caducidad, un
   formulario antiguo se puede enviar una vez.
 - **H-25 Valor inicial del tipo de cambio** (0,92): `fx_rates.source` solo admite `ecb`/`manual`;
-  se usa `settings.fx_usd_eur` mientras no haya filas.
+  mientras no haya filas se usa la constante `DEFAULT_FX_USD_EUR_PPM` (920.000) de `pricing`. La clave
+  `settings.fx_usd_eur`, que nadie leía desde C-49, se retiró en C-56 (migración 0020).
 - **H-26 Pérdidas absorbidas**: §6 tiene un solo `absorbed_µc`, pero BE-FR-54 separa deuda
   absorbida y repeticiones no cobradas. Se añade `absorbed_reason` (la pérdida por cancelación se
   deriva de `cost_micro_usd` de las `cancelled`, D-05).

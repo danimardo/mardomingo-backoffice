@@ -140,19 +140,47 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 			audit: { clock: fixture.clock, ids: createIdGenerator(), logger: fixture.logger }
 		};
 
-		expect(releaseBrake(releaseDeps, adminId)).toBe(true);
-		expect(releaseBrake(releaseDeps, adminId)).toBe(false);
+		const entryId = releaseBrake(releaseDeps, { adminId, reason: 'Coste revisado' });
+		expect(entryId).toMatch(/^aud_/);
+		expect(releaseBrake(releaseDeps, { adminId, reason: 'Otra vez' })).toBeNull();
 
 		expect(brakeRow()?.value).toMatchObject({ active: false, releasedBy: adminId });
+		// La entrada guarda el motivo escrito, no un texto fijo (C-54, C-55).
 		expect(
 			fixture.db
 				.select()
 				.from(adminAudit)
 				.where(eq(adminAudit.action, 'protections.brake.released'))
 				.all()
-		).toHaveLength(1);
+		).toEqual([expect.objectContaining({ id: entryId, reason: 'Coste revisado' })]);
 		await expect(guard(deps, requestFor('usr_a'))).resolves.toBeTypeOf('function');
 	});
+});
+
+describe('motivo de la liberación del freno (C-55)', () => {
+	it.each(['', '   ', 'x'.repeat(501)])(
+		'un motivo vacío o de más de 500 caracteres no libera el freno ni audita (%#)',
+		async (reason) => {
+			fixture.addUser('usr_b');
+			const adminId = fixture.addUser('adm_b', 'admin');
+			harness.costs = [{ userId: 'usr_b', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
+			await expect(guard(harness.deps, requestFor('usr_b'))).rejects.toMatchObject({
+				code: 'SERVICE_LIMITED'
+			});
+			const releaseDeps = {
+				db: fixture.db,
+				clock: fixture.clock,
+				logger: fixture.logger,
+				audit: { clock: fixture.clock, ids: createIdGenerator(), logger: fixture.logger }
+			};
+
+			expect(() => releaseBrake(releaseDeps, { adminId, reason })).toThrow(
+				expect.objectContaining({ code: 'VALIDATION_ERROR', details: { field: 'reason' } })
+			);
+			expect(brakeRow()?.value).toMatchObject({ active: true });
+			expect(fixture.db.select().from(adminAudit).all()).toEqual([]);
+		}
+	);
 });
 
 describe('estado del freno para la administración (W33, W44)', () => {
@@ -176,7 +204,7 @@ describe('estado del freno para la administración (W33, W44)', () => {
 				logger: fixture.logger,
 				audit: { clock: fixture.clock, ids: createIdGenerator(), logger: fixture.logger }
 			},
-			adminId
+			{ adminId, reason: 'Coste revisado' }
 		);
 		expect(brakeStatus({ db: fixture.db, clock: fixture.clock }).active).toBe(false);
 	});

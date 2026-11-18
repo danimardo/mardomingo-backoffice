@@ -2,7 +2,8 @@
 // valor debe ser igual o menor que su global, lo valida `updateAppOverrides`, y la auditoría va en la misma transacción. Exige
 // motivo y confirmación. Requiere rol de administrador. Pendiente: enlaces, orígenes, mantenimiento, versiones y operaciones.
 // Si el esquema de sincronización vigente ya no admite alguna categoría de los predeterminados, lo avisa (C-45): `apps` no
-// puede revalidarlos (son de `sync`), y la siembra las omite.
+// puede revalidarlos (son de `sync`), y la siembra las omite. Cada cambio vuelve con `?aviso=saved&auditoria=<id>` y la ficha
+// enlaza con esa entrada (UX-13; C-54).
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
@@ -17,7 +18,8 @@ import {
 	updateAppOverrides
 } from '$lib/server/features/apps';
 import { staleDefaultCategories } from '$lib/server/features/sync';
-import { isConfirmed } from '$lib/server/forms/confirmation';
+import { isConfirmed, savedEntryOf, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
 import type { Actions, PageServerLoad } from './$types';
@@ -37,7 +39,7 @@ function textOf(form: FormData, key: string): string {
 	return typeof value === 'string' ? value : '';
 }
 
-export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
+export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 	adminOrThrow(locals);
 	setHeaders({ 'cache-control': 'private, no-store' });
 	const composition = getComposition();
@@ -47,6 +49,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 	if (details === null) error(404);
 	return {
 		app,
+		saved: savedEntryOf(url),
 		details: {
 			name: details.name,
 			description: details.description,
@@ -95,8 +98,11 @@ export const actions: Actions = {
 		const composition = getComposition();
 		const app = appForAdmin(composition.apps, params.slug);
 		if (app === null) error(404);
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: 'guardarVersiones' });
+		if (rejected !== null) return rejected;
+		let entryId: string;
 		try {
-			updateAppVersions(composition.apps, {
+			entryId = updateAppVersions(composition.apps, {
 				actorId: admin.id,
 				appId: app.id,
 				minAppVersion: textOf(form, 'versionMinima'),
@@ -108,7 +114,7 @@ export const actions: Actions = {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		redirect(303, `/admin/apps/${encodeURIComponent(params.slug)}`);
+		redirect(303, savedRedirect(`/admin/apps/${encodeURIComponent(params.slug)}`, entryId));
 	},
 	crearOperacion: async ({ locals, params, request }) => {
 		const admin = adminOrThrow(locals);
@@ -121,8 +127,9 @@ export const actions: Actions = {
 		if (kind === null) return fail(400, { errors: { tipo: 'validation_invalid' } });
 		const model = textOf(form, 'modelo');
 		const group = textOf(form, 'grupo');
+		let entryId: string;
 		try {
-			createOperation(composition.apps, admin.id, app.id, {
+			({ entryId } = createOperation(composition.apps, admin.id, app.id, {
 				key: textOf(form, 'clave'),
 				name: textOf(form, 'nombre'),
 				kind,
@@ -132,12 +139,12 @@ export const actions: Actions = {
 				maxCostMicro: Number(textOf(form, 'costeMaximoMicro')),
 				capabilities: jsonField(form, 'capacidades'),
 				active: false
-			});
+			}));
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		redirect(303, `/admin/apps/${encodeURIComponent(params.slug)}`);
+		redirect(303, savedRedirect(`/admin/apps/${encodeURIComponent(params.slug)}`, entryId));
 	},
 	guardarApp: async ({ locals, params, request }) => {
 		const admin = adminOrThrow(locals);
@@ -146,10 +153,14 @@ export const actions: Actions = {
 		const composition = getComposition();
 		const app = appForAdmin(composition.apps, params.slug);
 		if (app === null) error(404);
+		// Motivo de 1 a 500 caracteres (C-55), con el error junto al campo de su formulario.
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: 'guardarApp' });
+		if (rejected !== null) return rejected;
 		const support = textOf(form, 'soporte');
 		const postVerify = textOf(form, 'textoPostVerificacion');
+		let entryId: string;
 		try {
-			updateAppDetails(composition.apps, {
+			entryId = updateAppDetails(composition.apps, {
 				actorId: admin.id,
 				appId: app.id,
 				name: textOf(form, 'nombre'),
@@ -165,7 +176,7 @@ export const actions: Actions = {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		redirect(303, `/admin/apps/${encodeURIComponent(params.slug)}`);
+		redirect(303, savedRedirect(`/admin/apps/${encodeURIComponent(params.slug)}`, entryId));
 	},
 	previsualizarMantenimiento: async ({ locals, params, request }) => {
 		adminOrThrow(locals);
@@ -188,8 +199,20 @@ export const actions: Actions = {
 		const app = appForAdmin(composition.apps, params.slug);
 		if (app === null) error(404);
 		const next = maintenanceOf(form);
+		// El campo del motivo vive dentro de la vista previa: el rechazo la vuelve a mostrar con lo que se iba a aplicar.
+		const rejected = reasonRejection(textOf(form, 'motivo'), {
+			scope: 'guardarMantenimiento',
+			extra: {
+				maintenancePreview: {
+					before: { active: app.maintenanceActive, message: app.maintenanceMessage },
+					after: next
+				}
+			}
+		});
+		if (rejected !== null) return rejected;
+		let entryId: string;
 		try {
-			setAppMaintenance(composition.apps, {
+			entryId = setAppMaintenance(composition.apps, {
 				actorId: admin.id,
 				appId: app.id,
 				active: next.active,
@@ -200,7 +223,7 @@ export const actions: Actions = {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		redirect(303, `/admin/apps/${encodeURIComponent(params.slug)}`);
+		redirect(303, savedRedirect(`/admin/apps/${encodeURIComponent(params.slug)}`, entryId));
 	},
 	guardarSobrescrituras: async ({ locals, params, request }) => {
 		const admin = adminOrThrow(locals);
@@ -209,14 +232,17 @@ export const actions: Actions = {
 		const composition = getComposition();
 		const app = appForAdmin(composition.apps, params.slug);
 		if (app === null) error(404);
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: 'guardarSobrescrituras' });
+		if (rejected !== null) return rejected;
 		let overrides: unknown;
 		try {
 			overrides = JSON.parse(textOf(form, 'sobrescrituras'));
 		} catch {
 			return fail(400, { errors: { sobrescrituras: 'validation_invalid' } });
 		}
+		let entryId: string;
 		try {
-			updateAppOverrides(composition.apps, {
+			entryId = updateAppOverrides(composition.apps, {
 				actorId: admin.id,
 				appId: app.id,
 				overrides,
@@ -227,6 +253,6 @@ export const actions: Actions = {
 			throw cause;
 		}
 		const back = `/admin/apps/${encodeURIComponent(params.slug)}`;
-		redirect(303, back);
+		redirect(303, savedRedirect(back, entryId));
 	}
 };

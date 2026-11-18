@@ -8,6 +8,7 @@ import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import type { EpochMs } from '$lib/shared/time';
 import { ANNOUNCEMENT_LEVELS, announcements, apps } from './schema';
@@ -180,8 +181,7 @@ export function deactivateAnnouncement(
 	deps: AnnouncementsAdminDeps,
 	input: { adminId: string; id: string; reason: string }
 ): string | null {
-	const reason = input.reason.trim();
-	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	return immediateTransaction(deps.db, (tx) => {
 		const current = tx.select().from(announcements).where(eq(announcements.id, input.id)).get();
 		if (current === undefined) throw new AppError('NOT_FOUND');

@@ -79,6 +79,9 @@ de corregir).
 | C-51 | Baja     | web      | Varias acciones auditadas no enlazan con su entrada de auditoría (UX-13)                 | T442  |
 | C-52 | Baja     | apps     | Editar, aplicar al grupo y activar una operación aceptan un motivo vacío                 | T443  |
 | C-53 | Baja     | web      | Una `pagina` enorme en los filtros GET del panel da 500                                  | T444  |
+| C-54 | Baja     | web      | Protecciones, apps, operación, anuncios, legal y predeterminados no enlazan su auditoría | T445  |
+| C-55 | Media    | admin    | El motivo no tiene una longitud máxima común en todas las acciones                       | T446  |
+| C-56 | Baja     | settings | La clave `settings.fx_usd_eur` sigue sembrada aunque ya no la lee nadie                  | T447  |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -815,3 +818,76 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
   («datatype mismatch»).
 - **Cambio**: exigir entero seguro y un máximo en `pageNumber`; fuera de rango, la última página o la lista vacía (200) o 400.
 - **Test (primero, debe fallar)**: `tests/http/admin-paginacion-limites.test.ts` (500 en lugar de 200 o 400).
+
+C-54 a C-56 son decisiones del propietario tras cerrar la fase 23 (2026-11-18): C-54 completa lo que T442 dejó pendiente,
+C-55 cierra R08 y D09 de `propuesta-reglas-administracion.md` y C-56 retira la clave que C-49 dejó sin lectores.
+
+## C-54 (Baja) — Protecciones, apps, operación, anuncios, legal y predeterminados no enlazan su auditoría
+
+- **Requisito**: UX-13 (al guardar se enlaza la entrada de auditoría); `contracts/web-routes.md` sección 4
+  (`?aviso=saved&auditoria=<entryId>`); BE-FR-55.
+- **Ficheros**: las acciones de W39 (`crearApp`), W40, W41, W42, W43, W44, W48 y W49, y los servicios que auditan
+  (`apps/service.ts`, `apps/activation.ts`, `apps/operation-settings.ts`, `apps/announcements-admin.ts`, `legal/publish.ts`,
+  `sync/service.ts`, `protections/service.ts`, `notifications/mistral-billing.ts`), que devuelven `void`, un id de dominio o
+  un booleano en lugar del id de su entrada. Los helpers `savedRedirect` y `savedEntryOf` (`src/lib/server/forms/confirmation.ts`)
+  ya existen (T442).
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio (15 casos HTTP en rojo por la URL sin `aviso=saved`,
+  y la integración de la activación en rojo por devolver `undefined`). Los servicios devuelven el id de la entrada:
+  `string` en `updateAppOverrides`, `setAppMaintenance`, `updateAppDetails`, `updateAppVersions`, activar, desactivar,
+  `updateOperationSettings`, `updateDefaults`, `applyCopyAsDefaults` y `setMistralBillingError`; `{ id, entryId }` en
+  `createApp` y `createOperation`; `{ version, entryId }` en `createTemplateVersion`; `releaseBrake` recibe
+  `{ adminId, reason }`, audita el motivo escrito (antes `'manual'`) y devuelve `string | null`; `publishAndNotify` pasa el
+  `auditId` de `publishVersion`. Los anuncios ya lo devolvían. Las rutas usan `savedRedirect` (W49 deja de usar
+  `?aviso=anuncio_creado`) y las siete páginas muestran el aviso con el enlace (`savedEntryOf`). `aplicarAlGrupo` enlaza la
+  entrada de la operación de la ficha. Sin aristas nuevas. Test: `tests/http/admin-enlace-auditoria-{protecciones,apps,operacion,anuncios,legal,predeterminados}.test.ts`
+  (con el helper `tests/http/saved-link.ts`, que comprueba la acción de la entrada y el enlace en la página) y
+  `apps/activation.int.test.ts` (activar no se puede probar por HTTP: la base no tiene un modelo compatible).
+- **Cambio** (**decisión del propietario**): cada servicio auditado devuelve el id de su entrada; las acciones redirigen con
+  `savedRedirect` y cada página muestra el aviso con el enlace a la entrada (`savedEntryOf`). Sin aristas nuevas entre
+  funcionalidades.
+- **Test (primero, debe fallar)**: `tests/http/admin-enlace-auditoria-*.test.ts`, uno por pantalla.
+
+## C-55 (Media) — El motivo no tiene una longitud máxima común en todas las acciones
+
+- **Requisito**: BE-FR-55 y FR-094 (motivo en toda acción que modifica datos); R08 y D09 de `propuesta-reglas-administracion.md`
+  (motivo de 1 a 500 caracteres tras recortar, validado por el servicio).
+- **Ficheros**: hay cuatro reglas distintas. `accounts/admin-users.ts` (`requireReason` propio, 1–500), `apps/service.ts` y
+  `sync/service.ts` (`requireReason` sin máximo), la ruta del ajuste (`MAX_REASON = 500` en la ruta, no en `credits`), y
+  comprobaciones sueltas sin máximo en `pricing/service.ts` (tipo manual y precio orientativo), `payments/service.ts`
+  (reembolso), `apps/announcements-admin.ts` (desactivar anuncio), `accounts/admin-users.ts` (tester) y las rutas de W44
+  (liberar el freno y la alerta de Mistral). `protections.releaseBrake` ni siquiera recibe el motivo: audita `'manual'`.
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio (16 casos de unidad, componente e integración y 22
+  de la matriz HTTP). Cierra R08 y D09. Regla única en `$lib/shared/reason` (`REASON_MAX_LENGTH`, `reasonIssueOf`);
+  `requireReason` en `$lib/server/shared/reason` sustituye a las cuatro reglas y a las comprobaciones sueltas de `accounts`,
+  `apps`, `sync`, `pricing`, `payments`, `credits.adjust` (que no validaba), `notifications` (alerta de Mistral) y
+  `protections.releaseBrake`; todos auditan el motivo recortado (`setTester`, los cambios de `apps` y el tipo manual
+  auditaban el texto sin recortar). En la web, `reasonRejection` (`$lib/server/forms/reason`) responde 400 antes del
+  servicio con `errors.motivo`, `values.motivo` y `scope`, y `reasonFieldOf` (`$lib/schemas/common/reason`) pinta el error
+  junto al campo de su formulario y conserva lo escrito en W35–W38, W40–W44 y W49. `TextField` admite `maxlength` y todos
+  los campos de motivo llevan `maxlength="500"`. Mensaje nuevo `validation_reason_too_long` (sustituye a
+  `admin_adjust_reason_too_long`). El reembolso (W37) conserva ahora lo escrito, y la copia de predeterminados (W43) se
+  envía a `?vista=propia&/copiar` para volver a pintar el formulario tras un rechazo. `src/lib/server/forms/reason.test.ts`
+  se escribió después del cambio (cubre el helper de la ruta).
+- **Cambio** (**decisión del propietario**, cierra R08 y D09): una sola regla compartida (`REASON_MAX_LENGTH = 500`) que
+  usan todos los servicios con motivo; más de 500 caracteres tras recortar es `VALIDATION_ERROR` con `field: 'reason'`, y en la
+  web 400 con el error junto al campo y el texto conservado. Los campos de motivo llevan `maxlength="500"`.
+- **Test (primero, debe fallar)**: `src/lib/shared/reason.test.ts`, `src/lib/server/shared/reason.test.ts` y
+  `tests/http/admin-motivo-longitud.test.ts`.
+
+## C-56 (Baja) — La clave `settings.fx_usd_eur` sigue sembrada aunque ya no la lee nadie
+
+- **Requisito**: BE-FR-87 (el tipo vigente sale de `fx_rates`; sin filas, el valor por defecto `DEFAULT_FX_USD_EUR_PPM`);
+  `data-model.md` 2.5 y H-25.
+- **Ficheros**: `apps/defaults.ts` (`DEFAULT_SETTINGS.fx_usd_eur`), `apps/json-schemas.ts` (`SETTING_SCHEMAS.fx_usd_eur`),
+  `data-model.md`. Desde C-49 (T440) ni `pricing` ni `protections` leen la clave.
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio (`migrations.int.test.ts`: la fila seguía tras
+  migrar; `apps/seed.int.test.ts`: 48 parámetros sembrados y la clave resembrada no se borraba). Migración
+  `0020_settings_sin_fx_usd_eur` (generada con `drizzle-kit generate --custom`, `DELETE` escrito a mano, idempotente); la
+  clave sale de `DEFAULT_SETTINGS` y de `SETTING_SCHEMAS`, y ningún código la lee (búsqueda en `src/`). Como `readSettings`
+  rechaza una clave desconocida, el _seed_ borra además las claves retiradas (`RETIRED_SETTING_KEYS`) en cada arranque: una
+  vuelta atrás a una imagen anterior la vuelve a sembrar y, al desplegar de nuevo, la 0020 ya consta como aplicada.
+  `data-model.md` (2.5, tabla de `settings` y H-25), `quickstart.md` y `docs/operaciones/migraciones.md` (0020: consulta
+  previa, vuelta atrás y regreso) enmendados. Vuelta atrás no ensayada en staging.
+- **Cambio** (**decisión del propietario**): migración `0020` que borra la fila de `settings`; quitar la clave de los valores
+  por defecto y de los esquemas; documentar el orden de despliegue y la vuelta atrás en `docs/operaciones/migraciones.md`.
+- **Test (primero, debe fallar)**: `src/lib/server/db/migrations.int.test.ts` (la fila desaparece tras migrar).
