@@ -9,7 +9,7 @@ import { creditsFixture, type CreditsFixture } from '../../../../../tests/builde
 import { markRealPurchase } from '../../../../../tests/builders/purchases';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import {
-	OVER_BRAKE_COST_MICRO_USD,
+	OVER_BRAKE_COST_EUR_CENTS,
 	guard,
 	protectionsHarness,
 	requestFor,
@@ -44,7 +44,7 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 	it('al superar el límite del día se activa, se guarda, avisa una vez al administrador y rechaza', async () => {
 		const deps = harness.deps;
 		fixture.addUser('usr_a');
-		harness.costs = [{ userId: 'usr_a', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		harness.costs = [{ userId: 'usr_a', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
 
 		await expect(guard(deps, requestFor('usr_a'))).rejects.toMatchObject({
 			code: 'SERVICE_LIMITED'
@@ -58,7 +58,7 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 	it('mientras está activo rechaza sin volver a sumar el día ni avisar otra vez', async () => {
 		const deps = harness.deps;
 		fixture.addUser('usr_a');
-		harness.costs = [{ userId: 'usr_a', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		harness.costs = [{ userId: 'usr_a', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
 		await expect(guard(deps, requestFor('usr_a'))).rejects.toMatchObject({
 			code: 'SERVICE_LIMITED'
 		});
@@ -78,7 +78,7 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 			emailNormalizedHash: 'h-pagadora'
 		});
 		markRealPurchase(fixture.db, 'usr_pagadora');
-		harness.costs = [{ userId: 'usr_pagadora', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		harness.costs = [{ userId: 'usr_pagadora', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
 
 		await expect(guard(deps, requestFor('usr_pagadora'))).resolves.toBeTypeOf('function');
 
@@ -94,7 +94,7 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 			emailNormalizedHash: 'h-pagadora'
 		});
 		markRealPurchase(fixture.db, 'usr_pagadora');
-		harness.costs = [{ userId: 'usr_gratis', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		harness.costs = [{ userId: 'usr_gratis', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
 		await expect(guard(deps, requestFor('usr_gratis'))).rejects.toMatchObject({
 			code: 'SERVICE_LIMITED'
 		});
@@ -108,7 +108,7 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 	it('al cambiar de día del calendario de Madrid vuelve a estar libre', async () => {
 		const deps = harness.deps;
 		fixture.addUser('usr_a');
-		harness.costs = [{ userId: 'usr_a', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		harness.costs = [{ userId: 'usr_a', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
 		await expect(guard(deps, requestFor('usr_a'))).rejects.toMatchObject({
 			code: 'SERVICE_LIMITED'
 		});
@@ -129,7 +129,7 @@ describe('freno global de gasto (BE-FR-46 CA1)', () => {
 		const deps = harness.deps;
 		fixture.addUser('usr_a');
 		const adminId = fixture.addUser('adm_a', 'admin');
-		harness.costs = [{ userId: 'usr_a', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		harness.costs = [{ userId: 'usr_a', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
 		await expect(guard(deps, requestFor('usr_a'))).rejects.toMatchObject({
 			code: 'SERVICE_LIMITED'
 		});
@@ -163,7 +163,7 @@ describe('estado del freno para la administración (W33, W44)', () => {
 		const { brakeStatus } = await import('./index');
 		expect(brakeStatus({ db: fixture.db, clock: fixture.clock }).active).toBe(false);
 
-		harness.costs = [{ userId: 'usr_a', costMicroUsd: OVER_BRAKE_COST_MICRO_USD }];
+		harness.costs = [{ userId: 'usr_a', costEurCents: OVER_BRAKE_COST_EUR_CENTS }];
 		await expect(guard(deps, requestFor('usr_a'))).rejects.toMatchObject({
 			code: 'SERVICE_LIMITED'
 		});

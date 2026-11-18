@@ -3,6 +3,7 @@ export {
 	chargeFor,
 	clearManualFx,
 	getCurrentFxRate,
+	previewManualFx,
 	refreshFxFromEcb,
 	setManualFx,
 	usdEurPpmOf,

@@ -10,6 +10,9 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+	/** Error del motivo vacío en el formulario `scope` (C-52): cada formulario pinta solo el suyo. */
+	const reasonError = (scope: string): string =>
+		form?.scope === scope && errors.motivo === 'validation_required' ? m.validation_required() : '';
 </script>
 
 <svelte:head>
@@ -37,7 +40,13 @@
 	<section aria-labelledby="activar">
 		<h2 id="activar">{m.admin_operation_activate()}</h2>
 		<form method="POST" action="?/activar">
-			<TextField id="motivo" name="motivo" label={m.admin_operation_reason()} required />
+			<TextField
+				id="motivo"
+				name="motivo"
+				label={m.admin_operation_reason()}
+				error={reasonError('activar')}
+				required
+			/>
 			<Checkbox id="confirmado" name="confirmado" value="true"
 				>{m.admin_operation_confirm()}</Checkbox
 			>
@@ -58,7 +67,7 @@
 				id="motivo-desactivar"
 				name="motivo"
 				label={m.admin_operation_reason()}
-				error={errors.motivo === 'validation_required' ? m.validation_required() : ''}
+				error={reasonError('desactivar')}
 				required
 			/>
 			<Checkbox id="confirmado-desactivar" name="confirmado" value="true"
@@ -115,7 +124,13 @@
 			value={data.operation.maxCostMicro.toString()}
 			required
 		/>
-		<TextField id="motivo-operacion" name="motivo" label={m.admin_operation_reason()} required />
+		<TextField
+			id="motivo-operacion"
+			name="motivo"
+			label={m.admin_operation_reason()}
+			error={reasonError('operacion')}
+			required
+		/>
 		<Checkbox id="confirmado-operacion" name="confirmado" value="true"
 			>{m.admin_operation_confirm_settings()}</Checkbox
 		>
@@ -155,7 +170,13 @@
 				value={data.operation.maxCostMicro.toString()}
 				required
 			/>
-			<TextField id="motivo-grupo" name="motivo" label={m.admin_operation_reason()} required />
+			<TextField
+				id="motivo-grupo"
+				name="motivo"
+				label={m.admin_operation_reason()}
+				error={reasonError('grupo')}
+				required
+			/>
 			<p><Button type="submit" variant="secondary">{m.admin_operation_group_preview()}</Button></p>
 		</form>
 

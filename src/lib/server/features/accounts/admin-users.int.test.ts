@@ -198,7 +198,8 @@ describe('cierre de sesiones (BE-FR-50)', () => {
 			reason: 'dispositivo perdido'
 		});
 
-		expect(closed).toBe(1);
+		// C-51 (T442; UX-13): devuelve también el id de su entrada de auditoría para que la ficha la enlace.
+		expect(closed).toEqual({ closed: 1, entryId: auditRows()[0]?.id });
 		expect(sessionsOf(targetId)).toBe(1);
 		expect(auditRows()[0]).toMatchObject({
 			action: 'accounts.session.close',
@@ -243,7 +244,7 @@ describe('cierre de sesiones (BE-FR-50)', () => {
 
 		expect(
 			closeUserSessions(deps, { adminId, userId: targetId, sessionId: null, reason: 'seguridad' })
-		).toBe(2);
+		).toMatchObject({ closed: 2 });
 		expect(sessionsOf(otherId)).toBe(1);
 	});
 });

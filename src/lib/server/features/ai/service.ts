@@ -19,6 +19,8 @@ import {
 	chargeFor,
 	checkMaxCost,
 	estimateChatMicroUsd,
+	getCurrentFxRate,
+	usdEurPpmOf,
 	type PricingDeps
 } from '$lib/server/features/pricing';
 import {
@@ -31,6 +33,7 @@ import {
 } from '$lib/server/features/notifications';
 import { emailOfUser } from '$lib/server/features/accounts';
 import {
+	eurCentsOf,
 	guardAccessAndBrake,
 	guardFrequency,
 	type ProtectionsDeps,
@@ -123,10 +126,39 @@ export function protectionsOf(deps: AiDeps): ProtectionsDeps {
 		credits: deps.credits,
 		alerts: deps.alerts,
 		dailyCosts: {
-			costByUserOfDay: (from, until) => realCostByUserOfDay(deps.db, from, until)
+			costByUserOfDay: (from, until) => realCostCentsByUserOfDay(deps, from, until)
 		},
 		runtime: deps.protections
 	};
+}
+
+/**
+ * Coste real del día por cuenta en céntimos de euro, para el freno global (BE-FR-46; C-49). Cada grupo se convierte con
+ * el tipo vigente cuando se cobró su operación (`fx_rate_id`, BE-FR-87 CA1). Una operación sin tipo guardado (no había
+ * filas en `fx_rates`, o no tuvo coste que cobrar) usa el tipo vigente ahora: el freno protege y no debe quedarse corto.
+ * El redondeo es hacia arriba, como en `protections`.
+ */
+function realCostCentsByUserOfDay(
+	deps: AiDeps,
+	from: EpochMs,
+	until: EpochMs
+): { readonly userId: string; readonly costEurCents: number }[] {
+	let currentPpm: number | undefined;
+	const ppmOf = (fxRateId: string | null): number => {
+		const stored = fxRateId === null ? null : usdEurPpmOf(deps.pricing, fxRateId);
+		if (stored !== null) return stored;
+		currentPpm ??= getCurrentFxRate(deps.pricing).usdEurPpm;
+		return currentPpm;
+	};
+	const cents = new Map<string, number>();
+	for (const row of realCostByUserOfDay(deps.db, from, until)) {
+		const rowCents = eurCentsOf({
+			costMicroUsd: row.costMicroUsd,
+			fxUsdEurPpm: ppmOf(row.fxRateId)
+		});
+		cents.set(row.userId, (cents.get(row.userId) ?? 0) + rowCents);
+	}
+	return [...cents].map(([userId, costEurCents]) => ({ userId, costEurCents }));
 }
 
 /** Contexto de la petición: quién llama, desde qué app, la señal de desconexión y la clave de idempotencia. */

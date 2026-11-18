@@ -349,6 +349,13 @@ tiempo se inyecta).
 - Índice (`effective_from`). Vigente = fila con mayor `effective_from` ≤ ahora; el manual está
   activo mientras la última fila sea `manual` (desactivarlo inserta una fila `ecb` con el último
   valor del BCE). Sin filas, se usa `settings.fx_usd_eur` (0,92) (hueco H-25).
+- Tipo manual (C-48): el servicio de `pricing` solo admite un entero entre 500.000 y 2.000.000 ppm (0,50 a 2,00 EUR
+  por USD); fuera de ese rango, `VALIDATION_ERROR` en `usdEurPpm` y no se inserta la fila. No es un CHECK de la tabla:
+  el BCE con su colchón puede quedar fuera del rango manual sin que la fila sea inválida.
+- Freno global (C-49): el coste del día de las cuentas gratuitas se convierte con el `fx_rate_id` de cada operación
+  (el tipo vigente cuando se cobró). El puerto `dailyCosts` que monta `ai` ya entrega céntimos de euro; una operación
+  sin `fx_rate_id` se convierte con el tipo vigente ahora (sin filas, 920.000, como el cobro). `protections` ya no lee
+  `settings.fx_usd_eur`.
 - Histórico de solo inserción por diseño (no declarado inmutable en Historias).
 
 ### 2.6 `credits`

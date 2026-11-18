@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { immediateTransaction } from '$lib/server/db/tx';
 import { recordEntry } from '$lib/server/features/audit';
 import { AppError } from '$lib/server/shared/errors';
-import type { AppsDeps } from './service';
+import { requireReason, type AppsDeps } from './service';
 import { appOperations } from './schema';
 
 export type ActivationRejection = 'no_model' | 'model_unknown' | 'model_incapable' | 'no_price';
@@ -21,8 +21,9 @@ export interface ActivateOperationInput {
 	readonly reason: string;
 }
 
-/** Activa la operación si la comprobación lo permite. Rechaza sin cambios y deja rastro si no. */
+/** Activa la operación si la comprobación lo permite. Exige motivo (C-52). Rechaza sin cambios y deja rastro si no. */
 export function activateOperation(deps: AppsDeps, input: ActivateOperationInput): void {
+	const reason = requireReason(input.reason);
 	if (!input.check.ok) {
 		deps.logger.emit('apps.operation.activation_rejected', { reason: input.check.reason });
 		throw new AppError('VALIDATION_ERROR', { field: 'activation', reason: input.check.reason });
@@ -48,7 +49,7 @@ export function activateOperation(deps: AppsDeps, input: ActivateOperationInput)
 				entityId: input.operationId,
 				before: { active: before.active },
 				after: { active: true },
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
@@ -64,7 +65,7 @@ export interface DeactivateOperationInput {
 
 /** Desactiva una operación. No exige comprobación: quitar una operación del servicio siempre es seguro (W41). */
 export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationInput): void {
-	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	const now = deps.clock.now();
 	immediateTransaction(deps.db, (tx) => {
 		const before = tx
@@ -86,7 +87,7 @@ export function deactivateOperation(deps: AppsDeps, input: DeactivateOperationIn
 				entityId: input.operationId,
 				before: { active: before.active },
 				after: { active: false },
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);

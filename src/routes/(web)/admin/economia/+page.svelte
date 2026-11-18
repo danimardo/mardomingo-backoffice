@@ -1,14 +1,18 @@
 <script lang="ts">
 	// W38 · `/admin/economia`: parámetros económicos globales, tipo de cambio manual y precio orientativo manual (T309; BE-FR-61,
-	// BE-FR-73, BE-FR-87). Cada cambio pide motivo y confirmación. Sin JavaScript funciona igual.
+	// BE-FR-73, BE-FR-87). Cada cambio pide motivo y confirmación, y al guardar enlaza con su entrada de auditoría (UX-13). El tipo
+	// manual se previsualiza («antes → después») antes de confirmarlo (C-48). Sin JavaScript funciona igual.
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { resolve } from '$app/paths';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+	const values = $derived<Readonly<Record<string, string>>>(form?.values ?? {});
 </script>
 
 <svelte:head>
@@ -17,6 +21,14 @@
 
 <h1>{m.admin_economy_title()}</h1>
 <p>{m.admin_economy_intro()}</p>
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
 
 {#if form?.formError}
 	<Banner level="critical">{m.admin_economy_error()}</Banner>
@@ -113,20 +125,53 @@
 	<p>
 		{m.admin_economy_fx_current()}: {data.fx.usdEurPpm} ppm · {data.fx.source}
 	</p>
-	<form method="POST" action="?/fijarTipoCambioManual">
+	<form method="POST" action="?/previsualizarTipoCambioManual">
 		<TextField
 			id="usdEurPpm"
 			name="usdEurPpm"
 			label={m.admin_economy_fx_ppm()}
 			hint={m.admin_economy_fx_hint()}
+			value={values.usdEurPpm ?? ''}
+			error={errors.usdEurPpm === 'fx_out_of_range' ? m.admin_economy_fx_out_of_range() : ''}
 			required
 		/>
-		<TextField id="motivo-fx" name="motivo" label={m.admin_economy_reason()} required />
-		<Checkbox id="confirmado-fx" name="confirmado" value="true"
-			>{m.admin_economy_confirm()}</Checkbox
-		>
-		<p><Button type="submit" variant="primary">{m.admin_economy_fx_set()}</Button></p>
+		<TextField
+			id="motivo-fx"
+			name="motivo"
+			label={m.admin_economy_reason()}
+			value={values.motivo ?? ''}
+			error={errors.motivo === 'validation_required' ? m.validation_required() : ''}
+			required
+		/>
+		<p><Button type="submit" variant="secondary">{m.admin_economy_preview()}</Button></p>
 	</form>
+	{#if form?.fxPreview}
+		<section aria-labelledby="vista-previa-fx">
+			<h3 id="vista-previa-fx">{m.admin_economy_fx_preview_title()}</h3>
+			<p>
+				{m.admin_economy_fx_preview_change({
+					beforePpm: String(form.fxPreview.beforePpm),
+					beforeEur: form.fxPreview.beforeEur,
+					afterPpm: String(form.fxPreview.afterPpm),
+					afterEur: form.fxPreview.afterEur
+				})}
+			</p>
+			<form method="POST" action="?/fijarTipoCambioManual">
+				<input type="hidden" name="usdEurPpm" value={form.fxPreview.afterPpm} />
+				<TextField
+					id="motivo-fx-confirmar"
+					name="motivo"
+					label={m.admin_economy_reason()}
+					value={form.fxPreview.reason}
+					required
+				/>
+				<Checkbox id="confirmado-fx" name="confirmado" value="true"
+					>{m.admin_economy_confirm()}</Checkbox
+				>
+				<p><Button type="submit" variant="primary">{m.admin_economy_fx_set()}</Button></p>
+			</form>
+		</section>
+	{/if}
 	<form method="POST" action="?/quitarTipoCambioManual">
 		<TextField id="motivo-quitar-fx" name="motivo" label={m.admin_economy_reason()} required />
 		<Checkbox id="confirmado-quitar-fx" name="confirmado" value="true"

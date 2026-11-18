@@ -538,6 +538,8 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
 | `?/marcarTester` / `?/desmarcarTester`               | `reason`                                                    | Cambia el rol `tester`              | `409`                                                                             |
 | `?/previsualizarCierreSesiones` / `?/cerrarSesiones` | `reason`, `confirmado`, `sessionId` (opcional: una o todas) | Revoca                              | `404`                                                                             |
 
+- **Éxito de `?/cerrarSesiones`** (C-51): `redirect(303, "/admin/usuarios/<id>?aviso=saved&auditoria=<entryId>")`; la
+  página muestra «Cambio guardado» con el enlace a la entrada de auditoría.
 - **Eventos**: `accounts.user.blocked`, `accounts.user.unblocked`, `accounts.role.changed`,
   `accounts.session.revoked`, `audit.entry.recorded`.
 
@@ -562,6 +564,9 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
   consumido), `amountEurCents` (importe en **céntimos** de euro; solo con proveedor real; ≤ pagado; campo `importe`), `reason`, `confirmado` → movimiento `refund`,
   devolución por el proveedor (si es real) y rectificativa. Errores: `400`, `409 PAYMENT_NOT_REFUNDABLE`.
   _Enmienda 2026-10-28: `amountEur` decía euros y el código usa céntimos. D01 (el administrador indica los créditos a retirar) ya coincide con `creditsToRemove`: no cambia nada más del bloque._
+- **Éxito** (C-51): `redirect(303, "/admin/usuarios/<id>?aviso=saved&auditoria=<entryId>")`, con la entrada
+  `payments.refund`. Un reenvío con la misma clave no aplica nada ni audita, y vuelve a `/admin/usuarios/<id>`
+  sin aviso. _Enmienda 2026-11-18: sustituye a `?aviso=reembolso_aplicado`, que ninguna página mostraba._
 - **Eventos**: `payments.refund.applied`, `invoicing.invoice.issued`, `audit.entry.recorded`.
 
 ### W38 · `/admin/economia` — Economía (BE-FR-51, 61, 73, 87; UX-14; FR-089, FR-096, FR-128)
@@ -572,8 +577,18 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
 - **Actions**: `?/previsualizarParametros` / `?/guardarParametros` (claves y valores; validación de tipos,
   rangos y coherencia: margen ≥ 1, `min_balance_to_operate` ≥ 0…; muestra anterior → nuevo y alcance);
   `?/crearPaquete`, `?/guardarPaquete` (nombre, precio con IVA, bonificación, activo, orden);
-  `?/fijarTipoCambioManual` (`usdEur` decimal español), `?/quitarTipoCambioManual`;
+  `?/previsualizarTipoCambioManual` / `?/fijarTipoCambioManual` (`usdEurPpm`, entero en ppm entre 500.000 y
+  2.000.000, es decir de 0,50 a 2,00 EUR por USD; `motivo`; `confirmado` solo al fijar), `?/quitarTipoCambioManual`;
   `?/guardarPrecioOrientativo` (app, operación, valor manual).
+- **Tipo de cambio manual** (C-48): la vista previa no escribe nada y devuelve
+  `{ fxPreview: { beforePpm, beforeEur, afterPpm, afterEur, reason } }`, que se muestra como «antes → después»
+  («920000 ppm (0,92 EUR por USD) → 1000000 ppm (1 EUR por USD)»). Un valor fuera de rango, decimal, con signo o vacío
+  responde `400` con `errors.usdEurPpm = "fx_out_of_range"` y lo escrito en `values`, y el servicio lanza
+  `VALIDATION_ERROR` en `usdEurPpm`. Sin motivo, `400` con `errors.motivo`. _Enmienda 2026-11-18: decía
+  `usdEur` decimal español; el formulario siempre ha enviado ppm._
+- **Éxito** (C-51): las cuatro _actions_ que guardan (parámetros, fijar y quitar el tipo manual, precio orientativo)
+  redirigen con `?aviso=saved&auditoria=<entryId>`. Quitar el tipo manual sin valor del BCE al que volver no cambia
+  nada ni audita, y vuelve sin aviso.
 - **Eventos**: `apps.settings.updated`, `apps.settings.rejected`, `payments.pack.updated`,
   `pricing.fx.manual_set`, `audit.entry.recorded`.
 
@@ -610,6 +625,12 @@ inexistente responde `error(404)` desde el `load`.
 - **Actions**: `?/guardarOperacion`; `?/activar` (rechaza sin modelo, con modelo incapaz o sin precio ni
   coste máximo estimado); `?/desactivar`; `?/aplicarAlGrupo` (tiempo máximo, tokens, temperatura y coste máximo estimado para todas las del grupo; no el modelo, T311, C-52);
   `?/guardarPlantilla` (crea una versión nueva inmutable).
+- **Motivo** (C-52): `?/activar`, `?/desactivar`, `?/guardarOperacion` y `?/aplicarAlGrupo` exigen `motivo` en el
+  servicio (`requireReason` de `apps`; `VALIDATION_ERROR` en `reason`). Sin motivo (vacío o solo espacios) responden
+  `400` con `errors.motivo = "validation_required"` y `scope` (`activar`, `desactivar`, `operacion` o `grupo`), y la
+  página muestra «Este campo es obligatorio.» en el campo de ese formulario, como W42 y W43. No se escribe nada: en
+  `?/aplicarAlGrupo` ningún miembro cambia. La auditoría guarda el motivo sin los espacios de los extremos. No hay
+  longitud máxima del motivo mientras R08/D09 siga abierto.
 - **Eventos**: `apps.operation.activation_rejected`, `apps.template.versioned`, `apps.settings.updated`,
   `audit.entry.recorded`.
 

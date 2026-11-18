@@ -94,7 +94,7 @@ describe('A-04 · cerrar una sesión que no es de la cuenta (W35: 404)', () => {
 				sessionId: 'ses_a04_objetivo',
 				reason: 'Sesión sospechosa'
 			})
-		).toBe(1);
+		).toMatchObject({ closed: 1 });
 		expect(closeAudits()).toHaveLength(1);
 	});
 });

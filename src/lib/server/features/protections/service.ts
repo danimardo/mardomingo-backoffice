@@ -17,7 +17,7 @@ import { AppError } from '$lib/server/shared/errors';
 import { addDays, civilDateOf, madridMidnight } from '$lib/shared/dates';
 import { toEpochMs, type CivilDate, type EpochMs } from '$lib/shared/time';
 import { maintenanceVerdict, versionVerdict, type EndpointName } from './domain/access';
-import { brakeVerdict, eurCentsOf } from './domain/brake';
+import { brakeVerdict } from './domain/brake';
 import { concurrencyVerdict, twoLevelRateVerdict } from './domain/limits';
 import { createRateWindows, RATE_WINDOW_MS, type RateWindows } from './rate-limit.cache';
 import { createTranscriptionSlots, type TranscriptionSlots } from './concurrency.cache';
@@ -37,14 +37,15 @@ export function createProtectionsRuntime(): ProtectionsRuntime {
 }
 
 /**
- * Coste real por cuenta de un día (USD micro), aportado por `ai` como puerto: `protections` no lee las tablas de `ai`.
- * Las cuentas sin compra real se separan después con `credits`.
+ * Coste real por cuenta de un día en céntimos de euro, aportado por `ai` como puerto: `protections` no lee las tablas de
+ * `ai` ni las de `pricing`. Cada operación ya llega convertida con el tipo vigente cuando se cobró (su `fx_rate_id`;
+ * BE-FR-87 CA1, BE-FR-46; C-49). Las cuentas sin compra real se separan después con `credits`.
  */
 export interface DailyCostPort {
 	costByUserOfDay(
 		from: EpochMs,
 		until: EpochMs
-	): readonly { readonly userId: string; readonly costMicroUsd: number }[];
+	): readonly { readonly userId: string; readonly costEurCents: number }[];
 }
 
 export interface ProtectionsDeps {
@@ -203,10 +204,9 @@ function freeAccountsCostCents(deps: ProtectionsDeps, day: CivilDate): number {
 		madridMidnight(addDays(day, 1))
 	);
 	const paying = deps.credits.realPurchaseUserIds(rows.map((row) => row.userId));
-	const fxUsdEurPpm = numberSetting(deps, 'fx_usd_eur');
 	const realCents = rows
 		.filter((row) => !paying.has(row.userId))
-		.reduce((sum, row) => sum + eurCentsOf({ costMicroUsd: row.costMicroUsd, fxUsdEurPpm }), 0);
+		.reduce((sum, row) => sum + row.costEurCents, 0);
 	// Micro-créditos reservados: 1 € = 1.000 créditos = 1.000.000.000 µc, así que un céntimo son 10.000.000 µc.
 	const holdCents = Math.ceil(deps.credits.freeAccountsOpenHoldsMicro() / 10_000_000);
 	return realCents + holdCents;

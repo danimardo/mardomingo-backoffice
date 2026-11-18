@@ -252,7 +252,8 @@ test('@BE-FR-27 reembolsar una compra recién pagada: la vista previa no cambia 
 	await page.locator('#motivo').fill('Reembolso de prueba E2E');
 	await page.locator('#confirmado').check();
 	await page.getByRole('button', { name: 'Reembolsar', exact: true }).click();
-	await page.waitForURL(/aviso=reembolso_aplicado/);
+	// UX-13 (C-51): la ficha enlaza con la entrada de auditoría del reembolso.
+	await page.waitForURL(/aviso=saved&auditoria=aud_/);
 
 	const done = openDb();
 	try {
@@ -288,5 +289,9 @@ test('@BE-FR-50 cerrar las sesiones de una ficha observa el POST y vuelve a la m
 	expect(response.status()).toBe(303);
 
 	await page.waitForLoadState('networkidle');
-	await expect(page).toHaveURL(/\/admin\/usuarios\/usr_panel$/);
+	// UX-13 (C-51): vuelve a la misma ficha con el aviso y el enlace a la entrada de auditoría del cierre.
+	await expect(page).toHaveURL(
+		/\/admin\/usuarios\/usr_panel\?aviso=saved&auditoria=aud_[A-Za-z0-9_-]+$/
+	);
+	await expect(page.getByRole('link', { name: 'Ver la entrada en la auditoría' })).toBeVisible();
 });

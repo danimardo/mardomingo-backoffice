@@ -298,8 +298,11 @@ export function getEffectiveConfig(
 	};
 }
 
-function requireReason(reason: string): void {
-	if (reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+/** Motivo obligatorio de una acción de administración (FR-094, BE-FR-55): sin texto, `VALIDATION_ERROR` en `reason`. */
+export function requireReason(reason: string): string {
+	const trimmed = reason.trim();
+	if (trimmed === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	return trimmed;
 }
 
 /** Un error de restricción de SQLite (`CHECK`, `UNIQUE`, `FOREIGN KEY`) es una entrada no válida, no un fallo. */
@@ -324,8 +327,11 @@ export interface UpdateSettingInput {
 	readonly reason: string;
 }
 
-/** Cambia un parámetro global (BE-FR-61 CA1, CA4): valida tipo y rango, y audita valor anterior y nuevo. */
-export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
+/**
+ * Cambia un parámetro global (BE-FR-61 CA1, CA4): valida tipo y rango, y audita valor anterior y nuevo. Devuelve el id de la
+ * entrada de auditoría, para que W38 la enlace (UX-13; C-51).
+ */
+export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): string {
 	requireReason(input.reason);
 	if (!isSettingKey(input.key)) throw new AppError('VALIDATION_ERROR', { field: 'key' });
 	const key = input.key;
@@ -337,7 +343,7 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 	const value = parsed.data;
 	const now = deps.clock.now();
 
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const before = readSettingValue(deps.db, deps.logger, key);
 		if (key === 'hold_ttl_seconds' && typeof value === 'number') {
 			// C-14: una reserva que caduca antes del cobro deja de contar en el saldo disponible y en el freno global.
@@ -370,7 +376,7 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 			}
 		}
 		upsertSetting(tx, key, value, now);
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -386,6 +392,7 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 	});
 	invalidateSettings(deps.db);
 	deps.logger.emit('apps.settings.updated', { key, scope: 'global' });
+	return entryId;
 }
 
 export interface UpdateAppOverridesInput {

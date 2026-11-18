@@ -139,6 +139,6 @@ describe('tope diario sumado entre apps (BE-FR-63/CA4)', () => {
 			madridMidnight(addDays(today, 1))
 		);
 
-		expect(costs).toEqual([{ userId: f.userId, costMicroUsd: 500_000 }]);
+		expect(costs).toEqual([{ userId: f.userId, fxRateId: null, costMicroUsd: 500_000 }]);
 	});
 });

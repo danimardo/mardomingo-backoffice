@@ -6,6 +6,15 @@ import { InvalidAmountError } from '$lib/shared/money';
 /** Valor sin filas en la base de datos (BE-FR-87; el valor por defecto de la configuración). */
 export const DEFAULT_FX_USD_EUR_PPM = 920_000;
 
+/** Rango del tipo manual (C-48, decisión del propietario): de 0,50 a 2,00 EUR por USD, en ppm. */
+export const MANUAL_FX_MIN_PPM = 500_000;
+export const MANUAL_FX_MAX_PPM = 2_000_000;
+
+/** `true` si el tipo manual es un entero de ppm dentro del rango (BE-FR-61 CA2). Un decimal, NaN o un negativo no lo son. */
+export function isManualFxPpm(value: number): boolean {
+	return Number.isSafeInteger(value) && value >= MANUAL_FX_MIN_PPM && value <= MANUAL_FX_MAX_PPM;
+}
+
 const PPM = BigInt(1_000_000);
 const ECB_DECIMALS = 6;
 

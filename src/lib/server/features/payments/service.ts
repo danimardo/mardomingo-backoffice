@@ -85,9 +85,15 @@ export type PurchaseOutcome =
 	| { readonly status: 'pending'; readonly paymentId: string }
 	| { readonly status: 'repeated'; readonly paymentId: string };
 
-export type RefundOutcome =
-	| { readonly status: 'refunded'; readonly refundedEurCents: number }
-	| { readonly status: 'partially_refunded'; readonly refundedEurCents: number };
+/**
+ * Resultado del reembolso. `auditEntryId` es la entrada de auditoría que se acaba de escribir, para enlazarla (UX-13; C-51); un
+ * reenvío con una clave ya aplicada no escribe ninguna y lo da nulo.
+ */
+export type RefundOutcome = {
+	readonly status: 'refunded' | 'partially_refunded';
+	readonly refundedEurCents: number;
+	readonly auditEntryId: string | null;
+};
 
 function numberSetting(deps: PaymentsDeps, key: Parameters<typeof getSetting>[1]): number {
 	const value = getSetting(deps.apps, key);
@@ -400,9 +406,15 @@ function repeatedRefund(deps: PaymentsDeps, key: RefundKeyRow, paymentId: string
 		correctRefund(deps, row, key.amountEurCents, key.refundedAfterEurCents);
 	return {
 		status: row.status === 'refunded' ? 'refunded' : 'partially_refunded',
-		refundedEurCents: row.refundedEurCents
+		refundedEurCents: row.refundedEurCents,
+		auditEntryId: null
 	};
 }
+
+/** Paso 2 del reembolso: o los créditos no caben (lo dice `credits`) o se aplicó, con el id de su entrada de auditoría. */
+type RefundApplied =
+	| Exclude<RefundWithdrawOutcome, { readonly ok: true }>
+	| { readonly ok: true; readonly auditEntryId: string };
 
 /** Libera la clave de un reembolso que no retiró créditos: el formulario puede volver a enviarse tras corregirlo. */
 function releaseRefundKey(deps: PaymentsDeps, key: string): void {
@@ -457,9 +469,9 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 	const { row, newRefundedEurCents, newStatus } = claim;
 
 	const now = toEpochMs(deps.clock.now());
-	let applied: RefundWithdrawOutcome;
+	let applied: RefundApplied;
 	try {
-		applied = immediateTransaction(deps.db, (tx: Tx): RefundWithdrawOutcome => {
+		applied = immediateTransaction(deps.db, (tx: Tx): RefundApplied => {
 			if (input.creditsToRemoveMicro > 0) {
 				const withdrawal = deps.credits.withdrawForRefund({
 					tx,
@@ -475,7 +487,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 			setRefundedEurCents(tx, row.id, newRefundedEurCents, now);
 			setStatus(tx, row.id, newStatus, now, row.completedAt);
 			markRefundKeyApplied(tx, input.idempotencyKey);
-			recordEntry(
+			const auditEntryId = recordEntry(
 				tx,
 				{
 					adminId: input.adminId,
@@ -488,7 +500,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 				},
 				deps.auditDeps
 			);
-			return { ok: true };
+			return { ok: true, auditEntryId };
 		});
 	} catch (cause) {
 		// Nada se confirmó: la clave vuelve a estar libre para reenviar el formulario.
@@ -503,7 +515,11 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 
 	correctRefund(deps, row, input.amountEurCents, newRefundedEurCents);
 	deps.logger.emit('payments.refund.applied', {});
-	return { status: newStatus, refundedEurCents: newRefundedEurCents };
+	return {
+		status: newStatus,
+		refundedEurCents: newRefundedEurCents,
+		auditEntryId: applied.auditEntryId
+	};
 }
 
 /** Paquete a la venta, con los créditos ya calculados con la tasa vigente (W20, BE-FR-23). */

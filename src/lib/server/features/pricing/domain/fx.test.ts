@@ -6,6 +6,9 @@ import {
 	DEFAULT_FX_USD_EUR_PPM,
 	fxUsdEurPpm,
 	isCurrentEcbObservation,
+	isManualFxPpm,
+	MANUAL_FX_MAX_PPM,
+	MANUAL_FX_MIN_PPM,
 	parseRatePpm,
 	staleWeekdays
 } from './fx';
@@ -71,6 +74,15 @@ describe('currentFx (vigencia: mayor effective_from ≤ ahora)', () => {
 
 		expect(currentFx(rows, NOW)).toMatchObject({ usdEurPpm: 950_000, source: 'manual' });
 	});
+
+	it('el orden de las filas no importa: una fila más antigua leída después no sustituye a la vigente', () => {
+		const rows = [
+			{ usdEurPpm: 910_000, source: 'ecb' as const, effectiveFrom: T2 },
+			{ usdEurPpm: 900_000, source: 'ecb' as const, effectiveFrom: T1 }
+		];
+
+		expect(currentFx(rows, NOW)).toEqual({ usdEurPpm: 910_000, source: 'ecb', effectiveFrom: T2 });
+	});
 });
 
 describe('staleWeekdays (fin de semana y festivos no cuentan; BE-FR-87 CA2)', () => {
@@ -110,4 +122,21 @@ describe('isCurrentEcbObservation (una observación antigua sí cuenta como fall
 		expect(isCurrentEcbObservation({ timePeriod: '2026-10-12', today: '2026-10-12' })).toBe(true);
 		expect(isCurrentEcbObservation({ timePeriod: '2026-10-09', today: '2026-10-12' })).toBe(false);
 	});
+});
+
+describe('isManualFxPpm (rango del tipo manual, C-48)', () => {
+	it('acepta los extremos del rango, 0,50 y 2,00 EUR por USD', () => {
+		expect(MANUAL_FX_MIN_PPM).toBe(500_000);
+		expect(MANUAL_FX_MAX_PPM).toBe(2_000_000);
+		expect(isManualFxPpm(500_000)).toBe(true);
+		expect(isManualFxPpm(920_000)).toBe(true);
+		expect(isManualFxPpm(2_000_000)).toBe(true);
+	});
+
+	it.each([499_999, 2_000_001, 920, 0, -920_000, 920_000.5, Number.NaN, Number.POSITIVE_INFINITY])(
+		'rechaza %s',
+		(value) => {
+			expect(isManualFxPpm(value)).toBe(false);
+		}
+	);
 });

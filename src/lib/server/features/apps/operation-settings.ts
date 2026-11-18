@@ -1,13 +1,13 @@
 // Edición de los parámetros seguros de una operación desde W41 (BE-FR-77; T311). Solo cambia tiempo máximo, tokens de salida,
 // temperatura y coste máximo por petición. No cambia el tipo ni el modelo: cambiar el modelo obliga a volver a comprobar la activación
-// (`activateOperation`). Valida por rango, audita en la misma transacción y no toca el estado de activación.
+// (`activateOperation`). Exige motivo (C-52), valida por rango, audita en la misma transacción y no toca el estado de activación.
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { immediateTransaction } from '$lib/server/db/tx';
 import { recordEntry } from '$lib/server/features/audit';
 import { AppError } from '$lib/server/shared/errors';
 import { toMicro } from '$lib/shared/money';
-import type { AppsDeps } from './service';
+import { requireReason, type AppsDeps } from './service';
 import { appOperations } from './schema';
 
 export const OperationSafeSettings = z.strictObject({
@@ -36,6 +36,7 @@ export interface UpdateOperationSettingsInput {
 }
 
 export function updateOperationSettings(deps: AppsDeps, input: UpdateOperationSettingsInput): void {
+	const reason = requireReason(input.reason);
 	const parsed = OperationSafeSettings.safeParse(input.settings);
 	if (!parsed.success) {
 		throw new AppError('VALIDATION_ERROR', { field: 'settings' });
@@ -73,7 +74,7 @@ export function updateOperationSettings(deps: AppsDeps, input: UpdateOperationSe
 				entityId: input.operationId,
 				before: snapshotOf(before),
 				after: snapshotOf(next),
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);

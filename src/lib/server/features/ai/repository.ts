@@ -157,17 +157,19 @@ export function countInProgress(db: Db): number {
 }
 
 /**
- * Coste real en USD micro por cuenta de las operaciones completadas en [desde, hasta) (BE-FR-46): es la parte del
- * agregado diario que consume el freno global. El filtro por cuenta (compras reales) lo aplica `protections` con `credits`.
+ * Coste real en USD micro por cuenta y tipo de cambio (`fx_rate_id`) de las operaciones completadas en [desde, hasta)
+ * (BE-FR-46): es la parte del agregado diario que consume el freno global, y el tipo de cada grupo es el vigente cuando se
+ * cobró (C-49). El filtro por cuenta (compras reales) lo aplica `protections` con `credits`.
  */
 export function realCostByUserOfDay(
 	db: Db,
 	from: EpochMs,
 	until: EpochMs
-): { readonly userId: string; readonly costMicroUsd: number }[] {
+): { readonly userId: string; readonly fxRateId: string | null; readonly costMicroUsd: number }[] {
 	return db
 		.select({
 			userId: aiOperations.userId,
+			fxRateId: aiOperations.fxRateId,
 			costMicroUsd: sql<number>`sum(${aiOperations.costMicroUsd})`
 		})
 		.from(aiOperations)
@@ -178,7 +180,10 @@ export function realCostByUserOfDay(
 				lt(aiOperations.completedAt, until)
 			)
 		)
-		.groupBy(aiOperations.userId)
+		.groupBy(aiOperations.userId, aiOperations.fxRateId)
 		.all()
-		.filter((row): row is { userId: string; costMicroUsd: number } => row.userId !== null);
+		.filter(
+			(row): row is { userId: string; fxRateId: string | null; costMicroUsd: number } =>
+				row.userId !== null
+		);
 }

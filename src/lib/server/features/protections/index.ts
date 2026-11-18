@@ -15,4 +15,5 @@ export {
 	type RequestGuardInput
 } from './service';
 export { ENDPOINT_CHECKS, type EndpointName } from './domain/access';
+export { eurCentsOf } from './domain/brake';
 export { PROTECTIONS_LOG_EVENTS, type ProtectionsLogFields } from './events';

@@ -220,11 +220,14 @@ export function setTester(
 	});
 }
 
-/** Cierra una sesión concreta de la cuenta, o todas si `sessionId` es nulo. Devuelve cuántas se cerraron. */
+/**
+ * Cierra una sesión concreta de la cuenta, o todas si `sessionId` es nulo. Devuelve cuántas se cerraron y el id de la entrada
+ * de auditoría, para que la ficha la enlace (UX-13; C-51).
+ */
 export function closeUserSessions(
 	deps: AdminUsersDeps,
 	input: { adminId: string; userId: string; sessionId: string | null; reason: string }
-): number {
+): { readonly closed: number; readonly entryId: string } {
 	const reason = requireReason(input.reason);
 	return immediateTransaction(deps.db, (tx) => {
 		loadUser(tx, input.userId);
@@ -236,7 +239,7 @@ export function closeUserSessions(
 		const closed = tx.delete(session).where(where).run().changes;
 		// Una sesión concreta que no es de esta cuenta (o no existe) es un 404 y no deja entrada de auditoría.
 		if (closed === 0 && input.sessionId !== null) throw new AppError('NOT_FOUND');
-		audit(tx, deps, {
+		const entryId = audit(tx, deps, {
 			adminId: input.adminId,
 			action: 'accounts.session.close',
 			userId: input.userId,
@@ -245,7 +248,7 @@ export function closeUserSessions(
 			reason
 		});
 		deps.logger.emit('accounts.session.revoked', { reason: 'admin_closed', count: closed });
-		return closed;
+		return { closed, entryId };
 	});
 }
 

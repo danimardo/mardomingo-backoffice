@@ -20,6 +20,16 @@ import { createPaymentsService } from './index';
 import { payments, refundKeys } from './schema';
 
 const CREDIT = 1_000_000;
+
+/** Un reembolso aplicado devuelve el id de su entrada de auditoría (C-51); se comprueba y se compara el resto. */
+function applied(outcome: {
+	readonly status: string;
+	readonly refundedEurCents: number;
+	readonly auditEntryId: string | null;
+}): { readonly status: string; readonly refundedEurCents: number } {
+	expect(outcome.auditEntryId).toMatch(/^aud_/);
+	return { status: outcome.status, refundedEurCents: outcome.refundedEurCents };
+}
 const PACK_10 = 'pck_seed_10eur';
 
 let f: PaymentsFixture;
@@ -128,7 +138,10 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 			idempotencyKey: randomUUID()
 		});
 
-		expect(outcome).toEqual({ status: 'refunded', refundedEurCents: 1000 });
+		expect(applied(outcome)).toEqual({
+			status: 'refunded',
+			refundedEurCents: 1000
+		});
 		expect(paymentOf(paymentId)).toMatchObject({ status: 'refunded', refundedEurCents: 1000 });
 		expect(refundMovements()).toEqual([
 			expect.objectContaining({ amountMicro: -10_500 * CREDIT, paymentId, adminId })
@@ -138,6 +151,29 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 			expect.objectContaining({ adminId, action: 'payments.refund', entityId: paymentId })
 		]);
 		expect(eventsNamed(f.base.logger, 'payments.refund.applied')).toHaveLength(1);
+	});
+
+	// C-51 (T442; UX-13): la ficha enlaza con la entrada de auditoría del reembolso; un reenvío no crea entrada y no da id.
+	it('devuelve el id de su entrada de auditoría, y un reenvío con la misma clave no', () => {
+		const { userId } = f.addAccount('usr_reembolso_enlace');
+		const adminId = f.addAccount('adm_reembolso_enlace', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_reembolso_enlace');
+		const form = {
+			adminId,
+			paymentId,
+			amountEurCents: 500,
+			creditsToRemoveMicro: 0,
+			reason: 'Enlace con la auditoría',
+			idempotencyKey: randomUUID()
+		};
+
+		const primero = f.payments.refund(form);
+		const reenvio = f.payments.refund(form);
+
+		const [entry] = f.base.db.select().from(adminAudit).all();
+		expect(entry).toMatchObject({ action: 'payments.refund', entityId: paymentId });
+		expect(primero).toMatchObject({ auditEntryId: entry?.id });
+		expect(reenvio).toMatchObject({ auditEntryId: null });
 	});
 
 	// R12 (propuesta de reglas, sin número de decisión): un reenvío del mismo formulario de reembolso parcial no debe aplicarse
@@ -158,8 +194,15 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		const primero = f.payments.refund(form);
 		const reenvio = f.payments.refund(form);
 
-		expect(primero).toEqual({ status: 'partially_refunded', refundedEurCents: 500 });
-		expect(reenvio).toEqual({ status: 'partially_refunded', refundedEurCents: 500 });
+		expect(applied(primero)).toEqual({
+			status: 'partially_refunded',
+			refundedEurCents: 500
+		});
+		expect(reenvio).toEqual({
+			status: 'partially_refunded',
+			refundedEurCents: 500,
+			auditEntryId: null
+		});
 		expect(paymentOf(paymentId)).toMatchObject({
 			status: 'partially_refunded',
 			refundedEurCents: 500
@@ -196,7 +239,10 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		expect(f.base.db.select().from(adminAudit).all()).toHaveLength(0);
 
 		f.base.db.run(sql`DROP TRIGGER fallo_estado_reembolso`);
-		expect(f.payments.refund(form)).toEqual({ status: 'refunded', refundedEurCents: 1000 });
+		expect(applied(f.payments.refund(form))).toEqual({
+			status: 'refunded',
+			refundedEurCents: 1000
+		});
 		expect(f.base.credits.getBalance(userId).totalMicro).toBe(0);
 		expect(refundMovements()).toHaveLength(1);
 	});
@@ -236,13 +282,20 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 				idempotencyKey: randomUUID()
 			};
 
-			expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+			expect(applied(flaky.refund(form))).toEqual({
+				status: 'partially_refunded',
+				refundedEurCents: 400
+			});
 			expect(paymentOf(paymentId)).toMatchObject({ refundedEurCents: 400 });
 			expect(correctiveAmounts(paymentId)).toEqual([]);
 			expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(1);
 			expect(eventsNamed(f.base.logger, 'payments.refund.applied')).toHaveLength(1);
 
-			expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+			expect(flaky.refund(form)).toEqual({
+				status: 'partially_refunded',
+				refundedEurCents: 400,
+				auditEntryId: null
+			});
 			expect(correctiveAmounts(paymentId)).toEqual([-400]);
 			expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(1);
 			expect(eventsNamed(f.base.logger, 'payments.refund.repeated')).toHaveLength(1);
@@ -330,7 +383,8 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 
 		expect(flaky.refund({ ...form, amountEurCents: 900 })).toEqual({
 			status: 'partially_refunded',
-			refundedEurCents: 400
+			refundedEurCents: 400,
+			auditEntryId: null
 		});
 		expect(correctiveAmounts(paymentId)).toEqual([-400]);
 	});
@@ -371,7 +425,11 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 			.where(eq(refundKeys.key, form.idempotencyKey))
 			.run();
 
-		expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+		expect(flaky.refund(form)).toEqual({
+			status: 'partially_refunded',
+			refundedEurCents: 400,
+			auditEntryId: null
+		});
 		expect(correctiveAmounts(paymentId)).toEqual([]);
 		expect(eventsNamed(f.base.logger, 'payments.refund.repeated')).toHaveLength(1);
 	});
@@ -405,7 +463,11 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		flaky.refund(second);
 		expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(2);
 
-		expect(flaky.refund(first)).toEqual({ status: 'partially_refunded', refundedEurCents: 700 });
+		expect(flaky.refund(first)).toEqual({
+			status: 'partially_refunded',
+			refundedEurCents: 700,
+			auditEntryId: null
+		});
 		expect(correctiveAmounts(paymentId)).toEqual([-400]);
 
 		flaky.refund(second);
@@ -443,7 +505,10 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 			idempotencyKey: randomUUID()
 		});
 
-		expect(segundo).toEqual({ status: 'partially_refunded', refundedEurCents: 500 });
+		expect(applied(segundo)).toEqual({
+			status: 'partially_refunded',
+			refundedEurCents: 500
+		});
 		expect(f.base.credits.getBalance(userId).totalMicro).toBe(5_500 * CREDIT);
 	});
 
@@ -461,7 +526,10 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 			idempotencyKey: randomUUID()
 		});
 
-		expect(outcome).toEqual({ status: 'partially_refunded', refundedEurCents: 500 });
+		expect(applied(outcome)).toEqual({
+			status: 'partially_refunded',
+			refundedEurCents: 500
+		});
 		expect(f.base.credits.getBalance(userId).totalMicro).toBe(10_500 * CREDIT);
 		expect(refundMovements()).toHaveLength(0);
 	});
@@ -521,12 +589,17 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		expect(paymentOf(paymentId)).toMatchObject({ status: 'completed' });
 
 		expect(
-			f.payments.refund({
-				...base,
-				creditsToRemoveMicro: 10_500 * CREDIT,
-				idempotencyKey: randomUUID()
-			})
-		).toEqual({ status: 'refunded', refundedEurCents: 1000 });
+			applied(
+				f.payments.refund({
+					...base,
+					creditsToRemoveMicro: 10_500 * CREDIT,
+					idempotencyKey: randomUUID()
+				})
+			)
+		).toEqual({
+			status: 'refunded',
+			refundedEurCents: 1000
+		});
 		expect(f.base.credits.getBalance(userId).totalMicro).toBe(0);
 	});
 
@@ -542,8 +615,11 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 			)
 		).toMatchObject({ code: 'PAYMENT_NOT_REFUNDABLE' });
 		expect(
-			f.payments.refund({ ...base, amountEurCents: 1000, idempotencyKey: randomUUID() })
-		).toEqual({ status: 'refunded', refundedEurCents: 1000 });
+			applied(f.payments.refund({ ...base, amountEurCents: 1000, idempotencyKey: randomUUID() }))
+		).toEqual({
+			status: 'refunded',
+			refundedEurCents: 1000
+		});
 		expect(
 			errorOf(() => f.payments.refund({ ...base, amountEurCents: 1, idempotencyKey: randomUUID() }))
 		).toMatchObject({ code: 'PAYMENT_NOT_REFUNDABLE' });
@@ -675,7 +751,10 @@ describe('reembolso de compra simulada (D02)', () => {
 			idempotencyKey: randomUUID()
 		});
 
-		expect(outcome).toEqual({ status: 'refunded', refundedEurCents: 0 });
+		expect(applied(outcome)).toEqual({
+			status: 'refunded',
+			refundedEurCents: 0
+		});
 		expect(paymentOf(paymentId)).toMatchObject({ status: 'refunded', refundedEurCents: 0 });
 		expect(refundMovements()).toEqual([expect.objectContaining({ amountMicro: -10_500 * CREDIT })]);
 		expect(

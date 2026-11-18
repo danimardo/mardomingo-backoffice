@@ -732,7 +732,10 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 - **Requisito**: BE-FR-61 CA2 (el panel valida tipos, rangos y coherencias); BE-FR-87 CA3.
 - **Ficheros**: `admin/economia/+page.server.ts` (`?/fijarTipoCambioManual` pasa `Number(form.usdEurPpm)`), `pricing/service.ts`
   (`setManualFx`), `pricing/domain/charge.ts` (usa este tipo).
-- **Estado**: confirmado por ejecución. Un valor absurdo (920 en lugar de 920 000) se guarda y cada operación se cobra unas
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. `setManualFx` exige un entero entre 500 000 y
+  2 000 000 ppm (`VALIDATION_ERROR` en `usdEurPpm`); W38 tiene `?/previsualizarTipoCambioManual` («antes → después») y el
+  error junto al campo. Tests: `fx-manual-range.int.test.ts` (6 en rojo) y `tests/http/admin-economia.test.ts` (5 en rojo).
+  Antes: confirmado por ejecución. Un valor absurdo (920 en lugar de 920 000) se guarda y cada operación se cobra unas
   1000 veces menos; un decimal, NaN o un negativo lanza `InvalidAmountError` y un 0 viola `fx_rates_usd_eur_positive`: la acción
   responde 500 en lugar de 400.
 - **Cambio** (**decisión del propietario**): entero entre 500 000 y 2 000 000 ppm (0,50 a 2,00 €/USD), con `VALIDATION_ERROR`
@@ -745,8 +748,11 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
   (`settings.fx_usd_eur` solo vale mientras no haya filas de `fx_rates`); BE-FR-46 (el freno es en euros).
 - **Ficheros**: `src/lib/server/features/protections/service.ts:206` (`numberSetting(deps, 'fx_usd_eur')`, que nadie
   actualiza), el puerto `dailyCosts` que da `ai`, `tests/builders/protections.ts`.
-- **Estado**: confirmado por ejecución. Con un tipo vigente de 2,0 €/USD, 3 USD son 600 céntimos (por encima de los 500 del
-  freno), pero el freno calcula 276 (a 0,92) y no salta.
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. El puerto `dailyCosts` devuelve céntimos de euro
+  convertidos en `ai` con el `fx_rate_id` de cada operación (sin tipo guardado, el vigente; redondeo hacia arriba), y
+  `protections` solo los suma. El test A-03 se adaptó al puerto nuevo y pasó a `src/lib/server/features/ai/brake-fx.int.test.ts`
+  (4 en rojo con el código anterior). Antes: confirmado por ejecución. Con un tipo vigente de 2,0 €/USD, 3 USD son 600
+  céntimos (por encima de los 500 del freno), pero el freno calcula 276 (a 0,92) y no salta.
 - **Cambio** (**decisión del propietario**): el puerto `dailyCosts` que da `ai` devuelve los céntimos ya convertidos con el
   tipo vigente de cada operación (`fx_rate_id`), sin aristas nuevas; ajustar `tests/builders/protections.ts`.
 - **Test (primero, debe fallar)**: `src/lib/server/features/protections/brake-fx.int.test.ts` (la petición pasa en lugar de
@@ -770,7 +776,10 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
   economía (138, 154, 169, 187), protecciones (91, 124, 134), apps, operación, anuncios, legal y predeterminados. Los servicios
   afectados no devuelven el id de la entrada (`closeUserSessions` devuelve el número de sesiones; `setManualFx`,
   `updateSetting` y otros devuelven `void`).
-- **Estado**: confirmado por ejecución. Las dos redirecciones del test no llevan `aviso=saved` ni `auditoria=`.
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio, en el alcance acotado: reembolso, cierre de
+  sesiones y las cuatro acciones de economía redirigen con `savedRedirect` y W38 muestra el enlace. Test:
+  `tests/http/admin-enlace-auditoria.test.ts` (2 en rojo). Siguen sin enlace protecciones, apps, operación, anuncios, legal y
+  predeterminados. Antes: confirmado por ejecución. Las dos redirecciones del test no llevan `aviso=saved` ni `auditoria=`.
 - **Cambio**: los servicios devuelven el id de su entrada de auditoría y las acciones redirigen con `savedRedirect`.
   Prioridad: reembolso y cierre de sesiones. `payments/service.ts` solo después de cerrar las fases 18 y 19, que ya están
   cerradas (commit a8b092c): se puede hacer.
@@ -785,7 +794,11 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
   cambio `deactivateOperation` sí lo exige, línea 67), las acciones `?/guardarOperacion`, `?/aplicarAlGrupo` y `?/activar` de
   `operaciones/[key]/+page.server.ts` (104–109, 178–183 y 221–226). La propuesta R08 da por hecho que «apps, operaciones y
   freno» ya exigen motivo (solo les falta el máximo): estas dos funciones no.
-- **Estado**: confirmado por ejecución. Las dos llamadas con motivo vacío terminan sin error y dejan auditoría con motivo `''`.
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. `requireReason` en `updateOperationSettings`,
+  `activateOperation` y `deactivateOperation`; W41 devuelve `errors.motivo` en el campo de cada formulario. Tests:
+  `operation-reason.int.test.ts` (3 en rojo) y `tests/http/admin-operacion.test.ts` (2 en rojo). La nota documental de W41
+  ya estaba enmendada en el contrato. Antes: confirmado por ejecución. Las dos llamadas con motivo vacío terminan sin error
+  y dejan auditoría con motivo `''`.
 - **Cambio**: exigir el motivo con `requireReason`. El tope de longitud del motivo queda con R08 y D09 (decisión pendiente ya
   registrada). **Nota documental (W41)**: `contracts/web-routes.md:607` dice que `aplicarAlGrupo` aplica el modelo, y el código
   aplica tiempo máximo, tokens, temperatura y coste máximo (T311); hay que enmendar el contrato (lo hace el propietario).
