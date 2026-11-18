@@ -2,9 +2,9 @@
 // `?aviso=saved&auditoria=<id>` y la página enlaza con esa entrada. Todo se hace sobre una app propia de la prueba, que se
 // deshabilita al terminar: `secretario` no cambia.
 import Database from 'better-sqlite3';
-import { afterAll, beforeAll, describe, inject, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { loginAsAdmin, postAdmin, type AdminSession } from './admin-session';
-import { expectAuditLink } from './saved-link';
+import { auditCount, expectAuditLink } from './saved-link';
 
 const baseUrl = inject('httpBaseUrl');
 const databasePath = inject('httpDatabasePath');
@@ -14,6 +14,32 @@ const LINKS = JSON.stringify({ landing: { type: 'internal' } });
 const SYNC_SCHEMA = JSON.stringify({ categories: { notas: { strategy: 'block' } } });
 
 let session: AdminSession;
+
+function reasonOf(entryId: string): string | null {
+	const db = new Database(databasePath, { readonly: true });
+	try {
+		return (
+			db
+				.prepare<[string], { reason: string | null }>('SELECT reason FROM admin_audit WHERE id = ?')
+				.get(entryId)?.reason ?? null
+		);
+	} finally {
+		db.close();
+	}
+}
+
+function operationExists(key: string): boolean {
+	const db = new Database(databasePath, { readonly: true });
+	try {
+		return (
+			db
+				.prepare<[string], { n: number }>('SELECT COUNT(*) AS n FROM app_operations WHERE key = ?')
+				.get(key)?.n === 1
+		);
+	} finally {
+		db.close();
+	}
+}
 
 beforeAll(async () => {
 	session = await loginAsAdmin(baseUrl, databasePath, {
@@ -99,7 +125,7 @@ describe('C-54 · W39–W40 enlazan cada cambio con su entrada de auditoría (UX
 		await expectAuditLink(session, databasePath, result, 'apps.settings.update');
 	});
 
-	it('dar de alta una operación vuelve con ?aviso=saved&auditoria=<id>', async () => {
+	it('dar de alta una operación vuelve con ?aviso=saved&auditoria=<id> y audita el motivo recortado (C-57)', async () => {
 		const body = new URLSearchParams({
 			clave: 'c54-operacion',
 			nombre: 'Operación de C-54',
@@ -110,11 +136,36 @@ describe('C-54 · W39–W40 enlazan cada cambio con su entrada de auditoría (UX
 			tiempoMs: '30000',
 			costeMaximoMicro: '1000000',
 			capacidades: JSON.stringify({ image_input: false, structured_output: false, tools: false }),
+			motivo: '  Alta de la operación de C-54  ',
 			confirmado: 'true'
 		});
 
 		const result = await postAdmin(session, `${PAGE}?/crearOperacion`, body.toString());
 
-		await expectAuditLink(session, databasePath, result, 'apps.operation.create');
+		const entryId = await expectAuditLink(session, databasePath, result, 'apps.operation.create');
+		expect(reasonOf(entryId)).toBe('Alta de la operación de C-54');
+	});
+
+	it('dar de alta una operación sin motivo responde 400 con el error junto al campo y no crea ni audita (C-57)', async () => {
+		const before = auditCount(databasePath, 'apps.operation.create');
+		const body = new URLSearchParams({
+			clave: 'c57-sin-motivo',
+			nombre: 'Operación sin motivo',
+			tipo: 'image',
+			modelo: '',
+			grupo: '',
+			tiempoMs: '30000',
+			costeMaximoMicro: '1000000',
+			capacidades: JSON.stringify({ image_input: false, structured_output: false, tools: false }),
+			motivo: '   ',
+			confirmado: 'true'
+		});
+
+		const result = await postAdmin(session, `${PAGE}?/crearOperacion`, body.toString());
+
+		expect(result.status).toBe(400);
+		expect(result.text).toContain('Este campo es obligatorio.');
+		expect(auditCount(databasePath, 'apps.operation.create')).toBe(before);
+		expect(operationExists('c57-sin-motivo')).toBe(false);
 	});
 });

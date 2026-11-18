@@ -16,7 +16,8 @@ import type { OPERATION_KINDS } from './schema';
 /**
  * Claves de `settings` retiradas: ya no tienen esquema y el _seed_ las borra si siguen en la BD (p. ej. tras volver a una
  * imagen anterior que las sembraba y desplegar de nuevo, cuando su migración ya consta como aplicada). `fx_usd_eur`: C-56,
- * migración 0020.
+ * migración 0020. Retirada no es lo mismo que desconocida: una clave que esta imagen no conoce y no está aquí (la de una
+ * imagen posterior, tras volver atrás) no se borra; `readSettings` la omite y avisa (C-60).
  */
 export const RETIRED_SETTING_KEYS: readonly string[] = Object.freeze(['fx_usd_eur']);
 

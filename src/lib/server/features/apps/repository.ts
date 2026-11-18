@@ -1,6 +1,7 @@
 // Lectura y escritura de `apps`, `app_operations`, `prompt_templates` y `settings`. Al leer, cada columna JSON se
 // valida con su esquema: si no encaja, se emite `apps.config.corrupt`, se rechaza la lectura con un error
-// controlado y el dato NO se modifica (BE-FR-61 CA5, data-model 3).
+// controlado y el dato NO se modifica (BE-FR-61 CA5, data-model 3). Excepción: una clave de `settings` desconocida
+// se omite con un aviso (C-60, `readSettings`).
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { ZodType } from 'zod';
 import type { Db } from '$lib/server/db/client';
@@ -9,6 +10,7 @@ import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
 import type { EpochMs } from '$lib/shared/time';
 import type { AnnouncementRow } from './domain/announcements';
+import { firstUnknownSettingWarning } from './config.cache';
 import { announcements, apps, appOperations, promptTemplates, settings } from './schema';
 import {
 	AllowedOrigins,
@@ -231,12 +233,26 @@ export function latestTemplateVersion(db: Db, operationId: string): number | und
 		.get()?.version;
 }
 
-/** Lee todos los parámetros de `settings`, cada uno validado con su esquema. */
+/**
+ * Lee todos los parámetros de `settings`, cada uno validado con su esquema.
+ *
+ * - Clave **desconocida** (sin esquema en esta imagen; p. ej. la sembró una imagen posterior antes de volver atrás): se
+ *   omite del resultado y se avisa con `apps.settings.unknown_key`, una vez por clave y conexión, sin el valor (C-60). Así
+ *   una imagen anterior tolera las claves de una posterior. La fila no se toca: la imagen que la conoce la vuelve a usar.
+ * - Clave **retirada** (`RETIRED_SETTING_KEYS`, p. ej. `fx_usd_eur`, C-56): el _seed_ la borra en cada arranque, antes de
+ *   atender peticiones. Si aun así se leyera, aquí es una desconocida más.
+ * - Clave **conocida** con un valor que no encaja: corrupción, lanza `config_corrupt` (BE-FR-61 CA5).
+ */
 export function readSettings(db: Db, logger: Logger): Map<SettingKey, SettingValue> {
 	const rows = readGuarded(logger, 'settings', () => db.select().from(settings).all());
 	const values = new Map<SettingKey, SettingValue>();
 	for (const row of rows) {
-		if (!isSettingKey(row.key)) throw corruptError(logger, 'settings', 'key');
+		if (!isSettingKey(row.key)) {
+			if (firstUnknownSettingWarning(db, row.key)) {
+				logger.emit('apps.settings.unknown_key', { key: row.key });
+			}
+			continue;
+		}
 		const key = row.key;
 		const parsed = parseSettingValue(key, row.value);
 		if (!parsed.success) throw corruptError(logger, 'settings', key);
@@ -308,7 +324,10 @@ export function seedInsertSetting(
 	tx.insert(settings).values({ key, value, updatedAt: now }).onConflictDoNothing().run();
 }
 
-/** Borra las claves retiradas de `settings` que sigan en la BD (C-56); sin ninguna, no hace nada. */
+/**
+ * Borra las claves retiradas de `settings` que sigan en la BD (C-56); sin ninguna, no hace nada. Solo las retiradas: una
+ * clave desconocida que no esté en la lista (la de una imagen posterior) no se borra, y `readSettings` la omite (C-60).
+ */
 export function seedDeleteSettings(tx: Tx, keys: readonly string[]): void {
 	if (keys.length === 0) return;
 	tx.delete(settings)

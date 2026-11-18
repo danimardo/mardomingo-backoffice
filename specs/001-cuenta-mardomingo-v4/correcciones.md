@@ -82,6 +82,11 @@ de corregir).
 | C-54 | Baja     | web      | Protecciones, apps, operación, anuncios, legal y predeterminados no enlazan su auditoría | T445  |
 | C-55 | Media    | admin    | El motivo no tiene una longitud máxima común en todas las acciones                       | T446  |
 | C-56 | Baja     | settings | La clave `settings.fx_usd_eur` sigue sembrada aunque ya no la lee nadie                  | T447  |
+| C-57 | Baja     | apps     | El alta de una operación (W40) tiene campo «motivo», pero nadie lo lee ni lo audita      | T448  |
+| C-58 | Baja     | pricing  | El precio orientativo de una operación inexistente responde 500                          | T449  |
+| C-59 | Baja     | web      | Ningún test comprueba que `hooks.server.ts` quita la cabecera `x-mm-client-ip`           | T450  |
+| C-60 | Media    | settings | Volver a la imagen anterior deja ilegibles los parámetros por las claves sembradas       | T451  |
+| C-61 | Baja     | docs     | Los comandos para repetir a mano la 0017 y la 0019 no funcionan tal cual                 | —     |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -229,7 +234,7 @@ reverificado.
 - **Requisito**: constitución, migraciones (compatibilidad y despliegue intermedio), por analogía.
 - **Ficheros**: `src/lib/server/features/apps/repository.ts:106-120` (`validatedApp` → `checked(SyncSchema, …)`),
   `src/lib/server/features/apps/json-schemas.ts:65-82`.
-- **Estado**: corregido (2026-11-18). Orden de despliegue y vuelta atrás en `docs/operaciones/migraciones.md` (T399). La vuelta atrás en staging no está verificada. Antes: confirmado por lectura que la versión anterior (`z.strictObject` sin `personal`) rechaza la clave; el alcance exacto
+- **Estado**: corregido (2026-11-18). Orden de despliegue y vuelta atrás en `docs/operaciones/migraciones.md` (T399). Vuelta atrás **ensayada en un simulacro local** (2026-11-18, no staging): los pasos 1–3 dejan el `sync_schema` de `secretario` idéntico al de antes de la 0017, el esquema de la imagen anterior al PR #47 (emulado con su `SyncSchema` extraído de git, sin arrancar la imagen) lo rechaza antes y lo acepta después, y el regreso funciona ejecutando el fichero de la 0017 con `exec` (el `prepare` documentado antes fallaba, C-61). En el simulacro aparece C-60: esa misma imagen rechaza las claves de `settings` sembradas después. Sin verificar en staging ni con la imagen anterior arrancada. Antes: confirmado por lectura que la versión anterior (`z.strictObject` sin `personal`) rechaza la clave; el alcance exacto
   de la caída es una sospecha.
 - **Qué pasa**: con `personal: true` en la BD y la imagen anterior, `readApp`, `readAppBySlug` y `listAppOverrides` lanzarían
   error de corrupción para esa fila; `resolveAppBySlug` fallaría en las peticiones con `X-App-Id: secretario`.
@@ -713,9 +718,45 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 
 - **Requisito**: rendimiento de `sync` (retención de marcas de borrado).
 - **Ficheros**: `sync/service.ts` y `sync/repository.ts` (limpieza de `tombstones`).
-- **Estado**: sospecha. Sin test y **sin tarea**: hay que medirla con `pnpm perf:seed` (antes y después) antes de tocar nada.
-- **Cambio**: solo si la medición lo justifica, procesar por lotes o filtrar en SQL.
-- **Test**: ninguno hasta medir.
+- **Estado**: medido (2026-11-18); **sospecha cerrada a la escala prevista**, con un riesgo latente anotado. Sin tarea y sin
+  cambios de código. Confirmado por ejecución que `purgeTombstones` carga y analiza todos los documentos de una vez, dentro
+  de una transacción `IMMEDIATE`, y que es síncrona: bloquea el bucle de eventos (no se atiende ninguna petición) durante toda
+  la limpieza.
+- **Medición** (Windows, Ryzen 5 2600X, 48 GB, Node 24.22.2; límite del montón de V8 del proceso: 16 576 MB). Base de
+  `pnpm perf:seed <ruta> 20000` (con un simulador mínimo del catálogo), documentos de `secretario` con `customReplacements`
+  rellenado hasta el tamaño indicado y, en el 10 % de ellos, tres marcas caducadas; `purgeTombstones` llamada desde un test
+  temporal (borrado) con `seedDefaults` y el reloj fijo. «Lectura» es solo `allDocuments` en su transacción `IMMEDIATE`
+  (tiempo con el bloqueo de escritura tomado); «RSS máx.» es `process.resourceUsage().maxRSS` al terminar; el proceso parte
+  de unos 250 MB.
+
+  | Documentos × tamaño | Datos  | Lectura | Montón retenido | Limpieza completa | Cambiados | RSS máx.  |
+  | ------------------- | ------ | ------- | --------------- | ----------------- | --------- | --------- |
+  | 5 000 × 10 KB, 0 %  | 47 MB  | 0,26 s  | +99 MB          | 2,0 s             | 0         | 473 MB    |
+  | 5 000 × 10 KB       | 47 MB  | 0,23 s  | +99 MB          | 2,0 s             | 500       | 481 MB    |
+  | 20 000 × 10 KB      | 188 MB | 1,2 s   | +419 MB         | 7,9 s             | 2 000     | 1 121 MB  |
+  | 5 000 × 100 KB      | 483 MB | 2,9 s   | +1 075 MB       | 5,2 s             | 500       | 1 535 MB  |
+  | 1 000 × 1 000 KB    | 969 MB | 5,2 s   | +2 160 MB       | 6,8 s             | 100       | 2 688 MB  |
+  | 5 000 × 1 000 KB    | 4,8 GB | —       | —               | 34,3 s            | 500       | 11 634 MB |
+
+  Con `--max-old-space-size=2048`, el caso de 1 000 × 1 000 KB **se cae** por falta de memoria
+  (`JavaScript heap out of memory`, código 134): en producción la tarea corre dentro del proceso del servidor, que se caería
+  con ella. El montón
+  retenido es unas 2,2 veces el tamaño de los datos. Con documentos pequeños domina un coste fijo de unos 0,35 ms por
+  documento aunque no cambie (5 000 documentos sin marcas caducadas: 2,0 s frente a 0,26 s de la lectura).
+
+- **Conclusión**: a la escala prevista (`plan.md`, «Scale/Scope»: del orden de cientos de cuentas, una sola app), no es un
+  problema: cientos de documentos de decenas de KB se limpian en décimas de segundo y con decenas de MB. El riesgo está en el
+  peor caso que permite `max_sync_doc_kb` (1 024 KB): la memoria crece con la suma de los documentos, no con su número. 500
+  cuentas con el documento al máximo serían unos 0,5 GB de datos, del orden de 1,1 GB de montón y unos 3–4 s de bloqueo
+  (extrapolado de la tabla, no medido); 20 000 documentos al máximo no caben en memoria (no medido). Volver a medir si la
+  suma de `length(data)` de `sync_documents` pasa de unos 200 MB o si se baja la memoria del contenedor (no medida).
+- **Cambio** (propuesto, no hecho; solo si una nueva medición lo justifica): recorrer `sync_documents` por lotes con
+  paginación por clave (`(user_id, app_id) > (?, ?) ORDER BY user_id, app_id LIMIT 100`), fuera de la transacción
+  `IMMEDIATE` (la escritura ya es condicional por `revision`); filtrar en SQL los que tengan alguna marca anterior al corte
+  (`json_each(data, '$.<categoría>.tombstones')` por cada categoría `items` del esquema); leer el esquema una vez por app y no
+  por documento; y ceder el bucle de eventos entre lotes. Test: el de `tombstones-cleanup.int.test.ts` más un caso con más
+  documentos que el tamaño del lote.
+- **Test**: ninguno (no hay cambio).
 
 ## C-47 (Media) — Los periodos del panel se cortan en días UTC y no en días de Madrid
 
@@ -891,3 +932,118 @@ C-55 cierra R08 y D09 de `propuesta-reglas-administracion.md` y C-56 retira la c
 - **Cambio** (**decisión del propietario**): migración `0020` que borra la fila de `settings`; quitar la clave de los valores
   por defecto y de los esquemas; documentar el orden de despliegue y la vuelta atrás en `docs/operaciones/migraciones.md`.
 - **Test (primero, debe fallar)**: `src/lib/server/db/migrations.int.test.ts` (la fila desaparece tras migrar).
+
+C-57 a C-59 son pendientes menores tras cerrar la fase 24 (2026-11-18). C-57 es decisión del propietario (exigir y auditar el
+motivo del alta de una operación).
+
+## C-57 (Baja) — El alta de una operación (W40) tiene campo «motivo», pero nadie lo lee ni lo audita
+
+- **Requisito**: BE-FR-55 (motivo de 1 a 500 caracteres en toda acción que modifica datos, con su entrada de auditoría) y
+  BE-FR-77 (catálogo de operaciones); `contracts/web-routes.md` W40.
+- **Ficheros**: `src/routes/(web)/admin/apps/[slug=appSlug]/+page.server.ts` (`crearOperacion` no lee `motivo`),
+  `+page.svelte` (el campo `motivo-operacion` no pinta su error ni conserva lo escrito) y `apps/service.ts` (`createOperation`
+  audita `reason: null`).
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio: `apps/create-operation-reason.int.test.ts` (5 en
+  rojo: sin motivo, en blanco o con 501 caracteres se creaba la operación y la entrada guardaba `reason` nulo) y, contra un
+  build con la ruta y el servicio anteriores, 3 casos HTTP en rojo (`admin-motivo-longitud.test.ts`, caso `crearOperacion`, y
+  los dos de C-57 en `admin-enlace-auditoria-apps.test.ts`: 303 en lugar de 400 y motivo auditado nulo). `NewOperation` lleva
+  `reason` obligatorio; `createOperation` aplica `requireReason` y audita el recortado; W40 rechaza con `reasonRejection`
+  (scope `crearOperacion`) y pinta el error con `reasonFieldOf`. Los cuerpos de alta de `admin-enlace-auditoria-operacion` y
+  los builders (`chatOperation`, `seededPromptTemplate`) envían motivo. Ningún E2E crea operaciones. `contracts/web-routes.md`
+  W40 enmendado. Antes: confirmado por lectura y por ejecución.
+- **Cambio** (**decisión del propietario**): la regla común de C-55. La ruta rechaza el motivo con `reasonRejection` (scope
+  `crearOperacion`) antes del servicio, la página lo pinta con `reasonFieldOf` (`maxlength="500"` ya estaba) y
+  `createOperation` exige `requireReason` y audita el motivo recortado. La redirección con el enlace a la auditoría ya existe
+  (C-54, `savedRedirect`).
+- **Test (primero, debe fallar)**: integración en `apps/` (sin motivo o con más de 500 caracteres, `VALIDATION_ERROR` en
+  `reason` sin crear nada; la entrada guarda el motivo recortado) y HTTP (`tests/http/admin-motivo-longitud.test.ts`, caso
+  `crearOperacion`, y el enlace con el motivo auditado).
+
+## C-58 (Baja) — El precio orientativo de una operación inexistente responde 500
+
+- **Requisito**: BE-FR-73 (valor manual del precio orientativo, W38) y BE-FR-55; las demás acciones de administración sobre una
+  entidad inexistente responden `NOT_FOUND` (C-50, W41).
+- **Ficheros**: `pricing/service.ts` (`setManualPrice` inserta en `price_references` sin comprobar la operación; la clave
+  foránea a `app_operations` lo rechaza dentro de la transacción) y `admin/economia/+page.server.ts`
+  (`guardarPrecioOrientativo`).
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. Confirmado por ejecución: con un motivo válido,
+  `setManualPrice` lanzaba `SqliteError` `SQLITE_CONSTRAINT_FOREIGNKEY` (integración) y la web respondía 500 (HTTP).
+  `setManualPrice` comprueba la operación dentro de la transacción con `operationKeysOf` (API pública de `apps`, sin aristas
+  nuevas) y lanza `NOT_FOUND` en `operation`; la ruta responde 404 con `failureOf` y el aviso genérico de W38. Tests:
+  `pricing/manual-price.int.test.ts` y `tests/http/admin-economia.test.ts` (C-58). `contracts/web-routes.md` W38 enmendado.
+- **Cambio**: si se confirma, `setManualPrice` lanza `NOT_FOUND` con `field: 'operation'` sin escribir ni auditar, comprobando
+  la operación con la API pública de `apps` (sin aristas nuevas: `pricing` ya importa `apps`); la web responde 404 con
+  `failureOf`.
+- **Test (primero, debe fallar)**: integración en `pricing/manual-price.int.test.ts` y HTTP en
+  `tests/http/admin-economia.test.ts` (operación inexistente con un motivo válido).
+
+## C-59 (Baja) — Ningún test comprueba que `hooks.server.ts` quita la cabecera `x-mm-client-ip`
+
+- **Requisito**: constitución, «Fuente única de la IP del cliente» (`event.getClientAddress()`); BE-FR-04 (la sesión guarda la
+  IP) y BE-FR-45 (límites por IP). Completa C-35 (T427), que quitó la cabecera sin test propio.
+- **Ficheros**: `src/hooks.server.ts` (`stripInternalHeaders`); tests en `tests/http/` y `src/hooks.server.test.ts`.
+- **Estado**: corregido (2026-11-18), solo tests. Con el paso desactivado temporalmente (restaurado después, sin cambios en
+  `hooks.server.ts`): `src/hooks.server.test.ts` falla (2 en rojo: la sesión y la ruta reciben `203.0.113.9`), y
+  `tests/http/client-ip-header.test.ts` **sigue pasando**, porque ninguna llamada a Better Auth que crea una sesión recibe las
+  cabeceras de la petición (`headersFor` y `authHeadersOf` las construyen con la IP real): el paso es una defensa en
+  profundidad que no se observa por HTTP. El test HTTP queda como comprobación del extremo a extremo (login de la web y de la
+  API con `x-mm-client-ip`: la sesión guarda la IP de `X-Forwarded-For`), y el del `handle` es el que vigila el paso.
+- **Cambio**: solo tests. Una petición con `x-mm-client-ip: 203.0.113.9` no fija la IP de la sesión (HTTP, contra el build) y
+  ningún paso posterior ni la sesión ven la cabecera. Se comprueba que el test falla si se desactiva el paso.
+- **Test**: `tests/http/client-ip-header.test.ts` y `src/hooks.server.test.ts`.
+
+C-60 y C-61 proceden del simulacro local de las migraciones 0017–0020 (2026-11-18, bases SQLite temporales, no staging;
+procedimiento y resultados en `docs/operaciones/migraciones.md`).
+
+## C-60 (Media) — Volver a la imagen anterior deja ilegibles los parámetros por las claves sembradas
+
+- **Requisito**: constitución, «Datos y almacenamiento» (migraciones compatibles con la vuelta atrás); BE-FR-61 (parámetros
+  globales).
+- **Ficheros**: `src/lib/server/features/apps/repository.ts` (`readSettings`: `if (!isSettingKey(row.key)) throw corruptError`,
+  igual en todas las versiones), `apps/seed.ts` y `apps/defaults.ts` (el _seed_ inserta en cada arranque las claves que
+  falten), `apps/json-schemas.ts` (`SETTING_SCHEMAS`), `docs/operaciones/migraciones.md`.
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio (`apps/settings-unknown-key.int.test.ts`: 2 de 4
+  en rojo, los dos de la clave desconocida, por `INTERNAL_ERROR` de `readSettings`; los otros dos, que el panel no acepta
+  guardar la clave y que una clave conocida con un valor no válido sigue siendo corrupción, pasaban ya y quedan de guarda).
+  Decisión del propietario: opción (b). `readSettings` omite la clave desconocida sin tocar la fila y emite
+  `apps.settings.unknown_key` (`warn`, solo `key`) una vez por clave y conexión (`firstUnknownSettingWarning`, en
+  `config.cache.ts`); una clave conocida con valor no válido sigue lanzando `config_corrupt`. `RETIRED_SETTING_KEYS` y
+  `seedDeleteSettings` se mantienen: retirada = el _seed_ la borra al arrancar; desconocida = se tolera y se avisa. No arregla
+  la imagen de `staging` del 2026-11-17 ni las anteriores: para volver a ellas sigue haciendo falta el paso manual de
+  `docs/operaciones/migraciones.md`. No ensayado en staging. Antes: confirmado por ejecución (emulado). Tras migrar y
+  sembrar con la imagen actual, la base tiene
+  `signup_attempts_per_ip_hour`, `resend_verification_per_email_hour` y `password_reset_per_email_hour` (C-34 y C-36, T426 y
+  T428, commit `bd66f2e`, sin migración: las siembra el _seed_). Los esquemas de `settings` de `origin/staging` (imagen del
+  PR #48, 2026-11-17) y de la anterior al PR #47, extraídos de git, rechazan esas tres claves; `readSettings` de esas imágenes
+  lanza con una clave desconocida (mismo código). No se ha arrancado la imagen anterior, así que el alcance exacto de la caída
+  (qué rutas fallan y si `GET /api/v1/health` lo detecta) no está comprobado. Documentado el paso manual previo en
+  `docs/operaciones/migraciones.md` («Claves nuevas de `settings` y vuelta a una imagen anterior (C-60)»), verificado en el
+  simulacro: tras borrar las tres claves, las 45 filas son válidas para la imagen de staging, y al volver el _seed_ las inserta
+  con sus valores por defecto. Las secciones 0018–0020 decían «compatible sin cambios» sin contar con esto; corregidas.
+- **Qué pasa**: la vuelta atrás de la imagen siguiente a la de staging actual (la que lleva 0017–0020) a la de staging deja
+  la base con tres claves que la imagen de staging no conoce: fallan todas las lecturas de parámetros globales. Es el mismo
+  defecto que obligó a la 0020, en sentido contrario, y se repetirá con cada clave nueva de `settings`.
+- **Cambio** (**decisión del propietario**): (a) solo operación: mantener el paso manual documentado y añadir a la lista de
+  comprobación de cada despliegue las claves nuevas de `settings`; o (b) código, para las vueltas atrás futuras: que
+  `readSettings` omita una clave desconocida con su evento (`apps.settings.unknown_key` o similar, sin el valor) en lugar de
+  lanzar, de modo que una imagen anterior tolere las claves de una posterior (no arregla la imagen de staging actual, que
+  sigue necesitando el paso manual). Con (b), la 0020 y `RETIRED_SETTING_KEYS` dejarían de ser imprescindibles, aunque siguen
+  siendo útiles para no dejar filas huérfanas.
+- **Test (primero, debe fallar)**, solo con (b): en `apps/`, una fila de `settings` con una clave desconocida no impide leer
+  los parámetros (`getEffectiveConfig` devuelve los valores) y emite el evento sin el valor. Hecho en
+  `apps/settings-unknown-key.int.test.ts` (también: un solo aviso por clave aunque se vuelva a leer de la BD, el panel sigue
+  rechazando la clave y una clave conocida inválida sigue lanzando).
+- **Verificación**: `pnpm test:related` del test; en staging, la vuelta atrás con el paso manual (no ensayada).
+
+## C-61 (Baja) — Los comandos para repetir a mano la 0017 y la 0019 no funcionan tal cual
+
+- **Requisito**: constitución, «Datos y almacenamiento» (procedimiento de vuelta atrás probado).
+- **Ficheros**: `docs/operaciones/migraciones.md` («Cómo ejecutar una consulta en el contenedor», 0017 y 0019).
+- **Estado**: corregido en la documentación (2026-11-18), confirmado por ejecución en el simulacro local. Con el comando
+  documentado (`db.prepare(process.argv[1])`): el texto de `drizzle/0017_….sql` y `drizzle/0019_….sql` empieza por `--` y
+  `node` lo toma como opción (`bad option`, código 9); el `DROP TRIGGER` de la 0019 con dos sentencias falla con `The supplied
+SQL string contains more than one statement`, igual que el fichero de la 0019. Documentado un comando con `exec` que lee el
+  fichero, y los dos `DROP TRIGGER` por separado; los dos comandos se han ejecutado en el simulacro (Windows), no en el
+  contenedor. Se añade además que, tras recrear los _triggers_, hay que repetir la consulta previa de la 0019.
+- **Cambio**: solo documentación (hecho).
+- **Test**: ninguno.

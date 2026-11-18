@@ -11,6 +11,7 @@ export interface AppsLogFields {
 	};
 	'apps.app.rejected': { reason: 'unknown_app' | 'app_disabled'; errorCode: string };
 	'apps.config.corrupt': { table: string; field: string };
+	'apps.settings.unknown_key': { key: string };
 	'apps.template.versioned': { version: number };
 	'apps.announcement.created': Record<string, never>;
 	'apps.announcement.deactivated': Record<string, never>;
@@ -41,5 +42,9 @@ export const APPS_LOG_EVENTS = Object.freeze({
 	},
 	'apps.app.rejected': { level: 'info', msg: 'Petición rechazada por la app de X-App-Id' },
 	'apps.config.corrupt': { level: 'error', msg: 'Columna de configuración no válida al leer' },
+	'apps.settings.unknown_key': {
+		level: 'warn',
+		msg: 'Parámetro global desconocido omitido al leer'
+	},
 	'apps.template.versioned': { level: 'info', msg: 'Nueva versión de plantilla publicada' }
 } as const satisfies Record<keyof AppsLogFields, LogEventMeta>);

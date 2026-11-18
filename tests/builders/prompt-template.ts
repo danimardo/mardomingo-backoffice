@@ -24,7 +24,8 @@ export function seededPromptTemplate(deps: AppsDeps, actorId: string): SeededPro
 		maxCostMicro: 12_000_000,
 		timeoutMs: 30_000,
 		capabilities: { image_input: false, structured_output: false, tools: false },
-		active: false
+		active: false,
+		reason: 'Plantilla de prueba'
 	});
 	const { version } = createTemplateVersion(deps, {
 		actorId,

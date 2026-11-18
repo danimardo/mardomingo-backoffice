@@ -154,3 +154,34 @@ describe('tipo de cambio manual con rango (W38, C-48)', () => {
 		expect(manualFxRows()).toBe(antes);
 	});
 });
+
+// C-58 (T449; BE-FR-73, BE-FR-55): fijar el precio orientativo de una operación que no existe, con un motivo válido, responde 404
+// `NOT_FOUND` como las demás acciones de administración sobre una entidad inexistente, sin escribir ni auditar (antes, la clave
+// foránea de `price_references` lo rechazaba dentro de la transacción y respondía 500).
+describe('precio orientativo de una operación inexistente (W38, C-58)', () => {
+	function rowsOf(sql: string): number {
+		const db = new Database(databasePath, { readonly: true });
+		try {
+			return db.prepare<[], { n: number }>(sql).get()?.n ?? 0;
+		} finally {
+			db.close();
+		}
+	}
+
+	it('responde 404 y no escribe ni audita', async () => {
+		const audits = "SELECT COUNT(*) AS n FROM admin_audit WHERE action = 'pricing.price.manual'";
+		const references =
+			"SELECT COUNT(*) AS n FROM price_references WHERE operation_id = 'aop_c58_inexistente'";
+		const antes = rowsOf(audits);
+
+		const result = await postAdmin(
+			session,
+			'/admin/economia?/guardarPrecioOrientativo',
+			'operacion=aop_c58_inexistente&microUsd=5&motivo=Precio+acordado&confirmado=true'
+		);
+
+		expect(result.status).toBe(404);
+		expect(rowsOf(audits)).toBe(antes);
+		expect(rowsOf(references)).toBe(0);
+	});
+});

@@ -85,6 +85,7 @@ export function chatOperation(key: string, overrides: Partial<NewOperation> = {}
 		timeoutMs: 45_000,
 		capabilities: { image_input: false, structured_output: false, tools: false },
 		active: true,
+		reason: 'Alta de prueba',
 		...overrides
 	};
 }

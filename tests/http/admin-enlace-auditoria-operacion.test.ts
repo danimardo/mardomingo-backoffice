@@ -28,6 +28,7 @@ function operationBody(key: string): string {
 		tiempoMs: '30000',
 		costeMaximoMicro: '1000000',
 		capacidades: JSON.stringify({ image_input: false, structured_output: false, tools: false }),
+		motivo: `Alta de ${key}`,
 		confirmado: 'true'
 	}).toString();
 }
