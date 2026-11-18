@@ -709,7 +709,8 @@ test('la copia a predeterminados muestra la vista previa sin nada preseleccionad
 		/datos personales/
 	);
 
-	// Sin marcar nada, la copia se rechaza y no sustituye ningún predeterminado.
+	// Sin marcar nada, la copia se rechaza y no sustituye ningún predeterminado. El motivo es obligatorio (C-41).
+	await page.getByRole('textbox', { name: /Motivo/ }).fill('Prueba E2E sin elementos');
 	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
 	await page.getByRole('button', { name: 'Copiar los elementos marcados' }).click();
 	await page.waitForLoadState('networkidle');

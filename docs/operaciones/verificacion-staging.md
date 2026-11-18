@@ -23,8 +23,9 @@ Con Nginx Proxy Manager delante de la aplicación, `XFF_DEPTH=1`:
 
 1. Haz una petición de login desde una IP conocida.
 2. Comprueba en el log de la aplicación que la IP registrada es la del cliente, no la del proxy (`X-Forwarded-For`).
-3. Comprueba que los límites por IP (`login_per_ip_15min`, `registrations_per_ip_24h`) cuentan por cliente real: 4 intentos
-   desde la misma IP bloquean el quinto, y una segunda IP no hereda el bloqueo.
+3. Comprueba que los límites por IP (`login_per_ip_15min`, `registrations_per_ip_24h`) cuentan por cliente real: con los
+   valores por defecto, `registrations_per_ip_24h` (3) bloquea la cuarta alta desde la misma IP; para comprobarlo con el login,
+   baja `login_per_ip_15min` a un valor pequeño (p. ej. 3) y vuelve a subirlo después. Una segunda IP no hereda el bloqueo.
 4. Anota la IP registrada, el límite aplicado y la cabecera recibida.
 
 ## 3. Clientes de correo (T344)

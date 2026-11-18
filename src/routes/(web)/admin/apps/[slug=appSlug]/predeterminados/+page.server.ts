@@ -1,6 +1,7 @@
 // W42 · `/admin/apps/[slug]/predeterminados` (contracts/web-routes.md W42; BE-FR-42; T312). Predeterminados de una app: el documento
 // que reciben las cuentas nuevas. Se valida con el esquema de sincronización de la app y no modifica ninguna cuenta. Requiere rol de
-// administrador. La edición es en JSON, validada por el mismo esquema que usa la sincronización.
+// administrador. La edición es en JSON, validada por el mismo esquema que usa la sincronización. Exige motivo y confirmación
+// (BE-FR-55; C-41): la auditoría guarda el motivo y un resumen sin contenido.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
@@ -44,9 +45,11 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		const written = textOf(form, 'datos');
+		const reason = textOf(form, 'motivo');
 		// Lo escrito vuelve a la página en cualquier fallo (`values`), para que no se pierda.
+		const values = { datos: written, motivo: reason };
 		if (!isConfirmed(form)) {
-			return fail(400, { formError: 'VALIDATION_ERROR', values: { datos: written } });
+			return fail(400, { formError: 'VALIDATION_ERROR', values });
 		}
 		const composition = getComposition();
 		const app = findActiveAppBySlug(composition.apps, params.slug);
@@ -55,22 +58,25 @@ export const actions: Actions = {
 		try {
 			data = JSON.parse(written);
 		} catch {
-			return fail(400, { errors: { datos: 'validation_invalid' }, values: { datos: written } });
+			return fail(400, { errors: { datos: 'validation_invalid' }, values });
 		}
 		try {
-			updateDefaults(composition.sync, { adminId: admin.id, appId: app.id, data });
+			updateDefaults(composition.sync, { adminId: admin.id, appId: app.id, data, reason });
 		} catch (cause) {
 			if (cause instanceof AppError) {
 				const field = cause.details.field;
+				if (cause.code === 'VALIDATION_ERROR' && field === 'reason') {
+					return fail(400, { errors: { motivo: 'validation_required' }, values });
+				}
 				if (cause.code === 'VALIDATION_ERROR') {
 					return fail(400, {
 						errors: { datos: 'validation_invalid' },
-						values: { datos: written },
+						values,
 						// La categoría que no cumple el esquema (BE-FR-42): «data» es el documento entero, no una categoría.
 						...(typeof field === 'string' && field !== 'data' ? { category: field } : {})
 					});
 				}
-				return failureOf(cause, { datos: written });
+				return failureOf(cause, values);
 			}
 			throw cause;
 		}

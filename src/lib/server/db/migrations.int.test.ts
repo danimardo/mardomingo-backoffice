@@ -32,7 +32,7 @@ function namesOf(open: OpenedDatabase, type: 'table' | 'trigger'): string[] {
 }
 
 describe('migraciones sobre una BD vacía', () => {
-	it('crean las 37 tablas de las funcionalidades y los 8 triggers de inmutabilidad', () => {
+	it('crean las 37 tablas de las funcionalidades, los 8 triggers de inmutabilidad y los 2 de cuenta borrada', () => {
 		opened = openDatabase(join(dir, 'app.db'));
 		migrate(opened.db, { migrationsFolder: 'drizzle' });
 
@@ -45,7 +45,9 @@ describe('migraciones sobre una BD vacía', () => {
 			'invoices_no_delete',
 			'invoices_no_update',
 			'prompt_templates_no_delete',
-			'prompt_templates_no_update'
+			'prompt_templates_no_update',
+			'sync_documents_deleted_user_no_insert',
+			'sync_documents_deleted_user_no_update'
 		]);
 	});
 
@@ -229,5 +231,86 @@ describe('T405 (C-13): `refund_keys` guarda importe y total del reembolso', () =
 		expect(() => insert.run('k_solo_total', null, 700)).toThrow(/CHECK/);
 		expect(() => insert.run('k_negativa', -1, 700)).toThrow(/CHECK/);
 		expect(() => insert.run('k_total_menor', 300, 200)).toThrow(/CHECK/);
+	});
+});
+
+describe('T435 (C-43): `sync_documents` rechaza las filas de una cuenta borrada', () => {
+	/** Cuenta viva (`deleted_at` nulo) o borrada y anonimizada (`deleted_at` con fecha), con las columnas obligatorias de `user`. */
+	function insertUser(open: OpenedDatabase, id: string, deletedAt: number | null): void {
+		open.sqlite
+			.prepare(
+				`INSERT INTO user (id, name, email, email_verified, role, banned, email_normalized, deleted_at, created_at, updated_at)
+				 VALUES (?, '', ?, 1, 'user', 0, ?, ?, 1000, 1000)`
+			)
+			.run(
+				id,
+				deletedAt === null ? `${id}@ejemplo.es` : `deleted+${id}@invalid`,
+				deletedAt === null ? `${id}@ejemplo.es` : null,
+				deletedAt
+			);
+	}
+
+	function migratedWithAccounts(): OpenedDatabase {
+		const open = openDatabase(join(dir, 'app.db'));
+		opened = open;
+		migrate(open.db, { migrationsFolder: 'drizzle' });
+		insertApp(open, 'notas', { categories: { notas: { strategy: 'block' } } });
+		insertUser(open, 'usr_viva', null);
+		insertUser(open, 'usr_borrada', 5000);
+		return open;
+	}
+
+	const INSERT_DOCUMENT =
+		"INSERT INTO sync_documents (user_id, app_id, revision, data, created_at, updated_at) VALUES (?, 'app_notas', 1, '{}', 1000, 1000)";
+
+	it('una cuenta viva inserta, actualiza y borra su documento', () => {
+		const open = migratedWithAccounts();
+
+		expect(() => open.sqlite.prepare(INSERT_DOCUMENT).run('usr_viva')).not.toThrow();
+		expect(() =>
+			open.sqlite
+				.prepare('UPDATE sync_documents SET revision = 2, data = \'{"a":1}\' WHERE user_id = ?')
+				.run('usr_viva')
+		).not.toThrow();
+		expect(
+			open.sqlite.prepare('DELETE FROM sync_documents WHERE user_id = ?').run('usr_viva').changes
+		).toBe(1);
+	});
+
+	it('una cuenta borrada no puede insertar un documento: aborta con el mensaje que traduce `sync`', () => {
+		const open = migratedWithAccounts();
+
+		expect(() => open.sqlite.prepare(INSERT_DOCUMENT).run('usr_borrada')).toThrow(
+			/^sync_documents_user_deleted$/
+		);
+		expect(open.sqlite.prepare('SELECT count(*) AS n FROM sync_documents').get()).toEqual({ n: 0 });
+	});
+
+	it('el documento de una cuenta que se borra después ya no se actualiza, pero sí se borra', () => {
+		const open = migratedWithAccounts();
+		open.sqlite.prepare(INSERT_DOCUMENT).run('usr_viva');
+		open.sqlite
+			.prepare('UPDATE user SET deleted_at = 6000, email_normalized = NULL WHERE id = ?')
+			.run('usr_viva');
+
+		expect(() =>
+			open.sqlite
+				.prepare('UPDATE sync_documents SET revision = revision + 1 WHERE user_id = ?')
+				.run('usr_viva')
+		).toThrow(/^sync_documents_user_deleted$/);
+		expect(
+			open.sqlite.prepare('DELETE FROM sync_documents WHERE user_id = ?').run('usr_viva').changes
+		).toBe(1);
+	});
+
+	it('pasar un documento a una cuenta borrada también se rechaza', () => {
+		const open = migratedWithAccounts();
+		open.sqlite.prepare(INSERT_DOCUMENT).run('usr_viva');
+
+		expect(() =>
+			open.sqlite
+				.prepare("UPDATE sync_documents SET user_id = 'usr_borrada' WHERE user_id = 'usr_viva'")
+				.run()
+		).toThrow(/^sync_documents_user_deleted$/);
 	});
 });

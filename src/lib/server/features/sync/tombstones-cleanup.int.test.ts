@@ -91,4 +91,25 @@ describe('limpieza de marcas de borrado (T338)', () => {
 		expect(storedOf(userB)?.revision).toBe(2);
 		expect(eventsNamed(fixture.logger, 'sync.tombstones.purged')).toHaveLength(0);
 	});
+
+	it('el documento de una cuenta borrada (que no debería existir; C-43) se omite sin parar la limpieza de los demás', () => {
+		const deleted = fixture.addUser('usr_tomb_borrada');
+		const alive = fixture.addUser('usr_tomb_viva');
+		const expired = {
+			customReplacements: {
+				items: [],
+				tombstones: [{ from: 'viejo', deletedAt: NOW - 40 * DAY_MS }]
+			}
+		};
+		insertRow(deleted, SECRETARIO_APP_ID, 1, expired);
+		insertRow(alive, SECRETARIO_APP_ID, 1, expired);
+		// Borrado posterior a la escritura, como en la carrera de C-43 antes de la migración 0019.
+		fixture.database.sqlite
+			.prepare('UPDATE user SET deleted_at = ?, email_normalized = NULL WHERE id = ?')
+			.run(NOW, deleted);
+
+		expect(purgeTombstones(deps)).toBe(1);
+		expect(storedOf(deleted)?.revision).toBe(1);
+		expect(storedOf(alive)?.revision).toBe(2);
+	});
 });

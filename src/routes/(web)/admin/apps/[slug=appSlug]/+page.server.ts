@@ -1,6 +1,8 @@
 // W40 · `/admin/apps/[slug]` (contracts/web-routes.md W40; BE-FR-61 CA3; T310). Ficha de una app y sus sobrescrituras de límites. Cada
 // valor debe ser igual o menor que su global, lo valida `updateAppOverrides`, y la auditoría va en la misma transacción. Exige
 // motivo y confirmación. Requiere rol de administrador. Pendiente: enlaces, orígenes, mantenimiento, versiones y operaciones.
+// Si el esquema de sincronización vigente ya no admite alguna categoría de los predeterminados, lo avisa (C-45): `apps` no
+// puede revalidarlos (son de `sync`), y la siembra las omite.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
@@ -14,6 +16,7 @@ import {
 	updateAppVersions,
 	updateAppOverrides
 } from '$lib/server/features/apps';
+import { staleDefaultCategories } from '$lib/server/features/sync';
 import { isConfirmed } from '$lib/server/forms/confirmation';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
@@ -53,6 +56,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders }) => {
 			allowedOrigins: JSON.stringify(details.allowedOrigins, null, 2),
 			syncSchema: JSON.stringify(details.syncSchema, null, 2)
 		},
+		staleDefaults: staleDefaultCategories(composition.sync, app.id),
 		versions: {
 			minAppVersion: details.minAppVersion ?? '',
 			recommendedAppVersion: details.recommendedAppVersion ?? '',

@@ -70,3 +70,29 @@ Para una sentencia que modifica datos, `.run()` en lugar de `.all()`. Antes de m
   no menor que el importe). El reenvío de una clave antigua no reintenta su rectificativa (`pagos.md`).
 - **Volver a una imagen anterior**: compatible sin cambios. La imagen anterior no lee ni escribe las columnas nuevas, y las
   claves que inserte quedan con ambas nulas, que los `CHECK` admiten.
+
+## 0019 · `sync_documents` rechaza las cuentas borradas (T435, C-43)
+
+- **Qué hace**: `0019_sync_documents_cuenta_borrada.sql` crea dos _triggers_, `sync_documents_deleted_user_no_insert` y
+  `sync_documents_deleted_user_no_update`, que abortan (`sync_documents_user_deleted`) un `INSERT` o `UPDATE` de
+  `sync_documents` si la cuenta de `user_id` tiene `deleted_at` no nulo (borrada y anonimizada). No toca datos: el borrado
+  de la cuenta ya eliminaba sus documentos, y el `DELETE` sigue permitido.
+- **Antes de desplegar** (opcional, solo lectura): comprobar que no quedan documentos de cuentas borradas, que la carrera de
+  C-43 podría haber dejado. Debe devolver 0; si no, borrarlos es lo que habría hecho el borrado de la cuenta (BE-FR-07 CA1):
+
+  ```sql
+  SELECT count(*) FROM sync_documents d JOIN user u ON u.id = d.user_id WHERE u.deleted_at IS NOT NULL;
+  -- Solo si la consulta anterior no da 0, y tras copiar la base (restauracion.md):
+  DELETE FROM sync_documents WHERE user_id IN (SELECT id FROM user WHERE deleted_at IS NOT NULL);
+  ```
+
+  Un documento así que quede no rompe la migración, pero los _triggers_ impiden actualizarlo (la limpieza de marcas de
+  borrado los omite).
+
+- **Volver a una imagen anterior**: compatible sin cambios. Los _triggers_ se quedan (una migración aplicada no se deshace)
+  y la imagen anterior, al chocar con ellos en la carrera de C-43, responde `500` en lugar de `401`, sin guardar nada. Si
+  hiciera falta quitarlos: `DROP TRIGGER sync_documents_deleted_user_no_insert; DROP TRIGGER
+sync_documents_deleted_user_no_update;` (al volver a la imagen actual no se recrean solos: ejecutar a mano las dos
+  sentencias de `drizzle/0019_sync_documents_cuenta_borrada.sql`).
+
+> **NO VERIFICADO.** La consulta previa y la vuelta atrás no se han ejecutado en staging.

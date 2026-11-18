@@ -1,15 +1,22 @@
 <script lang="ts">
 	// W43 · copiar de la cuenta propia a los predeterminados (T312; BE-FR-42 CA3–CA4; D03). Una casilla por elemento, sin preselección. Solo
-	// se sustituyen las categorías con algún elemento marcado. Sin JavaScript funciona igual.
+	// se sustituyen las categorías con algún elemento marcado; las demás se conservan (C-40). Exige motivo y confirmación
+	// (BE-FR-55; C-41). Sin JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import CheckboxGroup from '$lib/components/ui/CheckboxGroup.svelte';
+	import TextField from '$lib/components/ui/TextField.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
+	// Solo el rechazo por motivo vacío trae `errors` (C-41).
+	const motivoError = $derived.by(() => {
+		const errors: unknown = form && 'errors' in form ? form.errors : undefined;
+		return typeof errors === 'object' && errors !== null && 'motivo' in errors;
+	});
 </script>
 
 <svelte:head>
@@ -49,6 +56,13 @@
 				options={category.elements.map((element) => ({ value: element, label: element }))}
 			/>
 		{/each}
+		<TextField
+			id="motivo"
+			name="motivo"
+			label={m.admin_defaults_reason()}
+			error={motivoError ? m.validation_required() : ''}
+			required
+		/>
 		<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_defaults_confirm()}</Checkbox>
 		<p><Button type="submit" variant="primary">{m.admin_defaults_copy_submit()}</Button></p>
 	</form>

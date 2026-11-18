@@ -595,6 +595,10 @@ inexistente responde `error(404)` desde el `load`.
   `?/guardarMantenimiento` (activo, mensaje); `?/guardarVersiones` (`min`, `recommended`, `enforce`);
   `?/previsualizarSobrescrituras` / `?/guardarSobrescrituras` (límites por app, no mayores que el global;
   aclaración 2026-10-10); `?/crearOperacion` (clave, nombre, tipo, modo).
+- **Aviso de predeterminados** (C-45): si el esquema de sincronización vigente ya no admite alguna categoría de los
+  predeterminados de la app (no declarada o con otra estrategia), el `load` la nombra en un aviso con enlace a W42. Esas
+  categorías no se siembran en las cuentas nuevas, y los predeterminados guardados no cambian hasta que el administrador
+  los corrige.
 - **Eventos**: `apps.settings.updated`, `apps.settings.rejected`, `audit.entry.recorded`.
 
 ### W41 · `/admin/apps/[slug=appSlug]/operaciones/[key=operationKey]` — Operación (BE-FR-32, 35, 72, 77, 78, 80; FR-050, FR-051)
@@ -611,8 +615,11 @@ inexistente responde `error(404)` desde el `load`.
 
 ### W42 · `/admin/apps/[slug=appSlug]/predeterminados` — Predeterminados (BE-FR-42, 57; FR-067)
 
-- **`load`**: predeterminados vigentes por categoría. **Actions**: `?/guardarPredeterminados` (validados con
-  el esquema de sincronización de la app). No modifica ninguna cuenta.
+- **`load`**: predeterminados vigentes por categoría. **Actions**: `?/guardarPredeterminados` (`datos`, `motivo` y
+  `confirmado`; validados con el esquema de sincronización de la app). No modifica ninguna cuenta. El motivo es
+  obligatorio (`400` con `errors.motivo`, C-41). La auditoría guarda el motivo y, en `before` y `after`, un resumen
+  sin contenido: `{ categories, elements, sha256 }` y, en `after`, `changed` (categorías cambiadas); nunca el JSON
+  (data-model 3.7).
 - **Eventos**: `sync.defaults.updated`, `audit.entry.recorded`.
 
 ### W43 · `/admin/apps/[slug=appSlug]/predeterminados/copiar` — Copiar mis datos (BE-FR-42 CA3–CA4)
@@ -620,8 +627,10 @@ inexistente responde `error(404)` desde el `load`.
 - **`load`**: vista previa del documento sincronizado del propio administrador para esa app, por categorías,
   con una casilla por elemento (ninguna decisión por defecto que favorezca copiar datos personales): ninguna casilla viene
   marcada, y las categorías con `personal: true` en el esquema de sincronización muestran además un aviso (D14).
-- **Actions**: `?/copiar` — `items` (lista repetida `categoría:clave`) → solo sustituye las categorías con algún
-  elemento seleccionado. Errores: `400 NOTHING_SELECTED`.
+- **Actions**: `?/copiar` — `usuario`, `sel:<categoría>` (repetido, un valor por elemento marcado), `motivo` y
+  `confirmado` → solo sustituye las categorías con algún elemento copiado y conserva las demás tal como estaban
+  (C-40). Errores: `400 NOTHING_SELECTED` (nada marcado, o nada de lo marcado existe ya en el documento de origen);
+  `400 VALIDATION_ERROR` con `errors.motivo` si falta el motivo (C-41). Auditoría como en W42.
 - **Eventos**: `sync.defaults.copied`, `audit.entry.recorded`.
 
 ### W44 · `/admin/protecciones` — Protecciones (BE-FR-43, 46, 47, 53; UX-14; FR-091)

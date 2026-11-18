@@ -156,6 +156,8 @@ test('@BE-FR-42 copiar una sola casilla a predeterminados sustituye solo su cate
 	await page.goto('/admin/apps/secretario/predeterminados/copiar?vista=propia');
 	await page.waitForLoadState('networkidle');
 	await page.getByRole('group', { name: 'coreReplacements' }).getByRole('checkbox').first().check();
+	// El motivo es obligatorio y queda en la auditoría (BE-FR-55; C-41).
+	await page.getByRole('textbox', { name: /Motivo/ }).fill('Prueba E2E de copia');
 	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
 	await page.getByRole('button', { name: 'Copiar los elementos marcados' }).click();
 	await page.waitForURL(/\/predeterminados$/);

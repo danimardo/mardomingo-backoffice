@@ -749,6 +749,14 @@ Contadores propios de `accounts` para los límites de autenticación por IP. Sus
 - CHECK `revision >= 1`. Escritura condicional `UPDATE … WHERE revision = :ifMatch` (BE-FR-41
   CA1). El tamaño (`max_sync_doc_kb`) lo comprueba el servicio.
 - Índice (`app_id`) (anuncios del panel: apps con documento).
+- _Triggers_ de cuenta borrada (C-43, migración `0019_sync_documents_cuenta_borrada`):
+  `sync_documents_deleted_user_no_insert` y `sync_documents_deleted_user_no_update`, `BEFORE INSERT` y `BEFORE UPDATE`,
+  abortan con `RAISE(ABORT, 'sync_documents_user_deleted')` si la fila de `user` de `NEW.user_id` tiene `deleted_at` no
+  nulo. «Cuenta borrada» es eso: `accounts.anonymizeUser` fija `deleted_at` en la transacción de `privacy.deleteAccount`
+  (a petición, BE-FR-07, o por inactividad, BE-FR-86), y la fila no desaparece nunca (FK `RESTRICT`). Una cuenta que no
+  existe ya la rechaza la FK; una bloqueada (`banned`) no está borrada. El `DELETE` no se restringe: lo hace el propio
+  borrado. Así, una petición de `/sync` que pasó la sesión antes de confirmarse el borrado no recrea el documento; `sync`
+  traduce el aborto a `UNAUTHENTICATED` (api-v1 E10–E11).
 
 #### `app_defaults` (BE-FR-42, 57)
 
@@ -963,7 +971,10 @@ Objeto con **solo** las categorías declaradas; la forma depende de la estrategi
 
 El contenido de `value` y de los campos de cada elemento no se valida más allá de ser JSON (la
 fusión y la semántica son del cliente). La siembra (BE-FR-40) copia `app_defaults.data` con todos
-los `updatedAt`/`deletedAt` a 0. Tamaño serializado ≤ `max_sync_doc_kb` efectivo.
+los `updatedAt`/`deletedAt` a 0, y solo las categorías que admite el esquema vigente (C-45): un cambio de
+`apps.sync_schema` en W40 no revalida `app_defaults` (es de `sync`), así que una categoría que el esquema ya no
+declara, o que tiene otra estrategia, se omite entera en la siembra y W40 la avisa; los predeterminados guardados no
+cambian. Tamaño serializado ≤ `max_sync_doc_kb` efectivo.
 
 ### 3.4 Configuración de `app_operations`
 
@@ -995,6 +1006,12 @@ facturas simplificadas sin datos fiscales.
 `Record<campo, JSON>` con **solo** los campos cambiados de la entidad (o el objeto completo al
 crear). Reglas: nunca contraseñas, tokens, secretos ni contenido de usuario; los usuarios se
 identifican por `id`, no por email (así la auditoría no necesita anonimizarse).
+
+Excepción por contenido (C-41): los predeterminados de una app (`sync.defaults.updated` y `sync.defaults.copied`)
+pueden llevar datos personales copiados de una cuenta, así que no se guardan: `before` y `after` llevan un resumen
+`{ categories: Text[], elements: Int, sha256: Text }` (categorías ordenadas, elementos en total —los de `items` sin
+marcas, 1 por bloque y las claves de `keyed`— y SHA-256 del JSON con las claves ordenadas), y `after` añade
+`changed: Text[]` (categorías añadidas, quitadas o cambiadas). `before` es nulo si la app aún no tenía predeterminados.
 
 ### 3.8 `model_cache`
 

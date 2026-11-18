@@ -1,5 +1,6 @@
 <script lang="ts">
-	// W40 · `/admin/apps/[slug]`: ficha de la app con sus sobrescrituras de límites (T310; BE-FR-61 CA3). Sin JavaScript funciona igual.
+	// W40 · `/admin/apps/[slug]`: ficha de la app con sus sobrescrituras de límites (T310; BE-FR-61 CA3). Avisa de los predeterminados
+	// que el esquema vigente ya no admite (C-45). Sin JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
@@ -25,6 +26,15 @@
 
 {#if form?.formError}
 	<Banner level="critical">{m.admin_apps_error()}</Banner>
+{/if}
+
+{#if data.staleDefaults.length > 0}
+	<Banner level="warning">
+		{m.admin_apps_stale_defaults({ categories: data.staleDefaults.join(', ') })}
+		<a href={resolve(`/admin/apps/${data.app.slug}/predeterminados`)}
+			>{m.admin_apps_stale_defaults_link()}</a
+		>
+	</Banner>
 {/if}
 
 <section aria-labelledby="datos-app">

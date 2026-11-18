@@ -134,6 +134,13 @@
       "when": 1794978591889,
       "tag": "0018_refund_keys_importes",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794985506764,
+      "tag": "0019_sync_documents_cuenta_borrada",
+      "breakpoints": true
     }
   ]
 }

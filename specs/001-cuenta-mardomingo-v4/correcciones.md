@@ -637,7 +637,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 - **Requisito**: BE-FR-42 CA3, FR-067; `contracts/web-routes.md` W43 («solo sustituye las categorías con algún elemento seleccionado»).
 - **Ficheros**: `src/lib/server/features/sync/service.ts` (`applyCopyAsDefaults`, líneas 235–240: escribe con `writeDefaults` el
   resultado de `applyCopy`, que solo contiene lo seleccionado, y el upsert sustituye el documento entero).
-- **Estado**: confirmado por ejecución. Con una selección parcial, los predeterminados quedan solo con las categorías copiadas;
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. La copia fusiona lo copiado con los predeterminados actuales y lanza `NOTHING_SELECTED` si no copia nada (T432). Antes: confirmado por ejecución. Con una selección parcial, los predeterminados quedan solo con las categorías copiadas;
   con una selección que no casa con nada (categoría o elementos que ya no existen) se guarda `{}` y se audita una copia.
 - **Cambio**: dentro de la transacción, fusionar `{ ...actuales, ...copied }` y lanzar `NOTHING_SELECTED` si `copied` está
   vacío. No necesita decisión.
@@ -651,7 +651,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 - **Ficheros**: `sync/service.ts` (`updateDefaults` y `applyCopyAsDefaults`, líneas 192–204 y 241–253: `before: null`,
   `after: null` y un texto fijo como `reason`), las rutas de W42 y W43 (no leen `motivo`). La matriz de `admin-motivo.test.ts`
   pasa por casualidad: con `motivo=&confirmado=true` falla antes `JSON.parse('')` (W42) o `NOTHING_SELECTED` (W43).
-- **Estado**: confirmado por ejecución. Con datos válidos y motivo vacío responde 303 y audita; con motivo, `reason` sigue
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. Motivo obligatorio en W42 y W43 y auditoría con `{ categories, elements, sha256 }` y `after.changed`, sin el JSON (T433). Antes: confirmado por ejecución. Con datos válidos y motivo vacío responde 303 y audita; con motivo, `reason` sigue
   siendo el texto fijo.
 - **Cambio** (**decisión del propietario**): la auditoría guarda un resumen sin contenido (categorías cambiadas, número de
   elementos y un hash), no el JSON completo (puede romper la acción y mete datos personales en una tabla inmutable); y el
@@ -675,7 +675,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 - **Ficheros**: `sync/service.ts` (`getSyncDocument` y `putSyncDocument`, líneas 87–141: no comprueban en su transacción que la
   cuenta siga viva), `src/routes/api/v1/sync/+server.ts` (líneas 33–49: valida la sesión y después hace `await jsonBodyOf(...)`,
   hueco en el que puede confirmarse `deleteAccount`). La retención no mira `sync_documents`, así que nada lo borra después.
-- **Estado**: la carrera es una sospecha razonable, pero que el servicio no comprueba la cuenta borrada está confirmado por
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. Migración 0019 con los dos triggers; `sync` responde `UNAUTHENTICATED` (T435). La vuelta atrás en staging no está verificada. Antes: la carrera es una sospecha razonable, pero que el servicio no comprueba la cuenta borrada está confirmado por
   ejecución: tras el borrado, la llamada al servicio de una petición que ya había pasado la sesión deja una fila de
   `sync_documents` con el dato enviado.
 - **Cambio** (**decisión del propietario**): triggers `BEFORE INSERT` y `BEFORE UPDATE` en `sync_documents` que abortan si
@@ -698,7 +698,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 
 - **Requisito**: BE-FR-39, BE-FR-40; `data-model.md` 3.3 («objeto con solo las categorías declaradas»).
 - **Ficheros**: `sync/service.ts` (`documentOrSeed`, líneas 81–84), W40 (esquema de la app).
-- **Estado**: confirmado por ejecución. Si el administrador quita o cambia la estrategia de una categoría en W40 después de
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. La siembra omite las categorías que el esquema vigente no admite y W40 las nombra en un aviso (T437). Antes: confirmado por ejecución. Si el administrador quita o cambia la estrategia de una categoría en W40 después de
   guardar los predeterminados (`apps` no puede revalidar `app_defaults`, que es de `sync`), se siembra un documento que el
   propio servidor rechaza: el cliente que lo devuelve tal cual recibe `VALIDATION_ERROR` en cada PUT.
 - **Cambio** (**decisión del propietario**): filtrar la siembra por el esquema vigente, y que W40 avise si el cambio invalida

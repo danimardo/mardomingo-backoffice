@@ -1,10 +1,12 @@
 <script lang="ts">
 	// W42 · predeterminados de una app: edición en JSON validada por el esquema de sincronización (T312; BE-FR-42). No modifica cuentas.
-	// Sin JavaScript funciona igual.
+	// Exige motivo y confirmación (BE-FR-55; C-41). Avisa si el esquema vigente ya no admite alguna categoría (C-45). Sin
+	// JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
+	import TextField from '$lib/components/ui/TextField.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -38,6 +40,14 @@
 				: m.admin_defaults_json_invalid()}
 		</p>
 	{/if}
+	<TextField
+		id="motivo"
+		name="motivo"
+		label={m.admin_defaults_reason()}
+		value={form?.values.motivo ?? ''}
+		error={errors.motivo ? m.validation_required() : ''}
+		required
+	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_defaults_confirm()}</Checkbox>
 	<p><Button type="submit" variant="primary">{m.admin_defaults_save()}</Button></p>
 </form>
