@@ -113,6 +113,11 @@ export default ts.config(
 							group: ['$env', '$env/*'],
 							message:
 								'Solo $lib/server/config/env.ts lee el entorno (constitución, «Configuración»).'
+						},
+						{
+							regex: '^@lucide/svelte(/icons(/index)?)?$',
+							message:
+								'Importa cada icono por su ruta (@lucide/svelte/icons/<nombre>) en components/ui/icons.ts; nunca el índice (ADR 0009).'
 						}
 					]
 				}
@@ -174,6 +179,11 @@ export default ts.config(
 						{
 							group: ['$lib/server/features/*/domain', '$lib/server/features/*/domain/*'],
 							message: 'Las rutas no importan el dominio; usa el index.ts de la funcionalidad.'
+						},
+						{
+							regex: '^@lucide/svelte(/icons(/index)?)?$',
+							message:
+								'Importa cada icono por su ruta (@lucide/svelte/icons/<nombre>) en components/ui/icons.ts; nunca el índice (ADR 0009).'
 						}
 					]
 				}
@@ -194,6 +204,11 @@ export default ts.config(
 						{
 							group: ['$lib/server', '$lib/server/*'],
 							message: 'Los componentes no importan código de servidor.'
+						},
+						{
+							regex: '^@lucide/svelte(/icons(/index)?)?$',
+							message:
+								'Importa cada icono por su ruta (@lucide/svelte/icons/<nombre>) en components/ui/icons.ts; nunca el índice (ADR 0009).'
 						}
 					]
 				}
