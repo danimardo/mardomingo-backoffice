@@ -24,17 +24,17 @@
 /* Primitivas de color (invariantes por tema). */
 :root {
 	/* Verde salvia, color de marca: 600 claro y 300 oscuro son la acción principal */
-	--primary-50: #f0f8f3;
-	--primary-100: #bcdcc8;
-	--primary-200: #87c19e;
-	--primary-300: #6bb287;
-	--primary-400: #4c9c6b;
-	--primary-500: #338f56;
-	--primary-600: #11813f;
-	--primary-700: #067a34;
-	--primary-800: #006b2e;
-	--primary-900: #03441e;
-	--primary-950: #04200e;
+	--primary-50: #f1f6f3;
+	--primary-100: #d1e0d8;
+	--primary-200: #b2cabd;
+	--primary-300: #93b3a1;
+	--primary-400: #729883;
+	--primary-500: #58836b;
+	--primary-600: #3f6f53;
+	--primary-700: #345c45;
+	--primary-800: #2b4c39;
+	--primary-900: #1c3427;
+	--primary-950: #0f1e16;
 
 	/* Gris acromático de apoyo */
 	--secondary-50: #f6f6f6;

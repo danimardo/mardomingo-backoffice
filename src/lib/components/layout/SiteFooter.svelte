@@ -41,14 +41,17 @@
 </footer>
 
 <style>
+	/* Pie ordenado en dos columnas (información y apariencia) con el mismo ancho que el contenido (`main`), que pasan a una sola en pantallas
+	   estrechas. Las filas se alinean arriba y los controles se apilan, sin que nada se salga de la caja. */
 	.footer {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: var(--space-6);
-		margin-top: auto;
-		padding: var(--space-6);
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+		align-items: start;
+		gap: var(--space-6) var(--space-8);
+		box-sizing: border-box;
+		width: min(100%, 60rem);
+		margin: auto auto 0;
+		padding: var(--space-8) var(--space-6);
 		border-top: 1px solid var(--border-subtle);
 		color: var(--color-text-muted);
 		font-size: var(--font-size-sm);
@@ -60,13 +63,13 @@
 
 	.info {
 		display: grid;
-		gap: var(--space-3);
+		gap: var(--space-2);
 	}
 
 	.info ul {
 		display: flex;
 		flex-wrap: wrap;
-		gap: var(--space-2) var(--space-4);
+		gap: 0 var(--space-4);
 		list-style: none;
 		margin: 0;
 		padding: 0;
@@ -85,8 +88,14 @@
 	}
 
 	.controls {
-		display: flex;
-		flex-wrap: wrap;
-		gap: var(--space-6);
+		display: grid;
+		justify-items: start;
+		gap: var(--space-4);
+	}
+
+	@media (max-width: 48rem) {
+		.footer {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 </style>

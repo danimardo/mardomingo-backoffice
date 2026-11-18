@@ -42,17 +42,17 @@ const VERBOSE = args.includes('--verbose');
 // ---------------------------------------------------------------- escalas
 // Anclas: valores que se usan TAL CUAL; el resto de pasos se interpola en OKLCH.
 const ANCHORS = {
-	// Verde salvia de la app (Design/DESIGN_TOKENS.md): 600/700/800 son --color-accent, -hover y -active del tema claro
-	// anterior (#11813F, #067A34, #006B2E) y 200/300/400 los del oscuro (#87C19E, #6BB287, #4C9C6B).
+	// Verde salvia apagado (croma bajo, 2026-11-18: el anterior #11813F resultaba chillón): 600/700/800 son la acción
+	// principal, su hover y su estado activo en el tema claro, y 200/300/400 los del oscuro.
 	primary: {
-		50: '#F0F8F3',
-		200: '#87C19E',
-		300: '#6BB287',
-		400: '#4C9C6B',
-		600: '#11813F',
-		700: '#067A34',
-		800: '#006B2E',
-		950: '#04200E'
+		50: '#F1F6F3',
+		200: '#B2CABD',
+		300: '#93B3A1',
+		400: '#729883',
+		600: '#3F6F53',
+		700: '#345C45',
+		800: '#2B4C39',
+		950: '#0F1E16'
 	},
 	// Gris acromático de apoyo (lo usa el catálogo); no es color de marca.
 	secondary: {
