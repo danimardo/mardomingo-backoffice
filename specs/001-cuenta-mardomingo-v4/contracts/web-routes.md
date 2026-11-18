@@ -604,7 +604,7 @@ inexistente responde `error(404)` desde el `load`.
   grupo, escenario de transcripción), modelos compatibles de la caché, versiones de la plantilla,
   `timeoutMs` total calculado.
 - **Actions**: `?/guardarOperacion`; `?/activar` (rechaza sin modelo, con modelo incapaz o sin precio ni
-  coste máximo estimado); `?/desactivar`; `?/aplicarAlGrupo` (modelo para todas las del grupo);
+  coste máximo estimado); `?/desactivar`; `?/aplicarAlGrupo` (tiempo máximo, tokens, temperatura y coste máximo estimado para todas las del grupo; no el modelo, T311, C-52);
   `?/guardarPlantilla` (crea una versión nueva inmutable).
 - **Eventos**: `apps.operation.activation_rejected`, `apps.template.versioned`, `apps.settings.updated`,
   `audit.entry.recorded`.
