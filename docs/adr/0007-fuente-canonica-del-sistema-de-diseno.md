@@ -1,6 +1,6 @@
 # 0007 — Fuente canónica del sistema de diseño
 
-- **Estado:** Aceptado (2026-10-10)
+- **Estado:** Sustituido por [0009](0009-sistema-de-diseno-becall-con-color-salvia.md)
 
 ## Contexto
 

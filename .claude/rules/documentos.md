@@ -43,7 +43,7 @@ paths:
 ## `Design/`
 
 - Es la fuente canónica de la identidad visual **hasta L01**; desde L01 mandan
-  `src/lib/design-system/` y `src/lib/components/{ui,layout}/` (ADR 0007). Solo se modifica con la
+  `src/lib/design-system/` y `src/lib/components/{ui,layout}/` (ADR 0009). Solo se modifica con la
   aprobación del propietario.
 - Los cambios son centrales: tokens con pareja clara y oscura, y componentes compartidos. Nunca
   colores literales ni estilos locales repetidos.

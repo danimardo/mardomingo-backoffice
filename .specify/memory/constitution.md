@@ -496,34 +496,48 @@ Todo dato no confiable se valida con **Zod** al cruzar una frontera, y solo ahí
 
 ### XIII. Sistema de diseño, apariencia y rendimiento percibido
 
-- **Fuente canónica**: hasta L01, la carpeta `Design/` define la identidad, los tokens, los
-  materiales y los componentes base. **Desde L01** mandan el código de la app:
-  `src/lib/design-system/` (tokens y tema) y `src/lib/components/ui/` y `layout/`; `Design/`
-  queda como documentación de la identidad y de sus reglas, y apunta a ellos (`docs/adr/0007`).
-  Nunca hay dos ficheros de tokens. PROHIBIDO imponer la identidad de otro producto. Las
+- **Fuente canónica**: la base del sistema de diseño es el sistema propio del propietario
+  (`@becall/design-system`: estructura, tipografía, espacios, radios, movimiento y componentes),
+  adoptado por decisión del 2026-11-18 (`docs/adr/0009`, que sustituye al 0007). **Sin logotipos
+  ni nombre de BeCall**; la marca visible es la de Cuenta Mardomingo. El **color de marca es el
+  verde salvia**, generado con el script de tokens del sistema, con contraste WCAG 2.2 AA
+  verificado por script. Manda el código de la app: `src/lib/design-system/` (tokens y tema) y
+  `src/lib/components/ui/` y `layout/`; `Design/` queda como documentación y apunta a ellos.
+  Nunca hay dos ficheros de tokens. PROHIBIDO imponer la identidad visual de otro producto. Las
   adaptaciones pendientes (`Historias.md` 16.2, DS-xx) se resuelven en el sistema de diseño, de
   forma centralizada, nunca con estilos locales repetidos.
+- **Catálogo y componentes activos**: el catálogo completo del sistema se copia al repositorio en
+  una carpeta aparte (`src/lib/design-catalog/`), **excluida de ESLint, `svelte-check`, Vitest y
+  cobertura**, y no se importa desde la app. Un componente se **promueve** a
+  `src/lib/components/ui/` o `layout/` solo cuando una pantalla lo usa; desde ese momento se
+  comprueba y se testea como cualquier otro, sin dependencias de Tauri, funcionando con form
+  actions y sin JavaScript salvo el captcha del registro. Una lista de activos
+  (`src/lib/design-catalog/ACTIVOS.md`) la comprueba el CI.
+- **Tipografía e iconos**: Poppins (licencia OFL), **servida desde el propio servidor**, nunca
+  desde un tercero. Iconos con `@lucide/svelte` a través del componente `Icon`.
 - **Estilos**: las primitivas de `ui/` y `layout/` tienen su `<style>` con tokens; Tailwind se usa
   para componer en rutas y en `components/<f>/`, **solo con tokens**: la paleta por defecto de
   Tailwind está desactivada y se rechazan los colores arbitrarios (`bg-[#fff]`).
 - **Sin valores literales**: ningún componente ni ruta escribe colores, gradientes ni sombras de
   color literales; usa siempre los tokens (con pareja clara y oscura). Lo comprueba un script en
   el CI. Si falta un token, se añade al sistema antes de usarlo.
-- **Cristal selectivo** (lenguaje inspirado en Liquid Glass):
-  - Solo en navegación (cabecera, pie, lateral), superposiciones (diálogos, *toasts*, menús) y
-    tarjetas de resumen destacadas. Tablas, formularios, listas, gráficas, paso de compra, textos
-    legales y pantallas de datos de la administración son **siempre opacos**. Los emails, sin
+- **Cristal y fondo ambiental** (lenguaje inspirado en Liquid Glass):
+  - El fondo ambiental animado y el cristal se usan en **casi todas las zonas de la web**:
+    navegación (cabecera, pie, lateral), superposiciones (diálogos, *toasts*, menús), tarjetas,
+    paneles y bloques de contenido.
+  - Bajo **tablas, formularios, listas largas, gráficas, paso de compra, textos legales y
+    pantallas de datos de la administración** el cristal es **denso, casi opaco** (o directamente
+    opaco), de modo que el contraste de lectura no dependa del fondo animado. Los emails, sin
     cristal.
-  - Cada uso tiene una función concreta. PROHIBIDO anidar superficies de cristal o aplicarlo por
-    fila o por icono.
+  - PROHIBIDO anidar superficies de cristal o aplicarlo por fila o por icono.
   - Toda superficie de cristal tiene una **alternativa opaca** con las mismas acciones,
     información, jerarquía y foco. El material nunca sustituye a la semántica, al nombre
     accesible, al foco ni a los estados.
-- **Preferencias**: se respetan `prefers-reduced-transparency`, `prefers-reduced-motion`,
-  `prefers-contrast` y `forced-colors`. Además hay un ajuste propio **«Reducir transparencia y
-  movimiento»**, junto al selector de tema y guardado en una cookie técnica, que pasa todo a opaco
-  y retira el movimiento no esencial. El ajuste propio solo puede reducir efectos, nunca reactivar
-  lo que el sistema pide reducir. Tema y efectos son decisiones independientes.
+- **Preferencias del dispositivo**: se respetan siempre `prefers-reduced-transparency`,
+  `prefers-reduced-motion`, `prefers-contrast` y `forced-colors`: con cualquiera de ellas la web
+  pasa a superficies opacas y sin movimiento no esencial. **No hay ajuste propio** de «Reducir
+  transparencia y movimiento» en la interfaz (decisión del 2026-11-18). La elección de tema
+  (sistema, claro, oscuro) se mantiene y es independiente de los efectos.
 - **Temas**: el oscuro se diseña expresamente (no es una inversión del claro), con sus estados,
   foco, gráficas e imágenes. El contraste se mide sobre la **composición real** (cristal sobre el
   fondo, en ambos temas y con efectos reducidos), no solo entre pares de tokens.
@@ -584,13 +598,14 @@ constitución.
 | i18n | `@inlang/paraglide-js` | **2.27.0** (solo `es`) |
 | Plugins de mensajes de Paraglide | `@inlang/plugin-message-format` / `@inlang/plugin-m-function-matcher` | **4.5.0** / **2.3.0** (devDependencies). `project.inlang/settings.json` los carga desde `node_modules`; el valor por defecto de Paraglide los descarga de jsDelivr en cada build, algo que queda PROHIBIDO |
 | Estilos | `tailwindcss` / `@tailwindcss/vite` | **4.3.3** / **4.3.3** |
+| Iconos | `@lucide/svelte` | **1.69.0** (licencia ISC; verificada en el registro de npm el 2026-11-18; el plan confirma el fijado exacto al instalar) |
 | Gráficas | `layerchart` | **2.6.1** |
 | Email | `resend` | **6.32.1** |
 | Tareas programadas | `croner` | **10.0.1** (zona `Europe/Madrid` explícita en cada tarea) |
 | Logs del servidor | `pino` | **10.4.0** (en `dependencies`). `pino-abstract-transport` 3.0.0 llega solo como dependencia de `pino`; no es dependencia directa de la v4 |
 | Logs del navegador | `loglevel` | **1.9.2** |
 
-No se usa ninguna librería de componentes de UI: los componentes son propios, sobre Tailwind
+No se usa ninguna librería de componentes de UI de terceros: los componentes son propios (del sistema de diseño del propietario, copiado al repositorio), sobre Tailwind
 (ver principios IX y XIII).
 
 ### Calidad y tests
@@ -1091,4 +1106,4 @@ el motivo). Los lotes cierran con la
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 2.3.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-10-21
+**Version**: 3.0.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-11-18

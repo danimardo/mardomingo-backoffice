@@ -20,7 +20,7 @@ Si se contradicen, manda la primera:
 3. `ARCHITECTURE.md`: dónde va cada cosa, fronteras entre funcionalidades, flujos y el
    «Architecture Check» de cada plan. Las decisiones y sus alternativas, en `docs/adr/`.
 4. Sistema de diseño: hasta L01, `Design/`; desde L01, `src/lib/design-system/` y
-   `src/lib/components/{ui,layout}/` (ADR 0007). Adaptaciones pendientes en `Historias.md` 16.2.
+   `src/lib/components/{ui,layout}/` (ADR 0009). Adaptaciones pendientes en `Historias.md` 16.2.
 5. `specs/NNN-*/`: especificación, plan y tareas de cada funcionalidad, generados con Spec Kit.
 
 Una contradicción no se resuelve en silencio: se informa y se enmienda uno de los documentos.

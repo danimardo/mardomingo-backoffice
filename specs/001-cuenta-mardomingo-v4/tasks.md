@@ -1121,3 +1121,26 @@ corrigió en `docs/operaciones/migraciones.md` durante el simulacro (solo docume
 propietario: el paso manual ya está documentado; la tarea es el cambio de código, decidido el 2026-11-18 (opción b).
 
 - [x] T451 [US7] C-60 (Media): decidir si `readSettings` omite (con evento y sin valor) una clave de `settings` desconocida en lugar de lanzar, para que una imagen anterior tolere las claves sembradas por una posterior; mientras tanto, paso manual de `docs/operaciones/migraciones.md` antes de cada vuelta atrás [BE-FR-61] _Hecho: decisión del propietario, opción (b). `readSettings` omite la clave desconocida sin tocar la fila y emite `apps.settings.unknown_key` (`warn`, solo `key`) una vez por clave y conexión (`firstUnknownSettingWarning` en `config.cache.ts`); una clave conocida con valor no válido sigue lanzando `config_corrupt`, y el panel sigue rechazando guardar una clave desconocida. `RETIRED_SETTING_KEYS` se mantiene (retirada = el *seed* la borra; desconocida = se tolera y se avisa). `contracts/log-events.md`, `data-model.md` 3.1 y `migraciones.md` (el paso manual sigue haciendo falta para volver a imágenes anteriores a T451, la de staging del 2026-11-17 incluida). Test en rojo antes: `apps/settings-unknown-key.int.test.ts` (2 de 4)._
+
+## Phase 27: Migración al sistema de diseño propio con verde salvia (2026-11-18)
+
+Decisión del propietario: constitución 3.0.0 (principio XIII), ADR 0009 y `Historias.md` 2.17 (DS-11). La migración se hace por
+lotes, con capturas de la portada, el login, el panel y la administración, en claro y oscuro, antes y después de cada lote. Entre
+lotes basta `verify:batch`, `build` y `test:http`; `pnpm validate` y `test:e2e:a11y` se ejecutan una vez al final. Entre corchetes,
+el modelo recomendado para ahorrar tokens: **Haiku** (mecánico con script de comprobación), **Sonnet** (adaptación con criterio),
+**Opus** (decisiones delicadas: contraste, tokens, configuración del CI).
+
+- [ ] T452 [US9] [Haiku] DS-11: copiar el catálogo del sistema (`F:\Apps\desigm-systems\becall-design-system\src\lib`, sin logotipos ni nombre de BeCall) a `src/lib/design-catalog/`, con un índice generado de componentes; sin importaciones desde la app
+- [ ] T453 [US9] [Opus] DS-11: excluir `src/lib/design-catalog/` de ESLint, `svelte-check` (`tsconfig`), Prettier, Vitest y cobertura; crear `ACTIVOS.md` y un script que compruebe que lo importado desde la app coincide con la lista, y añadirlo al CI
+- [ ] T454 [US9] [Opus] DS-11: generar los tokens con el verde salvia como color de marca con el script del sistema, con escala, estados y tema oscuro; contraste WCAG 2.2 AA verificado; un solo `tokens.css`; añadir los tokens que falten (DS-08)
+- [ ] T455 [US9] [Sonnet] DS-11: servir Poppins desde el propio servidor (OFL), con precarga, `font-display` y CSP; retirar la pila `system-ui`; medir LCP y CLS antes y después
+- [ ] T456 [US9] [Sonnet] DS-11: añadir `@lucide/svelte` con versión fijada exacta (justificación en el plan) y adaptar `Icon` y `icons.ts`
+- [ ] T457 [US9] [Sonnet] DS-11: fondo ambiental animado en el marco de la web (`AppBackground`), con las preferencias del dispositivo (`prefers-reduced-motion`, `prefers-reduced-transparency`, `prefers-contrast`, `forced-colors`)
+- [ ] T458 [US9] [Sonnet] DS-11: cristal en cabecera, pie, lateral, tarjetas, paneles y superposiciones; cristal denso u opaco bajo tablas, formularios, listas largas, compra, textos legales y datos de administración; sin anidar
+- [ ] T459 [US9] [Sonnet] DS-11: retirar el ajuste «Reducir transparencia y movimiento»: `EffectsToggle`, la cookie `mdm_effects`, `data-effects`, `preferences.ts`, la acción de `preferencias` y su texto en `cookies`; adaptar o retirar los tests de `UX-EFECTOS` CA1, CA2 y CA4; que `test:trace` excluya los criterios retirados
+- [ ] T460 [US9] [Sonnet] DS-11: promover del catálogo a `components/ui` y `layout` los equivalentes de los 16 componentes actuales y los que haga falta, sin Tauri, con form actions y sin JavaScript (salvo el captcha del registro); sustituir los antiguos y adaptar sus tests, de uno en uno
+- [ ] T461 [US9] [Sonnet] DS-11: sustituir el estilo base provisional de `src/app.css` por el del sistema (títulos, párrafos, enlaces, espacios) y revisar las rutas con estilos locales
+- [ ] T462 [US9] [Opus] DS-09: medir el contraste sobre la composición real (cristal sobre el fondo animado, en ambos temas y con las preferencias del dispositivo) en todas las zonas de 16.3; ajustar la densidad del cristal donde no llegue a AA
+- [ ] T463 [US9] [Sonnet] DS-11: adaptar `e2e/appearance.spec.ts`, la matriz de UX, las capturas de regresión visual (solo en el contenedor de Playwright) y los tests HTTP que usan `mdm_effects` o `data-effects`
+- [ ] T464 [US9] [Sonnet] DS-11: actualizar `Design/README.md` y `docs/` (documentación archivada) y marcar DS-11 como resuelto en `Historias.md` 16.2 (versión 2.18, copia con `cmp`)
+- [ ] T465 [US9] [Opus] Checkpoint de la migración: `pnpm validate`, `test:e2e:a11y`, `test:e2e:cross-browser`, medidas de Web Vitals, capturas antes y después, y revisión manual de UX

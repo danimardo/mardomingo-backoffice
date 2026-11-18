@@ -64,7 +64,7 @@ src/
     schemas/common/          primitivas Zod (lista repetida, decimal español, dd/mm/aaaa)
     schemas/<f>/             esquemas de formularios compartidos con el cliente
     format/                  formato de importes, fechas y números (puro)
-    design-system/           tokens y tema: fuente canónica desde L01 (ADR 0007)
+    design-system/           tokens y tema: fuente canónica (ADR 0009)
     components/ui/           primitivas accesibles genéricas
     components/layout/       marco: cabecera, pie, navegación, menú de cuenta, tema y efectos
     components/<f>/          componentes de una funcionalidad
