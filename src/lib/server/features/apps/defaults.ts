@@ -35,12 +35,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
 	idempotency_window_minutes: 10,
 	daily_cap_no_purchase: 400_000_000,
 	registrations_per_ip_24h: 3,
+	// Intentos de registro por IP y hora, creen cuenta o no, antes del captcha (BE-FR-45, C-36).
+	signup_attempts_per_ip_hour: 10,
 	login_max_failures: 10,
 	login_lock_minutes: 15,
 	// Límites por IP (BE-FR-45). Valores provisionales: la especificación no los fija; pendientes de revisión del propietario.
 	login_per_ip_15min: 30,
 	resend_verification_per_ip_hour: 5,
 	password_reset_per_ip_hour: 5,
+	// Límites por email (BE-FR-45, C-34): al superarlos no se envía nada y la respuesta es la de siempre.
+	resend_verification_per_email_hour: 3,
+	password_reset_per_email_hour: 3,
 	unverified_account_ttl_days: 7,
 	min_age: 18,
 	inactive_account_years: 3,

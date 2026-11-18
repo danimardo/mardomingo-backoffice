@@ -31,7 +31,8 @@ import {
 } from '$lib/server/features/notifications';
 import { emailOfUser } from '$lib/server/features/accounts';
 import {
-	guardRequest,
+	guardAccessAndBrake,
+	guardFrequency,
 	type ProtectionsDeps,
 	type ProtectionsRuntime
 } from '$lib/server/features/protections';
@@ -380,13 +381,13 @@ export async function runChat(
 	ctx: ChatContext,
 	body: ChatRequestBody
 ): Promise<ChatResponseBody | null> {
-	// Pasos 6 a 8 de §8: versión, mantenimiento, freno global y frecuencia (FR-069, FR-072, FR-073, FR-074, BE-FR-43).
-	guardRequest(protectionsOf(deps), {
+	// Pasos 6 a 8 de §8: versión, mantenimiento y freno global (FR-069, FR-072, FR-073, FR-074).
+	const protections = protectionsOf(deps);
+	guardAccessAndBrake(protections, {
 		endpoint: 'ai',
 		appId: ctx.appId,
 		appVersion: ctx.appVersion,
-		userId: ctx.userId,
-		transcription: false
+		userId: ctx.userId
 	});
 	const now = toEpochMs(deps.clock.now());
 	const key = ctx.idempotencyKey;
@@ -453,6 +454,10 @@ export async function runChat(
 		tools = body.tools;
 		toolChoice = body.tool_choice;
 	}
+
+	// Paso 12: frecuencia por minuto (BE-FR-43), después de la idempotencia y la validación para que un reintento con la
+	// clave ya usada o una petición inválida no gasten cupo (C-39).
+	guardFrequency(protections, { appId: ctx.appId, userId: ctx.userId, transcription: false });
 
 	// Coste máximo (paso 13, BE-FR-72): precio más caro entre el principal y los respaldos, en micro-USD y luego en µc.
 	const modelIds = [eop.model, ...eop.fallbackModels].filter((id): id is string => id !== null);

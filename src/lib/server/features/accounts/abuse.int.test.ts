@@ -1,6 +1,6 @@
 // Antiabuso de las cuentas contra SQLite real (T095; BE-FR-01/CA4, BE-FR-11.2, BE-FR-11.4, BE-FR-67/CA1–CA2): dominios
 // desechables, altas por IP, bloqueo por intentos y antienumeración. Los eventos no llevan email ni IP (15.19).
-import { eq } from 'drizzle-orm';
+import { eq, notLike } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eventsNamed } from '../../../../../tests/builders/fake-logger';
 import {
@@ -28,6 +28,15 @@ beforeEach(() => {
 afterEach(() => {
 	fixture.close();
 });
+
+/** Reservas de alta en curso (C-21): las filas de `auth_rate_limits` que no son el contador de intentos `attempt:` (C-36). */
+function signupSlotRows() {
+	return fixture.database.db
+		.select()
+		.from(authRateLimits)
+		.where(notLike(authRateLimits.ip, 'attempt:%'))
+		.all();
+}
 
 function login(email: string, password: string) {
 	return { email, password, redirectTo: undefined, remoteIp: IP };
@@ -246,7 +255,7 @@ describe('[C-21] altas por IP: reserva atómica frente a peticiones simultáneas
 			8 - SIGNUPS_PER_IP
 		);
 		// Las reservas en curso se liberan al terminar: no queda ninguna.
-		expect(fixture.database.db.select().from(authRateLimits).all()).toEqual([]);
+		expect(signupSlotRows()).toEqual([]);
 	});
 
 	it('un alta que no crea cuenta (email ya registrado) no consume hueco', async () => {
@@ -277,7 +286,7 @@ describe('[C-21] altas por IP: reserva atómica frente a peticiones simultáneas
 				)
 			).toBe('sin error');
 		}
-		expect(fixture.database.db.select().from(authRateLimits).all()).toEqual([]);
+		expect(signupSlotRows()).toEqual([]);
 	});
 });
 

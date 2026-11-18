@@ -544,7 +544,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
 - **Requisito**: BE-FR-45, BE-FR-11 (altas por IP); `contracts/web-routes.md` 1.7.
 - **Ficheros**: `src/lib/server/features/accounts/service.ts` (`ipRateLimited` usa la IP tal cual), `accounts/repository.ts`
   (`bumpRateCounter`, `reserveSignupSlot` y el recuento sobre `user.signup_ip`).
-- **Estado**: confirmado por ejecución: logins y altas desde direcciones distintas del mismo /64 no comparten contador.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: logins y altas desde direcciones distintas del mismo /64 no compartían contador. Funciones puras en `accounts/domain/ip-key.ts` (`canonicalIp`, `rateLimitKeyOf`, `signupIpMatchOf`). `user.signup_ip` se guarda en forma canónica completa y las altas se cuentan por rango de texto del /64, sin migración. Efecto transitorio: las altas de las 24 h previas guardadas con IPv6 comprimida no entran en el recuento, y las filas antiguas de `auth_rate_limits` con IPv6 en bruto no coinciden con las claves /64 hasta que caduquen.
 - **Cambio**: una clave de límite que agrupe IPv6 por /64 y deje IPv4 igual (el criterio de `ipv6Subnet` de Better Auth), usada
   en todos los límites por IP, también en el de altas. Si exige una columna nueva o una migración, detente y anótalo.
 - **Test (primero, debe fallar)**: logins y altas desde el mismo /64 comparten el límite.
@@ -554,7 +554,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
 - **Requisito**: BE-FR-45 (2.14); BE-FR-02 CA3; `contracts/api-v1` E03 (al superar el límite por email no se envía).
 - **Ficheros**: `accounts/service.ts` (`resendVerification`, `requestPasswordReset`: solo límite por IP); `apps/defaults.ts`,
   `apps/json-schemas.ts` y `/admin/protecciones` (ajustes).
-- **Estado**: confirmado por ejecución: desde 10 IP se envían 10 emails a la misma dirección y se crean 10 enlaces de
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: desde 10 IP se enviaban 10 emails a la misma dirección y se creaban 10 enlaces de
   recuperación.
 - **Cambio** (**decisión del propietario: 3 por hora**): contador por HMAC del email normalizado con los ajustes
   `resend_verification_per_email_hour` y `password_reset_per_email_hour` (3, editables con su rango); al superarlo no se
@@ -577,7 +577,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
 
 - **Requisito**: BE-FR-45 (2.14); `contracts/web-routes.md` 1.7 y W08 (`429 RATE_LIMITED`).
 - **Fichero**: `accounts/service.ts` (`register`: solo cuenta las cuentas creadas).
-- **Estado**: confirmado por lectura.
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por lectura. Sin migración: el contador va en el ámbito `signup` con la clave `attempt:<clave IP>`. En E2E, `E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR` (no verificado: no se ha ejecutado E2E).
 - **Cambio** (**decisión del propietario: 10 por hora**): `ipRateLimited` con el ámbito de registro y el ajuste
   `signup_attempts_per_ip_hour` (10, editable con su rango), antes de comprobar el captcha.
 - **Test (primero, debe fallar)**: el intento 11 desde una IP en una hora responde `RATE_LIMITED` sin llamar a Turnstile.
@@ -605,7 +605,7 @@ han confirmado después ejecutando sus tests de reproducción contra el código 
 - **Requisito**: `contracts/api-v1` 1.8 (10 idempotencia, 11 validación, 12 frecuencia); BE-FR-81.
 - **Ficheros**: `src/lib/server/features/ai/service.ts` (`runChat`: `guardRequest` antes de `admissionOf`), `ai/media.ts`
   (transcripción e imagen).
-- **Estado**: confirmado por ejecución: los reintentos con una clave ya entregada responden `RATE_LIMITED` en vez de
+- **Estado**: corregido (2026-11-17), con su test en rojo antes del cambio. Confirmado por ejecución: los reintentos con una clave ya entregada respondían `RATE_LIMITED` en vez de
   `DUPLICATE_REQUEST`, y una operación inexistente gasta cupo.
 - **Cambio**: separar en `guardRequest` el acceso y el freno (pasos 6 a 8), antes de la admisión, de la frecuencia y la
   concurrencia (paso 12), después de la validación.

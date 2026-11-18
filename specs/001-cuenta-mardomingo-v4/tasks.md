@@ -993,13 +993,13 @@ Hallazgos C-32 a C-39 de `correcciones.md`, con las decisiones del propietario d
 Se corrigen en serie y con el test primero.
 
 - [x] T424 C-32 (Media): exigir `ADDRESS_HEADER`, `XFF_DEPTH` y `PROTOCOL_HEADER` en staging y producción, y fijarlas en el `Dockerfile` con `PORT=7311` [BE-FR-45, BE-FR-11] _Hecho: `env-schema.ts` las exige en staging y producción; el `Dockerfile` las fija con `PORT=7311` y `EXPOSE 7311`; `release.yml` y `.env.example` usan el 7311. Test en `config/env-schema-proxy.test.ts`. Antes de desplegar en `main`, Coolify debe apuntar al 7311; staging debe fijar `PORT=7312`._
-- [ ] T425 [US8] C-33 (Media): agrupar IPv6 por /64 en todos los límites por IP de `accounts` [BE-FR-45, BE-FR-11]
-- [ ] T426 [US8] C-34 (Media): límite por email del reenvío de verificación y de la recuperación, con sus ajustes [BE-FR-45, BE-FR-02 CA3]
+- [x] T425 [US8] C-33 (Media): agrupar IPv6 por /64 en todos los límites por IP de `accounts` [BE-FR-45, BE-FR-11] _Hecho: `accounts/domain/ip-key.ts`; `signup_ip` canónica y recuento de altas por rango del /64, sin migración. Tests en `ipv6-prefix-limits.int.test.ts` e `ip-key.test.ts`._
+- [x] T426 [US8] C-34 (Media): límite por email del reenvío de verificación y de la recuperación, con sus ajustes [BE-FR-45, BE-FR-02 CA3] _Hecho: ajustes `resend_verification_per_email_hour` y `password_reset_per_email_hour` (3, rango 1–50); contadores con clave `email:<HMAC>`, sin migración; al superarlo, `suppressed` y respuesta neutra. Test en `per-email-limits.int.test.ts`._
 - [x] T427 C-35 (Baja): ignorar `x-mm-client-ip` del cliente y pasar la IP real en `changePassword` _Hecho: `hooks.server.ts` quita la cabecera de toda petición y `changePassword` construye las cabeceras con `headersFor(remoteIp)` más la credencial. Test en `accounts/password-change-ip.int.test.ts`._
-- [ ] T428 [US8] C-36 (Baja): límite de intentos de registro por IP antes del captcha, con su ajuste [BE-FR-45]
+- [x] T428 [US8] C-36 (Baja): límite de intentos de registro por IP antes del captcha, con su ajuste [BE-FR-45] _Hecho: ajuste `signup_attempts_per_ip_hour` (10, rango 1–50); clave `attempt:<clave IP>` en el ámbito `signup`; `E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR` para los E2E (sin ejecutar). Test en `signup-attempts.int.test.ts`._
 - [x] T429 C-37 (Baja): `failureOf` muestra los minutos de espera de `RATE_LIMITED` en la web _Hecho: conversión con `Math.ceil` en `failureOf`; W10 ya no la hace a mano. Test en `web/actions.test.ts`._
 - [x] T430 C-38 (Baja): en `/client-errors`, límite del visitante antes del global y tope de 4 KB antes de leer el cuerpo _Hecho: el visitante se comprueba antes de sumar al cupo global; `readTextCapped` rechaza por `content-length` y corta la lectura al pasar de 4 KB. Tests en `client-errors.cache.test.ts` y `client-errors.body.test.ts`._
-- [ ] T431 C-39 (Baja): en `/ai/*`, frecuencia y concurrencia después de la idempotencia y la validación, en `ai/service.ts` y `ai/media.ts` [BE-FR-81]
+- [x] T431 C-39 (Baja): en `/ai/*`, frecuencia y concurrencia después de la idempotencia y la validación, en `ai/service.ts` y `ai/media.ts` [BE-FR-81]
 
 <!-- Desviaciones documentadas (sesión de implementación del panel): T260 lee los anuncios en `apps` (dueña de la tabla `announcements`), no en `notifications.listForPanel`. T265/T266: pruebas en `accounts/email-change.int.test.ts`. T272: el recorrido E2E del panel vive en `e2e/sesion.spec.ts` para no añadir altas por IP. Pendiente: T268 PDF real (el proveedor `none` no emite), T273 tema oscuro, T270 y T271 parciales. -->
 

@@ -76,7 +76,14 @@ function operationRow(operation: DefaultOperation, now: EpochMs): OperationInser
 export function seedApps(
 	tx: Tx,
 	now: EpochMs,
-	overrides: Readonly<Partial<Record<'registrations_per_ip_24h', number>>> = {}
+	overrides: Readonly<
+		Partial<
+			Record<
+				'registrations_per_ip_24h' | 'login_per_ip_15min' | 'signup_attempts_per_ip_hour',
+				number
+			>
+		>
+	> = {}
 ): void {
 	for (const [key, value] of Object.entries({ ...DEFAULT_SETTINGS, ...overrides })) {
 		if (isSettingKey(key)) seedInsertSetting(tx, key, value, now);

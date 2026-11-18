@@ -105,19 +105,42 @@ export interface RequestGuardInput {
 }
 
 /**
- * Pasos de protección de una petición de IA, en orden: versión y mantenimiento, freno global, frecuencia y, en
- * transcripciones, concurrencia. Devuelve la liberación de la ranura (no hace nada si no hay). El llamador la libera en
- * un `finally`.
+ * Pasos 6 a 8 del contrato (1.8) de una petición de IA: versión, mantenimiento y freno global. Van antes de las versiones
+ * legales y de la idempotencia; no gastan cupo de frecuencia.
  */
-export function guardRequest(deps: ProtectionsDeps, input: RequestGuardInput): () => void {
+export function guardAccessAndBrake(
+	deps: ProtectionsDeps,
+	input: Pick<RequestGuardInput, 'endpoint' | 'appId' | 'appVersion' | 'userId'>
+): void {
 	guardAccess(deps, input);
+	guardBrake(deps, toEpochMs(deps.clock.now()), input.userId);
+}
+
+/**
+ * Paso 12 del contrato (1.8): frecuencia por minuto y, en transcripciones, concurrencia. Va después de la idempotencia (10)
+ * y de la validación (11), así que un reintento con la clave ya usada o una petición inválida no gastan cupo (C-39). Solo
+ * aquí se registra la petición. Devuelve la liberación de la ranura (no hace nada si no hay); el llamador la libera en un
+ * `finally`.
+ */
+export function guardFrequency(
+	deps: ProtectionsDeps,
+	input: Pick<RequestGuardInput, 'appId' | 'userId' | 'transcription'>
+): () => void {
 	const now = toEpochMs(deps.clock.now());
-	guardBrake(deps, now, input.userId);
 	const limits = effectiveLimits(deps, input.appId);
 	checkRate(deps, input, now, limits);
 	const release = input.transcription ? acquireSlot(deps, input, limits) : () => undefined;
 	deps.runtime.rate.record(input.userId, input.appId, now);
 	return release;
+}
+
+/**
+ * Todos los pasos de protección seguidos (`guardAccessAndBrake` y `guardFrequency`), para quien no tiene pasos intermedios
+ * de idempotencia ni validación (las pruebas de `protections`). `/ai/*` llama a las dos partes por separado (C-39).
+ */
+export function guardRequest(deps: ProtectionsDeps, input: RequestGuardInput): () => void {
+	guardAccessAndBrake(deps, input);
+	return guardFrequency(deps, input);
 }
 
 /**
@@ -206,7 +229,7 @@ function effectiveLimits(deps: ProtectionsDeps, appId: string): EffectiveLimits 
 /** Frecuencia por minuto (BE-FR-43): el límite de la cuenta suma todas sus apps; el de la app solo cuenta las suyas. */
 function checkRate(
 	deps: ProtectionsDeps,
-	input: RequestGuardInput,
+	input: Pick<RequestGuardInput, 'userId' | 'appId'>,
 	now: EpochMs,
 	limits: EffectiveLimits
 ): void {
@@ -231,7 +254,7 @@ function checkRate(
 /** Transcripciones simultáneas (BE-FR-43): la cuenta suma todas sus apps; la app cuenta solo las suyas. */
 function acquireSlot(
 	deps: ProtectionsDeps,
-	input: RequestGuardInput,
+	input: Pick<RequestGuardInput, 'userId' | 'appId'>,
 	limits: EffectiveLimits
 ): () => void {
 	const inFlight = deps.runtime.slots.inFlight(input.userId, input.appId);

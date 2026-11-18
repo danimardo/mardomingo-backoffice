@@ -10,6 +10,7 @@ export const PANEL_E2E_PASSWORD = 'contraseña-panel-e2e-123';
 /** Límites de la base E2E (T250): la siembra los escribe porque el arranque no sobrescribe los ajustes ya presentes. */
 export const E2E_REGISTRATIONS_PER_IP_24H = 100;
 export const E2E_LOGINS_PER_IP_15MIN = 500;
+export const E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR = 500;
 
 /**
  * Única cuenta administradora de las pruebas E2E de la base de una ejecución (índice `one_admin`). Los specs que la

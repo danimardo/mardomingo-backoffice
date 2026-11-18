@@ -6,11 +6,14 @@ import { parseAdminSettingValue, parseSettingValue, type SettingKey } from './js
 const RANGES: readonly (readonly [SettingKey, number, number])[] = [
 	['global_daily_free_cost_brake_eur', 100, 10_000],
 	['registrations_per_ip_24h', 1, 20],
+	['signup_attempts_per_ip_hour', 1, 50],
 	['login_max_failures', 3, 50],
 	['login_lock_minutes', 1, 1440],
 	['login_per_ip_15min', 5, 500],
 	['resend_verification_per_ip_hour', 1, 50],
 	['password_reset_per_ip_hour', 1, 50],
+	['resend_verification_per_email_hour', 1, 50],
+	['password_reset_per_email_hour', 1, 50],
 	['ai_requests_per_minute', 1, 300],
 	['max_concurrent_transcriptions', 1, 10]
 ];

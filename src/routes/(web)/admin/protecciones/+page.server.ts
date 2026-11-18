@@ -21,11 +21,14 @@ import type { Actions, PageServerLoad } from './$types';
 /** Límites de protección que W44 muestra y puede cambiar (BE-FR-43, BE-FR-46, BE-FR-53). */
 const PROTECTION_LIMITS = Object.freeze([
 	'registrations_per_ip_24h',
+	'signup_attempts_per_ip_hour',
 	'login_max_failures',
 	'login_lock_minutes',
 	'login_per_ip_15min',
 	'resend_verification_per_ip_hour',
 	'password_reset_per_ip_hour',
+	'resend_verification_per_email_hour',
+	'password_reset_per_email_hour',
 	'ai_requests_per_minute',
 	'max_concurrent_transcriptions',
 	'global_daily_free_cost_brake_eur'

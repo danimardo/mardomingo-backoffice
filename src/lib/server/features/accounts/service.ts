@@ -25,6 +25,7 @@ import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import type { Auth } from './auth';
 import { DISPOSABLE_DOMAINS_V1 } from './disposable-domains';
 import { normalizeEmail } from './domain/email';
+import { canonicalIp, rateLimitKeyOf } from './domain/ip-key';
 import { revokedSince, sessionIdsOf } from './close-session';
 import { safeRedirect } from './domain/redirect';
 import { hashNormalizedEmail } from './email-hash';
@@ -94,6 +95,8 @@ export interface LoginInput {
 const HOUR_MS = 60 * 60 * 1000;
 /** Una reserva de alta en curso deja de contar a los 10 minutos de la última (C-21): un alta dura segundos. */
 const SIGNUP_PENDING_TTL_MS = 10 * 60 * 1000;
+/** Prefijo de la clave del contador de intentos de registro en el ámbito `signup` (C-36). */
+const SIGNUP_ATTEMPT_KEY_PREFIX = 'attempt:';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Errores de Better Auth: se leen en un único sitio y se traducen a códigos de la aplicación.
@@ -125,11 +128,14 @@ export function headersFor(remoteIp: string | null): Headers {
 
 type NumericSetting =
 	| 'registrations_per_ip_24h'
+	| 'signup_attempts_per_ip_hour'
 	| 'login_max_failures'
 	| 'login_lock_minutes'
 	| 'login_per_ip_15min'
 	| 'resend_verification_per_ip_hour'
 	| 'password_reset_per_ip_hour'
+	| 'resend_verification_per_email_hour'
+	| 'password_reset_per_email_hour'
 	| 'min_age';
 
 function numberSetting(deps: AccountsBase, key: NumericSetting): number {
@@ -156,7 +162,10 @@ async function matchVerificationTiming(deps: AccountsDeps): Promise<void> {
 	await deps.auth.api.sendVerificationEmail({ body: { email: 'registro@mardomingo.invalid' } });
 }
 
-/** Registro (W08): captcha → dominio desechable → altas por IP → versiones legales → alta → aceptaciones → email. */
+/**
+ * Registro (W08): intentos por IP → captcha → dominio desechable → altas por IP → versiones legales → alta → aceptaciones →
+ * email.
+ */
 export async function register(
 	deps: AccountsDeps,
 	input: RegisterInput
@@ -169,6 +178,20 @@ export async function register(
 		deps.logger.emit('accounts.signup.rejected', { reason });
 		throw new AppError(code);
 	};
+
+	// Intentos de registro por IP y hora, creen cuenta o no (C-36): antes del captcha, para no llamar a Turnstile sin freno.
+	// Su contador va en el ámbito `signup` con la clave `attempt:<clave de la IP>`, aparte del hueco de altas creadas.
+	if (input.remoteIp !== null) {
+		ipRateLimited(
+			deps,
+			'signup',
+			input.remoteIp,
+			now,
+			HOUR_MS,
+			numberSetting(deps, 'signup_attempts_per_ip_hour'),
+			SIGNUP_ATTEMPT_KEY_PREFIX
+		);
+	}
 
 	const outcome = await deps.captcha.verify({
 		token: input.captchaToken,
@@ -260,7 +283,8 @@ async function createAccount(
 		setSignupMetadata(tx, created.user.id, {
 			emailNormalized: normalizeEmail(input.email),
 			signupAppId: appId,
-			signupIp: input.remoteIp
+			// Completa y en forma canónica (C-33): sigue siendo la prueba del alta y su /64 es un prefijo de texto fijo.
+			signupIp: input.remoteIp === null ? null : canonicalIp(input.remoteIp)
 		});
 		// El hueco en curso pasa a ser un alta creada en la misma transacción (C-21).
 		if (input.remoteIp !== null) releaseSignupSlot(tx, input.remoteIp);
@@ -305,6 +329,13 @@ export async function resendVerification(
 		);
 	}
 	const email = input.email.toLowerCase();
+	const limit = numberSetting(deps, 'resend_verification_per_email_hour');
+	if (emailRateLimited(deps, 'resend_verification', email, now, limit)) {
+		// Superado el límite por email (C-34): no se envía, con el mismo suelo de tiempo que un envío (C-17).
+		await matchVerificationTiming(deps);
+		deps.logger.emit('accounts.verification.resend_requested', { status: 'suppressed' });
+		return;
+	}
 	const row = deps.db.select().from(user).where(eq(user.email, email)).get();
 	const pending = row !== undefined && !row.emailVerified;
 	// Better Auth aplica a este endpoint un suelo de tiempo constante (500 ms) tanto si la cuenta existe como si no, y solo
@@ -376,7 +407,8 @@ const LOGIN_IP_WINDOW_MS = 15 * 60 * 1000;
 
 /**
  * Límite por IP de una acción (BE-FR-45, D-02): cuenta la petición en su ventana fija y, si supera el máximo, la rechaza
- * con `RATE_LIMITED` y `Retry-After`. El evento no lleva la IP.
+ * con `RATE_LIMITED` y `Retry-After`. Una IPv6 cuenta por su /64 y una IPv4 mapeada como IPv4 (`rateLimitKeyOf`, C-33). El
+ * evento no lleva la IP. `keyPrefix` separa otro contador por IP del mismo ámbito (`attempt:` en `signup`, C-36).
  */
 export function ipRateLimited(
 	deps: AccountsDeps,
@@ -384,10 +416,12 @@ export function ipRateLimited(
 	ip: string,
 	now: EpochMs,
 	windowMs: number,
-	limit: number
+	limit: number,
+	keyPrefix = ''
 ): void {
+	const key = `${keyPrefix}${rateLimitKeyOf(ip)}`;
 	const counter = immediateTransaction(deps.db, (tx) =>
-		bumpRateCounter(tx, scope, ip, now, windowMs)
+		bumpRateCounter(tx, scope, key, now, windowMs)
 	);
 	if (counter.count <= limit) return;
 	deps.logger.emit('accounts.rate_limit.exceeded', { reason: scope });
@@ -395,6 +429,25 @@ export function ipRateLimited(
 	throw new AppError('RATE_LIMITED', {
 		retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000))
 	});
+}
+
+/**
+ * Límite por email de una acción que siempre responde neutra (BE-FR-45, C-34): cuenta la petición en el mismo ámbito que el
+ * límite por IP, con la clave `email:` + HMAC-SHA256 del email normalizado (nunca el email en claro), exista o no la
+ * cuenta. Devuelve `true` si se ha superado: entonces no se envía nada, sin error ni `Retry-After`, para no revelar nada.
+ */
+function emailRateLimited(
+	deps: AccountsDeps,
+	scope: Extract<AuthRateScope, 'resend_verification' | 'password_reset'>,
+	email: string,
+	now: EpochMs,
+	limit: number
+): boolean {
+	const key = `email:${hashNormalizedEmail(normalizeEmail(email), deps.emailHashKey)}`;
+	const counter = immediateTransaction(deps.db, (tx) =>
+		bumpRateCounter(tx, scope, key, now, HOUR_MS)
+	);
+	return counter.count > limit;
 }
 
 /**
@@ -666,7 +719,16 @@ export async function requestPasswordReset(
 		);
 	}
 	const email = input.email.toLowerCase();
-	const exists = deps.db.select().from(user).where(eq(user.email, email)).get() !== undefined;
+	// Superado el límite por email (C-34) no se crea enlace ni se envía nada, igual que sin cuenta: misma respuesta y tiempo.
+	const limited = emailRateLimited(
+		deps,
+		'password_reset',
+		email,
+		now,
+		numberSetting(deps, 'password_reset_per_email_hour')
+	);
+	const exists =
+		!limited && deps.db.select().from(user).where(eq(user.email, email)).get() !== undefined;
 	if (exists) await deps.auth.api.requestPasswordReset({ body: { email } });
 	deps.logger.emit('accounts.password.reset_requested', { status: exists ? 'sent' : 'suppressed' });
 }

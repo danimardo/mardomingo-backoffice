@@ -150,7 +150,7 @@ describe('valores de settings (3.1)', () => {
 		expect(parseSettingValue('maintenance', { active: false, message: '' }).success).toBe(true);
 	});
 
-	it('define un esquema para las 45 claves de §9 (42 + 3 límites por IP provisionales, T204)', () => {
-		expect(Object.keys(SETTING_SCHEMAS)).toHaveLength(45);
+	it('define un esquema para las 48 claves de §9 (42, 3 límites por IP provisionales de T204 y 3 de C-34 y C-36)', () => {
+		expect(Object.keys(SETTING_SCHEMAS)).toHaveLength(48);
 	});
 });

@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	E2E_LOGINS_PER_IP_15MIN,
 	E2E_REGISTRATIONS_PER_IP_24H,
+	E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR,
 	PANEL_E2E_EMAIL,
 	PANEL_E2E_PASSWORD
 } from '../../e2e/constants';
@@ -73,6 +74,7 @@ describe.skipIf(!existsSync(REQUEST_FILE))('siembra del panel para el E2E (T250)
 			const setLimit = db.prepare('UPDATE settings SET value = ? WHERE key = ?');
 			setLimit.run(String(E2E_REGISTRATIONS_PER_IP_24H), 'registrations_per_ip_24h');
 			setLimit.run(String(E2E_LOGINS_PER_IP_15MIN), 'login_per_ip_15min');
+			setLimit.run(String(E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR), 'signup_attempts_per_ip_hour');
 			const row = db
 				.prepare('SELECT COUNT(*) AS total FROM credit_buckets WHERE user_id = ?')
 				.pluck()

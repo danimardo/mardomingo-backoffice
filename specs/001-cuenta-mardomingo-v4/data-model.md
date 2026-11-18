@@ -520,24 +520,24 @@ tiempo se inyecta).
 
 #### `user` (Better Auth + plugin `admin` + campos propios)
 
-| Columna                     | Tipo    | Nulo | Defecto  | Descripción                                                                    |
-| --------------------------- | ------- | ---- | -------- | ------------------------------------------------------------------------------ |
-| `id`                        | Id      | no   | —        | Generado por Better Auth                                                       |
-| `name`                      | Text    | no   | `''`     | Exigido por Better Auth; **[Supuesto]** no se recoge nombre: `''`              |
-| `email`                     | Text    | no   | —        | Email de acceso (minúsculas)                                                   |
-| `email_verified`            | Bool    | no   | 0        | Sin verificar = 0                                                              |
-| `image`                     | Text    | sí   | —        | Better Auth; sin uso en la v4                                                  |
-| `role`                      | Text    | no   | `'user'` | Lista separada por comas: `user`, `tester`, `admin` (plugin `admin`)           |
-| `banned`                    | Bool    | no   | 0        | Bloqueada                                                                      |
-| `ban_reason`                | Text    | sí   | —        | Motivo del bloqueo (admin o contracargo)                                       |
-| `ban_expires`               | EpochMs | sí   | —        | Plugin `admin`; siempre nulo en la v4 (bloqueo indefinido)                     |
-| `email_normalized`          | Text    | sí   | —        | Forma normalizada (BE-FR-11.5); nulo al borrar                                 |
-| `signup_app_id`             | Id      | sí   | —        | App de origen (`?app=`, BE-FR-64 CA1)                                          |
-| `signup_ip`                 | Text    | sí   | —        | **Nuevo** (D-14): IP del registro (altas por IP, BE-FR-11.4; prueba, BE-FR-83) |
-| `last_activity_at`          | EpochMs | sí   | —        | **Nuevo** (D-14): última actividad (login, API, panel; BE-FR-86)               |
-| `inactivity_warned_at`      | EpochMs | sí   | —        | **Nuevo**: aviso de borrado por inactividad enviado                            |
-| `deleted_at`                | EpochMs | sí   | —        | Borrada y anonimizada                                                          |
-| `created_at` / `updated_at` | EpochMs | no   | now      | Better Auth (`Date` en infraestructura, `timestamp_ms`)                        |
+| Columna                     | Tipo    | Nulo | Defecto  | Descripción                                                                                                                                                                                                                                      |
+| --------------------------- | ------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                        | Id      | no   | —        | Generado por Better Auth                                                                                                                                                                                                                         |
+| `name`                      | Text    | no   | `''`     | Exigido por Better Auth; **[Supuesto]** no se recoge nombre: `''`                                                                                                                                                                                |
+| `email`                     | Text    | no   | —        | Email de acceso (minúsculas)                                                                                                                                                                                                                     |
+| `email_verified`            | Bool    | no   | 0        | Sin verificar = 0                                                                                                                                                                                                                                |
+| `image`                     | Text    | sí   | —        | Better Auth; sin uso en la v4                                                                                                                                                                                                                    |
+| `role`                      | Text    | no   | `'user'` | Lista separada por comas: `user`, `tester`, `admin` (plugin `admin`)                                                                                                                                                                             |
+| `banned`                    | Bool    | no   | 0        | Bloqueada                                                                                                                                                                                                                                        |
+| `ban_reason`                | Text    | sí   | —        | Motivo del bloqueo (admin o contracargo)                                                                                                                                                                                                         |
+| `ban_expires`               | EpochMs | sí   | —        | Plugin `admin`; siempre nulo en la v4 (bloqueo indefinido)                                                                                                                                                                                       |
+| `email_normalized`          | Text    | sí   | —        | Forma normalizada (BE-FR-11.5); nulo al borrar                                                                                                                                                                                                   |
+| `signup_app_id`             | Id      | sí   | —        | App de origen (`?app=`, BE-FR-64 CA1)                                                                                                                                                                                                            |
+| `signup_ip`                 | Text    | sí   | —        | **Nuevo** (D-14): IP del registro en forma canónica (IPv4 tal cual, la mapeada como IPv4; IPv6 en 8 grupos de 4 cifras hexadecimales en minúsculas, sin `::`), para contar las altas por /64 (C-33) (altas por IP, BE-FR-11.4; prueba, BE-FR-83) |
+| `last_activity_at`          | EpochMs | sí   | —        | **Nuevo** (D-14): última actividad (login, API, panel; BE-FR-86)                                                                                                                                                                                 |
+| `inactivity_warned_at`      | EpochMs | sí   | —        | **Nuevo**: aviso de borrado por inactividad enviado                                                                                                                                                                                              |
+| `deleted_at`                | EpochMs | sí   | —        | Borrada y anonimizada                                                                                                                                                                                                                            |
+| `created_at` / `updated_at` | EpochMs | no   | now      | Better Auth (`Date` en infraestructura, `timestamp_ms`)                                                                                                                                                                                          |
 
 - PK `id`. UNIQUE `email`. FK `signup_app_id` → `apps.id` (cruza, hacia atrás).
 - **Índice no único** (`email_normalized`, D-11): BE-FR-11 CA1 permite varias cuentas con la misma
@@ -597,14 +597,19 @@ del cambio de email usan el mecanismo de Better Auth con caducidad configurada a
 Contadores propios de `accounts` para los límites de autenticación por IP. Sustituye a la tabla
 `rate_limit` de Better Auth, cuyo `rateLimit` no actúa con `auth.api` y está desactivado.
 
-| Columna        | Tipo                                                                   | Nulo | Defecto | Descripción                                                        |
-| -------------- | ---------------------------------------------------------------------- | ---- | ------- | ------------------------------------------------------------------ |
-| `scope`        | Enum(login\|signup\|resend_verification\|password_reset\|email_change) | no   | —       | Acción limitada                                                    |
-| `ip`           | Text                                                                   | no   | —       | IP del cliente (`getClientAddress()`); dato personal de vida corta |
-| `count`        | Int                                                                    | no   | 0       | Peticiones en la ventana                                           |
-| `window_start` | EpochMs                                                                | no   | —       | Inicio de la ventana                                               |
+| Columna        | Tipo                                                                   | Nulo | Defecto | Descripción                                                                                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------- | ---- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scope`        | Enum(login\|signup\|resend_verification\|password_reset\|email_change) | no   | —       | Acción limitada                                                                                                                                                                                           |
+| `ip`           | Text                                                                   | no   | —       | Clave de IP del cliente (`getClientAddress()`): IPv4 tal cual (la mapeada `::ffff:a.b.c.d`, como IPv4) o el /64 de la IPv6 con 8 grupos de 4 cifras y el resto a cero (C-33); dato personal de vida corta |
+| `count`        | Int                                                                    | no   | 0       | Peticiones en la ventana                                                                                                                                                                                  |
+| `window_start` | EpochMs                                                                | no   | —       | Inicio de la ventana                                                                                                                                                                                      |
 
 - PK (`scope`, `ip`). Índice (`window_start`) (purga).
+- Sin migración, algunos contadores usan una clave con prefijo dentro de un ámbito ya existente (como `session:` en `login_attempts`):
+  `attempt:<clave IP>` en `signup` (intentos de registro por IP, `signup_attempts_per_ip_hour`; C-36) y `email:<HMAC>` en
+  `resend_verification` y `password_reset` (límite por email, HMAC-SHA256 en hexadecimal de `normalizeEmail(email)` con
+  `EMAIL_HASH_KEY`, el mismo que `login_attempts`; C-34). No chocan con las claves de IP, que solo llevan dígitos, hexadecimal,
+  `.` y `:`.
 - Los límites salen de `settings`; superarlos → `RATE_LIMITED` (API) o error con tiempo de espera
   (web). Las altas por IP en 24 h (BE-FR-11.4) se cuentan sobre `user.signup_ip` más las altas en curso, que se reservan de
   forma atómica en el ámbito `signup` antes de crear la cuenta y se liberan al crearla o al fallar (caducan a los 10 min; C-21).

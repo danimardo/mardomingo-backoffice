@@ -47,7 +47,7 @@ import {
 	protectionsOf
 } from './service';
 import { insertOperation, updateOperation } from './repository';
-import { guardRequest } from '$lib/server/features/protections';
+import { guardAccessAndBrake, guardFrequency } from '$lib/server/features/protections';
 
 /** Adaptadores de audio y de Voxtral. `transcriber` es `null` si no hay clave: el principal figura como no configurado. */
 export interface MediaDeps {
@@ -93,18 +93,28 @@ export async function runTranscription(
 	ctx: ChatContext,
 	input: { readonly operation: string; readonly audio: AudioUpload }
 ): Promise<TranscriptionResponseBody | null> {
-	// Pasos 6 a 8 de §8, y la ranura de concurrencia hasta que termina la transcripción (BE-FR-43).
-	const release = guardRequest(protectionsOf(deps), {
+	// Pasos 6 a 8 de §8: versión, mantenimiento y freno global.
+	const protections = protectionsOf(deps);
+	guardAccessAndBrake(protections, {
 		endpoint: 'ai',
 		appId: ctx.appId,
 		appVersion: ctx.appVersion,
-		userId: ctx.userId,
-		transcription: true
+		userId: ctx.userId
 	});
+	// Paso 12 (frecuencia y ranura de concurrencia, BE-FR-43): lo pide el flujo después de la idempotencia y de validar el
+	// audio (C-39). La ranura, si se llegó a ocupar, se libera aquí en cualquier camino.
+	const slot = { release: (): void => undefined };
+	const admitFrequency = (): void => {
+		slot.release = guardFrequency(protections, {
+			appId: ctx.appId,
+			userId: ctx.userId,
+			transcription: true
+		});
+	};
 	try {
-		return await transcriptionFlow(deps, media, ctx, input);
+		return await transcriptionFlow(deps, media, ctx, input, admitFrequency);
 	} finally {
-		release();
+		slot.release();
 	}
 }
 
@@ -112,7 +122,8 @@ async function transcriptionFlow(
 	deps: AiDeps,
 	media: MediaDeps,
 	ctx: ChatContext,
-	input: { readonly operation: string; readonly audio: AudioUpload }
+	input: { readonly operation: string; readonly audio: AudioUpload },
+	admitFrequency: () => void
 ): Promise<TranscriptionResponseBody | null> {
 	const now = toEpochMs(deps.clock.now());
 	const { replay } = admissionOf(deps, ctx, input.operation, now);
@@ -160,6 +171,9 @@ async function transcriptionFlow(
 				maxSeconds: limit.maxSeconds
 			});
 		}
+
+		// Paso 12: frecuencia y concurrencia, ya validada la petición (C-39).
+		admitFrequency();
 
 		// Coste máximo: el precio más caro entre Voxtral y el respaldo. Sin precio del respaldo, el tope de la operación.
 		const voxtralCharge = chargeFor(deps.pricing, {
@@ -464,13 +478,13 @@ export async function runImage(
 	ctx: ChatContext,
 	input: ImageInput
 ): Promise<ImageResponseBody | null> {
-	// Pasos 6 a 8 de §8: versión, mantenimiento, freno global y frecuencia (FR-069, FR-072, FR-073, FR-074, BE-FR-43).
-	guardRequest(protectionsOf(deps), {
+	// Pasos 6 a 8 de §8: versión, mantenimiento y freno global (FR-069, FR-072, FR-073, FR-074).
+	const protections = protectionsOf(deps);
+	guardAccessAndBrake(protections, {
 		endpoint: 'ai',
 		appId: ctx.appId,
 		appVersion: ctx.appVersion,
-		userId: ctx.userId,
-		transcription: false
+		userId: ctx.userId
 	});
 	const now = toEpochMs(deps.clock.now());
 	const { replay } = admissionOf(deps, ctx, input.operation, now);
@@ -515,6 +529,9 @@ export async function runImage(
 	if (!checkMessageSizes(messages, limits).ok) {
 		reject(deps, input.operation, 'payload_too_large', 'PAYLOAD_TOO_LARGE', { field: 'messages' });
 	}
+
+	// Paso 12: frecuencia por minuto (BE-FR-43), ya superadas la idempotencia y la validación (C-39).
+	guardFrequency(protections, { appId: ctx.appId, userId: ctx.userId, transcription: false });
 
 	// Coste máximo: el precio por imagen estimado de la operación, o su tope si no lo hay.
 	const estimateMicro =

@@ -3,6 +3,8 @@ export {
 	CONCURRENCY_RETRY_AFTER_SECONDS,
 	guardAccess,
 	createProtectionsRuntime,
+	guardAccessAndBrake,
+	guardFrequency,
 	guardRequest,
 	releaseBrake,
 	brakeStatus,
