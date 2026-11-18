@@ -599,7 +599,8 @@ audita (liberar un freno que ya no está activo, desactivar un anuncio ya inacti
   `?/crearPaquete`, `?/guardarPaquete` (nombre, precio con IVA, bonificación, activo, orden);
   `?/previsualizarTipoCambioManual` / `?/fijarTipoCambioManual` (`usdEurPpm`, entero en ppm entre 500.000 y
   2.000.000, es decir de 0,50 a 2,00 EUR por USD; `motivo`; `confirmado` solo al fijar), `?/quitarTipoCambioManual`;
-  `?/guardarPrecioOrientativo` (app, operación, valor manual).
+  `?/guardarPrecioOrientativo` (app, operación, valor manual). Una operación que no existe responde `404` con
+  `formError = "NOT_FOUND"`, sin escribir ni auditar (C-58).
 - **Tipo de cambio manual** (C-48): la vista previa no escribe nada y devuelve
   `{ fxPreview: { beforePpm, beforeEur, afterPpm, afterEur, reason } }`, que se muestra como «antes → después»
   («920000 ppm (0,92 EUR por USD) → 1000000 ppm (1 EUR por USD)»). Un valor fuera de rango, decimal, con signo o vacío
@@ -629,7 +630,8 @@ inexistente responde `error(404)` desde el `load`.
   texto de pasos siguientes `post_verify_text`, esquema de sincronización); `?/previsualizarMantenimiento` /
   `?/guardarMantenimiento` (activo, mensaje); `?/guardarVersiones` (`min`, `recommended`, `enforce`);
   `?/previsualizarSobrescrituras` / `?/guardarSobrescrituras` (límites por app, no mayores que el global;
-  aclaración 2026-10-10); `?/crearOperacion` (clave, nombre, tipo, modo).
+  aclaración 2026-10-10); `?/crearOperacion` (clave, nombre, tipo, modo y motivo: desde C-57 lo exige con la regla
+  común de 1 a 500 caracteres y la auditoría de `apps.operation.create` guarda el motivo recortado).
 - **Aviso de predeterminados** (C-45): si el esquema de sincronización vigente ya no admite alguna categoría de los
   predeterminados de la app (no declarada o con otra estrategia), el `load` la nombra en un aviso con enlace a W42. Esas
   categorías no se siembran en las cuentas nuevas, y los predeterminados guardados no cambian hasta que el administrador

@@ -123,6 +123,9 @@ export const actions: Actions = {
 		const composition = getComposition();
 		const app = appForAdmin(composition.apps, params.slug);
 		if (app === null) error(404);
+		// Motivo de 1 a 500 caracteres (C-55, C-57), con el error junto al campo de su formulario; el servicio lo audita.
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: 'crearOperacion' });
+		if (rejected !== null) return rejected;
 		const kind = kindOf(textOf(form, 'tipo'));
 		if (kind === null) return fail(400, { errors: { tipo: 'validation_invalid' } });
 		const model = textOf(form, 'modelo');
@@ -138,7 +141,8 @@ export const actions: Actions = {
 				timeoutMs: Number(textOf(form, 'tiempoMs')),
 				maxCostMicro: Number(textOf(form, 'costeMaximoMicro')),
 				capabilities: jsonField(form, 'capacidades'),
-				active: false
+				active: false,
+				reason: textOf(form, 'motivo')
 			}));
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);

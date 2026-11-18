@@ -743,16 +743,19 @@ export interface NewOperation {
 	readonly transcriptionConfig?: unknown;
 	readonly groupLabel?: string | null;
 	readonly active?: boolean;
+	/** Motivo del alta, de 1 a 500 caracteres tras recortar (BE-FR-55; C-57). */
+	readonly reason: string;
 }
 
-/** Alta de una operación del catálogo (BE-FR-77): sus reglas de coherencia se comprueban antes de guardar. Devuelve también el id de
- * su entrada de auditoría (UX-13; C-54). */
+/** Alta de una operación del catálogo (BE-FR-77): sus reglas de coherencia se comprueban antes de guardar. Exige el motivo y audita el
+ * recortado (C-57). Devuelve también el id de su entrada de auditoría (UX-13; C-54). */
 export function createOperation(
 	deps: AppsDeps,
 	actorId: string,
 	appId: string,
 	input: NewOperation
 ): { readonly id: string; readonly entryId: string } {
+	const reason = requireReason(input.reason);
 	const app = readApp(deps.db, deps.logger, appId);
 	if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
 	const fallbackModels = FallbackModels.safeParse(input.fallbackModels ?? []);
@@ -836,7 +839,7 @@ export function createOperation(
 				entityId: id,
 				before: null,
 				after: { key: input.key, kind: input.kind, active },
-				reason: null
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);

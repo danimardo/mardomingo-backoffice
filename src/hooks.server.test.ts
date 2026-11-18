@@ -115,3 +115,53 @@ describe('[C-30] fallo de loadSession', () => {
 		}
 	});
 });
+
+// C-59 (T450; C-35): `stripInternalHeaders` quita la cabecera interna de la IP de toda petición entrante, antes que ningún otro
+// paso. Ni la lectura de la sesión (Better Auth) ni la ruta la ven, aunque el cliente la envíe.
+describe('[C-59] cabecera interna x-mm-client-ip', () => {
+	const SPOOFED_IP = '203.0.113.9';
+
+	async function headersSeenBy(path: string, headers: Record<string, string>) {
+		const readSession = composition.accounts.readSession;
+		let session: string | null | undefined;
+		let route: string | null | undefined;
+		Reflect.set(composition.accounts, 'readSession', (received: Headers) => {
+			session = received.get('x-mm-client-ip');
+			return Promise.resolve(null);
+		});
+		try {
+			const resolve = (event: RequestEvent) => {
+				route = event.request.headers.get('x-mm-client-ip');
+				return Promise.resolve(new Response('ok', { status: 200 }));
+			};
+			const result: unknown = await Reflect.apply(handle, undefined, [
+				{ event: eventOf(path, headers), resolve }
+			]);
+			if (!(result instanceof Response)) throw new Error('handle no devolvió una Response');
+			return { status: result.status, session, route };
+		} finally {
+			composition.accounts.readSession = readSession;
+		}
+	}
+
+	it('en la web, ni la sesión ni la ruta ven la cabecera enviada por el cliente', async () => {
+		const seen = await headersSeenBy('/panel', {
+			cookie: 'better-auth.session_token=abc',
+			'x-mm-client-ip': SPOOFED_IP
+		});
+
+		expect(seen.status).toBe(200);
+		expect(seen.session).toBeNull();
+		expect(seen.route).toBeNull();
+	});
+
+	it('en la API, tampoco con un token Bearer', async () => {
+		const seen = await headersSeenBy('/api/v1/health', {
+			authorization: 'Bearer abc',
+			'x-mm-client-ip': SPOOFED_IP
+		});
+
+		expect(seen.status).toBe(200);
+		expect(seen.route).toBeNull();
+	});
+});

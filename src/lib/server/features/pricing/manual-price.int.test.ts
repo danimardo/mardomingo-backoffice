@@ -101,4 +101,25 @@ describe('precio orientativo manual (BE-FR-73)', () => {
 		}).toThrow(expect.objectContaining({ code: 'VALIDATION_ERROR', details: { field: 'reason' } }));
 		expect(f.db.select().from(priceReferences).all()).toEqual([]);
 	});
+
+	// C-58 (T449): con un motivo válido, una operación inexistente es `NOT_FOUND` en `operation`, sin escribir ni auditar (antes, la
+	// clave foránea de `price_references` lanzaba un error de SQLite y la web respondía 500).
+	it('una operación inexistente lanza NOT_FOUND sin escribir ni auditar', () => {
+		expect(() => {
+			setManualPrice(deps(), {
+				adminId,
+				operationId: 'aop_c58_inexistente',
+				microUsd: 5,
+				reason: 'precio acordado'
+			});
+		}).toThrow(expect.objectContaining({ code: 'NOT_FOUND', details: { field: 'operation' } }));
+		expect(f.db.select().from(priceReferences).all()).toEqual([]);
+		expect(
+			f.db
+				.select()
+				.from(adminAudit)
+				.all()
+				.filter((row) => row.action === 'pricing.price.manual')
+		).toEqual([]);
+	});
 });

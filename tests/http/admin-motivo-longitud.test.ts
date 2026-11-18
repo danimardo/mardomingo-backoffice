@@ -41,6 +41,21 @@ const CASES: readonly Case[] = [
 		action: 'guardarSobrescrituras',
 		fields: { sobrescrituras: '{}' }
 	},
+	// C-57: el alta de una operación también exige el motivo (sin él, este cuerpo crearía la operación).
+	{
+		path: '/admin/apps/secretario',
+		action: 'crearOperacion',
+		fields: {
+			clave: 'c57-motivo-largo',
+			nombre: 'Operación de C-57',
+			tipo: 'image',
+			modelo: '',
+			grupo: '',
+			tiempoMs: '30000',
+			costeMaximoMicro: '1000000',
+			capacidades: JSON.stringify({ image_input: false, structured_output: false, tools: false })
+		}
+	},
 	// El arranque de los tests HTTP activa `improve` (`activateChatOperation`): el formulario de activar no se pinta.
 	{ path: '/admin/apps/secretario/operaciones/improve', action: 'activar', rendersField: false },
 	{ path: '/admin/apps/secretario/operaciones/improve', action: 'desactivar' },

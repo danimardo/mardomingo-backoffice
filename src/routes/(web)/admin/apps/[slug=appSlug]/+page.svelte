@@ -190,6 +190,7 @@
 			label={m.admin_apps_reason()}
 			required
 			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'crearOperacion')}
 		/>
 		<Checkbox id="confirmado-operacion" name="confirmado" value="true"
 			>{m.admin_apps_confirm()}</Checkbox

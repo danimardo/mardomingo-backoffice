@@ -7,7 +7,12 @@ import type { Db } from '$lib/server/db/client';
 import { immediateTransaction } from '$lib/server/db/tx';
 import { priceReferences } from './schema';
 import { toMicro } from '$lib/shared/money';
-import { getEffectiveConfig, getSetting, type AppsDeps } from '$lib/server/features/apps';
+import {
+	getEffectiveConfig,
+	getSetting,
+	operationKeysOf,
+	type AppsDeps
+} from '$lib/server/features/apps';
 import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
 import {
 	alertKeys,
@@ -314,6 +319,7 @@ export function manualPriceFor(deps: { readonly db: Db }, operationId: string): 
 /**
  * Fija o quita el valor manual del coste típico de una operación (BE-FR-73; W38). El valor manual no toca el calculado ni su origen:
  * sobrevive a los recálculos diarios. Queda en la auditoría con el valor anterior y el nuevo; devuelve el id de la entrada (UX-13).
+ * Una operación que no existe es `NOT_FOUND` en `operation`, sin escribir ni auditar (C-58).
  */
 export function setManualPrice(
 	deps: Pick<PricingDeps, 'db' | 'logger' | 'clock' | 'audit'>,
@@ -329,6 +335,9 @@ export function setManualPrice(
 		throw new AppError('VALIDATION_ERROR', { field: 'microUsd' });
 	}
 	return immediateTransaction(deps.db, (tx) => {
+		if (!operationKeysOf(tx, [input.operationId]).has(input.operationId)) {
+			throw new AppError('NOT_FOUND', { field: 'operation' });
+		}
 		const before = manualPriceOf(tx, input.operationId);
 		const manual = input.microUsd === null ? null : toMicro(input.microUsd);
 		tx.insert(priceReferences)

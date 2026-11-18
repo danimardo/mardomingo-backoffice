@@ -82,6 +82,9 @@ de corregir).
 | C-54 | Baja     | web      | Protecciones, apps, operación, anuncios, legal y predeterminados no enlazan su auditoría | T445  |
 | C-55 | Media    | admin    | El motivo no tiene una longitud máxima común en todas las acciones                       | T446  |
 | C-56 | Baja     | settings | La clave `settings.fx_usd_eur` sigue sembrada aunque ya no la lee nadie                  | T447  |
+| C-57 | Baja     | apps     | El alta de una operación (W40) tiene campo «motivo», pero nadie lo lee ni lo audita      | T448  |
+| C-58 | Baja     | pricing  | El precio orientativo de una operación inexistente responde 500                          | T449  |
+| C-59 | Baja     | web      | Ningún test comprueba que `hooks.server.ts` quita la cabecera `x-mm-client-ip`           | T450  |
 
 C-05 a C-09 proceden de la revisión del PR #47 (D14, 2026-11-17), hecha con Opus por lectura, sin ejecutar nada. C-05 se ha
 comprobado además a mano (el seed solo inserta si no existe y no hay migración posterior a la 0016); el resto no se ha
@@ -891,3 +894,62 @@ C-55 cierra R08 y D09 de `propuesta-reglas-administracion.md` y C-56 retira la c
 - **Cambio** (**decisión del propietario**): migración `0020` que borra la fila de `settings`; quitar la clave de los valores
   por defecto y de los esquemas; documentar el orden de despliegue y la vuelta atrás en `docs/operaciones/migraciones.md`.
 - **Test (primero, debe fallar)**: `src/lib/server/db/migrations.int.test.ts` (la fila desaparece tras migrar).
+
+C-57 a C-59 son pendientes menores tras cerrar la fase 24 (2026-11-18). C-57 es decisión del propietario (exigir y auditar el
+motivo del alta de una operación).
+
+## C-57 (Baja) — El alta de una operación (W40) tiene campo «motivo», pero nadie lo lee ni lo audita
+
+- **Requisito**: BE-FR-55 (motivo de 1 a 500 caracteres en toda acción que modifica datos, con su entrada de auditoría) y
+  BE-FR-77 (catálogo de operaciones); `contracts/web-routes.md` W40.
+- **Ficheros**: `src/routes/(web)/admin/apps/[slug=appSlug]/+page.server.ts` (`crearOperacion` no lee `motivo`),
+  `+page.svelte` (el campo `motivo-operacion` no pinta su error ni conserva lo escrito) y `apps/service.ts` (`createOperation`
+  audita `reason: null`).
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio: `apps/create-operation-reason.int.test.ts` (5 en
+  rojo: sin motivo, en blanco o con 501 caracteres se creaba la operación y la entrada guardaba `reason` nulo) y, contra un
+  build con la ruta y el servicio anteriores, 3 casos HTTP en rojo (`admin-motivo-longitud.test.ts`, caso `crearOperacion`, y
+  los dos de C-57 en `admin-enlace-auditoria-apps.test.ts`: 303 en lugar de 400 y motivo auditado nulo). `NewOperation` lleva
+  `reason` obligatorio; `createOperation` aplica `requireReason` y audita el recortado; W40 rechaza con `reasonRejection`
+  (scope `crearOperacion`) y pinta el error con `reasonFieldOf`. Los cuerpos de alta de `admin-enlace-auditoria-operacion` y
+  los builders (`chatOperation`, `seededPromptTemplate`) envían motivo. Ningún E2E crea operaciones. `contracts/web-routes.md`
+  W40 enmendado. Antes: confirmado por lectura y por ejecución.
+- **Cambio** (**decisión del propietario**): la regla común de C-55. La ruta rechaza el motivo con `reasonRejection` (scope
+  `crearOperacion`) antes del servicio, la página lo pinta con `reasonFieldOf` (`maxlength="500"` ya estaba) y
+  `createOperation` exige `requireReason` y audita el motivo recortado. La redirección con el enlace a la auditoría ya existe
+  (C-54, `savedRedirect`).
+- **Test (primero, debe fallar)**: integración en `apps/` (sin motivo o con más de 500 caracteres, `VALIDATION_ERROR` en
+  `reason` sin crear nada; la entrada guarda el motivo recortado) y HTTP (`tests/http/admin-motivo-longitud.test.ts`, caso
+  `crearOperacion`, y el enlace con el motivo auditado).
+
+## C-58 (Baja) — El precio orientativo de una operación inexistente responde 500
+
+- **Requisito**: BE-FR-73 (valor manual del precio orientativo, W38) y BE-FR-55; las demás acciones de administración sobre una
+  entidad inexistente responden `NOT_FOUND` (C-50, W41).
+- **Ficheros**: `pricing/service.ts` (`setManualPrice` inserta en `price_references` sin comprobar la operación; la clave
+  foránea a `app_operations` lo rechaza dentro de la transacción) y `admin/economia/+page.server.ts`
+  (`guardarPrecioOrientativo`).
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio. Confirmado por ejecución: con un motivo válido,
+  `setManualPrice` lanzaba `SqliteError` `SQLITE_CONSTRAINT_FOREIGNKEY` (integración) y la web respondía 500 (HTTP).
+  `setManualPrice` comprueba la operación dentro de la transacción con `operationKeysOf` (API pública de `apps`, sin aristas
+  nuevas) y lanza `NOT_FOUND` en `operation`; la ruta responde 404 con `failureOf` y el aviso genérico de W38. Tests:
+  `pricing/manual-price.int.test.ts` y `tests/http/admin-economia.test.ts` (C-58). `contracts/web-routes.md` W38 enmendado.
+- **Cambio**: si se confirma, `setManualPrice` lanza `NOT_FOUND` con `field: 'operation'` sin escribir ni auditar, comprobando
+  la operación con la API pública de `apps` (sin aristas nuevas: `pricing` ya importa `apps`); la web responde 404 con
+  `failureOf`.
+- **Test (primero, debe fallar)**: integración en `pricing/manual-price.int.test.ts` y HTTP en
+  `tests/http/admin-economia.test.ts` (operación inexistente con un motivo válido).
+
+## C-59 (Baja) — Ningún test comprueba que `hooks.server.ts` quita la cabecera `x-mm-client-ip`
+
+- **Requisito**: constitución, «Fuente única de la IP del cliente» (`event.getClientAddress()`); BE-FR-04 (la sesión guarda la
+  IP) y BE-FR-45 (límites por IP). Completa C-35 (T427), que quitó la cabecera sin test propio.
+- **Ficheros**: `src/hooks.server.ts` (`stripInternalHeaders`); tests en `tests/http/` y `src/hooks.server.test.ts`.
+- **Estado**: corregido (2026-11-18), solo tests. Con el paso desactivado temporalmente (restaurado después, sin cambios en
+  `hooks.server.ts`): `src/hooks.server.test.ts` falla (2 en rojo: la sesión y la ruta reciben `203.0.113.9`), y
+  `tests/http/client-ip-header.test.ts` **sigue pasando**, porque ninguna llamada a Better Auth que crea una sesión recibe las
+  cabeceras de la petición (`headersFor` y `authHeadersOf` las construyen con la IP real): el paso es una defensa en
+  profundidad que no se observa por HTTP. El test HTTP queda como comprobación del extremo a extremo (login de la web y de la
+  API con `x-mm-client-ip`: la sesión guarda la IP de `X-Forwarded-For`), y el del `handle` es el que vigila el paso.
+- **Cambio**: solo tests. Una petición con `x-mm-client-ip: 203.0.113.9` no fija la IP de la sesión (HTTP, contra el build) y
+  ningún paso posterior ni la sesión ven la cabecera. Se comprueba que el test falla si se desactiva el paso.
+- **Test**: `tests/http/client-ip-header.test.ts` y `src/hooks.server.test.ts`.
