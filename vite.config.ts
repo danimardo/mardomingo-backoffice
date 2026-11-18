@@ -3,6 +3,10 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
+// Catálogo del sistema de diseño copiado sin adaptar (ADR 0009, T453): ni tests ni cobertura. Lo promovido a
+// components/ui o layout se testea como el resto.
+const DESIGN_CATALOG = 'src/lib/design-catalog/**';
+
 export default defineConfig({
 	// Con Vitest, Svelte resuelve su build de navegador para montar componentes (pruebas de componente).
 	...(process.env.VITEST ? { resolve: { conditions: ['browser'] } } : {}),
@@ -25,7 +29,7 @@ export default defineConfig({
 		coverage: {
 			provider: 'v8',
 			include: ['src/lib/**'],
-			exclude: ['src/lib/paraglide/**'],
+			exclude: ['src/lib/paraglide/**', DESIGN_CATALOG],
 			thresholds: {
 				lines: 80,
 				functions: 80,
@@ -54,8 +58,12 @@ export default defineConfig({
 				test: {
 					name: 'unit',
 					environment: 'node',
-					include: ['src/**/*.test.ts', 'tests/architecture/**/*.test.ts'],
-					exclude: ['src/**/*.int.test.ts', 'src/**/*.component.test.ts'],
+					include: [
+						'src/**/*.test.ts',
+						'tests/architecture/**/*.test.ts',
+						'tests/scripts/**/*.test.ts'
+					],
+					exclude: ['src/**/*.int.test.ts', 'src/**/*.component.test.ts', DESIGN_CATALOG],
 					setupFiles: ['tests/setup/unit.setup.ts'],
 					// Los emails toman los colores de tokens.css con `?raw`; sin esto Vitest devuelve el CSS vacío.
 					css: { include: [/tokens\.css(\?raw)?$/] }
@@ -66,6 +74,7 @@ export default defineConfig({
 					name: 'component',
 					environment: 'jsdom',
 					include: ['src/**/*.component.test.ts'],
+					exclude: [DESIGN_CATALOG],
 					setupFiles: ['tests/setup/component.setup.ts']
 				}
 			},
@@ -74,6 +83,7 @@ export default defineConfig({
 					name: 'integration',
 					environment: 'node',
 					include: ['src/**/*.int.test.ts'],
+					exclude: [DESIGN_CATALOG],
 					globalSetup: ['tests/setup/integration.global-setup.ts'],
 					// Igual que en unit: los emails de cuentas leen tokens.css con `?raw` al cargar el servicio.
 					css: { include: [/tokens\.css(\?raw)?$/] }

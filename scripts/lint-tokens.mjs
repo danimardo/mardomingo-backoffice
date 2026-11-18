@@ -7,6 +7,9 @@ import { join, relative } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..');
 const TOKENS_FILE = join('src', 'lib', 'design-system', 'tokens.css');
+// El catálogo del sistema de diseño se copió sin adaptar y no se comprueba (ADR 0009, T453): sus colores literales se
+// sustituyen por tokens al promover cada componente a components/ui o layout, y entonces este script ya lo ve.
+const EXCLUDED = /^src[\\/]lib[\\/](?:paraglide|design-catalog)[\\/]/;
 
 const RULES = [
 	{ name: 'hex', re: /#[0-9a-fA-F]{3,8}\b/ },
@@ -22,7 +25,7 @@ const RULES = [
 ];
 
 const files = globSync('src/**/*.{svelte,ts,js,css}', { cwd: ROOT }).filter(
-	(file) => relative(ROOT, join(ROOT, file)) !== TOKENS_FILE && !file.includes('src/lib/paraglide')
+	(file) => relative(ROOT, join(ROOT, file)) !== TOKENS_FILE && !EXCLUDED.test(file)
 );
 
 const violations = [];

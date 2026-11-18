@@ -8,6 +8,9 @@ import { randomUUID } from 'node:crypto';
 const LOG_DIR = '.local/verification';
 const LOG = `${LOG_DIR}/runs.jsonl`;
 const PRETTIER_FILES = /\.(ts|svelte|js|mjs|json|css|md|yml|yaml)$/;
+// Catálogo del sistema de diseño copiado sin adaptar (ADR 0009, T453): no se comprueba, salvo su índice y su lista de
+// activos (Markdown, con Prettier). Su aislamiento lo vigila `verify:catalog`, que se ejecuta siempre.
+const CATALOG_CODE = /^src\/lib\/design-catalog\/(?!(?:INDICE|ACTIVOS)\.md$)/;
 // Cambios que propagan el impacto más allá de los tests relacionados (15.24, «Se amplía la selección»).
 const WIDE = [
 	/^src\/lib\/shared\//,
@@ -29,14 +32,15 @@ function git(args) {
 }
 
 const head = git(['rev-parse', 'HEAD'])[0] ?? 'desconocido';
-const changed = [
+const allChanged = [
 	...new Set([
 		...git(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD']),
 		...git(['ls-files', '--others', '--exclude-standard'])
 	])
 ];
+const changed = allChanged.filter((file) => !CATALOG_CODE.test(file));
 
-if (changed.length === 0) {
+if (allChanged.length === 0) {
 	console.log('Sin cambios respecto a HEAD: no hay nada que verificar en este nivel.');
 	process.exit(0);
 }
@@ -91,6 +95,8 @@ record('EN_CURSO');
 const forPrettier = changed.filter((file) => PRETTIER_FILES.test(file) && existsSync(file));
 if (forPrettier.length > 0)
 	step('prettier de lo modificado', ['exec', 'prettier', '--check', ...forPrettier]);
+// Barato y sin depender de lo modificado: un import del catálogo puede aparecer en cualquier fichero.
+step('catálogo aislado (verify:catalog)', ['verify:catalog']);
 step('lint:changed', ['lint:changed']);
 step('check', ['check']);
 const wide = changed.some((file) => WIDE.some((pattern) => pattern.test(file)));

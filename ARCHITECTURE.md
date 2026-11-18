@@ -65,6 +65,7 @@ src/
     schemas/<f>/             esquemas de formularios compartidos con el cliente
     format/                  formato de importes, fechas y números (puro)
     design-system/           tokens y tema: fuente canónica (ADR 0009)
+    design-catalog/          catálogo del sistema sin adaptar: no se importa ni se comprueba; ACTIVOS.md
     components/ui/           primitivas accesibles genéricas
     components/layout/       marco: cabecera, pie, navegación, menú de cuenta, tema y efectos
     components/<f>/          componentes de una funcionalidad
@@ -269,6 +270,7 @@ la arquitectura de SvelteKit, principios XI y XII, y puertas del CI). Resumen:
 | Eventos únicos y con prefijo; `pino`/`loglevel` aislados; `no-console`            | XI                 | Test de arquitectura y ESLint |
 | Imports entre componentes                                                         | SvelteKit          | Test de arquitectura          |
 | Sin colores literales ni paleta de Tailwind                                       | XIII               | `lint:tokens` (puerta 10)     |
+| El catálogo de diseño no se importa; `ACTIVOS.md` coincide con lo promovido       | XIII, ADR 0009     | `verify:catalog` (puerta 10)  |
 | Cobertura del 100 % en `domain/` y en los dos `shared/`                           | V                  | Vitest con umbrales           |
 
 Lo que no se puede comprobar automáticamente (calidad de los nombres, abstracciones

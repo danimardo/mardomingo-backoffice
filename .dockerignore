@@ -23,3 +23,5 @@ specs
 e2e
 tests
 src/lib/paraglide
+# Catálogo del sistema de diseño sin adaptar (ADR 0009, T453): la app no lo importa y el build no lo necesita.
+src/lib/design-catalog

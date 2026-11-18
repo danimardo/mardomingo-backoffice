@@ -40,6 +40,9 @@ export default ts.config(
 	{
 		ignores: [
 			'Design/**',
+			// Catálogo del sistema de diseño copiado sin adaptar (ADR 0009, T453): no se comprueba. Lo que se promueve a
+			// components/ui o layout sí; `pnpm verify:catalog` vigila que nadie lo importe.
+			'src/lib/design-catalog/**',
 			'src/lib/paraglide/**',
 			'build/**',
 			'.svelte-kit/**',

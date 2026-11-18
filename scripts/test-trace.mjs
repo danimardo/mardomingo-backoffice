@@ -30,7 +30,10 @@ for (const line of historias.slice(uxStart)) {
 
 // Etiquetas en tests: [BE-FR-71/CA1], @BE-FR-71, [UX-05], @UX-05, [UX-TEMA/CA1]
 const testFiles = [
-	...globSync('src/**/*.test.ts', { cwd: ROOT }),
+	// El catálogo del sistema de diseño no cuenta como cobertura de criterios (ADR 0009, T453).
+	...globSync('src/**/*.test.ts', { cwd: ROOT }).filter(
+		(file) => !/^src[\\/]lib[\\/]design-catalog[\\/]/.test(file)
+	),
 	...globSync('tests/**/*.ts', { cwd: ROOT }),
 	...globSync('e2e/**/*.ts', { cwd: ROOT })
 ];

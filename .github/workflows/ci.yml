@@ -159,9 +159,15 @@ jobs:
           pnpm db:generate
           git diff --exit-code -- drizzle
 
-      # 10. Sin colores literales fuera de los tokens.
+      # 10. Sistema de diseño (principio XIII): sin colores literales fuera de los tokens.
       - name: 10. Tokens
         run: pnpm lint:tokens
+
+      # 10. Catálogo del sistema de diseño aislado (ADR 0009, T453): nadie importa `src/lib/design-catalog/` y su
+      # `ACTIVOS.md` coincide con lo promovido a components/ui y layout. Va dentro de la puerta 10 (principio XIII), como
+      # `docs:api` dentro de la 3: la constitución enumera diez puertas, y cambiar el nombre del job rompería un check requerido que lo use.
+      - name: 10. Catálogo aislado
+        run: pnpm verify:catalog
 
   # Humo tras el despliegue de staging (T374): el humo está en `deploy-smoke.yml`, y `workflow_run` no sirve porque GitHub
   # solo lo dispara desde el workflow del branch por defecto (`main`). Aquí se llama como reutilizable, solo en `staging`.

@@ -15,7 +15,9 @@ const SCRIPT_BLOCK = /<script[^>]*>([\s\S]*?)<\/script>/g;
 
 function walk(dir: string, found: string[] = []): string[] {
 	for (const entry of readdirSync(dir)) {
-		if (entry === 'paraglide') continue;
+		// Código generado (Paraglide) y catálogo del sistema de diseño copiado sin adaptar (ADR 0009, T453): no son código
+		// de la app. Lo que se promueve del catálogo vive en components/ui o layout y sí se comprueba.
+		if (entry === 'paraglide' || entry === 'design-catalog') continue;
 		const full = join(dir, entry);
 		if (statSync(full).isDirectory()) walk(full, found);
 		else found.push(full);

@@ -25,5 +25,5 @@
 		"*.config.js",
 		"svelte.config.js"
 	],
-	"exclude": ["Design", "node_modules", "src/lib/paraglide"]
+	"exclude": ["Design", "node_modules", "src/lib/paraglide", "src/lib/design-catalog"]
 }

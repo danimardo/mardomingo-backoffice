@@ -5,6 +5,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 
 const FULL_RUN_TRIGGERS = [/^eslint\.config\.js$/, /^tsconfig.*\.json$/];
 const LINTED_EXTENSIONS = /\.(ts|js|mjs|cjs|svelte)$/;
+// Catálogo del sistema de diseño sin adaptar (ADR 0009, T453): ESLint lo ignora, y pasar sus cientos de rutas desborda
+// la línea de comandos de Windows mientras no está commiteado.
+const CATALOG = /^src\/lib\/design-catalog\//;
 
 function git(args) {
 	return execFileSync('git', args, { encoding: 'utf8' })
@@ -20,7 +23,7 @@ const changed = [
 const unique = [...new Set(changed)];
 
 const configChanged = unique.some((file) => FULL_RUN_TRIGGERS.some((re) => re.test(file)));
-const files = unique.filter((file) => LINTED_EXTENSIONS.test(file));
+const files = unique.filter((file) => LINTED_EXTENSIONS.test(file) && !CATALOG.test(file));
 
 const args = ['eslint', '--max-warnings', '0', '--no-warn-ignored', '--concurrency', 'auto'];
 

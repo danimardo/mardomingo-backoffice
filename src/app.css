@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+/* El catálogo del sistema de diseño copiado sin adaptar no aporta clases (ADR 0009, T453): solo lo promovido a
+   components/ui o layout. Tailwind detecta las fuentes solo y, sin esto, generaría las utilidades del catálogo entero. */
+@source not './lib/design-catalog';
 @import './lib/design-system/tokens.css';
 
 /* Sin paleta por defecto de Tailwind ni sombras genéricas: los colores y sombras son los de tokens.css (DS-08).

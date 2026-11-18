@@ -18,6 +18,12 @@ test-results/
 reports/
 static/
 
+# Catálogo del sistema de diseño copiado sin adaptar (ADR 0009, T453): fuera del formato, salvo su índice y su lista de
+# activos. Con `/*` (y no `/`) se pueden reincluir ficheros sueltos: Prettier no reincluye nada dentro de una carpeta ignorada.
+src/lib/design-catalog/*
+!src/lib/design-catalog/INDICE.md
+!src/lib/design-catalog/ACTIVOS.md
+
 # Gestionados por Spec Kit (no se editan a mano)
 .specify/
 .claude/skills/

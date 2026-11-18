@@ -16,6 +16,7 @@
 		"lint:changed": "node scripts/lint-changed.mjs",
 		"verify:batch": "node scripts/verify-batch.mjs",
 		"lint:tokens": "node scripts/lint-tokens.mjs",
+		"verify:catalog": "node scripts/verify-catalog.mjs",
 		"format": "prettier --write .",
 		"test": "vitest run --project unit --project component --project integration",
 		"test:unit": "vitest run --project unit",

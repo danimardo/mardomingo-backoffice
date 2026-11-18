@@ -56,25 +56,26 @@ dependencias permitidas está en `ARCHITECTURE.md` (sección 3); dónde va cada 
 
 Los scripts son los de la constitución («Scripts estándar») y `Historias.md` 15.25, ya creados en L01. Tiempos medidos el 2026-10-10 en Windows, en serie (T064, `specs/001-cuenta-mardomingo-v4/research.md`): `check` 19 s, `lint` 53 s, `lint:changed` 14 s (sin cambios), `lint:tokens` 1 s, `test` 23 s, `test:coverage` 25 s, `build` 22 s, `test:http` 10 s, `test:e2e:smoke` 8 s y `test:e2e:a11y` 12 s en Chromium. `pnpm validate` se ejecutará completo en el checkpoint de L01 (T066).
 
-| Script                                                                     | Uso                                                                                                       |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `pnpm check`                                                               | `svelte-kit sync` + `svelte-check` sin avisos                                                             |
-| `pnpm lint`                                                                | Prettier + ESLint sin avisos (nivel historia, PR y CI)                                                    |
-| `pnpm lint:changed`                                                        | ESLint solo sobre lo modificado (nivel lote)                                                              |
-| `pnpm verify:batch`                                                        | Cierre de lote: Prettier, lint:changed, check, arquitectura, tests afectados y dominio                    |
-| `pnpm lint:tokens`                                                         | Sin colores literales fuera de los tokens                                                                 |
-| `pnpm test` / `pnpm test:coverage`                                         | Vitest: unit, componente e integración (sin `http`)                                                       |
-| `pnpm test:related <ficheros>`                                             | Tests afectados por un cambio (nivel edición)                                                             |
-| `pnpm test:http`                                                           | Hooks y API contra el build                                                                               |
-| `pnpm test:trace`                                                          | Lista los `CA` y `UX-xx` sin test                                                                         |
-| `pnpm test:e2e` / `test:e2e:smoke` / `test:e2e:critical` / `test:e2e:a11y` | Playwright contra el build                                                                                |
-| `pnpm build`                                                               | Build de producción (sin secretos)                                                                        |
-| `pnpm validate`                                                            | `check`, `lint`, `test:coverage`, `build` y `test:e2e`, en ese orden, parando en el primer fallo          |
-| `pnpm test:e2e:cross-browser`                                              | E2E en Chromium, Firefox, WebKit y WebKit móvil (la matriz completa de navegadores).                      |
-| `pnpm test:e2e:visual`                                                     | Regresión visual (8–10 capturas). **Solo dentro del contenedor oficial de Playwright**; nunca en Windows. |
-| `pnpm test:mutation`                                                       | Stryker incremental sobre el dominio. Umbral de partida del 60 % (`stryker.config.mjs`). Tarda horas.     |
-| `pnpm perf:seed <ruta> [cuentas]`                                          | Prepara una base SQLite migrada con cuentas y bolsas de crédito, con semilla fija (T274).                 |
-| `pnpm perf:load <URL> [sesiones] [segundos] [pausa-ms]`                    | Carga de laboratorio: sesiones que recorren las páginas públicas; informa de p50, p95 y errores (T274).   |
+| Script                                                                     | Uso                                                                                                                 |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`                                                               | `svelte-kit sync` + `svelte-check` sin avisos                                                                       |
+| `pnpm lint`                                                                | Prettier + ESLint sin avisos (nivel historia, PR y CI)                                                              |
+| `pnpm lint:changed`                                                        | ESLint solo sobre lo modificado (nivel lote)                                                                        |
+| `pnpm verify:batch`                                                        | Cierre de lote: Prettier, catálogo aislado, lint:changed, check, arquitectura, tests afectados y dominio            |
+| `pnpm lint:tokens`                                                         | Sin colores literales fuera de los tokens                                                                           |
+| `pnpm verify:catalog`                                                      | Nadie importa `src/lib/design-catalog/` y `ACTIVOS.md` coincide con lo promovido (<1 s; puerta 10 y `verify:batch`) |
+| `pnpm test` / `pnpm test:coverage`                                         | Vitest: unit, componente e integración (sin `http`)                                                                 |
+| `pnpm test:related <ficheros>`                                             | Tests afectados por un cambio (nivel edición)                                                                       |
+| `pnpm test:http`                                                           | Hooks y API contra el build                                                                                         |
+| `pnpm test:trace`                                                          | Lista los `CA` y `UX-xx` sin test                                                                                   |
+| `pnpm test:e2e` / `test:e2e:smoke` / `test:e2e:critical` / `test:e2e:a11y` | Playwright contra el build                                                                                          |
+| `pnpm build`                                                               | Build de producción (sin secretos)                                                                                  |
+| `pnpm validate`                                                            | `check`, `lint`, `test:coverage`, `build` y `test:e2e`, en ese orden, parando en el primer fallo                    |
+| `pnpm test:e2e:cross-browser`                                              | E2E en Chromium, Firefox, WebKit y WebKit móvil (la matriz completa de navegadores).                                |
+| `pnpm test:e2e:visual`                                                     | Regresión visual (8–10 capturas). **Solo dentro del contenedor oficial de Playwright**; nunca en Windows.           |
+| `pnpm test:mutation`                                                       | Stryker incremental sobre el dominio. Umbral de partida del 60 % (`stryker.config.mjs`). Tarda horas.               |
+| `pnpm perf:seed <ruta> [cuentas]`                                          | Prepara una base SQLite migrada con cuentas y bolsas de crédito, con semilla fija (T274).                           |
+| `pnpm perf:load <URL> [sesiones] [segundos] [pausa-ms]`                    | Carga de laboratorio: sesiones que recorren las páginas públicas; informa de p50, p95 y errores (T274).             |
 
 Qué ejecutar en cada nivel (edición, lote, historia o PR): `Historias.md` 15.24. El test de
 arquitectura se ejecuta siempre al cerrar un lote: `test:related` no lo selecciona.
@@ -121,8 +122,9 @@ Gestor de paquetes: **pnpm** (no uses npm ni yarn). Node 24.21.0 y pnpm 12.8.1.
 ## Interfaz
 
 - Antes de crear un componente, busca en `components/ui/`, `components/layout/` y el sistema de
-  diseño; las variantes nuevas se añaden ahí.
-- Sin colores literales ni paleta de Tailwind: solo tokens. El cristal, solo en las zonas del
+  diseño, y en el catálogo `src/lib/design-catalog/` (`INDICE.md`): de ahí se **promueve** según
+  `ACTIVOS.md`; el catálogo nunca se importa. Las variantes nuevas se añaden ahí.
+- Sin colores literales ni paleta de Tailwind: solo tokens. El cristal, según el
   principio XIII. Iconos con el componente `Icon` del sistema de diseño.
 - Enlaces con `resolve()`, mutaciones con form actions y filtros por formulario GET. Prueba sin
   JavaScript: nada crítico depende de él salvo el captcha del registro.
