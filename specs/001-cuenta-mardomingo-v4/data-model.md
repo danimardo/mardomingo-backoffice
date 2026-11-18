@@ -716,6 +716,22 @@ Contadores propios de `accounts` para los límites de autenticación por IP. Sus
   hace falta firmarlo ni guardarlo antes. Sirve igual para `stripe`: la fila `pending` se crea al
   enviar y el segundo envío devuelve la misma sesión de _checkout_.
 
+#### `refund_keys` (BE-FR-27, BE-FR-75; R12, C-04, C-13)
+
+| Columna                    | Tipo                   | Nulo | Defecto | Descripción                                                                                                         |
+| -------------------------- | ---------------------- | ---- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `key`                      | Text (UUID)            | no   | —       | Clave del formulario de reembolso (W37)                                                                             |
+| `payment_id`               | Id                     | no   | —       | Compra reembolsada                                                                                                  |
+| `status`                   | Enum(claimed\|applied) | no   | —       | `claimed` mientras se retiran créditos; `applied` con estado y auditoría escritos                                   |
+| `amount_eur_cents`         | EurCents               | sí   | —       | **Nuevo (0018, C-13)**: importe de este reembolso (0 en simuladas)                                                  |
+| `refunded_after_eur_cents` | EurCents               | sí   | —       | **Nuevo (0018, C-13)**: total devuelto tras él; da la `issue_key` `refund:<payment_id>:<total>` de su rectificativa |
+| `created_at`               | EpochMs                | no   | now     |                                                                                                                     |
+
+- PK `key`. FK `payment_id` → `payments.id` (`RESTRICT`). Índice (`payment_id`). CHECK `status IN ('claimed','applied')`;
+  `(amount_eur_cents IS NULL) = (refunded_after_eur_cents IS NULL)`; `amount_eur_cents >= 0 AND refunded_after_eur_cents >= amount_eur_cents`.
+- Sin cuenta, para no depender del borrado de cuentas (RGPD). Las claves anteriores a 0018 tienen las dos columnas nulas: su
+  reenvío no reintenta la rectificativa (se tratan a mano, `docs/operaciones/pagos.md`). El reenvío nunca toma el importe del cliente.
+
 ### 2.10 `sync`
 
 #### `sync_documents` (BE-FR-39, 40, 41)

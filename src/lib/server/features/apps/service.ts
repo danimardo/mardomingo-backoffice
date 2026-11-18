@@ -12,7 +12,11 @@ import type { IdGenerator } from '$lib/server/shared/ids';
 import { toMicro, toMicroUsd, toPpm } from '$lib/shared/money';
 import { cachedSettings, invalidateSettings, storeSettings } from './config.cache';
 import { appOperations, apps } from './schema';
-import { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
+import {
+	CHAT_RETRY_WAITS_MS,
+	minHoldTtlSeconds,
+	operationTotalMs
+} from './domain/operation-timing';
 import { isVisible } from './domain/announcements';
 import { isValidSlug } from './domain/slug';
 import {
@@ -66,7 +70,8 @@ import {
 	readSettings,
 	readSettingValue,
 	updateOverrides,
-	upsertSetting
+	upsertSetting,
+	type OperationRow
 } from './repository';
 import type { OperationKind } from './defaults';
 
@@ -334,6 +339,14 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 
 	immediateTransaction(deps.db, (tx) => {
 		const before = readSettingValue(deps.db, deps.logger, key);
+		if (key === 'hold_ttl_seconds' && typeof value === 'number') {
+			// C-14: una reserva que caduca antes del cobro deja de contar en el saldo disponible y en el freno global.
+			const minSeconds = minHoldTtlSecondsOf(deps);
+			if (value < minSeconds) {
+				deps.logger.emit('apps.settings.rejected', { key, scope: 'global', reason: 'hold_ttl' });
+				throw new AppError('VALIDATION_ERROR', { field: 'value', minSeconds });
+			}
+		}
 		if (isCeilingKey(key) && typeof value === 'number') {
 			// Un global no puede quedar por debajo de una sobrescritura ya concedida a una app (3.2). No se recorta nada en
 			// silencio: se rechaza y se listan las apps y valores que lo impiden (D07 = R02).
@@ -956,33 +969,42 @@ export function announcementsFor(
 		}));
 }
 
-/** Tiempo máximo total de cada operación activa, con la política de intentos de `ai` (T193). */
+/** Tiempo máximo total de una operación, con la política de intentos de `ai` (T193). */
+function operationTotalMsOf(operation: OperationRow): number {
+	const transcription = operation.transcriptionConfig;
+	return operation.kind === 'transcription' && transcription !== null
+		? operationTotalMs({
+				primaryTimeoutMs: transcription.primary.timeout_ms,
+				retryWaitsMs: transcription.primary.enabled ? transcription.primary.retry_delays_ms : [],
+				fallbackTimeoutsMs: transcription.backup === null ? [] : [transcription.backup.timeout_ms]
+			})
+		: operationTotalMs({
+				primaryTimeoutMs: operation.timeoutMs,
+				retryWaitsMs: CHAT_RETRY_WAITS_MS,
+				fallbackTimeoutsMs: operation.fallbackModels.map(() => operation.timeoutMs)
+			});
+}
+
+/** Tiempo máximo total de cada operación activa (T193). */
 function operationTimeouts(
 	deps: AppsDeps,
 	appId: string
 ): Record<string, { readonly timeoutMs: number }> {
 	const entries = listOperations(deps.db, deps.logger, appId)
 		.filter((operation) => operation.active)
-		.map((operation) => {
-			const transcription = operation.transcriptionConfig;
-			const timeoutMs =
-				operation.kind === 'transcription' && transcription !== null
-					? operationTotalMs({
-							primaryTimeoutMs: transcription.primary.timeout_ms,
-							retryWaitsMs: transcription.primary.enabled
-								? transcription.primary.retry_delays_ms
-								: [],
-							fallbackTimeoutsMs:
-								transcription.backup === null ? [] : [transcription.backup.timeout_ms]
-						})
-					: operationTotalMs({
-							primaryTimeoutMs: operation.timeoutMs,
-							retryWaitsMs: CHAT_RETRY_WAITS_MS,
-							fallbackTimeoutsMs: operation.fallbackModels.map(() => operation.timeoutMs)
-						});
-			return [operation.key, { timeoutMs }] as const;
-		});
+		.map((operation) => [operation.key, { timeoutMs: operationTotalMsOf(operation) }] as const);
 	return Object.fromEntries(entries);
+}
+
+/**
+ * Mínimo de `hold_ttl_seconds` (C-14): la operación más larga de todas las apps más el margen. Cuentan también las inactivas,
+ * porque activarlas no vuelve a validar este parámetro.
+ */
+export function minHoldTtlSecondsOf(deps: Pick<AppsDeps, 'db' | 'logger'>): number {
+	const totals = listApps(deps.db, deps.logger).flatMap((app) =>
+		listOperations(deps.db, deps.logger, app.id).map(operationTotalMsOf)
+	);
+	return minHoldTtlSeconds(totals);
 }
 
 export interface AppStatusDto {

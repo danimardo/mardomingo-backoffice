@@ -22,7 +22,9 @@ export interface PaymentsLogFields {
 			| 'no_purchase_bucket';
 	};
 	'payments.refund.repeated': Record<string, never>;
-	'payments.refund.corrective_pending': { reason: 'error' | 'rejected' | 'skipped' };
+	// `err` solo si `correctPayment` lanzó (C-12): sin él no se distingue un proveedor caído de un fallo de programación.
+	'payments.refund.corrective_pending':
+		{ reason: 'error'; err: unknown } | { reason: 'rejected' | 'skipped' };
 	'payments.chargeback.applied': Record<string, never>;
 }
 
@@ -52,7 +54,7 @@ export const PAYMENTS_LOG_EVENTS = Object.freeze({
 	},
 	'payments.refund.corrective_pending': {
 		level: 'warn',
-		msg: 'Reembolso aplicado sin rectificativa emitida: se reintenta al reenviar el formulario'
+		msg: 'Reembolso aplicado sin rectificativa emitida: se reintenta solo al reenviar la misma petición'
 	},
 	'payments.chargeback.applied': { level: 'warn', msg: 'Contracargo aplicado: cuenta bloqueada' }
 } as const satisfies Record<keyof PaymentsLogFields, LogEventMeta>);

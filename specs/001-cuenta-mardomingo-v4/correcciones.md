@@ -164,7 +164,7 @@ reverificado.
 - **Requisito**: D14 (= R14), BE-FR-42 CA3, US6 escenario 5 (`spec.md:147`).
 - **Ficheros**: `src/lib/server/features/apps/seed.ts` (inserta solo si no existe), `src/lib/server/features/apps/defaults.ts:99`
   (`prompts: { strategy: 'block', personal: true }`), `drizzle/` (la última migración es `0016_refund_keys_reembolso.sql`).
-- **Estado**: confirmado por lectura (revisión del PR #47 y comprobación manual del seed y de `drizzle/`).
+- **Estado**: corregido (2026-11-18). Migración 0017 (T397), con su test en rojo antes del cambio. Confirmado por lectura (revisión del PR #47 y comprobación manual del seed y de `drizzle/`).
 - **Qué pasa**: en staging y producción la fila `apps.sync_schema` de `secretario` conserva `prompts: { strategy: 'block' }`. W43
   no muestra el aviso. En tests y E2E la base es nueva y sí sale, así que el CI en verde no lo detecta. El propio PR lo anota en
   `tasks.md` (T312) como paso manual, pero no está en `docs/operaciones/`.
@@ -196,7 +196,7 @@ reverificado.
 - **Ficheros**: `src/lib/server/features/sync/domain/copy-defaults.test.ts:54-58`,
   `src/routes/(web)/admin/apps/[slug=appSlug]/predeterminados/copiar/+page.svelte:42-44`,
   `tests/http/admin-predeterminados.test.ts`, `e2e/admin-contenido.spec.ts:693-707`.
-- **Estado**: confirmado por lectura (revisión del PR #47); no reverificado.
+- **Estado**: corregido (2026-11-18). Orden de despliegue y vuelta atrás en `docs/operaciones/migraciones.md` (T399). La vuelta atrás en staging no está verificada.
 - **Qué pasa**: el test unitario titulado «no preselecciona nada» solo comprueba `applyCopy(SCHEMA, SOURCE, [])` → `{}`, que ya
   estaba cubierto. Ningún test HTTP, de componente ni E2E comprueba que el `Banner` aparece en `prompts` y no en las demás
   categorías: quitar el `{#if category.personal}` deja todo en verde. La no preselección sí la cubre el E2E de
@@ -285,7 +285,7 @@ es anterior al grupo; C-11 a C-14 se derivan de él.
 - **Requisito**: BE-FR-27; `contracts/log-events.md` 3.9.
 - **Ficheros**: `src/lib/server/features/payments/service.ts` (`correctRefund`),
   `src/routes/(web)/admin/usuarios/[userId]/pagos/[paymentId]/reembolso/+page.server.ts`.
-- **Estado**: confirmado por lectura.
+- **Estado**: corregido (2026-11-18). Confirmado por lectura. Con su test en rojo antes del cambio (T404).
 - **Qué pasa**: cada carga de W37 genera una clave nueva y el éxito redirige con 303: el administrador no ve que falta la
   rectificativa ni puede reenviar la misma clave (un envío nuevo es otro reembolso). `payments.refund.corrective_pending` solo
   lleva `reason`, sin `err`, y el `catch` también se traga los errores de programación.
@@ -298,7 +298,7 @@ es anterior al grupo; C-11 a C-14 se derivan de él.
 
 - **Requisito**: BE-FR-27, BE-FR-75.
 - **Fichero**: `src/lib/server/features/payments/service.ts` (`repeatedRefund` usa `input.amountEurCents` del reenvío).
-- **Estado**: confirmado por ejecución.
+- **Estado**: corregido (2026-11-18). Confirmado por ejecución, con su test en rojo antes del cambio (T405). Las claves anteriores a 0018 quedan con las columnas nulas y su reenvío no reintenta la rectificativa.
 - **Qué pasa**: reembolso de 400 con la clave K y rectificativa fallida; reenvío de K con importe 900 → rectificativa −900 con
   `issueKey` `refund:<id>:400`. `invoicing` no compara el importe al deduplicar. Requiere una petición manipulada o un navegador
   que restaure el campo oculto.
@@ -311,7 +311,7 @@ es anterior al grupo; C-11 a C-14 se derivan de él.
 - **Requisito**: BE-FR-71 CA1, BE-FR-11.6, BE-FR-46.
 - **Ficheros**: `src/lib/server/features/apps/json-schemas.ts` (`hold_ttl_seconds: PositiveInt`, sin relación con
   `timeout_ms`), `src/lib/server/features/credits/repository.ts` (`reservedOf`).
-- **Estado**: confirmado por ejecución. Con los valores por defecto no ocurre (600 s de reserva frente a unos 137 s de
+- **Estado**: corregido (2026-11-18). Con su test en rojo antes del cambio (T406); el mínimo se calcula sobre todas las operaciones, también las inactivas. Antes: confirmado por ejecución. Con los valores por defecto no ocurre (600 s de reserva frente a unos 137 s de
   operación).
 - **Qué pasa**: si el administrador baja `hold_ttl_seconds` por debajo de lo que dura una operación, una reserva caducada y aún
   sin cobrar deja de contar: en una cuenta sin compra real, dos reservas de 300 con tope diario de 400 cobran 600; el freno

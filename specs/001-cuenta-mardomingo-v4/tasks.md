@@ -943,9 +943,9 @@ Guía de implementación de cada tarea, con el test que debe fallar primero, el 
 Hallazgos C-05 a C-09 de `correcciones.md`, de la revisión del PR #47 (categorías personales en `sync`). El PR se fusiona
 sin ellos; la migración de T397 va en un despliegue **posterior** al del PR (C-07).
 
-- [ ] T397 [US6] C-05 (Media): migración de datos personalizada que marque `prompts` de `secretario` como `personal: true` en las bases ya sembradas, sin pisar un esquema cambiado por el administrador, con su T-INT en `src/lib/server/db/migrations.int.test.ts` [BE-FR-42 CA3, D14]
+- [x] T397 [US6] C-05 (Media): migración de datos personalizada que marque `prompts` de `secretario` como `personal: true` en las bases ya sembradas, sin pisar un esquema cambiado por el administrador, con su T-INT en `src/lib/server/db/migrations.int.test.ts` [BE-FR-42 CA3, D14] _Hecho: migración `0017_secretario_prompts_personal.sql` (UPDATE con `json_set` solo si `prompts.strategy = block` y `personal` es nulo). Tests en `db/migrations.int.test.ts`._
 - [ ] T398 [US6] C-06 (Media): test HTTP en `tests/http/admin-predeterminados.test.ts` que compruebe el aviso de categoría personal en W43 (y solo en ella); renombrar o quitar el test unitario «no preselecciona» de `sync/domain/copy-defaults.test.ts` [BE-FR-42 CA3, D14]
-- [ ] T399 C-07 (Baja): desplegar T397 después del PR #47 y documentar en `docs/operaciones/` que volver a una imagen anterior exige quitar antes la clave `personal` [constitución, migraciones]
+- [x] T399 C-07 (Baja): desplegar T397 después del PR #47 y documentar en `docs/operaciones/` que volver a una imagen anterior exige quitar antes la clave `personal` [constitución, migraciones] _Hecho: `docs/operaciones/migraciones.md` (orden de despliegue y vuelta atrás de 0017; el comando para ejecutar SQL en el contenedor, no verificado)._
 - [ ] T400 [US6] C-08 (Baja): asociar el aviso al grupo de casillas de W43 y nombrar la categoría (vía a, con aprobación del sistema de diseño, o vía b, sin tocarlo), con su E2E en `e2e/admin-contenido.spec.ts` [Historias.md 16.10, D14]
 - [x] T401 C-09 (Baja): enmendar `data-model.md` (esquema de categoría, `personal?: true`) y `contracts/web-routes.md` (W43, aviso y sin preselección) [D14] _Hecho (2026-11-17): data-model 3.2 y W43 recogen `personal?: true`, coherentes con `apps/json-schemas.ts` y el perfil de Secretario._
 
@@ -955,9 +955,9 @@ Hallazgos C-10 a C-14 de `correcciones.md`. C-10 y C-11 entran en el PR del grup
 
 - [x] T402 [US4] C-10 (Media): rechazar el reembolso de compras reales que no estén en `completed` ni `partially_refunded` en `src/lib/server/features/payments/domain/refund.ts` (`planRefund`), con su test de dominio y su T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-27, BE-FR-28, data-model 4.5] _Hecho (2026-11-17): 4 tests rojos (el reembolso se aceptaba en `pending`, `refunded` y `chargeback`) y verdes con test:related; dominio al 100 %._
 - [x] T403 [US4] C-11 (Media): enmendar `data-model.md` 4.5 (el contracargo en `refunded` retira lo que quede de la compra) y fijarlo con un T-INT en `payments/refund-chargeback.int.test.ts` [BE-FR-28, D01] _Hecho (2026-11-17): data-model enmendado y dos T-INT (−5.500 de la bolsa; −2.500 de la bolsa y −3.000 a deuda) en verde._
-- [ ] T404 [US4] C-12 (Baja): `err` en `payments.refund.corrective_pending` y consulta de rectificativas pendientes en `docs/operaciones/` [BE-FR-27]
-- [ ] T405 [US4] C-13 (Baja): guardar importe y total en `refund_keys` (migración) para no tomar el importe del cliente en el reenvío [BE-FR-27, BE-FR-75]
-- [ ] T406 C-14 (Baja): validar en los ajustes de `apps` que `hold_ttl_seconds` supera la duración máxima de una operación [BE-FR-71]
+- [x] T404 [US4] C-12 (Baja): `err` en `payments.refund.corrective_pending` y consulta de rectificativas pendientes en `docs/operaciones/` [BE-FR-27] _Hecho: `err` en `payments.refund.corrective_pending` y `docs/operaciones/pagos.md` con las consultas de rectificativas pendientes._
+- [x] T405 [US4] C-13 (Baja): guardar importe y total en `refund_keys` (migración) para no tomar el importe del cliente en el reenvío [BE-FR-27, BE-FR-75] _Hecho: migración `0018_refund_keys_importes.sql` (`amount_eur_cents` y `refunded_after_eur_cents`, nulables, con CHECK); el reenvío usa los valores de la clave y no el importe del cliente. Las claves anteriores no reintentan (se tratan a mano). Tests en `refund-chargeback.int.test.ts` y `migrations.int.test.ts`._
+- [x] T406 C-14 (Baja): validar en los ajustes de `apps` que `hold_ttl_seconds` supera la duración máxima de una operación [BE-FR-71] _Hecho: `hold_ttl_seconds` debe ser al menos la operación más larga + 60 s (`minHoldTtlSeconds`), en `updateSetting` y en la vista previa. Test en `apps/hold-ttl.int.test.ts`. Queda sin validar el sentido inverso (W41 y la activación)._
 
 ## Phase 20: Correcciones de la revisión de autenticación y cuentas (2026-11-17)
 

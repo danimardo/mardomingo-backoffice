@@ -24,3 +24,17 @@ export function operationTotalMs(input: {
 	];
 	return totalTimeoutMs(attempts);
 }
+
+/**
+ * Margen de una reserva sobre la operación más larga (C-14): cubre lo que pasa entre reservar y cobrar fuera de la llamada al
+ * proveedor (lectura de la respuesta, cálculo del coste y transacción de cobro).
+ */
+export const HOLD_TTL_MARGIN_MS = 60_000;
+
+/**
+ * Mínimo de `hold_ttl_seconds` (C-14; BE-FR-71): la operación más larga más el margen, en segundos enteros hacia arriba. Una
+ * reserva que caduca antes del cobro deja de contar en el saldo disponible, en el tope diario y en el freno global.
+ */
+export function minHoldTtlSeconds(operationTotalsMs: readonly number[]): number {
+	return Math.ceil((Math.max(0, ...operationTotalsMs) + HOLD_TTL_MARGIN_MS) / 1000);
+}

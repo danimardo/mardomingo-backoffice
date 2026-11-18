@@ -41,7 +41,6 @@ import {
 	findRefundKey,
 	insertPayment,
 	insertRefundKey,
-	latestAppliedRefundKeyOf,
 	markRefundKeyApplied,
 	markWantsFullInvoice,
 	paymentIdsOfUser,
@@ -375,21 +374,17 @@ function correctRefund(
 			(outcome.status === 'skipped' &&
 				(outcome.reason === 'simulated' || outcome.reason === 'provider_none'));
 		if (!done) deps.logger.emit('payments.refund.corrective_pending', { reason: outcome.status });
-	} catch {
-		deps.logger.emit('payments.refund.corrective_pending', { reason: 'error' });
+	} catch (error) {
+		deps.logger.emit('payments.refund.corrective_pending', { reason: 'error', err: error });
 	}
 }
 
 /**
  * Un reenvío con una clave ya aplicada responde con el estado actual y no vuelve a reembolsar (R12), pero reintenta la
- * rectificativa si la anterior no llegó a emitirse (C-04).
+ * rectificativa si la anterior no llegó a emitirse (C-04). C-13 (T405): el importe y el total salen de la clave, nunca del
+ * reenvío, así que sirve también para una clave que no es la del último reembolso de la compra.
  */
-function repeatedRefund(
-	deps: PaymentsDeps,
-	key: RefundKeyRow,
-	paymentId: string,
-	amountEurCents: number
-): RefundOutcome {
+function repeatedRefund(deps: PaymentsDeps, key: RefundKeyRow, paymentId: string): RefundOutcome {
 	if (key.paymentId !== paymentId)
 		throw new AppError('VALIDATION_ERROR', { field: 'idempotencyKey' });
 	if (key.status === 'claimed') {
@@ -399,10 +394,10 @@ function repeatedRefund(
 	deps.logger.emit('payments.refund.repeated', {});
 	const row = findById(deps.db, paymentId);
 	if (row === undefined) throw new AppError('NOT_FOUND');
-	// Tras otro reembolso de la misma compra, el total de la fila ya no es el de este: reintentar emitiría su importe con la clave
-	// del siguiente. Su `corrective_pending` ya quedó registrado en el primer intento.
-	if (latestAppliedRefundKeyOf(deps.db, paymentId) === key.key)
-		correctRefund(deps, row, amountEurCents, row.refundedEurCents);
+	// Una clave anterior a la migración 0018 no guarda importe ni total: no se reintenta (sería tomar el importe del cliente). Su
+	// `corrective_pending` ya quedó registrado en el primer intento y se trata a mano (docs/operaciones/pagos.md).
+	if (key.amountEurCents !== null && key.refundedAfterEurCents !== null)
+		correctRefund(deps, row, key.amountEurCents, key.refundedAfterEurCents);
 	return {
 		status: row.status === 'refunded' ? 'refunded' : 'partially_refunded',
 		refundedEurCents: row.refundedEurCents
@@ -441,6 +436,8 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 		insertRefundKey(tx, {
 			key: input.idempotencyKey,
 			paymentId: row.id,
+			amountEurCents: toEurCents(input.amountEurCents),
+			refundedAfterEurCents: toEurCents(plan.newRefundedEurCents),
 			createdAt: toEpochMs(deps.clock.now())
 		});
 		return {
@@ -451,8 +448,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 		};
 	});
 	if (claim.kind === 'missing') throw new AppError('NOT_FOUND');
-	if (claim.kind === 'repeated')
-		return repeatedRefund(deps, claim.key, input.paymentId, input.amountEurCents);
+	if (claim.kind === 'repeated') return repeatedRefund(deps, claim.key, input.paymentId);
 	if (claim.kind === 'rejected') {
 		deps.logger.emit('payments.refund.rejected', { reason: claim.reason });
 		throw rejectionError(claim.reason);

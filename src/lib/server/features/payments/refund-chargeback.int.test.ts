@@ -253,9 +253,132 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		}
 	);
 
-	// C-04 (T396): tras otro reembolso de la misma compra, el total de la fila ya no es el del reembolso reenviado, así que no se
-	// puede reconstruir su `issueKey`. Reintentarlo emitiría el importe del primero con la clave del segundo y bloquearía la buena.
-	it('el reenvío de un reembolso anterior al último no reintenta su rectificativa', () => {
+	// C-12 (T404): si la rectificativa lanza, el evento lleva el error (también los de programación, que el `catch` no propaga);
+	// si el proveedor solo la omite, no hay error que adjuntar.
+	it.each([
+		['lanza una excepción', 'throw'],
+		['no se emite (not_issued)', 'not_issued']
+	] as const)(
+		'payments.refund.corrective_pending lleva `err` solo si la rectificativa %s',
+		(_label, failure) => {
+			const { userId } = f.addAccount(`usr_pendiente_err_${failure}`);
+			const adminId = f.addAccount(`adm_pendiente_err_${failure}`, 'admin').userId;
+			const paymentId = buyReal(userId, `att_pendiente_err_${failure}`);
+			issueInitialInvoice(paymentId, userId);
+			const cause = new TypeError('fallo de programación en la facturación');
+			const failing = createPaymentsService({
+				...f.deps,
+				invoicing: {
+					...f.deps.invoicing,
+					correctPayment: () => {
+						if (failure === 'throw') throw cause;
+						return { status: 'skipped', reason: 'not_issued' };
+					}
+				}
+			});
+
+			failing.refund({
+				adminId,
+				paymentId,
+				amountEurCents: 400,
+				creditsToRemoveMicro: 0,
+				reason: 'Rectificativa fallida',
+				idempotencyKey: randomUUID()
+			});
+
+			const [pending] = eventsNamed(f.base.logger, 'payments.refund.corrective_pending');
+			expect(pending?.fields).toEqual(
+				failure === 'throw' ? { reason: 'error', err: cause } : { reason: 'skipped' }
+			);
+		}
+	);
+
+	// C-13 (T405): el reenvío toma el importe y el total guardados con la clave, no los del cliente. Antes, un reenvío de K con
+	// otro importe emitía la rectificativa con ese importe y la `issueKey` del original.
+	it('el reenvío con la misma clave y otro importe emite la rectificativa con el importe original', () => {
+		const { userId } = f.addAccount('usr_pendiente_importe');
+		const adminId = f.addAccount('adm_pendiente_importe', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_pendiente_importe');
+		issueInitialInvoice(paymentId, userId);
+		let failuresLeft = 1;
+		const flaky = createPaymentsService({
+			...f.deps,
+			invoicing: {
+				...f.deps.invoicing,
+				correctPayment: (input) => {
+					if (failuresLeft > 0) {
+						failuresLeft -= 1;
+						return { status: 'skipped', reason: 'not_issued' };
+					}
+					return f.deps.invoicing.correctPayment(input);
+				}
+			}
+		});
+		const form = {
+			adminId,
+			paymentId,
+			amountEurCents: 400,
+			creditsToRemoveMicro: 0,
+			reason: 'Rectificativa fallida',
+			idempotencyKey: randomUUID()
+		};
+
+		flaky.refund(form);
+		expect(
+			f.base.db.select().from(refundKeys).where(eq(refundKeys.key, form.idempotencyKey)).get()
+		).toMatchObject({ status: 'applied', amountEurCents: 400, refundedAfterEurCents: 400 });
+
+		expect(flaky.refund({ ...form, amountEurCents: 900 })).toEqual({
+			status: 'partially_refunded',
+			refundedEurCents: 400
+		});
+		expect(correctiveAmounts(paymentId)).toEqual([-400]);
+	});
+
+	// C-13 (T405): una clave anterior a la migración 0018 no guarda importe ni total. No se reintenta (sería tomar el importe del
+	// cliente); su `corrective_pending` ya quedó registrado y se trata a mano (docs/operaciones/pagos.md).
+	it('el reenvío de una clave sin importe guardado (anterior a 0018) no reintenta la rectificativa', () => {
+		const { userId } = f.addAccount('usr_pendiente_legado');
+		const adminId = f.addAccount('adm_pendiente_legado', 'admin').userId;
+		const paymentId = buyReal(userId, 'att_pendiente_legado');
+		issueInitialInvoice(paymentId, userId);
+		let failuresLeft = 1;
+		const flaky = createPaymentsService({
+			...f.deps,
+			invoicing: {
+				...f.deps.invoicing,
+				correctPayment: (input) => {
+					if (failuresLeft > 0) {
+						failuresLeft -= 1;
+						return { status: 'skipped', reason: 'not_issued' };
+					}
+					return f.deps.invoicing.correctPayment(input);
+				}
+			}
+		});
+		const form = {
+			adminId,
+			paymentId,
+			amountEurCents: 400,
+			creditsToRemoveMicro: 0,
+			reason: 'Clave antigua',
+			idempotencyKey: randomUUID()
+		};
+		flaky.refund(form);
+		f.base.db
+			.update(refundKeys)
+			.set({ amountEurCents: null, refundedAfterEurCents: null })
+			.where(eq(refundKeys.key, form.idempotencyKey))
+			.run();
+
+		expect(flaky.refund(form)).toEqual({ status: 'partially_refunded', refundedEurCents: 400 });
+		expect(correctiveAmounts(paymentId)).toEqual([]);
+		expect(eventsNamed(f.base.logger, 'payments.refund.repeated')).toHaveLength(1);
+	});
+
+	// C-13 (T405) resuelve el límite de C-04 (T396): con el total guardado en la clave, el reenvío de un reembolso anterior al
+	// último reconstruye su propia `issueKey` y emite su rectificativa con su importe.
+	it('el reenvío de un reembolso anterior al último reintenta su rectificativa con su importe y su total', () => {
 		const { userId } = f.addAccount('usr_pendiente_viejo');
 		const adminId = f.addAccount('adm_pendiente_viejo', 'admin').userId;
 		const paymentId = buyReal(userId, 'att_pendiente_viejo');
@@ -283,10 +406,19 @@ describe('reembolso manual de compra real (BE-FR-27, D01)', () => {
 		expect(eventsNamed(f.base.logger, 'payments.refund.corrective_pending')).toHaveLength(2);
 
 		expect(flaky.refund(first)).toEqual({ status: 'partially_refunded', refundedEurCents: 700 });
-		expect(correctiveAmounts(paymentId)).toEqual([]);
+		expect(correctiveAmounts(paymentId)).toEqual([-400]);
 
 		flaky.refund(second);
-		expect(correctiveAmounts(paymentId)).toEqual([-300]);
+		expect(correctiveAmounts(paymentId)).toEqual([-400, -300]);
+		expect(
+			f.base.db
+				.select({ issueKey: invoices.issueKey })
+				.from(invoices)
+				.where(and(eq(invoices.paymentId, paymentId), eq(invoices.kind, 'corrective')))
+				.all()
+				.map((row) => row.issueKey)
+				.sort()
+		).toEqual([`refund:${paymentId}:400`, `refund:${paymentId}:700`]);
 	});
 
 	it('dos formularios distintos sí son dos reembolsos parciales', () => {
