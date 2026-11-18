@@ -50,12 +50,6 @@ describe('previewCopy', () => {
 
 		expect(personal).toEqual(['prompts']);
 	});
-
-	it('no preselecciona nada: la vista previa solo describe, la copia exige marcar (D14)', () => {
-		const result = applyCopy(SCHEMA, SOURCE, []);
-
-		expect(result).toEqual({});
-	});
 });
 
 describe('applyCopy', () => {

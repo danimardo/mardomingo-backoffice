@@ -701,6 +701,14 @@ test('la copia a predeterminados muestra la vista previa sin nada preseleccionad
 		await expect(box).not.toBeChecked();
 	}
 
+	// C-08: el aviso de datos personales nombra la categoría y es la descripción accesible de su grupo, y solo de ese.
+	await expect(page.getByRole('group', { name: /prompts/ })).toHaveAccessibleDescription(
+		/datos personales/
+	);
+	await expect(page.getByRole('group', { name: /preferences/ })).not.toHaveAccessibleDescription(
+		/datos personales/
+	);
+
 	// Sin marcar nada, la copia se rechaza y no sustituye ningún predeterminado.
 	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
 	await page.getByRole('button', { name: 'Copiar los elementos marcados' }).click();

@@ -16,14 +16,36 @@
 		legend: string;
 		options: readonly GroupOption[];
 		selected?: string[];
+		/** Aviso o ayuda del grupo: se pinta dentro del `fieldset` y el grupo lo describe (aria-describedby). */
+		description?: string;
 		error?: string;
 	}
 
-	let { id, name, legend, options, selected = $bindable([]), error = '' }: Props = $props();
+	let {
+		id,
+		name,
+		legend,
+		options,
+		selected = $bindable([]),
+		description = '',
+		error = ''
+	}: Props = $props();
+
+	const describedBy = $derived(
+		[description !== '' ? `${id}-desc` : '', error !== '' ? `${id}-error` : ''].filter(
+			(part) => part !== ''
+		)
+	);
 </script>
 
-<fieldset class="group" aria-describedby={error !== '' ? `${id}-error` : undefined}>
+<fieldset
+	class="group"
+	aria-describedby={describedBy.length > 0 ? describedBy.join(' ') : undefined}
+>
 	<legend>{legend}</legend>
+	{#if description !== ''}
+		<p id="{id}-desc" class="message description">{description}</p>
+	{/if}
 	{#each options as option (option.value)}
 		<label class="option">
 			<input
@@ -84,6 +106,10 @@
 		gap: var(--space-2);
 		margin: 0;
 		font-size: var(--font-size-sm);
+	}
+
+	.description {
+		color: var(--color-text-secondary);
 	}
 
 	.error {

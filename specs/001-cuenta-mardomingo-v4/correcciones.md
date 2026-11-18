@@ -210,7 +210,7 @@ reverificado.
 - **Ficheros**: `src/lib/server/features/sync/domain/copy-defaults.test.ts:54-58`,
   `src/routes/(web)/admin/apps/[slug=appSlug]/predeterminados/copiar/+page.svelte:42-44`,
   `tests/http/admin-predeterminados.test.ts`, `e2e/admin-contenido.spec.ts:693-707`.
-- **Estado**: corregido (2026-11-18). Orden de despliegue y vuelta atrás en `docs/operaciones/migraciones.md` (T399). La vuelta atrás en staging no está verificada.
+- **Estado**: corregido (2026-11-18), como cobertura y no como defecto: el aviso ya se pintaba solo en `prompts`; faltaba el test (T398). Caso HTTP en `admin-predeterminados.test.ts`, que falla con `{#if category.personal}` sustituido por `{#if false}` (comprobado). Se quitó el test unitario «no preselecciona».
 - **Qué pasa**: el test unitario titulado «no preselecciona nada» solo comprueba `applyCopy(SCHEMA, SOURCE, [])` → `{}`, que ya
   estaba cubierto. Ningún test HTTP, de componente ni E2E comprueba que el `Banner` aparece en `prompts` y no en las demás
   categorías: quitar el `{#if category.personal}` deja todo en verde. La no preselección sí la cubre el E2E de
@@ -226,7 +226,7 @@ reverificado.
 - **Requisito**: constitución, migraciones (compatibilidad y despliegue intermedio), por analogía.
 - **Ficheros**: `src/lib/server/features/apps/repository.ts:106-120` (`validatedApp` → `checked(SyncSchema, …)`),
   `src/lib/server/features/apps/json-schemas.ts:65-82`.
-- **Estado**: confirmado por lectura que la versión anterior (`z.strictObject` sin `personal`) rechaza la clave; el alcance exacto
+- **Estado**: corregido (2026-11-18). Orden de despliegue y vuelta atrás en `docs/operaciones/migraciones.md` (T399). La vuelta atrás en staging no está verificada. Antes: confirmado por lectura que la versión anterior (`z.strictObject` sin `personal`) rechaza la clave; el alcance exacto
   de la caída es una sospecha.
 - **Qué pasa**: con `personal: true` en la BD y la imagen anterior, `readApp`, `readAppBySlug` y `listAppOverrides` lanzarían
   error de corrupción para esa fila; `resolveAppBySlug` fallaría en las peticiones con `X-App-Id: secretario`.
@@ -240,7 +240,7 @@ reverificado.
 - **Requisito**: D14 y `Historias.md` 16.10 (mensajes enlazados al control).
 - **Ficheros**: `src/routes/(web)/admin/apps/[slug=appSlug]/predeterminados/copiar/+page.svelte:42-50`,
   `src/lib/components/ui/CheckboxGroup.svelte` (no admite descripción, solo `error`).
-- **Estado**: confirmado por lectura; el efecto en un lector de pantalla no se ha verificado.
+- **Estado**: corregido (2026-11-18), vía (a): prop `description` en `CheckboxGroup` (T400). Descripción accesible comprobada con testing-library y Playwright (E2E y `test:e2e:a11y`); el efecto en un lector de pantalla real no se ha verificado.
 - **Qué pasa**: el `Banner` queda fuera del `fieldset` y sin `aria-describedby`; al recorrer el formulario por controles no se
   oye el aviso. El texto no dice qué categoría es.
 - **Cambio**: el sistema de diseño solo cambia con aprobación. Vía (a): prop opcional `description` en `CheckboxGroup` que pinte

@@ -57,4 +57,37 @@ describe('CheckboxGroup', () => {
 			'Elige al menos una.'
 		);
 	});
+
+	it('la descripción va dentro del fieldset y el grupo la describe', () => {
+		render(CheckboxGroup, {
+			props: {
+				id: 'cats',
+				name: 'categorias',
+				legend: 'Categorías',
+				options: OPTIONS,
+				description: 'Esta categoría puede contener datos personales.'
+			}
+		});
+
+		const group = screen.getByRole('group', { name: 'Categorías' });
+		expect(group).toHaveAccessibleDescription('Esta categoría puede contener datos personales.');
+		expect(group.querySelector('#cats-desc')).not.toBeNull();
+	});
+
+	it('con descripción y error, el grupo los describe a la vez', () => {
+		render(CheckboxGroup, {
+			props: {
+				id: 'cats',
+				name: 'categorias',
+				legend: 'Categorías',
+				options: OPTIONS,
+				description: 'Aviso.',
+				error: 'Elige al menos una.'
+			}
+		});
+
+		expect(screen.getByRole('group', { name: 'Categorías' })).toHaveAccessibleDescription(
+			'Aviso. Elige al menos una.'
+		);
+	});
 });

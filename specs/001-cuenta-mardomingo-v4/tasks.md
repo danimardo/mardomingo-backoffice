@@ -944,9 +944,9 @@ Hallazgos C-05 a C-09 de `correcciones.md`, de la revisión del PR #47 (categor�
 sin ellos; la migración de T397 va en un despliegue **posterior** al del PR (C-07).
 
 - [x] T397 [US6] C-05 (Media): migración de datos personalizada que marque `prompts` de `secretario` como `personal: true` en las bases ya sembradas, sin pisar un esquema cambiado por el administrador, con su T-INT en `src/lib/server/db/migrations.int.test.ts` [BE-FR-42 CA3, D14] _Hecho: migración `0017_secretario_prompts_personal.sql` (UPDATE con `json_set` solo si `prompts.strategy = block` y `personal` es nulo). Tests en `db/migrations.int.test.ts`._
-- [ ] T398 [US6] C-06 (Media): test HTTP en `tests/http/admin-predeterminados.test.ts` que compruebe el aviso de categoría personal en W43 (y solo en ella); renombrar o quitar el test unitario «no preselecciona» de `sync/domain/copy-defaults.test.ts` [BE-FR-42 CA3, D14]
+- [x] T398 [US6] C-06 (Media): test HTTP en `tests/http/admin-predeterminados.test.ts` que compruebe el aviso de categoría personal en W43 (y solo en ella); renombrar o quitar el test unitario «no preselecciona» de `sync/domain/copy-defaults.test.ts` [BE-FR-42 CA3, D14]
 - [x] T399 C-07 (Baja): desplegar T397 después del PR #47 y documentar en `docs/operaciones/` que volver a una imagen anterior exige quitar antes la clave `personal` [constitución, migraciones] _Hecho: `docs/operaciones/migraciones.md` (orden de despliegue y vuelta atrás de 0017; el comando para ejecutar SQL en el contenedor, no verificado)._
-- [ ] T400 [US6] C-08 (Baja): asociar el aviso al grupo de casillas de W43 y nombrar la categoría (vía a, con aprobación del sistema de diseño, o vía b, sin tocarlo), con su E2E en `e2e/admin-contenido.spec.ts` [Historias.md 16.10, D14]
+- [x] T400 [US6] C-08 (Baja): asociar el aviso al grupo de casillas de W43 y nombrar la categoría (vía a, con aprobación del sistema de diseño, o vía b, sin tocarlo), con su E2E en `e2e/admin-contenido.spec.ts` [Historias.md 16.10, D14]
 - [x] T401 C-09 (Baja): enmendar `data-model.md` (esquema de categoría, `personal?: true`) y `contracts/web-routes.md` (W43, aviso y sin preselección) [D14] _Hecho (2026-11-17): data-model 3.2 y W43 recogen `personal?: true`, coherentes con `apps/json-schemas.ts` y el perfil de Secretario._
 
 ## Phase 19: Correcciones de la revisión de cierre de T393–T396 (2026-11-17)
