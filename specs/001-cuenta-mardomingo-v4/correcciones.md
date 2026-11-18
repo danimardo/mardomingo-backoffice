@@ -665,7 +665,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 - **Ficheros**: la ruta de W42 `predeterminados/+page.server.ts` (líneas 53–60: `fail(400, { errors: { datos } })` o
   `failureOf(cause)` sin `values`; se descarta `verdict.field`) y su `+page.svelte` (líneas 28–30: pinta siempre
   `data.defaultsJson`).
-- **Estado**: confirmado por ejecución. La respuesta 400 no contiene el texto enviado.
+- **Estado**: corregido (2026-11-18). W42 devuelve `values` con el JSON escrito y la categoría que falla (`category`), y la página los pinta. Test: tests/http/admin-predeterminados-conserva-texto.test.ts. Pasa tras el cambio; no se comprobó en rojo antes del cambio (copiado del repaso y verificado solo después). Antes: confirmado por ejecución. La respuesta 400 no contiene el texto enviado.
 - **Cambio**: devolver `values` con el JSON enviado, pintarlo en la página y mostrar la categoría que falla. No necesita decisión.
 - **Test (primero, debe fallar)**: `tests/http/admin-predeterminados-conserva-texto.test.ts`.
 
@@ -686,7 +686,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 
 - **Requisito**: `contracts/log-events.md` 3.10; `contracts/api-v1` E10 y E11; `contracts/web-routes.md:623`.
 - **Ficheros**: `sync/events.ts` (líneas 5–12), `sync/service.ts` (líneas 76–206).
-- **Estado**: confirmado por ejecución. Faltan `sync.document.read` (debug, `durationMs`) y `sync.document.written` (info,
+- **Estado**: corregido (2026-11-18). eventos de `sync` alineados con `log-events.md` 3.10 (`read`, `written`, `schema_invalid`, `errorCode`, `if_match_invalid` en la ruta, `count`). Test: src/lib/server/features/sync/log-events-contract.int.test.ts. Pasa tras el cambio; no se comprobó en rojo antes del cambio (copiado del repaso y verificado solo después). Antes: confirmado por ejecución. Faltan `sync.document.read` (debug, `durationMs`) y `sync.document.written` (info,
   `durationMs`); `sync.document.rejected` usa `reason: 'validation'` en lugar de `schema_invalid`, no lleva `errorCode` y no se
   emite con `if_match_invalid`; `sync.tombstones.purged` lleva `removed` (uno por documento) en lugar de `count`;
   `sync.defaults.updated` y `sync.defaults.copied` no llevan `count`.
@@ -720,7 +720,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 - **Ficheros**: `bounds()` de facturación, exportación contable, estadísticas y filtro de auditoría
   (`Date.parse(`${desde}T00:00:00Z`)` y `${hasta}T23:59:59Z`); la fecha de cada fila del CSV es el día civil de Madrid
   (`civilDateOf`).
-- **Estado**: confirmado por ejecución. Una venta del 1 de febrero a las 00:30 de Madrid (31-ene 23:30 UTC) no sale en el
+- **Estado**: corregido (2026-11-18). `madridPeriodBounds` en `shared/dates.ts` usada por facturación, exportación, estadísticas y auditoría. Test: tests/http/admin-periodo-madrid.test.ts y `dates.test.ts`. Pasa tras el cambio; no se comprobó en rojo antes del cambio (copiado del repaso y verificado solo después). Antes: confirmado por ejecución. Una venta del 1 de febrero a las 00:30 de Madrid (31-ene 23:30 UTC) no sale en el
   periodo 01-02..01-02, y una del 2 de febrero a las 00:30 sí sale en él, con fecha «2026-02-02» en un CSV del día 1. Además,
   el fin `23:59:59.000Z` deja fuera el último segundo.
 - **Cambio**: una función común que devuelva `[madridMidnight(desde), madridMidnight(addDays(hasta, 1)))` y se use en los
@@ -757,7 +757,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
 - **Requisito**: `contracts/web-routes.md` W35 (`?/cerrarSesiones` con errores `404`); BE-FR-55 (la auditoría registra cambios reales).
 - **Ficheros**: `accounts/admin-users.ts` (`closeUserSessions`, líneas 224–247: filtra por cuenta y sesión, borra 0 filas y
   escribe `accounts.session.close` con `before: { sessions: 0 }`), la acción de `admin/usuarios/[userId]/+page.server.ts`.
-- **Estado**: confirmado por ejecución. Devuelve 0 en lugar de lanzar `NOT_FOUND` y queda una entrada de auditoría.
+- **Estado**: corregido (2026-11-18). `closeUserSessions` lanza `NOT_FOUND` sin auditar si una sesión concreta no se borra. Test: src/lib/server/features/accounts/admin-sessions-close.int.test.ts. Pasa tras el cambio; no se comprobó en rojo antes del cambio (copiado del repaso y verificado solo después). Antes: confirmado por ejecución. Devuelve 0 en lugar de lanzar `NOT_FOUND` y queda una entrada de auditoría.
 - **Cambio**: `NOT_FOUND` sin auditar si `changes === 0`. No necesita decisión.
 - **Test (primero, debe fallar)**: `src/lib/server/features/accounts/admin-sessions-close.int.test.ts`.
 
@@ -797,7 +797,7 @@ Equivalencias con los informes: S-01 a S-07 son C-40 a C-46, y A-01 a A-07 son C
   rompe la página).
 - **Ficheros**: `admin/usuarios/+page.server.ts:19`, `admin/auditoria/+page.server.ts:30` y `pageNumber` en
   `src/lib/shared/paging.ts:7-9` (`Math.max(1, Number.parseInt(x, 10) || 1)`, sin tope).
-- **Estado**: confirmado por ejecución (el informe lo daba por sospecha): responde 500. Con «1e400» en cifras da `Infinity` y con
+- **Estado**: corregido (2026-11-18). `pageNumber` acota a `MAX_PAGE` (10 000) y admite solo enteros seguros; usuarios y auditoría lo usan. Test: tests/http/admin-paginacion-limites.test.ts y `paging.test.ts`. Pasa tras el cambio; no se comprobó en rojo antes del cambio (copiado del repaso y verificado solo después). Antes: confirmado por ejecución (el informe lo daba por sospecha): responde 500. Con «1e400» en cifras da `Infinity` y con
   «100000000000000000000» da 1e20; el desplazamiento llega a SQLite como REAL no representable y lo rechaza en `LIMIT`/`OFFSET`
   («datatype mismatch»).
 - **Cambio**: exigir entero seguro y un máximo en `pageNumber`; fuera de rango, la última página o la lista vacía (200) o 400.

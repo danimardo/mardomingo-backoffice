@@ -3,9 +3,14 @@
 
 export const ADMIN_PAGE_SIZE = 20;
 
-/** Página pedida como entero mayor o igual que 1. */
+/** Página máxima atendida: más allá se sirve esta (lista vacía), para que el desplazamiento siga siendo un entero seguro. */
+export const MAX_PAGE = 10_000;
+
+/** Página pedida como entero entre 1 y `MAX_PAGE`; lo no numérico o fuera de rango se acota. */
 export function pageNumber(value: string | null): number {
-	return Math.max(1, Number.parseInt(value ?? '1', 10) || 1);
+	const parsed = Number.parseInt(value ?? '1', 10);
+	if (!Number.isSafeInteger(parsed)) return Number.isNaN(parsed) ? 1 : MAX_PAGE;
+	return Math.min(MAX_PAGE, Math.max(1, parsed));
 }
 
 /** Filas a pedir para mostrar la página: la página completa más una, para detectar la siguiente. */

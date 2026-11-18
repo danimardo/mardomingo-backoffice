@@ -121,7 +121,8 @@ describe('escritura con If-Match (BE-FR-41)', () => {
 			second.write({ ...reread.data, notas: { value: 'de B tras fusionar', updatedAt: 3 } })
 		).toEqual({ ok: true, revision: 3 });
 		expect(eventsNamed(fixture.logger, 'sync.document.rejected').at(-1)?.fields).toEqual({
-			reason: 'revision_conflict'
+			reason: 'revision_conflict',
+			errorCode: 'SYNC_CONFLICT'
 		});
 	});
 

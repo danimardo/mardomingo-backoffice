@@ -43,20 +43,35 @@ export const actions: Actions = {
 	guardarPredeterminados: async ({ locals, params, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
-		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const written = textOf(form, 'datos');
+		// Lo escrito vuelve a la página en cualquier fallo (`values`), para que no se pierda.
+		if (!isConfirmed(form)) {
+			return fail(400, { formError: 'VALIDATION_ERROR', values: { datos: written } });
+		}
 		const composition = getComposition();
 		const app = findActiveAppBySlug(composition.apps, params.slug);
 		if (app === undefined) error(404);
 		let data: unknown;
 		try {
-			data = JSON.parse(textOf(form, 'datos'));
+			data = JSON.parse(written);
 		} catch {
-			return fail(400, { errors: { datos: 'validation_invalid' } });
+			return fail(400, { errors: { datos: 'validation_invalid' }, values: { datos: written } });
 		}
 		try {
 			updateDefaults(composition.sync, { adminId: admin.id, appId: app.id, data });
 		} catch (cause) {
-			if (cause instanceof AppError) return failureOf(cause);
+			if (cause instanceof AppError) {
+				const field = cause.details.field;
+				if (cause.code === 'VALIDATION_ERROR') {
+					return fail(400, {
+						errors: { datos: 'validation_invalid' },
+						values: { datos: written },
+						// La categoría que no cumple el esquema (BE-FR-42): «data» es el documento entero, no una categoría.
+						...(typeof field === 'string' && field !== 'data' ? { category: field } : {})
+					});
+				}
+				return failureOf(cause, { datos: written });
+			}
 			throw cause;
 		}
 		const back = `/admin/apps/${encodeURIComponent(params.slug)}/predeterminados`;

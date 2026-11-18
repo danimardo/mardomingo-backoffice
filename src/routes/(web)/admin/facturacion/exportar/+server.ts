@@ -5,6 +5,7 @@ import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import { accountingReport } from '$lib/server/web/accounting-report';
+import { madridPeriodBounds } from '$lib/shared/dates';
 import type { RequestHandler } from './$types';
 
 const FILES = Object.freeze({
@@ -13,12 +14,9 @@ const FILES = Object.freeze({
 	ia: 'aiCostsCsv'
 } as const);
 
-/** Día `AAAA-MM-DD` como intervalo de Madrid aproximado en UTC (inicio y fin del día). */
+/** Periodo `AAAA-MM-DD`..`AAAA-MM-DD` como intervalo de días de Madrid. */
 function bounds(desde: string, hasta: string): { fromMs: number; toMs: number } | null {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return null;
-	const fromMs = Date.parse(`${desde}T00:00:00Z`);
-	const toMs = Date.parse(`${hasta}T23:59:59Z`);
-	return Number.isNaN(fromMs) || Number.isNaN(toMs) || fromMs > toMs ? null : { fromMs, toMs };
+	return madridPeriodBounds(desde, hasta);
 }
 
 export const GET: RequestHandler = ({ locals, url }) => {

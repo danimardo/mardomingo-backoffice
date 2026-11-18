@@ -10,6 +10,9 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
+	// Tras un fallo se vuelve a pintar lo escrito, no el documento guardado.
+	const category = $derived(form && 'category' in form ? form.category : undefined);
+	const written = $derived(form?.values.datos ?? data.defaultsJson);
 </script>
 
 <svelte:head>
@@ -26,10 +29,14 @@
 <form method="POST" action="?/guardarPredeterminados">
 	<label for="datos">{m.admin_defaults_json()}</label>
 	<textarea id="datos" name="datos" rows="16" aria-invalid={errors.datos ? 'true' : undefined}
-		>{data.defaultsJson}</textarea
+		>{written}</textarea
 	>
 	{#if errors.datos}
-		<p role="alert">{m.admin_defaults_json_invalid()}</p>
+		<p role="alert">
+			{category
+				? m.admin_defaults_json_category_invalid({ category })
+				: m.admin_defaults_json_invalid()}
+		</p>
 	{/if}
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_defaults_confirm()}</Checkbox>
 	<p><Button type="submit" variant="primary">{m.admin_defaults_save()}</Button></p>

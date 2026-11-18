@@ -4,6 +4,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor, searchUsers } from '$lib/server/features/accounts';
+import { pageNumber } from '$lib/shared/paging';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
@@ -16,7 +17,7 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 	setHeaders({ 'cache-control': 'private, no-store' });
 
 	const query = url.searchParams.get('q') ?? '';
-	const page = Math.max(1, Number.parseInt(url.searchParams.get('pagina') ?? '1', 10) || 1);
+	const page = pageNumber(url.searchParams.get('pagina'));
 	const result = searchUsers(getComposition().adminUsers, query, page);
 	return { q: query, rows: result.rows, pagination: result.pagination };
 };

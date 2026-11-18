@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import { toCivilDate, toEpochMs } from './time';
 import {
 	addDays,
+	madridPeriodBounds,
 	civilDateOf,
 	civilFromDays,
 	daysFromCivil,
@@ -104,5 +105,28 @@ describe('propiedades de coherencia', () => {
 				expect([23, 24, 25].map((h) => h * 3_600_000)).toContain(length);
 			})
 		);
+	});
+});
+
+describe('madridPeriodBounds (C-47)', () => {
+	it('cubre de las 00:00 de Madrid del primer día al último milisegundo del último', () => {
+		// Febrero: UTC+1. El 1 de febrero empieza el 31 de enero a las 23:00 UTC.
+		expect(madridPeriodBounds('2026-02-01', '2026-02-01')).toEqual({
+			fromMs: Date.UTC(2026, 0, 31, 23, 0, 0),
+			toMs: Date.UTC(2026, 1, 1, 23, 0, 0) - 1
+		});
+	});
+
+	it('respeta el horario de verano (UTC+2)', () => {
+		expect(madridPeriodBounds('2026-07-01', '2026-07-02')).toEqual({
+			fromMs: Date.UTC(2026, 5, 30, 22, 0, 0),
+			toMs: Date.UTC(2026, 6, 2, 22, 0, 0) - 1
+		});
+	});
+
+	it('es nulo si un día no es válido o el orden es inverso', () => {
+		expect(madridPeriodBounds('', '2026-02-01')).toBeNull();
+		expect(madridPeriodBounds('2026-02-30', '2026-03-01')).toBeNull();
+		expect(madridPeriodBounds('2026-02-02', '2026-02-01')).toBeNull();
 	});
 });

@@ -5,16 +5,9 @@ import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
 import { accessFor } from '$lib/server/features/accounts';
 import { auditPage } from '$lib/server/features/audit';
-import { toEpochMs } from '$lib/shared/time';
+import { madridPeriodBounds } from '$lib/shared/dates';
+import { pageNumber } from '$lib/shared/paging';
 import type { PageServerLoad } from './$types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function dayStart(value: string | null): number | null {
-	if (value === null || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-	const ms = Date.parse(`${value}T00:00:00Z`);
-	return Number.isNaN(ms) ? null : ms;
-}
 
 export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 	const access = accessFor(locals.user, 'admin');
@@ -25,16 +18,19 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 	if (access.kind !== 'allow') error(403);
 	setHeaders({ 'cache-control': 'private, no-store' });
 
-	const from = dayStart(url.searchParams.get('desde'));
-	const to = dayStart(url.searchParams.get('hasta'));
-	const page = Math.max(1, Number.parseInt(url.searchParams.get('pagina') ?? '1', 10) || 1);
+	const desde = url.searchParams.get('desde');
+	const hasta = url.searchParams.get('hasta');
+	// Cada filtro de día es un día civil de Madrid: `desde` desde sus 00:00 y `hasta` hasta su último milisegundo.
+	const from = desde === null ? null : madridPeriodBounds(desde, desde);
+	const to = hasta === null ? null : madridPeriodBounds(hasta, hasta);
+	const page = pageNumber(url.searchParams.get('pagina'));
 	const entity = url.searchParams.get('entidad') || null;
 	const action = url.searchParams.get('accion') || null;
 	const result = auditPage(getComposition().db, {
 		entity,
 		action,
-		fromMs: from === null ? null : toEpochMs(from),
-		toMs: to === null ? null : toEpochMs(to + DAY_MS - 1),
+		fromMs: from === null ? null : from.fromMs,
+		toMs: to === null ? null : to.toMs,
 		page
 	});
 	return {

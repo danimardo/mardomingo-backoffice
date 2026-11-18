@@ -234,6 +234,8 @@ export function closeUserSessions(
 				? eq(session.userId, input.userId)
 				: and(eq(session.userId, input.userId), eq(session.id, input.sessionId));
 		const closed = tx.delete(session).where(where).run().changes;
+		// Una sesión concreta que no es de esta cuenta (o no existe) es un 404 y no deja entrada de auditoría.
+		if (closed === 0 && input.sessionId !== null) throw new AppError('NOT_FOUND');
 		audit(tx, deps, {
 			adminId: input.adminId,
 			action: 'accounts.session.close',

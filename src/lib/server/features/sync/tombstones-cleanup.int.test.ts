@@ -80,7 +80,7 @@ describe('limpieza de marcas de borrado (T338)', () => {
 		});
 		const events = eventsNamed(fixture.logger, 'sync.tombstones.purged');
 		expect(events).toHaveLength(1);
-		expect(events[0]?.fields).toStrictEqual({ removed: 1 });
+		expect(events[0]?.fields).toStrictEqual({ count: 1 });
 	});
 
 	it('un documento sin marcas caducadas no cambia ni sube la revisión', () => {

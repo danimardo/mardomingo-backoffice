@@ -1082,14 +1082,14 @@ decisiones del propietario del 2026-11-18 (C-41, C-43, C-45, C-48 y C-49). Se co
 
 - [ ] T432 [US6] C-40 (Alta): la copia de W43 conserva las categorías no seleccionadas y lanza `NOTHING_SELECTED` si no copia nada, en `sync/service.ts` [BE-FR-42 CA3]
 - [ ] T433 [US6] C-41 (Media): motivo obligatorio en W42 y W43 y auditoría con resumen sin contenido (categorías, número de elementos y hash) [BE-FR-55]
-- [ ] T434 [US6] C-42 (Media): W42 conserva el JSON escrito y nombra la categoría que falla [BE-FR-42]
+- [x] T434 [US6] C-42 (Media): W42 conserva el JSON escrito y nombra la categoría que falla [BE-FR-42] _Hecho: W42 devuelve `values` con el JSON escrito y la categoría que falla (`category`), y la página los pinta._
 - [ ] T435 [US6] C-43 (Media): triggers `BEFORE INSERT/UPDATE` en `sync_documents` que abortan si el usuario está borrado, con migración [BE-FR-07 CA1]
-- [ ] T436 [US6] C-44 (Baja): eventos de `sync` y de W43 según `log-events.md` 3.10 [BE-FR-41, BE-FR-42]
+- [x] T436 [US6] C-44 (Baja): eventos de `sync` y de W43 según `log-events.md` 3.10 [BE-FR-41, BE-FR-42] _Hecho: eventos de `sync` alineados con `log-events.md` 3.10 (`read`, `written`, `schema_invalid`, `errorCode`, `if_match_invalid` en la ruta, `count`)._
 - [ ] T437 [US6] C-45 (Baja): la siembra filtra por el esquema vigente y W40 avisa si el cambio invalida los predeterminados [BE-FR-39, BE-FR-40]
-- [ ] T438 [US7] C-47 (Media): periodos del panel por días de Madrid con una función común (facturación, exportación, estadísticas y auditoría) [BE-FR-76, BE-FR-54]
+- [x] T438 [US7] C-47 (Media): periodos del panel por días de Madrid con una función común (facturación, exportación, estadísticas y auditoría) [BE-FR-76, BE-FR-54] _Hecho: `madridPeriodBounds` en `shared/dates.ts` usada por facturación, exportación, estadísticas y auditoría._
 - [ ] T439 [US7] C-48 (Media): tipo de cambio manual entero entre 500 000 y 2 000 000 ppm con `VALIDATION_ERROR` y vista previa [BE-FR-61 CA2, BE-FR-87 CA3]
 - [ ] T440 [US8] C-49 (Media): el freno global usa los céntimos que devuelve el puerto `dailyCosts` de `ai`, con el tipo vigente de cada operación [BE-FR-87 CA1, BE-FR-46]
-- [ ] T441 [US7] C-50 (Baja): cerrar una sesión inexistente o ajena da `NOT_FOUND` sin auditar, en `accounts/admin-users.ts` [BE-FR-55]
+- [x] T441 [US7] C-50 (Baja): cerrar una sesión inexistente o ajena da `NOT_FOUND` sin auditar, en `accounts/admin-users.ts` [BE-FR-55] _Hecho: `closeUserSessions` lanza `NOT_FOUND` sin auditar si una sesión concreta no se borra._
 - [ ] T442 [US7] C-51 (Baja): las acciones auditadas redirigen con `?aviso=saved&auditoria=<id>`, empezando por el reembolso y el cierre de sesiones (UX-13) [BE-FR-55]
 - [ ] T443 [US7] C-52 (Baja): `requireReason` al editar, aplicar al grupo y activar una operación [BE-FR-55]
-- [ ] T444 [US7] C-53 (Baja): `pageNumber` exige entero seguro y un máximo, y una `pagina` enorme no da 500 [UX-09]
+- [x] T444 [US7] C-53 (Baja): `pageNumber` exige entero seguro y un máximo, y una `pagina` enorme no da 500 [UX-09] _Hecho: `pageNumber` acota a `MAX_PAGE` (10 000) y admite solo enteros seguros; usuarios y auditoría lo usan._

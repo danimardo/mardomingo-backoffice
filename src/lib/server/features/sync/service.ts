@@ -88,10 +88,13 @@ export function getSyncDocument(
 	deps: SyncDeps,
 	input: { readonly userId: string; readonly appId: string }
 ): { readonly revision: number; readonly data: SyncData } {
+	const started = performance.now();
 	const now = toEpochMs(deps.clock.now());
-	return immediateTransaction(deps.db, (tx) =>
+	const document = immediateTransaction(deps.db, (tx) =>
 		documentOrSeed(tx, deps, input.userId, input.appId, now)
 	);
+	deps.logger.emit('sync.document.read', { durationMs: Math.round(performance.now() - started) });
+	return document;
 }
 
 /**
@@ -107,21 +110,28 @@ export function putSyncDocument(
 		readonly data: unknown;
 	}
 ): { readonly revision: number } {
+	const started = performance.now();
 	const { schema, maxBytes } = schemaAndLimit(deps, input.appId);
 	const verdict = validateDocument(schema, input.data, maxBytes);
 	if (!verdict.ok) {
 		if (verdict.reason === 'too_large') {
-			deps.logger.emit('sync.document.rejected', { reason: 'too_large' });
+			deps.logger.emit('sync.document.rejected', {
+				reason: 'too_large',
+				errorCode: 'PAYLOAD_TOO_LARGE'
+			});
 			throw new AppError('PAYLOAD_TOO_LARGE');
 		}
-		deps.logger.emit('sync.document.rejected', { reason: 'validation' });
+		deps.logger.emit('sync.document.rejected', {
+			reason: 'schema_invalid',
+			errorCode: 'VALIDATION_ERROR'
+		});
 		throw new AppError('VALIDATION_ERROR', { field: verdict.field });
 	}
 	if (!isRecord(input.data)) throw new AppError('VALIDATION_ERROR', { field: 'data' });
 	const data = input.data;
 	const now = toEpochMs(deps.clock.now());
 
-	return immediateTransaction(deps.db, (tx) => {
+	const result = immediateTransaction(deps.db, (tx) => {
 		const current = documentOrSeed(tx, deps, input.userId, input.appId, now);
 		const written =
 			current.revision === input.ifMatch &&
@@ -133,11 +143,18 @@ export function putSyncDocument(
 				now
 			});
 		if (!written) {
-			deps.logger.emit('sync.document.rejected', { reason: 'revision_conflict' });
+			deps.logger.emit('sync.document.rejected', {
+				reason: 'revision_conflict',
+				errorCode: 'SYNC_CONFLICT'
+			});
 			throw new AppError('SYNC_CONFLICT');
 		}
 		return { revision: current.revision + 1 };
 	});
+	deps.logger.emit('sync.document.written', {
+		durationMs: Math.round(performance.now() - started)
+	});
+	return result;
 }
 
 /**
@@ -150,6 +167,7 @@ export function purgeTombstones(deps: SyncDeps): number {
 	const now = toEpochMs(deps.clock.now());
 	const rows = immediateTransaction(deps.db, (tx) => allDocuments(tx));
 	let changed = 0;
+	let removed = 0;
 	for (const row of rows) {
 		if (!isRecord(row.data)) continue;
 		const { schema } = schemaAndLimit(deps, row.appId);
@@ -166,9 +184,10 @@ export function purgeTombstones(deps: SyncDeps): number {
 		);
 		if (written) {
 			changed += 1;
-			deps.logger.emit('sync.tombstones.purged', { removed: pruned.removed });
+			removed += pruned.removed;
 		}
 	}
+	if (removed > 0) deps.logger.emit('sync.tombstones.purged', { count: removed });
 	return changed;
 }
 
@@ -203,7 +222,7 @@ export function updateDefaults(
 			deps.audit
 		);
 	});
-	deps.logger.emit('sync.defaults.updated', {});
+	deps.logger.emit('sync.defaults.updated', { count: Object.keys(data).length });
 }
 
 /** Vista previa de la copia: categorías y elementos del documento propio de la cuenta (BE-FR-42 CA3). */
@@ -252,5 +271,5 @@ export function applyCopyAsDefaults(
 			deps.audit
 		);
 	});
-	deps.logger.emit('sync.defaults.copied', {});
+	deps.logger.emit('sync.defaults.copied', { count: Object.keys(copied).length });
 }

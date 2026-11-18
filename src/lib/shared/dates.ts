@@ -119,3 +119,22 @@ export function addDays(day: CivilDate, count: number): CivilDate {
 export function startOfMadridDay(instant: EpochMs): EpochMs {
 	return madridMidnight(civilDateOf(instant));
 }
+
+/**
+ * Periodo del panel `desde..hasta` (días civiles `AAAA-MM-DD`, ambos incluidos) como intervalo de Madrid: de las 00:00 de
+ * `desde` al último milisegundo de `hasta` (inclusive). Nulo si falta un día, no es válido o `desde` es posterior a `hasta`.
+ */
+export function madridPeriodBounds(
+	desde: string,
+	hasta: string
+): { fromMs: EpochMs; toMs: EpochMs } | null {
+	try {
+		const first = toCivilDate(desde);
+		const last = toCivilDate(hasta);
+		const fromMs = madridMidnight(first);
+		const toMs = toEpochMs(madridMidnight(addDays(last, 1)) - 1);
+		return fromMs > toMs ? null : { fromMs, toMs };
+	} catch {
+		return null;
+	}
+}

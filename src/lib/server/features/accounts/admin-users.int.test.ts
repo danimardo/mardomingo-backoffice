@@ -218,14 +218,14 @@ describe('cierre de sesiones (BE-FR-50)', () => {
 			})
 			.run();
 
-		const closed = closeUserSessions(deps, {
-			adminId,
-			userId: targetId,
-			sessionId: 'ses_ajena',
-			reason: 'prueba'
-		});
-
-		expect(closed).toBe(0);
+		expect(() =>
+			closeUserSessions(deps, {
+				adminId,
+				userId: targetId,
+				sessionId: 'ses_ajena',
+				reason: 'prueba'
+			})
+		).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
 		expect(sessionsOf(otherId)).toBe(1);
 	});
 
