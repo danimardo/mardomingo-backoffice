@@ -15,6 +15,7 @@ export interface AccountsLogFields {
 	'accounts.signup.rejected': { reason: SignupRejectReason };
 	'accounts.captcha.unavailable': { provider: 'turnstile' };
 	'accounts.email.verified': Record<string, never>;
+	'accounts.email.dispatch_failed': { err: unknown };
 	'accounts.verification.rejected': { reason: 'expired' | 'used' | 'invalid' };
 	'accounts.verification.resend_requested': { status: 'sent' | 'suppressed' };
 	'accounts.login.succeeded': { status: 'web' | 'app' };
@@ -42,16 +43,16 @@ export interface AccountsLogFields {
 			| 'blocked'
 			| 'account_deleted'
 			| 'admin_closed';
-		count?: number;
+		count: number;
 	};
 	'accounts.password.reset_requested': { status: 'sent' | 'suppressed' };
 	'accounts.password.reset_completed': Record<string, never>;
 	'accounts.password.changed': { count: number };
-	'accounts.password.change_rejected': { reason: 'wrong_password' | 'validation' };
+	'accounts.password.change_rejected': { reason: 'wrong_password' | 'validation' | 'locked' };
 	'accounts.email_change.requested': { status: 'sent' | 'suppressed' };
-	'accounts.email_change.applied': { sessionsClosed: number };
+	'accounts.email_change.applied': { count: number };
 	'accounts.email_change.rejected': {
-		reason: 'wrong_password' | 'expired' | 'used' | 'invalid' | 'taken';
+		reason: 'wrong_password' | 'locked' | 'expired' | 'used' | 'invalid' | 'taken';
 	};
 	'accounts.user.blocked': { reason: 'admin' | 'chargeback' };
 	'accounts.user.unblocked': Record<string, never>;
@@ -70,6 +71,10 @@ export const ACCOUNTS_LOG_EVENTS = Object.freeze({
 	'accounts.signup.rejected': { level: 'info', msg: 'Registro rechazado' },
 	'accounts.captcha.unavailable': { level: 'warn', msg: 'Captcha no disponible' },
 	'accounts.email.verified': { level: 'info', msg: 'Email verificado' },
+	'accounts.email.dispatch_failed': {
+		level: 'error',
+		msg: 'Fallo al enviar un email de cuenta sin esperarlo'
+	},
 	'accounts.verification.rejected': { level: 'info', msg: 'Verificación rechazada' },
 	'accounts.verification.resend_requested': {
 		level: 'info',

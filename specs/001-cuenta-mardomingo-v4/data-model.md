@@ -348,7 +348,15 @@ tiempo se inyecta).
 - CHECK `usd_eur_ppm > 0`; `source = 'manual' OR (ecb_rate_ppm > 0 AND ecb_date IS NOT NULL AND buffer_ppm IS NOT NULL)`; `source = 'ecb' OR created_by IS NOT NULL`.
 - Índice (`effective_from`). Vigente = fila con mayor `effective_from` ≤ ahora; el manual está
   activo mientras la última fila sea `manual` (desactivarlo inserta una fila `ecb` con el último
-  valor del BCE). Sin filas, se usa `settings.fx_usd_eur` (0,92) (hueco H-25).
+  valor del BCE). Sin filas, se usa `DEFAULT_FX_USD_EUR_PPM` (920.000 = 0,92) del dominio de `pricing`
+  (hueco H-25; C-56 retiró `settings.fx_usd_eur`, migración 0020).
+- Tipo manual (C-48): el servicio de `pricing` solo admite un entero entre 500.000 y 2.000.000 ppm (0,50 a 2,00 EUR
+  por USD); fuera de ese rango, `VALIDATION_ERROR` en `usdEurPpm` y no se inserta la fila. No es un CHECK de la tabla:
+  el BCE con su colchón puede quedar fuera del rango manual sin que la fila sea inválida.
+- Freno global (C-49): el coste del día de las cuentas gratuitas se convierte con el `fx_rate_id` de cada operación
+  (el tipo vigente cuando se cobró). El puerto `dailyCosts` que monta `ai` ya entrega céntimos de euro; una operación
+  sin `fx_rate_id` se convierte con el tipo vigente ahora (sin filas, 920.000, como el cobro). Ni `protections` ni
+  `pricing` leen ya `settings.fx_usd_eur`, y la clave se retiró (C-56, migración 0020).
 - Histórico de solo inserción por diseño (no declarado inmutable en Historias).
 
 ### 2.6 `credits`
@@ -520,24 +528,24 @@ tiempo se inyecta).
 
 #### `user` (Better Auth + plugin `admin` + campos propios)
 
-| Columna                     | Tipo    | Nulo | Defecto  | Descripción                                                                    |
-| --------------------------- | ------- | ---- | -------- | ------------------------------------------------------------------------------ |
-| `id`                        | Id      | no   | —        | Generado por Better Auth                                                       |
-| `name`                      | Text    | no   | `''`     | Exigido por Better Auth; **[Supuesto]** no se recoge nombre: `''`              |
-| `email`                     | Text    | no   | —        | Email de acceso (minúsculas)                                                   |
-| `email_verified`            | Bool    | no   | 0        | Sin verificar = 0                                                              |
-| `image`                     | Text    | sí   | —        | Better Auth; sin uso en la v4                                                  |
-| `role`                      | Text    | no   | `'user'` | Lista separada por comas: `user`, `tester`, `admin` (plugin `admin`)           |
-| `banned`                    | Bool    | no   | 0        | Bloqueada                                                                      |
-| `ban_reason`                | Text    | sí   | —        | Motivo del bloqueo (admin o contracargo)                                       |
-| `ban_expires`               | EpochMs | sí   | —        | Plugin `admin`; siempre nulo en la v4 (bloqueo indefinido)                     |
-| `email_normalized`          | Text    | sí   | —        | Forma normalizada (BE-FR-11.5); nulo al borrar                                 |
-| `signup_app_id`             | Id      | sí   | —        | App de origen (`?app=`, BE-FR-64 CA1)                                          |
-| `signup_ip`                 | Text    | sí   | —        | **Nuevo** (D-14): IP del registro (altas por IP, BE-FR-11.4; prueba, BE-FR-83) |
-| `last_activity_at`          | EpochMs | sí   | —        | **Nuevo** (D-14): última actividad (login, API, panel; BE-FR-86)               |
-| `inactivity_warned_at`      | EpochMs | sí   | —        | **Nuevo**: aviso de borrado por inactividad enviado                            |
-| `deleted_at`                | EpochMs | sí   | —        | Borrada y anonimizada                                                          |
-| `created_at` / `updated_at` | EpochMs | no   | now      | Better Auth (`Date` en infraestructura, `timestamp_ms`)                        |
+| Columna                     | Tipo    | Nulo | Defecto  | Descripción                                                                                                                                                                                                                                      |
+| --------------------------- | ------- | ---- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                        | Id      | no   | —        | Generado por Better Auth                                                                                                                                                                                                                         |
+| `name`                      | Text    | no   | `''`     | Exigido por Better Auth; **[Supuesto]** no se recoge nombre: `''`                                                                                                                                                                                |
+| `email`                     | Text    | no   | —        | Email de acceso (minúsculas)                                                                                                                                                                                                                     |
+| `email_verified`            | Bool    | no   | 0        | Sin verificar = 0                                                                                                                                                                                                                                |
+| `image`                     | Text    | sí   | —        | Better Auth; sin uso en la v4                                                                                                                                                                                                                    |
+| `role`                      | Text    | no   | `'user'` | Lista separada por comas: `user`, `tester`, `admin` (plugin `admin`)                                                                                                                                                                             |
+| `banned`                    | Bool    | no   | 0        | Bloqueada                                                                                                                                                                                                                                        |
+| `ban_reason`                | Text    | sí   | —        | Motivo del bloqueo (admin o contracargo)                                                                                                                                                                                                         |
+| `ban_expires`               | EpochMs | sí   | —        | Plugin `admin`; siempre nulo en la v4 (bloqueo indefinido)                                                                                                                                                                                       |
+| `email_normalized`          | Text    | sí   | —        | Forma normalizada (BE-FR-11.5); nulo al borrar                                                                                                                                                                                                   |
+| `signup_app_id`             | Id      | sí   | —        | App de origen (`?app=`, BE-FR-64 CA1)                                                                                                                                                                                                            |
+| `signup_ip`                 | Text    | sí   | —        | **Nuevo** (D-14): IP del registro en forma canónica (IPv4 tal cual, la mapeada como IPv4; IPv6 en 8 grupos de 4 cifras hexadecimales en minúsculas, sin `::`), para contar las altas por /64 (C-33) (altas por IP, BE-FR-11.4; prueba, BE-FR-83) |
+| `last_activity_at`          | EpochMs | sí   | —        | **Nuevo** (D-14): última actividad (login, API, panel; BE-FR-86)                                                                                                                                                                                 |
+| `inactivity_warned_at`      | EpochMs | sí   | —        | **Nuevo**: aviso de borrado por inactividad enviado                                                                                                                                                                                              |
+| `deleted_at`                | EpochMs | sí   | —        | Borrada y anonimizada                                                                                                                                                                                                                            |
+| `created_at` / `updated_at` | EpochMs | no   | now      | Better Auth (`Date` en infraestructura, `timestamp_ms`)                                                                                                                                                                                          |
 
 - PK `id`. UNIQUE `email`. FK `signup_app_id` → `apps.id` (cruza, hacia atrás).
 - **Índice no único** (`email_normalized`, D-11): BE-FR-11 CA1 permite varias cuentas con la misma
@@ -597,16 +605,22 @@ del cambio de email usan el mecanismo de Better Auth con caducidad configurada a
 Contadores propios de `accounts` para los límites de autenticación por IP. Sustituye a la tabla
 `rate_limit` de Better Auth, cuyo `rateLimit` no actúa con `auth.api` y está desactivado.
 
-| Columna        | Tipo                                                                   | Nulo | Defecto | Descripción                                                        |
-| -------------- | ---------------------------------------------------------------------- | ---- | ------- | ------------------------------------------------------------------ |
-| `scope`        | Enum(login\|signup\|resend_verification\|password_reset\|email_change) | no   | —       | Acción limitada                                                    |
-| `ip`           | Text                                                                   | no   | —       | IP del cliente (`getClientAddress()`); dato personal de vida corta |
-| `count`        | Int                                                                    | no   | 0       | Peticiones en la ventana                                           |
-| `window_start` | EpochMs                                                                | no   | —       | Inicio de la ventana                                               |
+| Columna        | Tipo                                                                   | Nulo | Defecto | Descripción                                                                                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------- | ---- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scope`        | Enum(login\|signup\|resend_verification\|password_reset\|email_change) | no   | —       | Acción limitada                                                                                                                                                                                           |
+| `ip`           | Text                                                                   | no   | —       | Clave de IP del cliente (`getClientAddress()`): IPv4 tal cual (la mapeada `::ffff:a.b.c.d`, como IPv4) o el /64 de la IPv6 con 8 grupos de 4 cifras y el resto a cero (C-33); dato personal de vida corta |
+| `count`        | Int                                                                    | no   | 0       | Peticiones en la ventana                                                                                                                                                                                  |
+| `window_start` | EpochMs                                                                | no   | —       | Inicio de la ventana                                                                                                                                                                                      |
 
 - PK (`scope`, `ip`). Índice (`window_start`) (purga).
+- Sin migración, algunos contadores usan una clave con prefijo dentro de un ámbito ya existente (como `session:` en `login_attempts`):
+  `attempt:<clave IP>` en `signup` (intentos de registro por IP, `signup_attempts_per_ip_hour`; C-36) y `email:<HMAC>` en
+  `resend_verification` y `password_reset` (límite por email, HMAC-SHA256 en hexadecimal de `normalizeEmail(email)` con
+  `EMAIL_HASH_KEY`, el mismo que `login_attempts`; C-34). No chocan con las claves de IP, que solo llevan dígitos, hexadecimal,
+  `.` y `:`.
 - Los límites salen de `settings`; superarlos → `RATE_LIMITED` (API) o error con tiempo de espera
-  (web). Las altas por IP en 24 h (BE-FR-11.4) se cuentan sobre `user.signup_ip`.
+  (web). Las altas por IP en 24 h (BE-FR-11.4) se cuentan sobre `user.signup_ip` más las altas en curso, que se reservan de
+  forma atómica en el ámbito `signup` antes de crear la cuenta y se liberan al crearla o al fallar (caducan a los 10 min; C-21).
 
 #### `login_attempts` (BE-FR-67)
 
@@ -618,6 +632,10 @@ Contadores propios de `accounts` para los límites de autenticación por IP. Sus
 | `locked_until`          | EpochMs | sí   | —       | Fin del bloqueo temporal                                       |
 
 - PK `email_normalized_hash`. Índice (`window_start`) (purga).
+- Dos tipos de clave (C-16, C-24): el HMAC del email normalizado para el login, y `session:` más el HMAC de `user:<id>` para
+  las operaciones de sesión que comprueban la contraseña actual (cambio de contraseña, cambio de email y borrado de cuenta).
+  Comparten umbral, ventana y bloqueo; cada acierto limpia solo su contador. El intento se reserva de forma atómica antes de
+  comprobar la contraseña y cuenta como fallo provisional; un error inesperado queda contado.
 
 #### `disposable_domains` (BE-FR-11.2)
 
@@ -706,6 +724,22 @@ Contadores propios de `accounts` para los límites de autenticación por IP. Sus
   hace falta firmarlo ni guardarlo antes. Sirve igual para `stripe`: la fila `pending` se crea al
   enviar y el segundo envío devuelve la misma sesión de _checkout_.
 
+#### `refund_keys` (BE-FR-27, BE-FR-75; R12, C-04, C-13)
+
+| Columna                    | Tipo                   | Nulo | Defecto | Descripción                                                                                                         |
+| -------------------------- | ---------------------- | ---- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| `key`                      | Text (UUID)            | no   | —       | Clave del formulario de reembolso (W37)                                                                             |
+| `payment_id`               | Id                     | no   | —       | Compra reembolsada                                                                                                  |
+| `status`                   | Enum(claimed\|applied) | no   | —       | `claimed` mientras se retiran créditos; `applied` con estado y auditoría escritos                                   |
+| `amount_eur_cents`         | EurCents               | sí   | —       | **Nuevo (0018, C-13)**: importe de este reembolso (0 en simuladas)                                                  |
+| `refunded_after_eur_cents` | EurCents               | sí   | —       | **Nuevo (0018, C-13)**: total devuelto tras él; da la `issue_key` `refund:<payment_id>:<total>` de su rectificativa |
+| `created_at`               | EpochMs                | no   | now     |                                                                                                                     |
+
+- PK `key`. FK `payment_id` → `payments.id` (`RESTRICT`). Índice (`payment_id`). CHECK `status IN ('claimed','applied')`;
+  `(amount_eur_cents IS NULL) = (refunded_after_eur_cents IS NULL)`; `amount_eur_cents >= 0 AND refunded_after_eur_cents >= amount_eur_cents`.
+- Sin cuenta, para no depender del borrado de cuentas (RGPD). Las claves anteriores a 0018 tienen las dos columnas nulas: su
+  reenvío no reintenta la rectificativa (se tratan a mano, `docs/operaciones/pagos.md`). El reenvío nunca toma el importe del cliente.
+
 ### 2.10 `sync`
 
 #### `sync_documents` (BE-FR-39, 40, 41)
@@ -723,6 +757,14 @@ Contadores propios de `accounts` para los límites de autenticación por IP. Sus
 - CHECK `revision >= 1`. Escritura condicional `UPDATE … WHERE revision = :ifMatch` (BE-FR-41
   CA1). El tamaño (`max_sync_doc_kb`) lo comprueba el servicio.
 - Índice (`app_id`) (anuncios del panel: apps con documento).
+- _Triggers_ de cuenta borrada (C-43, migración `0019_sync_documents_cuenta_borrada`):
+  `sync_documents_deleted_user_no_insert` y `sync_documents_deleted_user_no_update`, `BEFORE INSERT` y `BEFORE UPDATE`,
+  abortan con `RAISE(ABORT, 'sync_documents_user_deleted')` si la fila de `user` de `NEW.user_id` tiene `deleted_at` no
+  nulo. «Cuenta borrada» es eso: `accounts.anonymizeUser` fija `deleted_at` en la transacción de `privacy.deleteAccount`
+  (a petición, BE-FR-07, o por inactividad, BE-FR-86), y la fila no desaparece nunca (FK `RESTRICT`). Una cuenta que no
+  existe ya la rechaza la FK; una bloqueada (`banned`) no está borrada. El `DELETE` no se restringe: lo hace el propio
+  borrado. Así, una petición de `/sync` que pasó la sesión antes de confirmarse el borrado no recrea el documento; `sync`
+  traduce el aborto a `UNAUTHENTICATED` (api-v1 E10–E11).
 
 #### `app_defaults` (BE-FR-42, 57)
 
@@ -875,35 +917,39 @@ Las operaciones se siembran **inactivas**: las activa el administrador.
 
 ### 3.1 `settings.value` (por clave)
 
-| Clave                                                                                              | Tipo del valor                                    | Defecto (seed)                   |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------------------------------- |
-| `credits_per_eur_purchase`, `credits_per_eur_usage`                                                | Int > 0 (créditos por euro)                       | 1.000                            |
-| `fx_usd_eur`                                                                                       | Ppm > 0 (valor inicial hasta la primera consulta) | 920.000                          |
-| `fx_buffer_pct`                                                                                    | Ppm                                               | 30.000                           |
-| `fx_stale_alert_days`                                                                              | Int > 0                                           | 3                                |
-| `margin_global`                                                                                    | Ppm ≥ 1.000.000                                   | 2.000.000                        |
-| `provider_fee_pct_openrouter` / `provider_fee_pct_mistral`                                         | Ppm                                               | 55.000 / 0                       |
-| `voxtral_price_per_minute_usd`                                                                     | MicroUsd                                          | tarifa vigente                   |
-| `welcome_credits`                                                                                  | Micro                                             | 1.000.000.000                    |
-| `free_credits_expiry_days` / `free_expiry_warning_days`                                            | Int > 0                                           | 30 / 7                           |
-| `min_balance_to_operate`                                                                           | Micro                                             | 5.000.000                        |
-| `max_debt`                                                                                         | Micro                                             | 200.000.000                      |
-| `hold_ttl_seconds`                                                                                 | Int > 0                                           | 600                              |
-| `chars_per_token_estimate` / `image_input_token_estimate`                                          | Int > 0                                           | 3 / 1.500                        |
-| `idempotency_window_minutes`                                                                       | Int > 0                                           | 10                               |
-| `daily_cap_no_purchase`                                                                            | Micro                                             | 400.000.000                      |
-| `registrations_per_ip_24h`, `login_max_failures`, `login_lock_minutes`                             | Int > 0                                           | 3, 10, 15                        |
-| `unverified_account_ttl_days`, `min_age`, `inactive_account_years`, `inactive_account_notice_days` | Int > 0                                           | 7, 18, 3, 30                     |
-| `ai_requests_per_minute`, `max_concurrent_transcriptions`                                          | Int > 0                                           | 30, 2                            |
-| `max_audio_seconds`, `audio_duration_tolerance_seconds`, `max_audio_mb`                            | Int > 0                                           | 300, 10, 10                      |
-| `max_text_chars`, `max_image_mb`, `max_sync_doc_kb`                                                | Int > 0                                           | 200.000, 10, 1.024               |
-| `global_daily_free_cost_brake_eur`                                                                 | EurCents                                          | 500                              |
-| `maintenance`                                                                                      | `{ active: Bool, message: Text }`                 | `{ active: false, message: "" }` |
-| `openrouter_balance_alert_usd`                                                                     | MicroUsd                                          | 10.000.000                       |
-| `model_price_change_alert_pct`                                                                     | Ppm                                               | 200.000                          |
-| `price_reference_window_days`, `price_reference_min_samples`                                       | Int > 0                                           | 30, 50                           |
-| `flagged_ops_alert_per_day`                                                                        | Int > 0                                           | 3                                |
-| `support_email`                                                                                    | email                                             | `soporte@mardomingo.com`         |
+| Clave                                                                                                                | Tipo del valor                    | Defecto (seed)                   |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------------- | -------------------------------- |
+| `credits_per_eur_purchase`, `credits_per_eur_usage`                                                                  | Int > 0 (créditos por euro)       | 1.000                            |
+| `fx_buffer_pct`                                                                                                      | Ppm                               | 30.000                           |
+| `fx_stale_alert_days`                                                                                                | Int > 0                           | 3                                |
+| `margin_global`                                                                                                      | Ppm ≥ 1.000.000                   | 2.000.000                        |
+| `provider_fee_pct_openrouter` / `provider_fee_pct_mistral`                                                           | Ppm                               | 55.000 / 0                       |
+| `voxtral_price_per_minute_usd`                                                                                       | MicroUsd                          | tarifa vigente                   |
+| `welcome_credits`                                                                                                    | Micro                             | 1.000.000.000                    |
+| `free_credits_expiry_days` / `free_expiry_warning_days`                                                              | Int > 0                           | 30 / 7                           |
+| `min_balance_to_operate`                                                                                             | Micro                             | 5.000.000                        |
+| `max_debt`                                                                                                           | Micro                             | 200.000.000                      |
+| `hold_ttl_seconds`                                                                                                   | Int > 0                           | 600                              |
+| `chars_per_token_estimate` / `image_input_token_estimate`                                                            | Int > 0                           | 3 / 1.500                        |
+| `idempotency_window_minutes`                                                                                         | Int > 0                           | 10                               |
+| `daily_cap_no_purchase`                                                                                              | Micro                             | 400.000.000                      |
+| `registrations_per_ip_24h`, `login_max_failures`, `login_lock_minutes`                                               | Int > 0                           | 3, 10, 15                        |
+| `login_per_ip_15min`, `resend_verification_per_ip_hour`, `password_reset_per_ip_hour`, `signup_attempts_per_ip_hour` | Int > 0                           | 30, 5, 5, 10                     |
+| `resend_verification_per_email_hour`, `password_reset_per_email_hour`                                                | Int > 0                           | 3, 3                             |
+| `unverified_account_ttl_days`, `min_age`, `inactive_account_years`, `inactive_account_notice_days`                   | Int > 0                           | 7, 18, 3, 30                     |
+| `ai_requests_per_minute`, `max_concurrent_transcriptions`                                                            | Int > 0                           | 30, 2                            |
+| `max_audio_seconds`, `audio_duration_tolerance_seconds`, `max_audio_mb`                                              | Int > 0                           | 300, 10, 10                      |
+| `max_text_chars`, `max_image_mb`, `max_sync_doc_kb`                                                                  | Int > 0                           | 200.000, 10, 1.024               |
+| `global_daily_free_cost_brake_eur`                                                                                   | EurCents                          | 500                              |
+| `maintenance`                                                                                                        | `{ active: Bool, message: Text }` | `{ active: false, message: "" }` |
+| `openrouter_balance_alert_usd`                                                                                       | MicroUsd                          | 10.000.000                       |
+| `model_price_change_alert_pct`                                                                                       | Ppm                               | 200.000                          |
+| `price_reference_window_days`, `price_reference_min_samples`                                                         | Int > 0                           | 30, 50                           |
+| `flagged_ops_alert_per_day`                                                                                          | Int > 0                           | 3                                |
+| `support_email`                                                                                                      | email                             | `soporte@mardomingo.com`         |
+
+Claves retiradas (C-56): `fx_usd_eur` (migración 0020). El _seed_ borra en cada arranque las de `RETIRED_SETTING_KEYS`
+(`apps/defaults.ts`), porque `readSettings` trata una clave sin esquema como dato corrupto.
 
 ### 3.2 Configuración de `apps`
 
@@ -916,9 +962,11 @@ Las operaciones se siembran **inactivas**: las activa el administrador.
   (Int > 0). Refinamiento: `ai_requests_per_minute` y `max_concurrent_transcriptions` ≤ global
   (aclaración 2026-10-10). Mantenimiento, versiones y soporte por app son columnas, no claves.
 - `sync_schema`: `{ categories: Record<Nombre, Categoría> }` (al menos una), con
-  `Categoría = { strategy: "items", key: Text, tombstone_ttl_days: Int } | { strategy: "block" } | { strategy: "keyed", keys?: Text[] }`.
+  `Categoría = { strategy: "items", key: Text, tombstone_ttl_days: Int } | { strategy: "block" } | { strategy: "keyed", keys?: Text[] }`,
+  y cualquiera de las tres admite `personal?: true` (D14): marca una categoría con datos personales, que W43 avisa y no
+  preselecciona. Solo se admite `true`: `personal: false` se rechaza, y para desmarcar se quita la clave.
   Perfil `secretario`: `customReplacements` = `items` (clave `from`, 30 días);
-  `coreReplacements`, `quickTexts`, `prompts` = `block`; `preferences` = `keyed` con
+  `coreReplacements`, `quickTexts` = `block`; `prompts` = `block` con `personal: true`; `preferences` = `keyed` con
   `keys: [communicationStyle, messageType, language, targetPersons, processWithLLM, autoCopy, fixAuto, markdownMode, translationTargetLanguage, themePreference]`.
 
 ### 3.3 `sync_documents.data` y `app_defaults.data`
@@ -933,7 +981,10 @@ Objeto con **solo** las categorías declaradas; la forma depende de la estrategi
 
 El contenido de `value` y de los campos de cada elemento no se valida más allá de ser JSON (la
 fusión y la semántica son del cliente). La siembra (BE-FR-40) copia `app_defaults.data` con todos
-los `updatedAt`/`deletedAt` a 0. Tamaño serializado ≤ `max_sync_doc_kb` efectivo.
+los `updatedAt`/`deletedAt` a 0, y solo las categorías que admite el esquema vigente (C-45): un cambio de
+`apps.sync_schema` en W40 no revalida `app_defaults` (es de `sync`), así que una categoría que el esquema ya no
+declara, o que tiene otra estrategia, se omite entera en la siembra y W40 la avisa; los predeterminados guardados no
+cambian. Tamaño serializado ≤ `max_sync_doc_kb` efectivo.
 
 ### 3.4 Configuración de `app_operations`
 
@@ -965,6 +1016,12 @@ facturas simplificadas sin datos fiscales.
 `Record<campo, JSON>` con **solo** los campos cambiados de la entidad (o el objeto completo al
 crear). Reglas: nunca contraseñas, tokens, secretos ni contenido de usuario; los usuarios se
 identifican por `id`, no por email (así la auditoría no necesita anonimizarse).
+
+Excepción por contenido (C-41): los predeterminados de una app (`sync.defaults.updated` y `sync.defaults.copied`)
+pueden llevar datos personales copiados de una cuenta, así que no se guardan: `before` y `after` llevan un resumen
+`{ categories: Text[], elements: Int, sha256: Text }` (categorías ordenadas, elementos en total —los de `items` sin
+marcas, 1 por bloque y las claves de `keyed`— y SHA-256 del JSON con las claves ordenadas), y `after` añade
+`changed: Text[]` (categorías añadidas, quitadas o cambiadas). `before` es nulo si la app aún no tenía predeterminados.
 
 ### 3.8 `model_cache`
 
@@ -1298,7 +1355,8 @@ Cerrados por las correcciones tras `/speckit-analyze` (2026-10-10):
 - **H-24 Caducidad del identificador de intento de compra**: no está definida; sin caducidad, un
   formulario antiguo se puede enviar una vez.
 - **H-25 Valor inicial del tipo de cambio** (0,92): `fx_rates.source` solo admite `ecb`/`manual`;
-  se usa `settings.fx_usd_eur` mientras no haya filas.
+  mientras no haya filas se usa la constante `DEFAULT_FX_USD_EUR_PPM` (920.000) de `pricing`. La clave
+  `settings.fx_usd_eur`, que nadie leía desde C-49, se retiró en C-56 (migración 0020).
 - **H-26 Pérdidas absorbidas**: §6 tiene un solo `absorbed_µc`, pero BE-FR-54 separa deuda
   absorbida y repeticiones no cobradas. Se añade `absorbed_reason` (la pérdida por cancelación se
   deriva de `cost_micro_usd` de las `cancelled`, D-05).

@@ -7,6 +7,7 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import { formatCredits, formatEuros } from '$lib/components/payments/format';
+	import { REASON_MAX_LENGTH } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -38,7 +39,7 @@
 			case 'expiry_too_far':
 				return m.admin_adjust_expiry_too_far();
 			case 'reason_too_long':
-				return m.admin_adjust_reason_too_long();
+				return m.validation_reason_too_long();
 			default:
 				return m.validation_invalid();
 		}
@@ -136,6 +137,7 @@
 		value={values.motivo ?? ''}
 		label={m.admin_adjust_reason()}
 		error={fieldErrorText(errors.motivo)}
+		maxlength={REASON_MAX_LENGTH}
 		required
 	/>
 	<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_adjust_confirm()}</Checkbox>

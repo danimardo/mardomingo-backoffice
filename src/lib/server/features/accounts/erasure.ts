@@ -4,22 +4,49 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { verifyPassword } from 'better-auth/crypto';
 import { immediateTransaction } from '$lib/server/db/tx';
+import { lockReachedBy, reservePasswordAttempt, sessionAttemptKeyOf } from './password-attempts';
+import { clearLoginAttempts } from './repository';
 import { account, session, user, userAppActivity, verification } from './schema';
 import type { AccountsDeps } from './service';
 
-/** ¿Es la contraseña la de la cuenta? Sin cuenta o sin contraseña (alta futura con Google) no coincide nunca. */
-export async function passwordMatches(
+/** Resultado de comprobar la contraseña actual: coincide, no coincide o hay demasiados intentos fallidos. */
+export type PasswordCheck =
+	| { readonly status: 'match' }
+	| { readonly status: 'wrong' }
+	| { readonly status: 'locked'; readonly retryAfterMinutes: number };
+
+/**
+ * ¿Es la contraseña la de la cuenta? Sin cuenta o sin contraseña (alta futura con Google) no coincide nunca. Los intentos se
+ * limitan con el contador de sesión de la cuenta, compartido con el cambio de contraseña y el de email, y con el umbral y el
+ * bloqueo del login (BE-FR-45, BE-FR-67; C-24): el intento se reserva antes de comprobar el hash, el fallo que alcanza el
+ * umbral ya responde `locked` y un acierto pone ese contador a cero. Un error inesperado deja el intento contado (ver
+ * `password-attempts.ts`).
+ */
+export async function checkCurrentPassword(
 	deps: AccountsDeps,
 	userId: string,
 	password: string
-): Promise<boolean> {
+): Promise<PasswordCheck> {
+	const attempt = reservePasswordAttempt(deps, sessionAttemptKeyOf(deps, userId));
+	if (attempt.kind === 'locked') {
+		return { status: 'locked', retryAfterMinutes: attempt.retryAfterMinutes };
+	}
 	const row = deps.db
 		.select({ hash: account.password })
 		.from(account)
 		.where(and(eq(account.userId, userId), eq(account.providerId, 'credential')))
 		.get();
 	const hash: string | null | undefined = row?.hash;
-	return hash != null && (await verifyPassword({ hash, password }));
+	if (hash != null && (await verifyPassword({ hash, password }))) {
+		immediateTransaction(deps.db, (tx) => {
+			clearLoginAttempts(tx, attempt.key);
+		});
+		return { status: 'match' };
+	}
+	const lockMinutes = lockReachedBy(attempt);
+	return lockMinutes === null
+		? { status: 'wrong' }
+		: { status: 'locked', retryAfterMinutes: lockMinutes };
 }
 
 /** Cierra todas las sesiones de la cuenta, de cualquier app. Devuelve cuántas había. */

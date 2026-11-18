@@ -1,7 +1,11 @@
 // Adaptador de Turnstile contra su simulador por HTTP real (T089; BE-FR-01 CA3).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { startTurnstileMock } from '../../../../../tests/mock-servers/turnstile';
+import {
+	MOCK_TURNSTILE_HOSTNAME,
+	startTurnstileMock
+} from '../../../../../tests/mock-servers/turnstile';
 import type { MockServer } from '../../../../../tests/mock-servers/server';
+import { REGISTER_CAPTCHA_ACTION } from '$lib/shared/captcha';
 import { createTurnstileVerifier } from './turnstile-verifier';
 
 let mock: MockServer;
@@ -19,6 +23,41 @@ function verifier() {
 }
 
 const CHECK = { token: 'token-del-widget', remoteIp: '203.0.113.7', idempotencyKey: 'intento-1' };
+
+function strictVerifier() {
+	return createTurnstileVerifier({
+		secret: 'secreto-de-prueba',
+		endpoint: mock.url,
+		expectedHostname: MOCK_TURNSTILE_HOSTNAME,
+		expectedAction: REGISTER_CAPTCHA_ACTION
+	});
+}
+
+describe('hostname y action de la respuesta (C-25)', () => {
+	it('con el host y la acción esperados da «valid»', async () => {
+		await expect(strictVerifier().verify(CHECK)).resolves.toBe('valid');
+	});
+
+	it('un token válido resuelto en otro hostname da «invalid»', async () => {
+		mock.scenario('wrong_hostname');
+		await expect(strictVerifier().verify(CHECK)).resolves.toBe('invalid');
+	});
+
+	it('un token válido de otra acción da «invalid»', async () => {
+		mock.scenario('wrong_action');
+		await expect(strictVerifier().verify(CHECK)).resolves.toBe('invalid');
+	});
+
+	it('si se esperan y la respuesta no los trae, da «invalid»', async () => {
+		mock.scenario('bare');
+		await expect(strictVerifier().verify(CHECK)).resolves.toBe('invalid');
+	});
+
+	it('sin expectativas (claves de prueba de Cloudflare, simulador) no comprueba nada', async () => {
+		mock.scenario('wrong_hostname');
+		await expect(verifier().verify(CHECK)).resolves.toBe('valid');
+	});
+});
 
 describe('verificación de Turnstile', () => {
 	it('un token válido da «valid» y envía secreto, token, IP y clave de idempotencia', async () => {

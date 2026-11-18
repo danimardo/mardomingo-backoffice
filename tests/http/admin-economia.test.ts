@@ -101,3 +101,56 @@ describe('parámetros económicos con sesión de administrador (W38, T309)', () 
 		expect(await pageHtml()).toContain(`value="${CHANGED_VALUE}"`);
 	});
 });
+
+// C-48 (T439; BE-FR-61 CA2, BE-FR-87 CA3): el tipo manual es un entero entre 500.000 y 2.000.000 ppm. Un valor fuera de rango o
+// que no es un entero responde 400 con el error en el campo (antes, 920 se guardaba y «0.92» daba 500), y la vista previa
+// muestra el tipo vigente y el nuevo sin escribir nada.
+describe('tipo de cambio manual con rango (W38, C-48)', () => {
+	const FX_ACTION = '/admin/economia?/fijarTipoCambioManual';
+
+	function manualFxRows(): number {
+		const db = new Database(databasePath, { readonly: true });
+		try {
+			const row = db
+				.prepare<[], { n: number }>("SELECT COUNT(*) AS n FROM fx_rates WHERE source = 'manual'")
+				.get();
+			return row?.n ?? 0;
+		} finally {
+			db.close();
+		}
+	}
+
+	it.each([
+		['fuera de rango por abajo', '920'],
+		['fuera de rango por arriba', '50000000'],
+		['decimal', '0.92'],
+		['vacío', '']
+	])('%s responde 400 con el error en el campo y no fija nada', async (_name, value) => {
+		const antes = manualFxRows();
+
+		const result = await postAdmin(
+			session,
+			FX_ACTION,
+			`usdEurPpm=${encodeURIComponent(value)}&motivo=Error+de+tecleo&confirmado=true`
+		);
+
+		expect(result.status).toBe(400);
+		expect(result.text).toContain('Escribe un número entero entre 500000 y 2000000 ppm');
+		expect(manualFxRows()).toBe(antes);
+	});
+
+	it('la vista previa muestra el tipo vigente y el nuevo, y no fija nada', async () => {
+		const antes = manualFxRows();
+
+		const result = await postAdmin(
+			session,
+			'/admin/economia?/previsualizarTipoCambioManual',
+			'usdEurPpm=1000000&motivo=Tipo+de+la+gestor%C3%ADa'
+		);
+
+		expect(result.status).toBe(200);
+		expect(result.text).toContain('Vista previa del tipo de cambio');
+		expect(result.text).toMatch(/\d+ ppm \([\d,]+ EUR por USD\) → 1000000 ppm \(1 EUR por USD\)/);
+		expect(manualFxRows()).toBe(antes);
+	});
+});

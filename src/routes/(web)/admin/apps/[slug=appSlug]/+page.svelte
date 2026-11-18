@@ -1,11 +1,13 @@
 <script lang="ts">
-	// W40 · `/admin/apps/[slug]`: ficha de la app con sus sobrescrituras de límites (T310; BE-FR-61 CA3). Sin JavaScript funciona igual.
+	// W40 · `/admin/apps/[slug]`: ficha de la app con sus sobrescrituras de límites (T310; BE-FR-61 CA3). Avisa de los predeterminados
+	// que el esquema vigente ya no admite (C-45). Sin JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -23,8 +25,26 @@
 	<p>{data.app.description}</p>
 {/if}
 
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
+
 {#if form?.formError}
 	<Banner level="critical">{m.admin_apps_error()}</Banner>
+{/if}
+
+{#if data.staleDefaults.length > 0}
+	<Banner level="warning">
+		{m.admin_apps_stale_defaults({ categories: data.staleDefaults.join(', ') })}
+		<a href={resolve(`/admin/apps/${data.app.slug}/predeterminados`)}
+			>{m.admin_apps_stale_defaults_link()}</a
+		>
+	</Banner>
 {/if}
 
 <section aria-labelledby="datos-app">
@@ -79,7 +99,14 @@
 			hint={m.admin_apps_hint_json()}
 			required
 		/>
-		<TextField id="motivo-datos" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo-datos"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'guardarApp')}
+		/>
 		<Checkbox id="confirmado-datos" name="confirmado" value="true"
 			>{m.admin_apps_confirm()}</Checkbox
 		>
@@ -110,7 +137,14 @@
 			value="true"
 			checked={data.versions.enforceVersion}>{m.admin_apps_versions_enforce()}</Checkbox
 		>
-		<TextField id="motivo-versiones" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo-versiones"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'guardarVersiones')}
+		/>
 		<Checkbox id="confirmado-versiones" name="confirmado" value="true"
 			>{m.admin_apps_confirm()}</Checkbox
 		>
@@ -150,7 +184,13 @@
 			hint={m.admin_apps_hint_json()}
 			required
 		/>
-		<TextField id="motivo-operacion" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo-operacion"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+		/>
 		<Checkbox id="confirmado-operacion" name="confirmado" value="true"
 			>{m.admin_apps_confirm()}</Checkbox
 		>
@@ -192,7 +232,14 @@
 					value={form.maintenancePreview.after.active ? 'true' : 'false'}
 				/>
 				<input type="hidden" name="mensaje" value={form.maintenancePreview.after.message} />
-				<TextField id="motivo-mantenimiento" name="motivo" label={m.admin_apps_reason()} required />
+				<TextField
+					id="motivo-mantenimiento"
+					name="motivo"
+					label={m.admin_apps_reason()}
+					required
+					maxlength={REASON_MAX_LENGTH}
+					{...reasonFieldOf(form, 'guardarMantenimiento')}
+				/>
 				<Checkbox id="confirmado-mantenimiento" name="confirmado" value="true"
 					>{m.admin_apps_confirm()}</Checkbox
 				>
@@ -214,7 +261,14 @@
 			hint={m.admin_apps_hint_overrides()}
 			required
 		/>
-		<TextField id="motivo" name="motivo" label={m.admin_apps_reason()} required />
+		<TextField
+			id="motivo"
+			name="motivo"
+			label={m.admin_apps_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'guardarSobrescrituras')}
+		/>
 		<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_apps_confirm()}</Checkbox>
 		<p><Button type="submit" variant="primary">{m.admin_apps_save()}</Button></p>
 	</form>

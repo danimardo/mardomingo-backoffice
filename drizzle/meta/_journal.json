@@ -120,6 +120,34 @@
       "when": 1793165007792,
       "tag": "0016_refund_keys_reembolso",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1794978241263,
+      "tag": "0017_secretario_prompts_personal",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1794978591889,
+      "tag": "0018_refund_keys_importes",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794985506764,
+      "tag": "0019_sync_documents_cuenta_borrada",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794995473748,
+      "tag": "0020_settings_sin_fx_usd_eur",
+      "breakpoints": true
     }
   ]
 }

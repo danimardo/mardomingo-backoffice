@@ -13,8 +13,9 @@ export function requireApp(event: ApiEvent): NonNullable<ApiEvent['locals']['app
 	const app = event.locals.app;
 	if (app !== null) return app;
 	const reason = event.locals.appRejection ?? 'unknown_app';
-	event.locals.log.emit('apps.app.rejected', { reason });
-	throw new AppError(reason === 'app_disabled' ? 'APP_DISABLED' : 'UNKNOWN_APP');
+	const code = reason === 'app_disabled' ? 'APP_DISABLED' : 'UNKNOWN_APP';
+	event.locals.log.emit('apps.app.rejected', { reason, errorCode: code });
+	throw new AppError(code);
 }
 
 /** Cabeceras para leer la sesión de la API: sin `cookie`, así una cookie de la web nunca autentica aquí. */

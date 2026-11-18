@@ -234,12 +234,14 @@ export function buildOpenApiDocument(publicApiUrl: string) {
 			},
 			'/defaults': {
 				get: {
-					summary: 'Predeterminados vigentes de la app (solo exige versión)',
+					summary:
+						'Predeterminados vigentes de la app (Bearer; exige versión pero no se bloquea por mantenimiento ni documentos)',
 					responses: {
 						'200': {
 							description: 'Predeterminados',
 							content: { 'application/json': { schema: DefaultsResponse } }
 						},
+						'401': { description: 'Sin sesión válida para la app' },
 						'426': { description: 'Versión de la app inferior a la mínima' }
 					}
 				}

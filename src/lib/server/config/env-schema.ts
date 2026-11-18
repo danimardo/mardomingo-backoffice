@@ -20,7 +20,7 @@ const LOG_LEVELS = Object.freeze([
 const LOCAL_HOSTS: readonly string[] = Object.freeze(['localhost', '127.0.0.1']);
 
 // Claves de prueba oficiales de Turnstile: siempre aceptan o rechazan, nunca protegen nada.
-const TURNSTILE_TEST_KEY = /^[123]x0+[A-Z]{2}$/;
+export const TURNSTILE_TEST_KEY = /^[123]x0+[A-Z]{2}$/;
 
 // Variables que solo existen para las pruebas: rechazadas fuera de APP_ENV=test.
 const TEST_ONLY_KEYS = Object.freeze([
@@ -31,6 +31,7 @@ const TEST_ONLY_KEYS = Object.freeze([
 	'MOCK_TURNSTILE_URL',
 	'E2E_REGISTRATIONS_PER_IP_24H',
 	'E2E_LOGINS_PER_IP_15MIN',
+	'E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR',
 	'MOCK_GITHUB_URL',
 	'EMAIL_OUTBOX_DIR',
 	'CAPTCHA_FAKE'
@@ -43,6 +44,14 @@ const DEPLOYED_REQUIRED_KEYS = Object.freeze([
 	'RESEND_API_KEY',
 	'PUBLIC_TURNSTILE_SITE_KEY',
 	'TURNSTILE_SECRET'
+] as const);
+
+// Variables del proxy: staging y producción deben fijarlas (C-32). adapter-node las lee directamente de `process.env`, así
+// que un valor por defecto del esquema no le llega y, sin ellas, todas las peticiones tendrían la IP del proxy.
+const DEPLOYED_PROXY_KEYS = Object.freeze([
+	'ADDRESS_HEADER',
+	'XFF_DEPTH',
+	'PROTOCOL_HEADER'
 ] as const);
 
 // Entero leído de texto (los valores del entorno siempre llegan como cadena).
@@ -79,9 +88,10 @@ const baseSchema = z.object({
 	CLIENT_LOG_LEVEL: logLevel.optional(),
 	PORT: intFromEnv(1, 65535).default(3000),
 	HOST: z.string().default('0.0.0.0'),
-	ADDRESS_HEADER: z.string().default('x-forwarded-for'),
-	XFF_DEPTH: intFromEnv(0, 10).default(1),
-	PROTOCOL_HEADER: z.string().default('x-forwarded-proto'),
+	// Del proxy: obligatorias en staging y producción (adapter-node las lee de `process.env`; ver `DEPLOYED_PROXY_KEYS`).
+	ADDRESS_HEADER: z.string().optional(),
+	XFF_DEPTH: intFromEnv(0, 10).optional(),
+	PROTOCOL_HEADER: z.string().optional(),
 	/** Sin valor, SvelteKit usa 512K: la comprobación de arranque lo tiene en cuenta (FR-070). */
 	BODY_SIZE_LIMIT: z.string().optional(),
 	MOCK_OPENROUTER_URL: z.url().optional(),
@@ -93,6 +103,8 @@ const baseSchema = z.object({
 	E2E_REGISTRATIONS_PER_IP_24H: z.coerce.number().int().positive().max(1000).optional(),
 	/** Inicios de sesión por IP cada 15 min del servidor de E2E: toda la suite entra desde 127.0.0.1 (solo APP_ENV=test). */
 	E2E_LOGINS_PER_IP_15MIN: z.coerce.number().int().positive().max(1000).optional(),
+	/** Intentos de registro por IP y hora del servidor de E2E: todos llegan desde 127.0.0.1 (solo APP_ENV=test, C-36). */
+	E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR: z.coerce.number().int().positive().max(1000).optional(),
 	MOCK_GITHUB_URL: z.url().optional(),
 	EMAIL_OUTBOX_DIR: z.string().min(1).optional(),
 	CAPTCHA_FAKE: booleanFromEnv.optional()
@@ -152,6 +164,16 @@ const envSchema = baseSchema
 			}
 		}
 
+		for (const key of DEPLOYED_PROXY_KEYS) {
+			if (env[key] === undefined) {
+				ctx.addIssue({
+					code: 'custom',
+					path: [key],
+					message: 'Obligatoria en staging y producción (proxy e IP del cliente).'
+				});
+			}
+		}
+
 		if (env.APP_ENV === 'production') {
 			if (TURNSTILE_TEST_KEY.test(env.PUBLIC_TURNSTILE_SITE_KEY)) {
 				ctx.addIssue({
@@ -171,6 +193,10 @@ const envSchema = baseSchema
 	})
 	.transform((env) => ({
 		...env,
+		// Solo en desarrollo y test se admiten los valores por defecto del proxy.
+		ADDRESS_HEADER: env.ADDRESS_HEADER ?? 'x-forwarded-for',
+		XFF_DEPTH: env.XFF_DEPTH ?? 1,
+		PROTOCOL_HEADER: env.PROTOCOL_HEADER ?? 'x-forwarded-proto',
 		// Valores por defecto según el entorno (constitución, «Variables» y Historias 4.3).
 		LOG_LEVEL: env.LOG_LEVEL ?? (env.APP_ENV === 'production' ? 'info' : 'debug'),
 		CAPTCHA_FAKE: env.CAPTCHA_FAKE ?? false,

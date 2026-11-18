@@ -5,6 +5,7 @@ import { resolve } from '$app/paths';
 import { accessFor } from '$lib/server/features/accounts';
 import { accountingReport } from '$lib/server/web/accounting-report';
 import { getComposition } from '$lib/server/composition.cache';
+import { madridPeriodBounds } from '$lib/shared/dates';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
@@ -18,12 +19,11 @@ export const load: PageServerLoad = ({ locals, url, setHeaders }) => {
 
 	const desde = url.searchParams.get('desde') ?? '';
 	const hasta = url.searchParams.get('hasta') ?? '';
-	const fromMs = Date.parse(`${desde}T00:00:00Z`);
-	const toMs = Date.parse(`${hasta}T23:59:59Z`);
-	if (desde === '' || hasta === '' || Number.isNaN(fromMs) || Number.isNaN(toMs) || fromMs > toMs) {
+	const period = madridPeriodBounds(desde, hasta);
+	if (period === null) {
 		return { desde, hasta, period: false as const, sales: 0, unconverted: 0 };
 	}
-	const report = accountingReport(getComposition(), { fromMs, toMs });
+	const report = accountingReport(getComposition(), period);
 	return {
 		desde,
 		hasta,

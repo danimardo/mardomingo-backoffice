@@ -38,6 +38,24 @@ export function nextLoginAttempt(
 	return { failures, windowStart, lockedUntil };
 }
 
+/**
+ * Estado tras devolver un intento reservado que no resultó ser un fallo (C-16): la contraseña era correcta, pero la cuenta no
+ * está verificada o está bloqueada. Solo se resta si la ventana sigue siendo la de la reserva, y el bloqueo solo se quita si lo
+ * puso esa reserva (mientras dura, ninguna otra reserva puede escribirlo). `undefined`: no hay nada que devolver (un acierto ya
+ * limpió el contador o empezó otra ventana); `null`: no queda nada que guardar.
+ */
+export function refundLoginAttempt(
+	current: LoginAttemptResult | undefined,
+	reserved: LoginAttemptResult
+): LoginAttemptResult | null | undefined {
+	if (current === undefined || current.windowStart !== reserved.windowStart) return undefined;
+	const ownLock = reserved.lockedUntil !== null && current.lockedUntil === reserved.lockedUntil;
+	const failures = Math.max(0, current.failures - 1);
+	const lockedUntil = ownLock ? null : current.lockedUntil;
+	if (failures === 0 && lockedUntil === null) return null;
+	return { failures, windowStart: current.windowStart, lockedUntil };
+}
+
 /** Un bloqueo vigente impide el login aunque la contraseña sea correcta. */
 export function isLoginLocked(
 	lockedUntil: EpochMs | null | undefined,

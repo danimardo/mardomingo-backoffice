@@ -66,6 +66,25 @@ function isCategoryOf(category: SyncSchema['categories'][string], value: unknown
 	}
 }
 
+/** Por qué el esquema no admite una categoría, o `null` si la admite. */
+function categoryProblem(
+	schema: SyncSchema,
+	name: string,
+	value: unknown
+): 'undeclared_category' | 'malformed' | null {
+	const declared = schema.categories;
+	const category = Object.prototype.hasOwnProperty.call(declared, name)
+		? declared[name]
+		: undefined;
+	if (category === undefined) return 'undeclared_category';
+	return isCategoryOf(category, value) ? null : 'malformed';
+}
+
+/** Tamaño del documento serializado en JSON, en bytes UTF-8. */
+export function documentBytes(data: unknown): number {
+	return new TextEncoder().encode(JSON.stringify(data)).byteLength;
+}
+
 /**
  * Comprueba el documento contra el esquema de la app: solo categorías declaradas, con la forma de su estrategia, y no más
  * de `maxBytes` en JSON. Devuelve la primera categoría que falla, para que el error pueda nombrarla.
@@ -76,17 +95,35 @@ export function validateDocument(
 	maxBytes: number
 ): DocumentVerdict {
 	if (!isPlain(data)) return { ok: false, reason: 'malformed', field: 'data' };
-	const declared = schema.categories;
 
 	for (const [name, value] of Object.entries(data)) {
-		const category = Object.prototype.hasOwnProperty.call(declared, name)
-			? declared[name]
-			: undefined;
-		if (category === undefined) return { ok: false, reason: 'undeclared_category', field: name };
-		if (!isCategoryOf(category, value)) return { ok: false, reason: 'malformed', field: name };
+		const problem = categoryProblem(schema, name, value);
+		if (problem !== null) return { ok: false, reason: problem, field: name };
 	}
 
-	const bytes = new TextEncoder().encode(JSON.stringify(data)).byteLength;
-	if (bytes > maxBytes) return { ok: false, reason: 'too_large', field: 'data' };
+	if (documentBytes(data) > maxBytes) return { ok: false, reason: 'too_large', field: 'data' };
 	return { ok: true };
+}
+
+/**
+ * Categorías de un documento que el esquema vigente no admite: no declaradas o con la forma de otra estrategia (C-45).
+ * Pasa con los predeterminados guardados antes de un cambio del esquema en W40: `apps` no puede revalidarlos.
+ */
+export function invalidCategories(
+	schema: SyncSchema,
+	data: Readonly<Record<string, unknown>>
+): string[] {
+	return Object.entries(data)
+		.filter(([name, value]) => categoryProblem(schema, name, value) !== null)
+		.map(([name]) => name);
+}
+
+/** El documento con solo las categorías que el esquema vigente admite, enteras (la siembra, BE-FR-40; C-45). */
+export function keepValidCategories(
+	schema: SyncSchema,
+	data: Readonly<Record<string, unknown>>
+): Record<string, unknown> {
+	return Object.fromEntries(
+		Object.entries(data).filter(([name, value]) => categoryProblem(schema, name, value) === null)
+	);
 }

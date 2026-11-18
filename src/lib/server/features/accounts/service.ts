@@ -24,21 +24,35 @@ import type { IdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs, type EpochMs } from '$lib/shared/time';
 import type { Auth } from './auth';
 import { DISPOSABLE_DOMAINS_V1 } from './disposable-domains';
-import { isLoginLocked, minutesUntilUnlock, signupIpLimitReached } from './domain/abuse';
 import { normalizeEmail } from './domain/email';
+import { canonicalIp, rateLimitKeyOf } from './domain/ip-key';
+import { revokedSince, sessionIdsOf } from './close-session';
 import { safeRedirect } from './domain/redirect';
 import { hashNormalizedEmail } from './email-hash';
+import {
+	lockReachedBy,
+	loginAttemptKeyOf,
+	refundPasswordAttempt,
+	reservePasswordAttempt,
+	type PasswordAttempt
+} from './password-attempts';
 import {
 	bumpRateCounter,
 	type AuthRateScope,
 	clearLoginAttempts,
-	countSignupsFromIp,
+	deleteSessionByToken,
 	insertDisposableDomains,
 	isDisposableDomain,
-	readLoginAttempt,
-	recordLoginFailure,
+	loginCredentialOf,
+	type LoginCredential,
+	releaseSignupSlot,
+	reserveSignupSlot,
+	revocationMarksOf,
+	sessionOwnerOf,
 	setSignupMetadata
 } from './repository';
+import type { EmailDispatcher } from './email-dispatch';
+import { deletePendingEmailChanges, deleteResetTokens } from './pending-tokens';
 import { session, user, userAppActivity, verification } from './schema';
 
 /** Lo que `accounts` necesita de la composición. El `Auth` se añade al montar el servicio (ver `index.ts`). */
@@ -53,6 +67,8 @@ export interface AccountsBase {
 	readonly legal: LegalDeps;
 	readonly emailHashKey: string;
 	readonly adminEmail: string | null;
+	/** Envío de los emails de cuenta sin esperarlos (C-17). */
+	readonly emails: EmailDispatcher;
 }
 
 export interface AccountsDeps extends AccountsBase {
@@ -77,7 +93,10 @@ export interface LoginInput {
 }
 
 const HOUR_MS = 60 * 60 * 1000;
-const LOGIN_WINDOW_MINUTES = 15;
+/** Una reserva de alta en curso deja de contar a los 10 minutos de la última (C-21): un alta dura segundos. */
+const SIGNUP_PENDING_TTL_MS = 10 * 60 * 1000;
+/** Prefijo de la clave del contador de intentos de registro en el ámbito `signup` (C-36). */
+const SIGNUP_ATTEMPT_KEY_PREFIX = 'attempt:';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Errores de Better Auth: se leen en un único sitio y se traducen a códigos de la aplicación.
@@ -101,7 +120,7 @@ const isBadCredentials = (error: unknown): boolean =>
 const isExpiredToken = (error: unknown): boolean => /expired|EXPIRED/.test(betterAuthCode(error));
 
 /** Cabeceras para Better Auth: la IP del cliente va en la cabecera interna que lee `advanced.ipAddress` (R02). */
-function headersFor(remoteIp: string | null): Headers {
+export function headersFor(remoteIp: string | null): Headers {
 	const headers = new Headers();
 	if (remoteIp !== null) headers.set('x-mm-client-ip', remoteIp);
 	return headers;
@@ -109,11 +128,14 @@ function headersFor(remoteIp: string | null): Headers {
 
 type NumericSetting =
 	| 'registrations_per_ip_24h'
+	| 'signup_attempts_per_ip_hour'
 	| 'login_max_failures'
 	| 'login_lock_minutes'
 	| 'login_per_ip_15min'
 	| 'resend_verification_per_ip_hour'
 	| 'password_reset_per_ip_hour'
+	| 'resend_verification_per_email_hour'
+	| 'password_reset_per_email_hour'
 	| 'min_age';
 
 function numberSetting(deps: AccountsBase, key: NumericSetting): number {
@@ -131,7 +153,19 @@ function emailDomain(email: string): string {
 // ---------------------------------------------------------------------------------------------------------------------
 // Alta y verificación (W08–W10)
 
-/** Registro (W08): captcha → dominio desechable → altas por IP → versiones legales → alta → aceptaciones → email. */
+/**
+ * Iguala el tiempo del registro de un email ya existente con el de uno nuevo (que termina en `sendVerificationEmail`, con el
+ * suelo de tiempo constante de Better Auth): la misma llamada sobre una dirección que no puede existir (`.invalid`, RFC 2606)
+ * firma un token y espera el suelo, sin enviar nada (C-17).
+ */
+async function matchVerificationTiming(deps: AccountsDeps): Promise<void> {
+	await deps.auth.api.sendVerificationEmail({ body: { email: 'registro@mardomingo.invalid' } });
+}
+
+/**
+ * Registro (W08): intentos por IP → captcha → dominio desechable → altas por IP → versiones legales → alta → aceptaciones →
+ * email.
+ */
 export async function register(
 	deps: AccountsDeps,
 	input: RegisterInput
@@ -144,6 +178,20 @@ export async function register(
 		deps.logger.emit('accounts.signup.rejected', { reason });
 		throw new AppError(code);
 	};
+
+	// Intentos de registro por IP y hora, creen cuenta o no (C-36): antes del captcha, para no llamar a Turnstile sin freno.
+	// Su contador va en el ámbito `signup` con la clave `attempt:<clave de la IP>`, aparte del hueco de altas creadas.
+	if (input.remoteIp !== null) {
+		ipRateLimited(
+			deps,
+			'signup',
+			input.remoteIp,
+			now,
+			HOUR_MS,
+			numberSetting(deps, 'signup_attempts_per_ip_hour'),
+			SIGNUP_ATTEMPT_KEY_PREFIX
+		);
+	}
 
 	const outcome = await deps.captcha.verify({
 		token: input.captchaToken,
@@ -159,16 +207,41 @@ export async function register(
 	if (isDisposableDomain(deps.db, emailDomain(input.email)))
 		return reject('disposable_domain', 'DISPOSABLE_DOMAIN');
 
-	if (
-		input.remoteIp !== null &&
-		signupIpLimitReached(
-			countSignupsFromIp(deps.db, input.remoteIp, now),
-			numberSetting(deps, 'registrations_per_ip_24h')
-		)
-	) {
-		return reject('ip_limit', 'REGISTRATION_IP_LIMIT');
+	// Reserva atómica del hueco antes de crear la cuenta (C-21). Sin IP conocida no hay límite (como hasta ahora).
+	const ip = input.remoteIp;
+	if (ip !== null) {
+		const limit = numberSetting(deps, 'registrations_per_ip_24h');
+		const reserved = immediateTransaction(deps.db, (tx) =>
+			reserveSignupSlot(tx, ip, now, { limit, pendingTtlMs: SIGNUP_PENDING_TTL_MS })
+		);
+		if (!reserved) return reject('ip_limit', 'REGISTRATION_IP_LIMIT');
 	}
+	// Si el alta se crea, el hueco se suelta en la transacción que escribe `signup_ip` y pasa a contar como alta creada. Si no
+	// se crea por cualquier motivo (versiones legales, email ya registrado, error), se suelta aquí: hoy solo cuentan las
+	// cuentas creadas, y un intento que no crea nada no debe gastar hueco.
+	const slot = { held: ip !== null };
+	try {
+		return await createAccount(deps, input, now, reject, slot);
+	} finally {
+		if (ip !== null && slot.held) {
+			immediateTransaction(deps.db, (tx) => {
+				releaseSignupSlot(tx, ip);
+			});
+		}
+	}
+}
 
+/**
+ * Versiones legales → alta en Better Auth → metadatos y aceptaciones. `slot.held` pasa a `false` cuando la transacción que
+ * escribe `signup_ip` ya ha soltado el hueco reservado.
+ */
+async function createAccount(
+	deps: AccountsDeps,
+	input: RegisterInput,
+	now: EpochMs,
+	reject: (reason: 'legal_version_changed', code: ErrorCode) => never,
+	slot: { held: boolean }
+): Promise<{ readonly sentTo: string }> {
 	const current = currentVersions(deps.legal, now, ['terms', 'privacy', 'aup']);
 	const sameVersions =
 		current.get('terms')?.version === input.versions.terms &&
@@ -186,6 +259,7 @@ export async function register(
 		// Anti-enumeración (BE-FR-01 CA5): si el email ya existe, la respuesta es la misma y no sale ningún email.
 		if (isUserExists(error)) {
 			deps.logger.emit('accounts.signup.rejected', { reason: 'email_exists' });
+			await matchVerificationTiming(deps);
 			return { sentTo: input.email };
 		}
 		throw error;
@@ -198,6 +272,7 @@ export async function register(
 		undefined
 	) {
 		deps.logger.emit('accounts.signup.rejected', { reason: 'email_exists' });
+		await matchVerificationTiming(deps);
 		return { sentTo: input.email };
 	}
 
@@ -208,8 +283,11 @@ export async function register(
 		setSignupMetadata(tx, created.user.id, {
 			emailNormalized: normalizeEmail(input.email),
 			signupAppId: appId,
-			signupIp: input.remoteIp
+			// Completa y en forma canónica (C-33): sigue siendo la prueba del alta y su /64 es un prefijo de texto fijo.
+			signupIp: input.remoteIp === null ? null : canonicalIp(input.remoteIp)
 		});
+		// El hueco en curso pasa a ser un alta creada en la misma transacción (C-21).
+		if (input.remoteIp !== null) releaseSignupSlot(tx, input.remoteIp);
 		recordAcceptances(tx, deps.legal, {
 			userId: created.user.id,
 			appId: null,
@@ -225,6 +303,7 @@ export async function register(
 			]
 		});
 	});
+	slot.held = false;
 
 	// El envío lo hace Better Auth con su token; el callback de `auth.ts` construye el enlace y lo entrega a notifications.
 	await deps.auth.api.sendVerificationEmail({ body: { email: input.email } });
@@ -250,9 +329,18 @@ export async function resendVerification(
 		);
 	}
 	const email = input.email.toLowerCase();
+	const limit = numberSetting(deps, 'resend_verification_per_email_hour');
+	if (emailRateLimited(deps, 'resend_verification', email, now, limit)) {
+		// Superado el límite por email (C-34): no se envía, con el mismo suelo de tiempo que un envío (C-17).
+		await matchVerificationTiming(deps);
+		deps.logger.emit('accounts.verification.resend_requested', { status: 'suppressed' });
+		return;
+	}
 	const row = deps.db.select().from(user).where(eq(user.email, email)).get();
 	const pending = row !== undefined && !row.emailVerified;
-	if (pending) await deps.auth.api.sendVerificationEmail({ body: { email } });
+	// Better Auth aplica a este endpoint un suelo de tiempo constante (500 ms) tanto si la cuenta existe como si no, y solo
+	// envía el email si está pendiente: se llama siempre para que el tiempo no distinga ambos casos (C-17).
+	await deps.auth.api.sendVerificationEmail({ body: { email } });
 	deps.logger.emit('accounts.verification.resend_requested', {
 		status: pending ? 'sent' : 'suppressed'
 	});
@@ -319,7 +407,8 @@ const LOGIN_IP_WINDOW_MS = 15 * 60 * 1000;
 
 /**
  * Límite por IP de una acción (BE-FR-45, D-02): cuenta la petición en su ventana fija y, si supera el máximo, la rechaza
- * con `RATE_LIMITED` y `Retry-After`. El evento no lleva la IP.
+ * con `RATE_LIMITED` y `Retry-After`. Una IPv6 cuenta por su /64 y una IPv4 mapeada como IPv4 (`rateLimitKeyOf`, C-33). El
+ * evento no lleva la IP. `keyPrefix` separa otro contador por IP del mismo ámbito (`attempt:` en `signup`, C-36).
  */
 export function ipRateLimited(
 	deps: AccountsDeps,
@@ -327,10 +416,12 @@ export function ipRateLimited(
 	ip: string,
 	now: EpochMs,
 	windowMs: number,
-	limit: number
+	limit: number,
+	keyPrefix = ''
 ): void {
+	const key = `${keyPrefix}${rateLimitKeyOf(ip)}`;
 	const counter = immediateTransaction(deps.db, (tx) =>
-		bumpRateCounter(tx, scope, ip, now, windowMs)
+		bumpRateCounter(tx, scope, key, now, windowMs)
 	);
 	if (counter.count <= limit) return;
 	deps.logger.emit('accounts.rate_limit.exceeded', { reason: scope });
@@ -338,6 +429,67 @@ export function ipRateLimited(
 	throw new AppError('RATE_LIMITED', {
 		retryAfterSeconds: Math.max(1, Math.ceil(remainingMs / 1000))
 	});
+}
+
+/**
+ * Límite por email de una acción que siempre responde neutra (BE-FR-45, C-34): cuenta la petición en el mismo ámbito que el
+ * límite por IP, con la clave `email:` + HMAC-SHA256 del email normalizado (nunca el email en claro), exista o no la
+ * cuenta. Devuelve `true` si se ha superado: entonces no se envía nada, sin error ni `Retry-After`, para no revelar nada.
+ */
+function emailRateLimited(
+	deps: AccountsDeps,
+	scope: Extract<AuthRateScope, 'resend_verification' | 'password_reset'>,
+	email: string,
+	now: EpochMs,
+	limit: number
+): boolean {
+	const key = `email:${hashNormalizedEmail(normalizeEmail(email), deps.emailHashKey)}`;
+	const counter = immediateTransaction(deps.db, (tx) =>
+		bumpRateCounter(tx, scope, key, now, HOUR_MS)
+	);
+	return counter.count > limit;
+}
+
+/**
+ * Rechaza el login como credenciales inválidas. El intento reservado queda contado como fallo; si alcanza el umbral, la
+ * respuesta es el bloqueo (BE-FR-67).
+ */
+function rejectAsInvalidCredentials(
+	deps: AccountsDeps,
+	attempt: Extract<PasswordAttempt, { kind: 'reserved' }>
+): never {
+	deps.logger.emit('accounts.login.failed', {
+		reason: 'invalid_credentials',
+		errorCode: 'INVALID_CREDENTIALS'
+	});
+	const lockMinutes = lockReachedBy(attempt);
+	if (lockMinutes !== null) {
+		deps.logger.emit('accounts.login.locked', {
+			reason: 'too_many_failures',
+			count: attempt.state.failures
+		});
+		throw new AppError('LOGIN_TEMPORARILY_LOCKED', { retryAfterMinutes: lockMinutes });
+	}
+	throw new AppError('INVALID_CREDENTIALS');
+}
+
+/**
+ * ¿Sigue la cuenta como estaba cuando Better Auth comprobó la contraseña (C-27)? Misma cuenta, mismo email, sin borrar y con
+ * la misma credencial (un cambio o una recuperación de contraseña cambian el hash, que lleva su propia sal).
+ */
+function credentialUnchanged(
+	before: LoginCredential | undefined,
+	after: LoginCredential | undefined
+): boolean {
+	return (
+		before !== undefined &&
+		after !== undefined &&
+		before.passwordHash !== null &&
+		after.passwordHash === before.passwordHash &&
+		after.userId === before.userId &&
+		after.email === before.email &&
+		after.deletedAt === null
+	);
 }
 
 async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<string> {
@@ -352,18 +504,20 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 			numberSetting(deps, 'login_per_ip_15min')
 		);
 	}
-	const hash = hashNormalizedEmail(normalizeEmail(input.email), deps.emailHashKey);
-	const state = readLoginAttempt(deps.db, hash);
-	if (state !== undefined && isLoginLocked(state.lockedUntil, now)) {
+	// Reserva atómica antes de comprobar la contraseña (C-16): el mismo camino y las mismas escrituras exista o no la cuenta.
+	const attempt = reservePasswordAttempt(deps, loginAttemptKeyOf(deps, input.email));
+	if (attempt.kind === 'locked') {
 		deps.logger.emit('accounts.login.locked', {
 			reason: 'too_many_failures',
-			count: state.failures
+			count: attempt.failures
 		});
 		throw new AppError('LOGIN_TEMPORARILY_LOCKED', {
-			retryAfterMinutes: minutesUntilUnlock(state.lockedUntil, now)
+			retryAfterMinutes: attempt.retryAfterMinutes
 		});
 	}
 
+	// Instantánea de la credencial antes de que Better Auth la lea (C-27): la busca igual que él, por el email en minúsculas.
+	const before = loginCredentialOf(deps.db, { email: input.email.toLowerCase() });
 	let token: string;
 	try {
 		({ token } = await deps.auth.api.signInEmail({
@@ -371,7 +525,9 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 			headers: headersFor(input.remoteIp)
 		}));
 	} catch (error) {
+		// Better Auth solo responde «sin verificar» o «bloqueada» tras comprobar la contraseña: no fue un fallo.
 		if (isNotVerified(error)) {
+			refundPasswordAttempt(deps, attempt);
 			deps.logger.emit('accounts.login.failed', {
 				reason: 'not_verified',
 				errorCode: 'EMAIL_NOT_VERIFIED'
@@ -379,39 +535,35 @@ async function authenticate(deps: AccountsDeps, input: LoginInput): Promise<stri
 			throw new AppError('EMAIL_NOT_VERIFIED');
 		}
 		if (isBanned(error)) {
+			refundPasswordAttempt(deps, attempt);
 			deps.logger.emit('accounts.login.failed', {
 				reason: 'blocked',
 				errorCode: 'ACCOUNT_BLOCKED'
 			});
 			throw new AppError('ACCOUNT_BLOCKED');
 		}
+		// Un error inesperado deja el intento contado (falla cerrado; ver `password-attempts.ts`).
 		if (!isBadCredentials(error)) throw error;
-		const after = immediateTransaction(deps.db, (tx) =>
-			recordLoginFailure(tx, hash, now, {
-				maxFailures: numberSetting(deps, 'login_max_failures'),
-				lockMinutes: numberSetting(deps, 'login_lock_minutes'),
-				windowMinutes: LOGIN_WINDOW_MINUTES
-			})
-		);
-		deps.logger.emit('accounts.login.failed', {
-			reason: 'invalid_credentials',
-			errorCode: 'INVALID_CREDENTIALS'
-		});
-		if (isLoginLocked(after.lockedUntil, now)) {
-			deps.logger.emit('accounts.login.locked', {
-				reason: 'too_many_failures',
-				count: after.failures
-			});
-			throw new AppError('LOGIN_TEMPORARILY_LOCKED', {
-				retryAfterMinutes: minutesUntilUnlock(after.lockedUntil, now)
-			});
-		}
-		throw new AppError('INVALID_CREDENTIALS');
+		return rejectAsInvalidCredentials(deps, attempt);
 	}
 
-	immediateTransaction(deps.db, (tx) => {
-		clearLoginAttempts(tx, hash);
+	// Better Auth crea la sesión sin volver a leer la credencial que comprobó antes de esperar al hash (C-27). Si entretanto se
+	// borró la cuenta, se cambió o recuperó la contraseña o se cambió el email, esas operaciones ya cerraron las sesiones que
+	// había y esta se crearía después: se vuelve a leer la credencial en una transacción IMMEDIATE, serializada con ellas. Si
+	// cambió (o la sesión ya no existe), se borra la sesión nueva y el login falla como una contraseña errónea: la contraseña
+	// ya no es la de la cuenta (o la cuenta ya no existe, y el intento cuenta exista o no, BE-FR-67 CA1). Una revocación que
+	// llegue después de esta transacción ya encuentra la sesión y la borra.
+	const intact = immediateTransaction(deps.db, (tx) => {
+		const ownerId = sessionOwnerOf(tx, token);
+		const after = ownerId === undefined ? undefined : loginCredentialOf(tx, { userId: ownerId });
+		if (!credentialUnchanged(before, after)) {
+			deleteSessionByToken(tx, token);
+			return false;
+		}
+		clearLoginAttempts(tx, attempt.key);
+		return true;
 	});
+	if (!intact) return rejectAsInvalidCredentials(deps, attempt);
 	return token;
 }
 
@@ -567,7 +719,16 @@ export async function requestPasswordReset(
 		);
 	}
 	const email = input.email.toLowerCase();
-	const exists = deps.db.select().from(user).where(eq(user.email, email)).get() !== undefined;
+	// Superado el límite por email (C-34) no se crea enlace ni se envía nada, igual que sin cuenta: misma respuesta y tiempo.
+	const limited = emailRateLimited(
+		deps,
+		'password_reset',
+		email,
+		now,
+		numberSetting(deps, 'password_reset_per_email_hour')
+	);
+	const exists =
+		!limited && deps.db.select().from(user).where(eq(user.email, email)).get() !== undefined;
 	if (exists) await deps.auth.api.requestPasswordReset({ body: { email } });
 	deps.logger.emit('accounts.password.reset_requested', { status: exists ? 'sent' : 'suppressed' });
 }
@@ -586,6 +747,7 @@ export async function resetPassword(
 		pending === undefined
 			? undefined
 			: deps.db.select().from(user).where(eq(user.id, pending.userId)).get();
+	const sessionsBefore = target === undefined ? [] : sessionIdsOf(deps.db, target.id);
 	try {
 		await deps.auth.api.resetPassword({
 			body: { newPassword: input.password, token: input.token }
@@ -597,6 +759,9 @@ export async function resetPassword(
 		const hash = hashNormalizedEmail(normalizeEmail(target.email), deps.emailHashKey);
 		immediateTransaction(deps.db, (tx) => {
 			clearLoginAttempts(tx, hash);
+			// Una recuperación anula las demás y los cambios de email pedidos antes (C-15, C-20).
+			deleteResetTokens(tx, target.id);
+			deletePendingEmailChanges(tx, target.id);
 		});
 		await sendAccountEmail(deps.notifications, {
 			reason: 'password_changed',
@@ -605,12 +770,22 @@ export async function resetPassword(
 		});
 	}
 	deps.logger.emit('accounts.password.reset_completed', {});
+	if (target !== undefined) {
+		deps.logger.emit('accounts.session.revoked', {
+			reason: 'password_changed',
+			count: revokedSince(deps.db, target.id, sessionsBefore)
+		});
+	}
 }
 
 /** Cierra la sesión de las cabeceras dadas (W15, BE-FR-06). */
 export async function logout(deps: AccountsDeps, headers: Headers): Promise<void> {
+	const current = await deps.auth.api.getSession({ headers });
 	await deps.auth.api.signOut({ headers });
-	deps.logger.emit('accounts.session.revoked', { reason: 'logout' });
+	deps.logger.emit('accounts.session.revoked', {
+		reason: 'logout',
+		count: current === null ? 0 : 1
+	});
 }
 
 /**
@@ -647,9 +822,17 @@ export function resetTokenStateOf(deps: AccountsBase, token: string): 'valid' | 
 	return 'valid';
 }
 
-/** Sesión de las cabeceras dadas, o `null` si no hay una válida. */
-export function readSession(deps: AccountsDeps, headers: Headers) {
-	return deps.auth.api.getSession({ headers });
+/**
+ * Sesión de las cabeceras dadas, o `null` si no hay una válida. La de una cuenta borrada o bloqueada no vale aunque siga en
+ * la base de datos (C-27, defensa en profundidad): el borrado y el bloqueo cierran las sesiones, pero Better Auth no mira
+ * `deleted_at` y su plugin `admin` solo mira `banned` al crear la sesión, no al leerla.
+ */
+export async function readSession(deps: AccountsDeps, headers: Headers) {
+	const current = await deps.auth.api.getSession({ headers });
+	if (current === null) return null;
+	const marks = revocationMarksOf(deps.db, current.user.id);
+	if (marks === undefined || marks.deleted || marks.banned) return null;
+	return current;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -700,13 +883,13 @@ export function blockAccount(
 	deps: { readonly db: Db; readonly logger: Logger },
 	input: { readonly userId: string; readonly reason: 'chargeback' }
 ): void {
-	immediateTransaction(deps.db, (tx) => {
+	const closed = immediateTransaction(deps.db, (tx) => {
 		tx.update(user)
 			.set({ banned: true, banReason: input.reason })
 			.where(eq(user.id, input.userId))
 			.run();
-		tx.delete(session).where(eq(session.userId, input.userId)).run();
+		return tx.delete(session).where(eq(session.userId, input.userId)).run().changes;
 	});
 	deps.logger.emit('accounts.user.blocked', { reason: input.reason });
-	deps.logger.emit('accounts.session.revoked', { reason: 'blocked' });
+	deps.logger.emit('accounts.session.revoked', { reason: 'blocked', count: closed });
 }

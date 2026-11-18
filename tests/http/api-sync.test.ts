@@ -201,7 +201,12 @@ describe('mantenimiento y predeterminados (BE-FR-47, BE-FR-42 CA2)', () => {
 		const sync = await get();
 		const defaults = await send(baseUrl, '/api/v1/defaults', {
 			host: apiHost,
-			headers: { 'x-app-id': 'secretario', 'x-app-version': '4.0.0', accept: 'application/json' }
+			headers: {
+				'x-app-id': 'secretario',
+				'x-app-version': '4.0.0',
+				accept: 'application/json',
+				authorization: `Bearer ${token}`
+			}
 		});
 		setMaintenance(false);
 
@@ -219,7 +224,12 @@ describe('documentos legales pendientes (BE-FR-70 CA1)', () => {
 		const sync = await get();
 		const defaults = await send(baseUrl, '/api/v1/defaults', {
 			host: apiHost,
-			headers: { 'x-app-id': 'secretario', 'x-app-version': '4.0.0', accept: 'application/json' }
+			headers: {
+				'x-app-id': 'secretario',
+				'x-app-version': '4.0.0',
+				accept: 'application/json',
+				authorization: `Bearer ${token}`
+			}
 		});
 
 		expect(sync.status).toBe(403);

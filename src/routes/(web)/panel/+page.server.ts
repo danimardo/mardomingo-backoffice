@@ -109,6 +109,7 @@ export const actions: Actions = {
 		try {
 			acceptDocuments(composition.legal, {
 				userId: access.user.id,
+				appId: null,
 				ip: clientIpOf(getClientAddress),
 				now: toEpochMs(composition.clock.now()),
 				accepted

@@ -58,7 +58,8 @@ test('@BE-FR-70 un administrador publica una versión informativa y aparece como
 	await loginAsAdmin(page);
 	await publish(page, { document: 'cookies', version: '2026-12-01', reacceptance: false });
 
-	await expect(page).toHaveURL(/\/admin\/legal$/);
+	// Publicar vuelve con el aviso y el enlace a la auditoría (UX-13; C-54).
+	await expect(page).toHaveURL(/\/admin\/legal\?aviso=saved&auditoria=aud_/);
 	await expect(page.getByText('cookies · 2026-12-01')).toBeVisible();
 });
 
@@ -701,7 +702,16 @@ test('la copia a predeterminados muestra la vista previa sin nada preseleccionad
 		await expect(box).not.toBeChecked();
 	}
 
-	// Sin marcar nada, la copia se rechaza y no sustituye ningún predeterminado.
+	// C-08: el aviso de datos personales nombra la categoría y es la descripción accesible de su grupo, y solo de ese.
+	await expect(page.getByRole('group', { name: /prompts/ })).toHaveAccessibleDescription(
+		/datos personales/
+	);
+	await expect(page.getByRole('group', { name: /preferences/ })).not.toHaveAccessibleDescription(
+		/datos personales/
+	);
+
+	// Sin marcar nada, la copia se rechaza y no sustituye ningún predeterminado. El motivo es obligatorio (C-41).
+	await page.getByRole('textbox', { name: /Motivo/ }).fill('Prueba E2E sin elementos');
 	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
 	await page.getByRole('button', { name: 'Copiar los elementos marcados' }).click();
 	await page.waitForLoadState('networkidle');

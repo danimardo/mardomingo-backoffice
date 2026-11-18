@@ -14,10 +14,11 @@ import type { Credits } from '$lib/server/features/credits';
 import { alertKeys, raiseAlert, type AlertDeps } from '$lib/server/features/notifications';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import { addDays, civilDateOf, madridMidnight } from '$lib/shared/dates';
 import { toEpochMs, type CivilDate, type EpochMs } from '$lib/shared/time';
 import { maintenanceVerdict, versionVerdict, type EndpointName } from './domain/access';
-import { brakeVerdict, eurCentsOf } from './domain/brake';
+import { brakeVerdict } from './domain/brake';
 import { concurrencyVerdict, twoLevelRateVerdict } from './domain/limits';
 import { createRateWindows, RATE_WINDOW_MS, type RateWindows } from './rate-limit.cache';
 import { createTranscriptionSlots, type TranscriptionSlots } from './concurrency.cache';
@@ -37,14 +38,15 @@ export function createProtectionsRuntime(): ProtectionsRuntime {
 }
 
 /**
- * Coste real por cuenta de un día (USD micro), aportado por `ai` como puerto: `protections` no lee las tablas de `ai`.
- * Las cuentas sin compra real se separan después con `credits`.
+ * Coste real por cuenta de un día en céntimos de euro, aportado por `ai` como puerto: `protections` no lee las tablas de
+ * `ai` ni las de `pricing`. Cada operación ya llega convertida con el tipo vigente cuando se cobró (su `fx_rate_id`;
+ * BE-FR-87 CA1, BE-FR-46; C-49). Las cuentas sin compra real se separan después con `credits`.
  */
 export interface DailyCostPort {
 	costByUserOfDay(
 		from: EpochMs,
 		until: EpochMs
-	): readonly { readonly userId: string; readonly costMicroUsd: number }[];
+	): readonly { readonly userId: string; readonly costEurCents: number }[];
 }
 
 export interface ProtectionsDeps {
@@ -105,19 +107,42 @@ export interface RequestGuardInput {
 }
 
 /**
- * Pasos de protección de una petición de IA, en orden: versión y mantenimiento, freno global, frecuencia y, en
- * transcripciones, concurrencia. Devuelve la liberación de la ranura (no hace nada si no hay). El llamador la libera en
- * un `finally`.
+ * Pasos 6 a 8 del contrato (1.8) de una petición de IA: versión, mantenimiento y freno global. Van antes de las versiones
+ * legales y de la idempotencia; no gastan cupo de frecuencia.
  */
-export function guardRequest(deps: ProtectionsDeps, input: RequestGuardInput): () => void {
+export function guardAccessAndBrake(
+	deps: ProtectionsDeps,
+	input: Pick<RequestGuardInput, 'endpoint' | 'appId' | 'appVersion' | 'userId'>
+): void {
 	guardAccess(deps, input);
+	guardBrake(deps, toEpochMs(deps.clock.now()), input.userId);
+}
+
+/**
+ * Paso 12 del contrato (1.8): frecuencia por minuto y, en transcripciones, concurrencia. Va después de la idempotencia (10)
+ * y de la validación (11), así que un reintento con la clave ya usada o una petición inválida no gastan cupo (C-39). Solo
+ * aquí se registra la petición. Devuelve la liberación de la ranura (no hace nada si no hay); el llamador la libera en un
+ * `finally`.
+ */
+export function guardFrequency(
+	deps: ProtectionsDeps,
+	input: Pick<RequestGuardInput, 'appId' | 'userId' | 'transcription'>
+): () => void {
 	const now = toEpochMs(deps.clock.now());
-	guardBrake(deps, now, input.userId);
 	const limits = effectiveLimits(deps, input.appId);
 	checkRate(deps, input, now, limits);
 	const release = input.transcription ? acquireSlot(deps, input, limits) : () => undefined;
 	deps.runtime.rate.record(input.userId, input.appId, now);
 	return release;
+}
+
+/**
+ * Todos los pasos de protección seguidos (`guardAccessAndBrake` y `guardFrequency`), para quien no tiene pasos intermedios
+ * de idempotencia ni validación (las pruebas de `protections`). `/ai/*` llama a las dos partes por separado (C-39).
+ */
+export function guardRequest(deps: ProtectionsDeps, input: RequestGuardInput): () => void {
+	guardAccessAndBrake(deps, input);
+	return guardFrequency(deps, input);
 }
 
 /**
@@ -180,10 +205,9 @@ function freeAccountsCostCents(deps: ProtectionsDeps, day: CivilDate): number {
 		madridMidnight(addDays(day, 1))
 	);
 	const paying = deps.credits.realPurchaseUserIds(rows.map((row) => row.userId));
-	const fxUsdEurPpm = numberSetting(deps, 'fx_usd_eur');
 	const realCents = rows
 		.filter((row) => !paying.has(row.userId))
-		.reduce((sum, row) => sum + eurCentsOf({ costMicroUsd: row.costMicroUsd, fxUsdEurPpm }), 0);
+		.reduce((sum, row) => sum + row.costEurCents, 0);
 	// Micro-créditos reservados: 1 € = 1.000 créditos = 1.000.000.000 µc, así que un céntimo son 10.000.000 µc.
 	const holdCents = Math.ceil(deps.credits.freeAccountsOpenHoldsMicro() / 10_000_000);
 	return realCents + holdCents;
@@ -206,7 +230,7 @@ function effectiveLimits(deps: ProtectionsDeps, appId: string): EffectiveLimits 
 /** Frecuencia por minuto (BE-FR-43): el límite de la cuenta suma todas sus apps; el de la app solo cuenta las suyas. */
 function checkRate(
 	deps: ProtectionsDeps,
-	input: RequestGuardInput,
+	input: Pick<RequestGuardInput, 'userId' | 'appId'>,
 	now: EpochMs,
 	limits: EffectiveLimits
 ): void {
@@ -231,7 +255,7 @@ function checkRate(
 /** Transcripciones simultáneas (BE-FR-43): la cuenta suma todas sus apps; la app cuenta solo las suyas. */
 function acquireSlot(
 	deps: ProtectionsDeps,
-	input: RequestGuardInput,
+	input: Pick<RequestGuardInput, 'userId' | 'appId'>,
 	limits: EffectiveLimits
 ): () => void {
 	const inFlight = deps.runtime.slots.inFlight(input.userId, input.appId);
@@ -256,33 +280,41 @@ export interface BrakeReleaseDeps {
 }
 
 /**
- * Liberación manual del freno por un administrador, con auditoría (BE-FR-46 CA2). Devuelve `false` si el freno no está
- * activo hoy. La interfaz de administración es de L13.
+ * Liberación manual del freno por un administrador, con su motivo en la auditoría (BE-FR-46 CA2, BE-FR-55). Devuelve el id de la
+ * entrada, que W44 enlaza al guardar (UX-13; C-54), o `null` si el freno no está activo hoy (nada cambia ni se audita).
  */
-export function releaseBrake(deps: BrakeReleaseDeps, adminId: string): boolean {
+export function releaseBrake(
+	deps: BrakeReleaseDeps,
+	input: { readonly adminId: string; readonly reason: string }
+): string | null {
+	// Motivo de 1 a 500 caracteres antes de escribir (C-55); se audita recortado.
+	const reason = requireReason(input.reason);
 	const now = toEpochMs(deps.clock.now());
 	const day = civilDateOf(now);
-	const released = immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const stored = readBrakeState(tx);
-		if (stored === null || stored.day !== day || !stored.active) return false;
-		writeBrakeState(tx, { ...stored, active: false, releasedAt: now, releasedBy: adminId }, now);
-		recordEntry(
+		if (stored === null || stored.day !== day || !stored.active) return null;
+		writeBrakeState(
+			tx,
+			{ ...stored, active: false, releasedAt: now, releasedBy: input.adminId },
+			now
+		);
+		return recordEntry(
 			tx,
 			{
-				adminId,
+				adminId: input.adminId,
 				action: 'protections.brake.released',
 				entity: 'protection_state',
 				entityId: GLOBAL_BRAKE_KEY,
 				before: { active: true },
 				after: { active: false },
-				reason: 'manual'
+				reason
 			},
 			deps.audit
 		);
-		return true;
 	});
-	if (released) deps.logger.emit('protections.brake.released', { reason: 'manual' });
-	return released;
+	if (entryId !== null) deps.logger.emit('protections.brake.released', { reason: 'manual' });
+	return entryId;
 }
 
 function numberSetting(

@@ -5,11 +5,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { resolve } from '$app/paths';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
-	const errors = $derived<Readonly<Record<string, string>>>(form?.errors ?? {});
 </script>
 
 <svelte:head>
@@ -20,6 +21,15 @@
 <p>
 	{data.app.name} · {data.operation.kind} · {data.operation.model ?? m.admin_operation_no_model()}
 </p>
+
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
 
 {#if form?.formError}
 	<Banner level="critical">{m.admin_operation_error()}</Banner>
@@ -37,7 +47,14 @@
 	<section aria-labelledby="activar">
 		<h2 id="activar">{m.admin_operation_activate()}</h2>
 		<form method="POST" action="?/activar">
-			<TextField id="motivo" name="motivo" label={m.admin_operation_reason()} required />
+			<TextField
+				id="motivo"
+				name="motivo"
+				label={m.admin_operation_reason()}
+				required
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, 'activar')}
+			/>
 			<Checkbox id="confirmado" name="confirmado" value="true"
 				>{m.admin_operation_confirm()}</Checkbox
 			>
@@ -58,8 +75,9 @@
 				id="motivo-desactivar"
 				name="motivo"
 				label={m.admin_operation_reason()}
-				error={errors.motivo === 'validation_required' ? m.validation_required() : ''}
 				required
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, 'desactivar')}
 			/>
 			<Checkbox id="confirmado-desactivar" name="confirmado" value="true"
 				>{m.admin_operation_confirm_deactivate()}</Checkbox
@@ -115,7 +133,14 @@
 			value={data.operation.maxCostMicro.toString()}
 			required
 		/>
-		<TextField id="motivo-operacion" name="motivo" label={m.admin_operation_reason()} required />
+		<TextField
+			id="motivo-operacion"
+			name="motivo"
+			label={m.admin_operation_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form, 'operacion')}
+		/>
 		<Checkbox id="confirmado-operacion" name="confirmado" value="true"
 			>{m.admin_operation_confirm_settings()}</Checkbox
 		>
@@ -155,7 +180,14 @@
 				value={data.operation.maxCostMicro.toString()}
 				required
 			/>
-			<TextField id="motivo-grupo" name="motivo" label={m.admin_operation_reason()} required />
+			<TextField
+				id="motivo-grupo"
+				name="motivo"
+				label={m.admin_operation_reason()}
+				required
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, 'grupo')}
+			/>
 			<p><Button type="submit" variant="secondary">{m.admin_operation_group_preview()}</Button></p>
 		</form>
 
@@ -184,6 +216,7 @@
 					name="motivo"
 					label={m.admin_operation_reason()}
 					required
+					maxlength={REASON_MAX_LENGTH}
 				/>
 				<Checkbox id="confirmado-grupo" name="confirmado" value="true"
 					>{m.admin_operation_confirm_group()}</Checkbox

@@ -431,8 +431,12 @@ chargedMicro, balance }` **[7.3]**. Nunca el nombre del modelo.
 - **Salida 200**: `{ revision: entero ≥ 1, data: { <categoría>: … } }` con la forma de cada estrategia
   (`items` con `items[]` y `tombstones[]`; `block` con `{ value, updatedAt }`; `keyed` con
   `{ <clave>: { value, updatedAt } }`; `updatedAt` en milisegundos epoch). Primera lectura: se siembra con
-  los predeterminados vigentes, todos los `updatedAt = 0` (BE-FR-40) y `revision = 1` (D-19).
-- **Errores**: comunes de 1.8 (incluidos `MAINTENANCE` y `TERMS_ACCEPTANCE_REQUIRED`).
+  los predeterminados vigentes, todos los `updatedAt = 0` (BE-FR-40) y `revision = 1` (D-19); solo las
+  categorías que admite el esquema vigente de la app (C-45: un predeterminado que un cambio del esquema dejó fuera
+  no se siembra).
+- **Errores**: comunes de 1.8 (incluidos `MAINTENANCE` y `TERMS_ACCEPTANCE_REQUIRED`). Si la cuenta se borra
+  mientras la petición está en curso, `401 UNAUTHENTICATED` y no se siembra nada (C-43: _triggers_ de
+  `sync_documents`, data-model 2.10).
 - **Idempotencia**: lectura; la siembra ocurre una sola vez (clave `(user_id, app_id)`).
 - **Eventos**: `sync.document.seeded`, `sync.document.read`, `sync.document.corrupt`.
 
@@ -444,7 +448,8 @@ chargedMicro, balance }` **[7.3]**. Nunca el nombre del modelo.
   Tamaño serializado ≤ `max_sync_doc_kb`.
 - **Salida 200**: `{ revision: entero }` (revisión anterior + 1). Sustituye el documento completo; la fusión
   la hace el cliente.
-- **Errores**: `SYNC_CONFLICT` (412), `PAYLOAD_TOO_LARGE`, `VALIDATION_ERROR` **[7.3]** + comunes de 1.8.
+- **Errores**: `SYNC_CONFLICT` (412), `PAYLOAD_TOO_LARGE`, `VALIDATION_ERROR` **[7.3]** + comunes de 1.8. Si la
+  cuenta se borra mientras la petición está en curso, `401 UNAUTHENTICATED` y no se escribe nada (C-43).
   [Hueco] `PUT` sin `GET` previo (documento aún no sembrado): **[Propuesta]** se siembra primero y se
   compara `If-Match` con la revisión sembrada (`1`).
 - **Concurrencia**: dos `PUT` con la misma revisión → uno `200` y otro `412`; nunca se pierde una escritura

@@ -8,6 +8,7 @@ import { immediateTransaction, type Tx } from '$lib/server/db/tx';
 import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { session, user } from './schema';
 
@@ -96,14 +97,6 @@ function loadUser(tx: Tx, userId: string) {
 	return row;
 }
 
-function requireReason(reason: string): string {
-	const trimmed = reason.trim();
-	if (trimmed === '' || trimmed.length > 500) {
-		throw new AppError('VALIDATION_ERROR', { field: 'reason' });
-	}
-	return trimmed;
-}
-
 interface AuditInput {
 	readonly adminId: string;
 	readonly action: string;
@@ -138,6 +131,8 @@ export function blockUser(
 	input: { adminId: string; userId: string; reason: string }
 ): string {
 	const reason = requireReason(input.reason);
+	// Un único administrador bloqueado no se recupera ni con `ADMIN_EMAIL` (C-22).
+	if (input.adminId === input.userId) throw new AppError('CANNOT_BLOCK_SELF');
 	return immediateTransaction(deps.db, (tx) => {
 		const current = loadUser(tx, input.userId);
 		if (current.banned) throw new AppError('ALREADY_BLOCKED');
@@ -191,7 +186,7 @@ export function setTester(
 	deps: AdminUsersDeps,
 	input: { adminId: string; userId: string; on: boolean; reason: string }
 ): string | null {
-	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	return immediateTransaction(deps.db, (tx) => {
 		const current = loadUser(tx, input.userId);
 		const roles = current.role.split(',').filter((role) => role !== '');
@@ -211,18 +206,21 @@ export function setTester(
 			userId: input.userId,
 			before: { tester: has },
 			after: { tester: input.on },
-			reason: input.reason
+			reason
 		});
 		deps.logger.emit('accounts.role.changed', { status: input.on ? 'tester_on' : 'tester_off' });
 		return id;
 	});
 }
 
-/** Cierra una sesión concreta de la cuenta, o todas si `sessionId` es nulo. Devuelve cuántas se cerraron. */
+/**
+ * Cierra una sesión concreta de la cuenta, o todas si `sessionId` es nulo. Devuelve cuántas se cerraron y el id de la entrada
+ * de auditoría, para que la ficha la enlace (UX-13; C-51).
+ */
 export function closeUserSessions(
 	deps: AdminUsersDeps,
 	input: { adminId: string; userId: string; sessionId: string | null; reason: string }
-): number {
+): { readonly closed: number; readonly entryId: string } {
 	const reason = requireReason(input.reason);
 	return immediateTransaction(deps.db, (tx) => {
 		loadUser(tx, input.userId);
@@ -232,7 +230,9 @@ export function closeUserSessions(
 				? eq(session.userId, input.userId)
 				: and(eq(session.userId, input.userId), eq(session.id, input.sessionId));
 		const closed = tx.delete(session).where(where).run().changes;
-		audit(tx, deps, {
+		// Una sesión concreta que no es de esta cuenta (o no existe) es un 404 y no deja entrada de auditoría.
+		if (closed === 0 && input.sessionId !== null) throw new AppError('NOT_FOUND');
+		const entryId = audit(tx, deps, {
 			adminId: input.adminId,
 			action: 'accounts.session.close',
 			userId: input.userId,
@@ -241,7 +241,7 @@ export function closeUserSessions(
 			reason
 		});
 		deps.logger.emit('accounts.session.revoked', { reason: 'admin_closed', count: closed });
-		return closed;
+		return { closed, entryId };
 	});
 }
 

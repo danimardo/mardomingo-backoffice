@@ -50,6 +50,30 @@ describe('ajuste de saldo del administrador (W36, T307)', () => {
 		).toHaveLength(1);
 	});
 
+	it('el servicio rechaza un motivo vacío o de más de 500 caracteres sin movimiento ni auditoría (C-55)', () => {
+		const userId = f.addUser('usr_adj_motivo');
+		const antes = balanceOf(userId);
+
+		for (const reason of ['   ', 'x'.repeat(501)]) {
+			expect(() =>
+				f.credits.adjust({
+					idempotencyKey: randomUUID(),
+					adminId,
+					userId,
+					direction: 'credit',
+					kind: 'paid',
+					amountMicro: 1_000_000,
+					reason
+				})
+			).toThrow(
+				expect.objectContaining({ code: 'VALIDATION_ERROR', details: { field: 'reason' } })
+			);
+		}
+
+		expect(balanceOf(userId)).toEqual(antes);
+		expect(f.db.select().from(adminAudit).all()).toEqual([]);
+	});
+
 	it('una resta por encima del disponible se rechaza en la vista previa y en el servicio, sin movimiento', () => {
 		const userId = f.addUser('usr_adj_resta');
 		f.credits.grantWelcome({ userId, emailNormalizedHash: 'hash-adj-resta' });

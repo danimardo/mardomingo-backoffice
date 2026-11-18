@@ -1,6 +1,11 @@
 // Tiempo máximo total de una operación para `/app/status` (BE-FR-77 CA4, FR-050; T193). Puro.
 import { describe, expect, it } from 'vitest';
-import { CHAT_RETRY_WAITS_MS, operationTotalMs } from './operation-timing';
+import {
+	CHAT_RETRY_WAITS_MS,
+	HOLD_TTL_MARGIN_MS,
+	minHoldTtlSeconds,
+	operationTotalMs
+} from './operation-timing';
 
 describe('operationTotalMs', () => {
 	it('chat: principal con un reintento a 2 s y un respaldo, con 45 s por intento', () => {
@@ -28,5 +33,19 @@ describe('operationTotalMs', () => {
 		expect(
 			operationTotalMs({ primaryTimeoutMs: 10_000, retryWaitsMs: [], fallbackTimeoutsMs: [] })
 		).toBe(10_000);
+	});
+});
+
+// C-14 (T406): una reserva debe durar más que la operación más larga, con margen para el cobro; si caduca antes, deja de contar
+// en el saldo disponible y en el freno global (BE-FR-71 CA1).
+describe('minHoldTtlSeconds', () => {
+	it('es la operación más larga más el margen, redondeado hacia arriba a segundos', () => {
+		expect(HOLD_TTL_MARGIN_MS).toBe(60_000);
+		expect(minHoldTtlSeconds([137_000, 254_000, 10_000])).toBe(314);
+		expect(minHoldTtlSeconds([137_500])).toBe(198);
+	});
+
+	it('sin operaciones basta con el margen', () => {
+		expect(minHoldTtlSeconds([])).toBe(60);
 	});
 });

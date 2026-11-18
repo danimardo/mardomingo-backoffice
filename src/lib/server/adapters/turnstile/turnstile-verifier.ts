@@ -4,7 +4,11 @@
 import { z } from 'zod';
 import type { CaptchaCheck, CaptchaOutcome, CaptchaVerifier } from './captcha-verifier';
 
-const SITEVERIFY_RESPONSE = z.object({ success: z.boolean() });
+const SITEVERIFY_RESPONSE = z.object({
+	success: z.boolean(),
+	hostname: z.string().optional(),
+	action: z.string().optional()
+});
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 export interface TurnstileOptions {
@@ -12,6 +16,13 @@ export interface TurnstileOptions {
 	/** `https://challenges.cloudflare.com` en producción; el simulador en pruebas (`MOCK_TURNSTILE_URL`). */
 	readonly endpoint: string;
 	readonly timeoutMs?: number;
+	/**
+	 * Host donde debe haberse resuelto el widget (C-25). Si se indica, un token válido de otro host (o sin `hostname` en la
+	 * respuesta) es «invalid». Sin indicar no se comprueba: las claves de prueba de Cloudflare devuelven `example.com`.
+	 */
+	readonly expectedHostname?: string;
+	/** `action` del widget que debe traer la respuesta (C-25); misma regla que `expectedHostname`. */
+	readonly expectedAction?: string;
 }
 
 export function createTurnstileVerifier(options: TurnstileOptions): CaptchaVerifier {
@@ -35,7 +46,16 @@ export function createTurnstileVerifier(options: TurnstileOptions): CaptchaVerif
 				if (!response.ok) return 'unavailable';
 				const body = SITEVERIFY_RESPONSE.safeParse(await response.json());
 				if (!body.success) return 'unavailable';
-				return body.data.success ? 'valid' : 'invalid';
+				if (!body.data.success) return 'invalid';
+				// Un token válido de otro sitio o de otro formulario no sirve para este registro (C-25).
+				if (
+					options.expectedHostname !== undefined &&
+					body.data.hostname !== options.expectedHostname
+				)
+					return 'invalid';
+				if (options.expectedAction !== undefined && body.data.action !== options.expectedAction)
+					return 'invalid';
+				return 'valid';
 			} catch {
 				return 'unavailable';
 			}

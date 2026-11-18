@@ -16,6 +16,7 @@ import type { InvoicingService } from '$lib/server/features/invoicing';
 import { isOwnWithdrawalWaiver, type LegalDeps } from '$lib/server/features/legal';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { toEpochMs } from '$lib/shared/time';
 import { civilDateOf } from '$lib/shared/dates';
@@ -41,7 +42,6 @@ import {
 	findRefundKey,
 	insertPayment,
 	insertRefundKey,
-	latestAppliedRefundKeyOf,
 	markRefundKeyApplied,
 	markWantsFullInvoice,
 	paymentIdsOfUser,
@@ -86,9 +86,15 @@ export type PurchaseOutcome =
 	| { readonly status: 'pending'; readonly paymentId: string }
 	| { readonly status: 'repeated'; readonly paymentId: string };
 
-export type RefundOutcome =
-	| { readonly status: 'refunded'; readonly refundedEurCents: number }
-	| { readonly status: 'partially_refunded'; readonly refundedEurCents: number };
+/**
+ * Resultado del reembolso. `auditEntryId` es la entrada de auditoría que se acaba de escribir, para enlazarla (UX-13; C-51); un
+ * reenvío con una clave ya aplicada no escribe ninguna y lo da nulo.
+ */
+export type RefundOutcome = {
+	readonly status: 'refunded' | 'partially_refunded';
+	readonly refundedEurCents: number;
+	readonly auditEntryId: string | null;
+};
 
 function numberSetting(deps: PaymentsDeps, key: Parameters<typeof getSetting>[1]): number {
 	const value = getSetting(deps.apps, key);
@@ -375,21 +381,17 @@ function correctRefund(
 			(outcome.status === 'skipped' &&
 				(outcome.reason === 'simulated' || outcome.reason === 'provider_none'));
 		if (!done) deps.logger.emit('payments.refund.corrective_pending', { reason: outcome.status });
-	} catch {
-		deps.logger.emit('payments.refund.corrective_pending', { reason: 'error' });
+	} catch (error) {
+		deps.logger.emit('payments.refund.corrective_pending', { reason: 'error', err: error });
 	}
 }
 
 /**
  * Un reenvío con una clave ya aplicada responde con el estado actual y no vuelve a reembolsar (R12), pero reintenta la
- * rectificativa si la anterior no llegó a emitirse (C-04).
+ * rectificativa si la anterior no llegó a emitirse (C-04). C-13 (T405): el importe y el total salen de la clave, nunca del
+ * reenvío, así que sirve también para una clave que no es la del último reembolso de la compra.
  */
-function repeatedRefund(
-	deps: PaymentsDeps,
-	key: RefundKeyRow,
-	paymentId: string,
-	amountEurCents: number
-): RefundOutcome {
+function repeatedRefund(deps: PaymentsDeps, key: RefundKeyRow, paymentId: string): RefundOutcome {
 	if (key.paymentId !== paymentId)
 		throw new AppError('VALIDATION_ERROR', { field: 'idempotencyKey' });
 	if (key.status === 'claimed') {
@@ -399,15 +401,21 @@ function repeatedRefund(
 	deps.logger.emit('payments.refund.repeated', {});
 	const row = findById(deps.db, paymentId);
 	if (row === undefined) throw new AppError('NOT_FOUND');
-	// Tras otro reembolso de la misma compra, el total de la fila ya no es el de este: reintentar emitiría su importe con la clave
-	// del siguiente. Su `corrective_pending` ya quedó registrado en el primer intento.
-	if (latestAppliedRefundKeyOf(deps.db, paymentId) === key.key)
-		correctRefund(deps, row, amountEurCents, row.refundedEurCents);
+	// Una clave anterior a la migración 0018 no guarda importe ni total: no se reintenta (sería tomar el importe del cliente). Su
+	// `corrective_pending` ya quedó registrado en el primer intento y se trata a mano (docs/operaciones/pagos.md).
+	if (key.amountEurCents !== null && key.refundedAfterEurCents !== null)
+		correctRefund(deps, row, key.amountEurCents, key.refundedAfterEurCents);
 	return {
 		status: row.status === 'refunded' ? 'refunded' : 'partially_refunded',
-		refundedEurCents: row.refundedEurCents
+		refundedEurCents: row.refundedEurCents,
+		auditEntryId: null
 	};
 }
+
+/** Paso 2 del reembolso: o los créditos no caben (lo dice `credits`) o se aplicó, con el id de su entrada de auditoría. */
+type RefundApplied =
+	| Exclude<RefundWithdrawOutcome, { readonly ok: true }>
+	| { readonly ok: true; readonly auditEntryId: string };
 
 /** Libera la clave de un reembolso que no retiró créditos: el formulario puede volver a enviarse tras corregirlo. */
 function releaseRefundKey(deps: PaymentsDeps, key: string): void {
@@ -427,8 +435,7 @@ function releaseRefundKey(deps: PaymentsDeps, key: string): void {
  * esa compra hasta revisarla a mano.
  */
 export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome {
-	const reason = input.reason.trim();
-	if (reason.length === 0) throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+	const reason = requireReason(input.reason);
 	const claim = immediateTransaction(deps.db, (tx: Tx): RefundClaim => {
 		const previous = findRefundKey(tx, input.idempotencyKey);
 		if (previous !== undefined) return { kind: 'repeated', key: previous };
@@ -441,6 +448,8 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 		insertRefundKey(tx, {
 			key: input.idempotencyKey,
 			paymentId: row.id,
+			amountEurCents: toEurCents(input.amountEurCents),
+			refundedAfterEurCents: toEurCents(plan.newRefundedEurCents),
 			createdAt: toEpochMs(deps.clock.now())
 		});
 		return {
@@ -451,8 +460,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 		};
 	});
 	if (claim.kind === 'missing') throw new AppError('NOT_FOUND');
-	if (claim.kind === 'repeated')
-		return repeatedRefund(deps, claim.key, input.paymentId, input.amountEurCents);
+	if (claim.kind === 'repeated') return repeatedRefund(deps, claim.key, input.paymentId);
 	if (claim.kind === 'rejected') {
 		deps.logger.emit('payments.refund.rejected', { reason: claim.reason });
 		throw rejectionError(claim.reason);
@@ -461,9 +469,9 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 	const { row, newRefundedEurCents, newStatus } = claim;
 
 	const now = toEpochMs(deps.clock.now());
-	let applied: RefundWithdrawOutcome;
+	let applied: RefundApplied;
 	try {
-		applied = immediateTransaction(deps.db, (tx: Tx): RefundWithdrawOutcome => {
+		applied = immediateTransaction(deps.db, (tx: Tx): RefundApplied => {
 			if (input.creditsToRemoveMicro > 0) {
 				const withdrawal = deps.credits.withdrawForRefund({
 					tx,
@@ -471,7 +479,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 					userId: row.userId,
 					paymentId: row.id,
 					amountMicro: input.creditsToRemoveMicro,
-					reason: input.reason
+					reason
 				});
 				// Si los créditos no caben, `credits` no ha escrito nada: la transacción no cambia nada más.
 				if (!withdrawal.ok) return withdrawal;
@@ -479,7 +487,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 			setRefundedEurCents(tx, row.id, newRefundedEurCents, now);
 			setStatus(tx, row.id, newStatus, now, row.completedAt);
 			markRefundKeyApplied(tx, input.idempotencyKey);
-			recordEntry(
+			const auditEntryId = recordEntry(
 				tx,
 				{
 					adminId: input.adminId,
@@ -492,7 +500,7 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 				},
 				deps.auditDeps
 			);
-			return { ok: true };
+			return { ok: true, auditEntryId };
 		});
 	} catch (cause) {
 		// Nada se confirmó: la clave vuelve a estar libre para reenviar el formulario.
@@ -507,7 +515,11 @@ export function refund(deps: PaymentsDeps, input: RefundRequest): RefundOutcome 
 
 	correctRefund(deps, row, input.amountEurCents, newRefundedEurCents);
 	deps.logger.emit('payments.refund.applied', {});
-	return { status: newStatus, refundedEurCents: newRefundedEurCents };
+	return {
+		status: newStatus,
+		refundedEurCents: newRefundedEurCents,
+		auditEntryId: applied.auditEntryId
+	};
 }
 
 /** Paquete a la venta, con los créditos ya calculados con la tasa vigente (W20, BE-FR-23). */

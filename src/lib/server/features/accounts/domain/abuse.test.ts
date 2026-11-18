@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { toEpochMs } from '$lib/shared/time';
-import { isLoginLocked, minutesUntilUnlock, nextLoginAttempt, signupIpLimitReached } from './abuse';
+import {
+	isLoginLocked,
+	minutesUntilUnlock,
+	nextLoginAttempt,
+	refundLoginAttempt,
+	signupIpLimitReached
+} from './abuse';
 
 const MINUTE = 60_000;
 const NOW = toEpochMs(1_000_000_000);
@@ -59,6 +65,54 @@ describe('intentos de login (BE-FR-67)', () => {
 		expect(minutesUntilUnlock(toEpochMs(NOW + MINUTE), NOW)).toBe(1);
 		expect(minutesUntilUnlock(toEpochMs(NOW + MINUTE + 1), NOW)).toBe(2);
 		expect(minutesUntilUnlock(toEpochMs(NOW + 15 * MINUTE), NOW)).toBe(15);
+	});
+});
+
+describe('devolución de un intento reservado que no fue un fallo (C-16)', () => {
+	const start = toEpochMs(NOW - MINUTE);
+	const lock = toEpochMs(NOW + 15 * MINUTE);
+
+	it('resta el intento de la misma ventana', () => {
+		const reserved = { failures: 4, windowStart: start, lockedUntil: null };
+
+		expect(refundLoginAttempt({ ...reserved, failures: 6 }, reserved)).toEqual({
+			failures: 5,
+			windowStart: start,
+			lockedUntil: null
+		});
+	});
+
+	it('sin fallos ni bloqueo no queda nada que guardar', () => {
+		const reserved = { failures: 1, windowStart: start, lockedUntil: null };
+
+		expect(refundLoginAttempt(reserved, reserved)).toBeNull();
+	});
+
+	it('quita el bloqueo que puso la propia reserva, aunque la ventana siga llena', () => {
+		const reserved = { failures: 11, windowStart: start, lockedUntil: lock };
+
+		expect(refundLoginAttempt(reserved, reserved)).toEqual({
+			failures: 10,
+			windowStart: start,
+			lockedUntil: null
+		});
+	});
+
+	it('conserva el bloqueo que puso otra reserva', () => {
+		const reserved = { failures: 9, windowStart: start, lockedUntil: null };
+
+		expect(
+			refundLoginAttempt({ failures: 10, windowStart: start, lockedUntil: lock }, reserved)
+		).toEqual({ failures: 9, windowStart: start, lockedUntil: lock });
+	});
+
+	it('no devuelve nada si un acierto ya limpió el contador o empezó otra ventana', () => {
+		const reserved = { failures: 3, windowStart: start, lockedUntil: null };
+
+		expect(refundLoginAttempt(undefined, reserved)).toBeUndefined();
+		expect(
+			refundLoginAttempt({ failures: 1, windowStart: NOW, lockedUntil: null }, reserved)
+		).toBeUndefined();
 	});
 });
 

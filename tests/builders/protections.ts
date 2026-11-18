@@ -1,5 +1,6 @@
 // Arnés de `protections` para las pruebas de integración (T206, T207): dependencias sobre el montaje de créditos, un puerto
-// de coste diario que la prueba cambia a mano y un adaptador que espera el guard síncrono como promesa.
+// de coste diario que la prueba cambia a mano (en céntimos de euro, ya convertidos por `ai`; C-49) y un adaptador que espera
+// el guard síncrono como promesa.
 import {
 	createFakeEmailSender,
 	type FakeEmailSender
@@ -17,13 +18,13 @@ import type { CreditsFixture } from './credits';
 /** La app sembrada exige 4.0.0 (`apps/seed.ts`): sin versión válida la petición ni llega al freno. */
 export const SEEDED_MIN_VERSION = '4.0.0';
 /** 6 USD de coste real a 0,92 EUR por USD son 552 céntimos: por encima de los 500 del freno. */
-export const OVER_BRAKE_COST_MICRO_USD = 6_000_000;
+export const OVER_BRAKE_COST_EUR_CENTS = 552;
 
 export interface ProtectionsHarness {
 	readonly deps: ProtectionsDeps;
 	readonly sender: FakeEmailSender;
-	/** Coste real por cuenta que devuelve el puerto diario; la prueba lo cambia entre peticiones. */
-	costs: { userId: string; costMicroUsd: number }[];
+	/** Coste real por cuenta, en céntimos de euro, que devuelve el puerto diario; la prueba lo cambia entre peticiones. */
+	costs: { userId: string; costEurCents: number }[];
 	/** Veces que el guard ha pedido el coste diario. */
 	costCalls(): number;
 }

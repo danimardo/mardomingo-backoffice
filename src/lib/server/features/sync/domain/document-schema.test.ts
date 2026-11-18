@@ -2,7 +2,12 @@
 // de la app y el tamaño máximo llegan por parámetro. Solo categorías declaradas, con la forma de su estrategia, y no más
 // de `max_sync_doc_kb`.
 import { describe, expect, it } from 'vitest';
-import { validateDocument } from './document-schema';
+import {
+	documentBytes,
+	invalidCategories,
+	keepValidCategories,
+	validateDocument
+} from './document-schema';
 
 const SCHEMA = {
 	categories: {
@@ -140,5 +145,34 @@ describe('validateDocument: formas que no son de su estrategia', () => {
 			reason: 'malformed',
 			field: 'preferences'
 		});
+	});
+});
+
+describe('categorías que el esquema vigente ya no admite (C-45)', () => {
+	// Predeterminados guardados antes de que W40 quitara `retirada` y pasara `preferences` de keyed a block.
+	const STALE = {
+		coreReplacements: { value: { x: 1 }, updatedAt: 2 },
+		retirada: { value: 'ya no declarada', updatedAt: 1 },
+		preferences: { idioma: { value: 'es', updatedAt: 3 } }
+	};
+
+	it('invalidCategories nombra las no declaradas y las de otra forma, en el orden del documento', () => {
+		expect(invalidCategories(SCHEMA, STALE)).toEqual(['retirada', 'preferences']);
+	});
+
+	it('invalidCategories de un documento válido o vacío no nombra ninguna', () => {
+		expect(invalidCategories(SCHEMA, { coreReplacements: STALE.coreReplacements })).toEqual([]);
+		expect(invalidCategories(SCHEMA, {})).toEqual([]);
+	});
+
+	it('keepValidCategories deja solo las categorías admitidas, enteras, y el resultado valida', () => {
+		const kept = keepValidCategories(SCHEMA, STALE);
+
+		expect(kept).toEqual({ coreReplacements: STALE.coreReplacements });
+		expect(validateDocument(SCHEMA, kept, MAX_BYTES)).toEqual({ ok: true });
+	});
+
+	it('documentBytes mide el JSON en bytes UTF-8', () => {
+		expect(documentBytes({ a: 'ñ' })).toBe('{"a":"ñ"}'.length + 1);
 	});
 });

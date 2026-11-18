@@ -20,6 +20,7 @@ import {
 	type StatsGrouping
 } from '$lib/server/features/stats';
 import { toCivilDate } from '$lib/shared/time';
+import { madridPeriodBounds } from '$lib/shared/dates';
 import type { PageServerLoad } from './$types';
 
 const GROUPINGS = Object.freeze([
@@ -43,10 +44,7 @@ function embudoOf(value: string | null): FunnelMode {
 }
 
 function bounds(desde: string, hasta: string): { fromMs: number; toMs: number } | null {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}-\d{2}$/.test(hasta)) return null;
-	const fromMs = Date.parse(`${desde}T00:00:00Z`);
-	const toMs = Date.parse(`${hasta}T23:59:59Z`);
-	return Number.isNaN(fromMs) || Number.isNaN(toMs) || fromMs > toMs ? null : { fromMs, toMs };
+	return madridPeriodBounds(desde, hasta);
 }
 
 export const load: PageServerLoad = ({ locals, url, setHeaders }) => {

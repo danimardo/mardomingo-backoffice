@@ -1,10 +1,10 @@
 // Repositorio de pagos (BE-FR-23, BE-FR-25 CA4, BE-FR-27; data-model 2.9; T223). La tabla `payments` la crea L02; aquí solo
 // se lee y se escribe. Las transiciones de estado válidas las comprueba el servicio con el dominio; el repositorio no decide
 // negocio. Toda búsqueda filtra por `user_id` cuando la compra es de un usuario concreto.
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
-import { toEurCents } from '$lib/shared/money';
+import { toEurCents, type EurCents } from '$lib/shared/money';
 import type { EpochMs } from '$lib/shared/time';
 import { packs, payments, refundKeys } from './schema';
 
@@ -24,24 +24,16 @@ export function findClaimedRefundKeyOf(db: Db | Tx, paymentId: string): RefundKe
 		.get();
 }
 
-/**
- * Clave del último reembolso aplicado de la compra (C-04). Solo con ella el total devuelto de la fila es el de ese reembolso y
- * se puede reconstruir la `issueKey` de su rectificativa. Nunca hay dos claves `claimed` a la vez en la misma compra, así que el
- * orden de inserción (`rowid`) desempata dos claves del mismo milisegundo.
- */
-export function latestAppliedRefundKeyOf(db: Db | Tx, paymentId: string): string | undefined {
-	return db
-		.select({ key: refundKeys.key })
-		.from(refundKeys)
-		.where(and(eq(refundKeys.paymentId, paymentId), eq(refundKeys.status, 'applied')))
-		.orderBy(desc(refundKeys.createdAt), desc(sql`rowid`))
-		.limit(1)
-		.get()?.key;
-}
-
+/** Clave reservada con el importe del reembolso y el total devuelto tras él (C-13): el reenvío los toma de aquí. */
 export function insertRefundKey(
 	tx: Tx,
-	row: { readonly key: string; readonly paymentId: string; readonly createdAt: EpochMs }
+	row: {
+		readonly key: string;
+		readonly paymentId: string;
+		readonly amountEurCents: EurCents;
+		readonly refundedAfterEurCents: EurCents;
+		readonly createdAt: EpochMs;
+	}
 ): void {
 	tx.insert(refundKeys)
 		.values({ ...row, status: 'claimed' })

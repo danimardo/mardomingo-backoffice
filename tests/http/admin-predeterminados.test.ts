@@ -160,6 +160,46 @@ describe('predeterminados con sesión de administrador (W42–W43, T312)', () =>
 		expect(auditCount('sync.defaults.copied')).toBe(audit);
 	});
 
+	it('la vista previa avisa de datos personales solo en la categoría marcada (prompts), una vez y sin preselección (D14; C-06)', async () => {
+		const siembra = new Database(databasePath);
+		try {
+			siembra
+				.prepare('DELETE FROM sync_documents WHERE user_id = ? AND app_id = ?')
+				.run(ADMIN_ID, appId);
+			siembra
+				.prepare(
+					`INSERT INTO sync_documents (user_id, app_id, revision, data, created_at, updated_at)
+					 VALUES (?, ?, 1, ?, ?, ?)`
+				)
+				.run(
+					ADMIN_ID,
+					appId,
+					JSON.stringify({
+						prompts: { value: ['resume mis correos'], updatedAt: 7 },
+						preferences: { language: { value: 'es', updatedAt: 1 } }
+					}),
+					Date.now(),
+					Date.now()
+				);
+		} finally {
+			siembra.close();
+		}
+
+		const vista = await send(baseUrl, `${PAGE}/copiar?vista=propia`, {
+			host: session.webHost,
+			headers: { accept: 'text/html', cookie: session.cookie }
+		});
+
+		expect(vista.status).toBe(200);
+		expect(vista.text).toContain('sel:prompts');
+		expect(vista.text).toContain('sel:preferences');
+		const aviso = 'datos personales';
+		expect(vista.text.split(aviso).length - 1).toBe(1);
+		expect(vista.text).not.toMatch(/\schecked[\s=>]/);
+		// `prompts` es la primera categoría del esquema: su aviso aparece antes del grupo `preferences`.
+		expect(vista.text.indexOf(aviso)).toBeLessThan(vista.text.indexOf('sel:preferences'));
+	});
+
 	it('la copia toma el elemento marcado del propio documento del administrador, lo deja en predeterminados y audita (CA3–CA4)', async () => {
 		const audit = auditCount('sync.defaults.copied');
 		// D03: la cuenta origen es siempre la del propio administrador. Se siembra su documento aquí para esta prueba.

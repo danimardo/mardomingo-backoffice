@@ -6,6 +6,8 @@
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { resolve } from '$app/paths';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -20,6 +22,14 @@
 
 <h1>{m.admin_announcements_title()}</h1>
 <p>{m.admin_announcements_intro()}</p>
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
 
 <section aria-labelledby="nuevo-anuncio">
 	<h2 id="nuevo-anuncio">{m.admin_announcements_new()}</h2>
@@ -167,6 +177,8 @@
 								name="motivo"
 								label={m.admin_announcements_reason()}
 								required
+								maxlength={REASON_MAX_LENGTH}
+								{...reasonFieldOf(form, `desactivar:${row.id}`)}
 							/>
 							<Checkbox id={`confirmado-anuncio-${row.id}`} name="confirmado" value="true"
 								>{m.admin_announcements_confirm()}</Checkbox

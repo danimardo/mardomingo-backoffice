@@ -1,6 +1,8 @@
 // W38 · `/admin/economia` (contracts/web-routes.md W38; BE-FR-61, BE-FR-73, BE-FR-87; T309). Parámetros económicos globales, tipo de cambio
-// manual y precio orientativo manual por operación. Cada cambio pide motivo y confirmación y queda en la auditoría. Los parámetros se
-// validan con su esquema (`apps.updateSetting`). Requiere rol de administrador.
+// manual y precio orientativo manual por operación. Cada cambio pide motivo y confirmación y queda en la auditoría; al guardar se
+// vuelve con `?aviso=saved&auditoria=<id>` y la página enlaza con esa entrada (UX-13; C-51). Los parámetros se validan con su
+// esquema (`apps.updateSetting`). El tipo manual es un entero entre 500.000 y 2.000.000 ppm y tiene vista previa (C-48).
+// Requiere rol de administrador.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
@@ -15,11 +17,13 @@ import { listPacksForAdmin } from '$lib/server/features/payments';
 import {
 	clearManualFx,
 	getCurrentFxRate,
+	previewManualFx,
 	setManualFx,
 	setManualPrice
 } from '$lib/server/features/pricing';
 import * as m from '$lib/paraglide/messages.js';
-import { isConfirmed } from '$lib/server/forms/confirmation';
+import { isConfirmed, savedEntryOf, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { AppError } from '$lib/server/shared/errors';
 import { failureOf } from '$lib/server/web/actions';
 import type { Actions, PageServerLoad } from './$types';
@@ -90,7 +94,34 @@ function valueText(value: unknown): string {
 	return typeof value === 'number' || typeof value === 'string' ? String(value) : '';
 }
 
-export const load: PageServerLoad = ({ locals, setHeaders }) => {
+/** Tipo manual escrito en ppm: solo cifras. Cualquier otra cosa (vacío, decimal, signo, exponente) es NaN y no pasa (C-48). */
+function fxPpmOf(form: FormData): number {
+	const text = textOf(form, 'usdEurPpm').trim();
+	return /^\d{1,10}$/.test(text) ? Number(text) : Number.NaN;
+}
+
+const EUR_PER_USD = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 6 });
+
+/** Un tipo en ppm como euros por dólar a la española (920.000 → «0,92»). */
+function eurPerUsdOf(ppm: number): string {
+	return EUR_PER_USD.format(ppm / 1_000_000);
+}
+
+/** Formulario del tipo manual en la página (vista previa y confirmación comparten campo de motivo). */
+const FX_SCOPE = 'tipoCambioManual';
+
+/** Error de un campo del tipo manual (C-48): el tipo fuera de rango o el motivo vacío, con lo escrito para no perderlo. */
+function fxFailure(cause: AppError, values: Readonly<Record<string, string>>) {
+	if (cause.code === 'VALIDATION_ERROR' && cause.details.field === 'usdEurPpm') {
+		return fail(400, { errors: { usdEurPpm: 'fx_out_of_range' }, values, scope: FX_SCOPE });
+	}
+	if (cause.code === 'VALIDATION_ERROR' && cause.details.field === 'reason') {
+		return fail(400, { errors: { motivo: 'validation_required' }, values, scope: FX_SCOPE });
+	}
+	return failureOf(cause, values);
+}
+
+export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	adminOrThrow(locals);
 	setHeaders({ 'cache-control': 'private, no-store' });
 	const composition = getComposition();
@@ -105,7 +136,9 @@ export const load: PageServerLoad = ({ locals, setHeaders }) => {
 			origin: 'global' as const
 		})),
 		fx: { usdEurPpm: fx.usdEurPpm, source: fx.source, effectiveFrom: fx.effectiveFrom },
-		packs: listPacksForAdmin({ db: composition.db })
+		packs: listPacksForAdmin({ db: composition.db }),
+		// Aviso tras un cambio aplicado: enlaza con su entrada de auditoría (UX-13).
+		saved: savedEntryOf(url)
 	};
 };
 
@@ -124,8 +157,12 @@ export const actions: Actions = {
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const key = textOf(form, 'clave');
 		if (!isEconomyKey(key)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		// Motivo de 1 a 500 caracteres (C-55): el error va al formulario de ese parámetro.
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: `guardarParametros:${key}` });
+		if (rejected !== null) return rejected;
+		let entryId: string;
 		try {
-			updateSetting(getComposition().apps, {
+			entryId = updateSetting(getComposition().apps, {
 				actorId: admin.id,
 				key,
 				value: Number(textOf(form, 'valor')),
@@ -135,30 +172,63 @@ export const actions: Actions = {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		redirect(303, back);
+		const next = savedRedirect(back, entryId);
+		redirect(303, next);
+	},
+	// Vista previa del tipo manual (C-48): el vigente y el nuevo, sin escribir nada. La confirmación la hace su formulario.
+	previsualizarTipoCambioManual: async ({ locals, request }) => {
+		adminOrThrow(locals);
+		const form = await request.formData();
+		const values = { usdEurPpm: textOf(form, 'usdEurPpm'), motivo: textOf(form, 'motivo') };
+		try {
+			const preview = previewManualFx(getComposition().pricing, fxPpmOf(form));
+			// La vista previa ya rechaza el motivo que la confirmación rechazaría (C-55).
+			const rejected = reasonRejection(values.motivo, { scope: FX_SCOPE, values });
+			if (rejected !== null) return rejected;
+			return {
+				fxPreview: {
+					beforePpm: preview.beforePpm,
+					beforeEur: eurPerUsdOf(preview.beforePpm),
+					afterPpm: preview.afterPpm,
+					afterEur: eurPerUsdOf(preview.afterPpm),
+					reason: values.motivo
+				}
+			};
+		} catch (cause) {
+			if (cause instanceof AppError) return fxFailure(cause, values);
+			throw cause;
+		}
 	},
 	fijarTipoCambioManual: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const values = { usdEurPpm: textOf(form, 'usdEurPpm'), motivo: textOf(form, 'motivo') };
+		const rejected = reasonRejection(values.motivo, { scope: FX_SCOPE, values });
+		if (rejected !== null) return rejected;
+		let entryId: string;
 		try {
-			setManualFx(getComposition().pricing, {
+			entryId = setManualFx(getComposition().pricing, {
 				adminId: admin.id,
-				usdEurPpm: Number(textOf(form, 'usdEurPpm')),
-				reason: textOf(form, 'motivo')
+				usdEurPpm: fxPpmOf(form),
+				reason: values.motivo
 			});
 		} catch (cause) {
-			if (cause instanceof AppError) return failureOf(cause);
+			if (cause instanceof AppError) return fxFailure(cause, values);
 			throw cause;
 		}
-		redirect(303, back);
+		const next = savedRedirect(back, entryId);
+		redirect(303, next);
 	},
 	quitarTipoCambioManual: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(textOf(form, 'motivo'), { scope: 'quitarTipoCambioManual' });
+		if (rejected !== null) return rejected;
+		let outcome: ReturnType<typeof clearManualFx>;
 		try {
-			clearManualFx(getComposition().pricing, {
+			outcome = clearManualFx(getComposition().pricing, {
 				adminId: admin.id,
 				reason: textOf(form, 'motivo')
 			});
@@ -166,15 +236,23 @@ export const actions: Actions = {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		redirect(303, back);
+		// Sin valor del BCE al que volver no se cambia nada ni se audita: vuelve sin aviso.
+		const next = outcome.ok ? savedRedirect(back, outcome.entryId) : back;
+		redirect(303, next);
 	},
 	guardarPrecioOrientativo: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
 		const micro = textOf(form, 'microUsd');
+		const rejected = reasonRejection(textOf(form, 'motivo'), {
+			scope: 'guardarPrecioOrientativo',
+			values: { operacion: textOf(form, 'operacion'), microUsd: micro }
+		});
+		if (rejected !== null) return rejected;
+		let entryId: string;
 		try {
-			setManualPrice(getComposition().pricing, {
+			entryId = setManualPrice(getComposition().pricing, {
 				adminId: admin.id,
 				operationId: textOf(form, 'operacion'),
 				microUsd: micro === '' ? null : Number(micro),
@@ -184,6 +262,7 @@ export const actions: Actions = {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		redirect(303, back);
+		const next = savedRedirect(back, entryId);
+		redirect(303, next);
 	}
 };

@@ -117,22 +117,28 @@ export type DeleteAccountInput =
 
 export type DeleteAccountOutcome =
 	| { readonly status: 'deleted'; readonly forfeitedMicro: number }
-	| { readonly status: 'wrong_password' | 'not_found' };
+	| { readonly status: 'wrong_password' | 'not_found' }
+	| { readonly status: 'locked'; readonly retryAfterMinutes: number };
 
 class AlreadyDeleted extends Error {}
 
 /**
  * Borra la cuenta (BE-FR-07): libera las reservas, anula el saldo con movimientos `forfeit`, cierra todas las sesiones,
  * borra el perfil fiscal y los documentos sincronizados y anonimiza la cuenta. Las tablas inmutables no se tocan (D-18).
- * Con motivo `user` exige la contraseña; con `inactivity` (BE-FR-86) la llama la tarea diaria, sin contraseña.
+ * Con motivo `user` exige la contraseña, con el límite de intentos por cuenta de `accounts` (BE-FR-45; C-24); con `inactivity`
+ * (BE-FR-86) la llama la tarea diaria, sin contraseña.
  */
 export async function deleteAccount(
 	deps: PrivacyDeps,
 	input: DeleteAccountInput
 ): Promise<DeleteAccountOutcome> {
 	if (input.reason === 'user') {
-		const matches = await deps.accounts.passwordMatches(input.userId, input.password);
-		if (!matches) {
+		const check = await deps.accounts.checkCurrentPassword(input.userId, input.password);
+		if (check.status === 'locked') {
+			deps.logger.emit('privacy.account.deletion_rejected', { reason: 'locked' });
+			return { status: 'locked', retryAfterMinutes: check.retryAfterMinutes };
+		}
+		if (check.status === 'wrong') {
 			deps.logger.emit('privacy.account.deletion_rejected', { reason: 'wrong_password' });
 			return { status: 'wrong_password' };
 		}

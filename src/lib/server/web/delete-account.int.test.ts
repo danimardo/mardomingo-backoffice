@@ -179,6 +179,36 @@ describe('acción ?/borrarCuenta de W29 (T287)', () => {
 		expect(composition.credits.getBalance(made.id).totalMicro).toBeGreaterThan(0);
 	});
 
+	it('[C-24] superado el límite de intentos responde 429 LOGIN_TEMPORARILY_LOCKED con los minutos y no borra nada', async () => {
+		const made = makeAccount();
+		for (let index = 0; index < 9; index += 1) {
+			await submitDeleteAccount(
+				composition,
+				made.session,
+				formFor({ password: `mala-${String(index)}-xxxxxxxx` }),
+				new Headers()
+			);
+		}
+
+		const locked = await submitDeleteAccount(
+			composition,
+			made.session,
+			formFor({ password: 'mala-final-xxxxxxxx' }),
+			new Headers()
+		);
+		const correct = await submitDeleteAccount(composition, made.session, formFor(), new Headers());
+
+		for (const result of [locked, correct]) {
+			if (result.kind !== 'failure') throw new Error('debía fallar');
+			expect(result.failure.status).toBe(429);
+			expect(result.failure.data).toMatchObject({
+				formError: 'LOGIN_TEMPORARILY_LOCKED',
+				retryAfterMinutes: 15
+			});
+		}
+		expect(stillThere(made.id)).toBe(true);
+	});
+
 	it('con la casilla sin marcar responde 400 con el error en la casilla y no borra nada', async () => {
 		const made = makeAccount();
 

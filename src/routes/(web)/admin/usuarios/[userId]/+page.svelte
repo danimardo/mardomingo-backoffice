@@ -9,6 +9,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import Pagination from '$lib/components/ui/Pagination.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -34,7 +35,13 @@
 		tester: m.admin_users_submit_tester_on,
 		cerrarSesiones: m.admin_users_submit_close
 	};
-	const errorText = $derived(form?.formError ? m.admin_users_error() : '');
+	const errorText = $derived(
+		form?.formError === 'CANNOT_BLOCK_SELF'
+			? m.errors_cannot_block_self()
+			: form?.formError
+				? m.admin_users_error()
+				: ''
+	);
 </script>
 
 <svelte:head>
@@ -243,7 +250,14 @@
 			<p>{m.admin_users_block_intro()}</p>
 			<form method="POST" action="?/bloquear">
 				<input type="hidden" name="accion" value="bloquear" />
-				<TextField id="motivo-bloqueo" name="motivo" label={m.admin_users_reason()} required />
+				<TextField
+					id="motivo-bloqueo"
+					name="motivo"
+					label={m.admin_users_reason()}
+					required
+					maxlength={REASON_MAX_LENGTH}
+					{...reasonFieldOf(form, 'bloquear')}
+				/>
 				<Checkbox id="confirmado-bloqueo" name="confirmado" value="true"
 					>{m.admin_users_confirm()}</Checkbox
 				>
@@ -260,7 +274,14 @@
 			<h2 id="desbloquear">{m.admin_users_unblock_heading()}</h2>
 			<form method="POST" action="?/desbloquear">
 				<input type="hidden" name="accion" value="desbloquear" />
-				<TextField id="motivo-desbloqueo" name="motivo" label={m.admin_users_reason()} required />
+				<TextField
+					id="motivo-desbloqueo"
+					name="motivo"
+					label={m.admin_users_reason()}
+					required
+					maxlength={REASON_MAX_LENGTH}
+					{...reasonFieldOf(form, 'desbloquear')}
+				/>
 				<Checkbox id="confirmado-desbloqueo" name="confirmado" value="true"
 					>{m.admin_users_confirm()}</Checkbox
 				>
@@ -283,7 +304,14 @@
 				name="on"
 				value={data.account.role.split(',').includes('tester') ? 'false' : 'true'}
 			/>
-			<TextField id="motivo-tester" name="motivo" label={m.admin_users_reason()} />
+			<TextField
+				id="motivo-tester"
+				name="motivo"
+				label={m.admin_users_reason()}
+				required
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, 'tester')}
+			/>
 			<Checkbox id="confirmado-tester" name="confirmado" value="true"
 				>{m.admin_users_confirm()}</Checkbox
 			>
@@ -306,7 +334,14 @@
 		<h2 id="sesiones">{m.admin_users_sessions_heading()}</h2>
 		<form method="POST" action="?/cerrarSesiones">
 			<input type="hidden" name="accion" value="cerrarSesiones" />
-			<TextField id="motivo-sesiones" name="motivo" label={m.admin_users_reason()} required />
+			<TextField
+				id="motivo-sesiones"
+				name="motivo"
+				label={m.admin_users_reason()}
+				required
+				maxlength={REASON_MAX_LENGTH}
+				{...reasonFieldOf(form, 'cerrarSesiones')}
+			/>
 			<Checkbox id="confirmado-sesiones" name="confirmado" value="true"
 				>{m.admin_users_confirm()}</Checkbox
 			>

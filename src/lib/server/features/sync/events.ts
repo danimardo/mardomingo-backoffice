@@ -4,11 +4,16 @@ import type { LogEventMeta } from '$lib/server/logging/events';
 
 export interface SyncLogFields {
 	'sync.document.seeded': Record<string, never>;
-	'sync.document.rejected': { reason: 'revision_conflict' | 'validation' | 'too_large' };
+	'sync.document.read': { durationMs: number };
+	'sync.document.written': { durationMs: number };
+	'sync.document.rejected': {
+		reason: 'revision_conflict' | 'schema_invalid' | 'too_large' | 'if_match_invalid';
+		errorCode: 'SYNC_CONFLICT' | 'VALIDATION_ERROR' | 'PAYLOAD_TOO_LARGE';
+	};
 	'sync.document.corrupt': Record<string, never>;
-	'sync.defaults.updated': Record<string, never>;
-	'sync.defaults.copied': Record<string, never>;
-	'sync.tombstones.purged': { removed: number };
+	'sync.defaults.updated': { count: number };
+	'sync.defaults.copied': { count: number };
+	'sync.tombstones.purged': { count: number };
 }
 
 export const SYNC_LOG_EVENTS = Object.freeze({
@@ -16,6 +21,8 @@ export const SYNC_LOG_EVENTS = Object.freeze({
 		level: 'info',
 		msg: 'Documento de sincronización sembrado con los predeterminados'
 	},
+	'sync.document.read': { level: 'debug', msg: 'Documento de sincronización leído' },
+	'sync.document.written': { level: 'info', msg: 'Documento de sincronización escrito' },
 	'sync.document.rejected': { level: 'info', msg: 'Escritura de sincronización rechazada' },
 	'sync.document.corrupt': {
 		level: 'error',

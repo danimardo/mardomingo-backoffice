@@ -27,6 +27,15 @@
 <h1>{m.admin_apps_title()}</h1>
 <p>{m.admin_apps_intro()}</p>
 
+{#if data.saved !== null}
+	<p role="status">
+		{m.admin_notice_saved()}
+		<a href="{resolve('/admin/auditoria')}/{encodeURIComponent(data.saved)}"
+			>{m.admin_notice_audit_link()}</a
+		>
+	</p>
+{/if}
+
 {#if form?.formError}
 	<Banner level="critical">{m.admin_apps_error()}</Banner>
 {/if}

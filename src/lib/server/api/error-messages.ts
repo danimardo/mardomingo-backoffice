@@ -43,6 +43,7 @@ export const ERROR_MESSAGES: Readonly<Record<ErrorCode, () => string>> = Object.
 	TOKEN_INVALID: m.errors_token_invalid,
 	SLUG_TAKEN: m.errors_slug_taken,
 	ALREADY_BLOCKED: m.errors_already_blocked,
+	CANNOT_BLOCK_SELF: m.errors_cannot_block_self,
 	PACK_INACTIVE: m.errors_pack_inactive,
 	PURCHASE_NOT_AVAILABLE: m.errors_purchase_not_available,
 	LEGAL_VERSION_CHANGED: m.errors_legal_version_changed,

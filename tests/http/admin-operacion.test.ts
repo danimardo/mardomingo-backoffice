@@ -118,3 +118,54 @@ describe('operación de IA con sesión de administrador (W41, T311)', () => {
 		expect(result.status).toBe(404);
 	});
 });
+
+// C-52 (T443; FR-094, BE-FR-55): guardar los parámetros y aplicarlos al grupo exigen motivo aunque los valores sean válidos. Con
+// el motivo vacío responden 400 con el error en el campo y no auditan. Se envían los valores vigentes de la operación, así que,
+// si la regla fallase, el cambio no alteraría a otras pruebas de la misma base.
+describe('motivo obligatorio en W41 (C-52)', () => {
+	function currentSettings(): string {
+		const db = new Database(databasePath, { readonly: true });
+		try {
+			const row = db
+				.prepare<
+					[string],
+					{
+						timeout: number;
+						tokens: number | null;
+						temperature: number;
+						cost: number;
+					}
+				>(
+					`SELECT timeout_ms AS timeout, max_output_tokens AS tokens, temperature_milli AS temperature,
+					 max_cost_micro AS cost FROM app_operations WHERE key = ?`
+				)
+				.get(KEY);
+			if (row === undefined) throw new Error('falta la operación sembrada');
+			return new URLSearchParams({
+				tiempoMs: String(row.timeout),
+				tokensSalida: row.tokens === null ? '' : String(row.tokens),
+				temperaturaMilli: String(row.temperature),
+				costeMaximoMicro: String(row.cost)
+			}).toString();
+		} finally {
+			db.close();
+		}
+	}
+
+	it.each(['guardarOperacion', 'aplicarAlGrupo'])(
+		'%s con valores válidos y el motivo vacío responde 400 con el error en el campo y no audita',
+		async (action) => {
+			const antes = auditCount('apps.operation.settings');
+
+			const result = await postAdmin(
+				session,
+				`${PAGE}?/${action}`,
+				`${currentSettings()}&motivo=+++&confirmado=true`
+			);
+
+			expect(result.status).toBe(400);
+			expect(result.text).toContain('Este campo es obligatorio.');
+			expect(auditCount('apps.operation.settings')).toBe(antes);
+		}
+	);
+});

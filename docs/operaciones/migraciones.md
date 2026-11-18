@@ -1,0 +1,129 @@
+# Migraciones: orden de despliegue y vuelta atrás
+
+Las migraciones de `drizzle/` se aplican solas al arrancar la imagen (`src/hooks.server.ts`, `migrateDatabase`), después de
+copiar la base en `pre-migrate/<versión>.db` junto a `DATABASE_PATH` (se conservan las 3 últimas). Una migración ya aplicada no
+se vuelve a ejecutar, y una imagen anterior no deshace las posteriores: arranca con el esquema y los datos tal como estén. Por
+eso, antes de volver a una imagen anterior, hay que comprobar en este fichero si alguna migración posterior deja datos que esa
+imagen no sabe leer.
+
+Probar cada migración en staging antes de producción (constitución, «Datos y almacenamiento»).
+
+## Cómo ejecutar una consulta en el contenedor
+
+La imagen no trae el cliente `sqlite3`. Desde la terminal del contenedor en Coolify, con `better-sqlite3` de la propia
+aplicación (directorio `/app`):
+
+```sh
+node -e "const db = require('better-sqlite3')(process.env.DATABASE_PATH); console.log(db.prepare(process.argv[1]).all())" "SELECT 1"
+```
+
+Para una sentencia que modifica datos, `.run()` en lugar de `.all()`. Antes de modificar nada, hacer una copia de la base
+(`restauracion.md`).
+
+> **NO VERIFICADO.** El comando anterior no se ha ejecutado todavía en el contenedor.
+
+## 0017 · `prompts` de Secretario como categoría personal (T397, C-05; T399, C-07)
+
+- **Qué hace**: `0017_secretario_prompts_personal.sql` añade `personal: true` a `categories.prompts` del `sync_schema` de
+  `secretario`, solo si `prompts` sigue en `block` y no tiene la clave (un esquema cambiado por el administrador no se toca).
+- **Orden de despliegue**: después de la imagen del PR #47 (D14), que es la primera que acepta la clave `personal`. El PR #47
+  ya está fusionado; T397 va en un despliegue **posterior**, nunca en el mismo.
+- **Volver a una imagen anterior al PR #47**: esa imagen valida `sync_schema` con un esquema estricto sin `personal` y trata la
+  fila como corrupta: fallarían la lectura de la app en el panel y las peticiones con `X-App-Id: secretario` (confirmado por
+  lectura del código; el alcance exacto no se ha probado). Antes de desplegar la
+  imagen anterior, con la imagen actual todavía en marcha:
+
+  1. Listar las categorías marcadas como personales (en cualquier app, porque el administrador también puede marcarlas):
+
+     ```sql
+     SELECT a.slug, c.key AS category
+     FROM apps a, json_each(a.sync_schema, '$.categories') c
+     WHERE json_extract(c.value, '$.personal') IS NOT NULL;
+     ```
+
+  2. Quitar la clave de `prompts` de `secretario` (la que pone la migración 0017):
+
+     ```sql
+     UPDATE apps
+     SET sync_schema = json_remove(sync_schema, '$.categories.prompts.personal'),
+         updated_at = CAST(strftime('%s', 'now') AS INTEGER) * 1000
+     WHERE slug = 'secretario'
+       AND json_extract(sync_schema, '$.categories.prompts.personal') IS NOT NULL;
+     ```
+
+     Si el paso 1 lista otras filas, repetir la sentencia con su `slug` y su categoría en la ruta
+     (`'$.categories.<categoría>.personal'`, también en el `WHERE`).
+
+  3. Repetir el paso 1: no debe devolver ninguna fila. Desplegar la imagen anterior y comprobar `GET /api/v1/health` y una
+     petición con `X-App-Id: secretario`.
+
+- **Al volver a la imagen actual**: la migración 0017 consta como aplicada y no se repite. Ejecutar a mano su sentencia
+  (`drizzle/0017_secretario_prompts_personal.sql`) para recuperar el aviso de W43, y marcar de nuevo en el panel las demás
+  categorías que se hayan desmarcado en el paso 2.
+
+> **NO VERIFICADO.** La vuelta atrás no se ha ensayado en staging (C-07, verificación manual opcional).
+
+## 0018 · Importe y total en `refund_keys` (T405, C-13)
+
+- **Qué hace**: `0018_refund_keys_importes.sql` recrea `refund_keys` con dos columnas nuevas, `amount_eur_cents` y
+  `refunded_after_eur_cents`, nulas en las claves que ya existían, y con sus `CHECK` (las dos a la vez, no negativas y el total
+  no menor que el importe). El reenvío de una clave antigua no reintenta su rectificativa (`pagos.md`).
+- **Volver a una imagen anterior**: compatible sin cambios. La imagen anterior no lee ni escribe las columnas nuevas, y las
+  claves que inserte quedan con ambas nulas, que los `CHECK` admiten.
+
+## 0019 · `sync_documents` rechaza las cuentas borradas (T435, C-43)
+
+- **Qué hace**: `0019_sync_documents_cuenta_borrada.sql` crea dos _triggers_, `sync_documents_deleted_user_no_insert` y
+  `sync_documents_deleted_user_no_update`, que abortan (`sync_documents_user_deleted`) un `INSERT` o `UPDATE` de
+  `sync_documents` si la cuenta de `user_id` tiene `deleted_at` no nulo (borrada y anonimizada). No toca datos: el borrado
+  de la cuenta ya eliminaba sus documentos, y el `DELETE` sigue permitido.
+- **Antes de desplegar** (opcional, solo lectura): comprobar que no quedan documentos de cuentas borradas, que la carrera de
+  C-43 podría haber dejado. Debe devolver 0; si no, borrarlos es lo que habría hecho el borrado de la cuenta (BE-FR-07 CA1):
+
+  ```sql
+  SELECT count(*) FROM sync_documents d JOIN user u ON u.id = d.user_id WHERE u.deleted_at IS NOT NULL;
+  -- Solo si la consulta anterior no da 0, y tras copiar la base (restauracion.md):
+  DELETE FROM sync_documents WHERE user_id IN (SELECT id FROM user WHERE deleted_at IS NOT NULL);
+  ```
+
+  Un documento así que quede no rompe la migración, pero los _triggers_ impiden actualizarlo (la limpieza de marcas de
+  borrado los omite).
+
+- **Volver a una imagen anterior**: compatible sin cambios. Los _triggers_ se quedan (una migración aplicada no se deshace)
+  y la imagen anterior, al chocar con ellos en la carrera de C-43, responde `500` en lugar de `401`, sin guardar nada. Si
+  hiciera falta quitarlos: `DROP TRIGGER sync_documents_deleted_user_no_insert; DROP TRIGGER
+sync_documents_deleted_user_no_update;` (al volver a la imagen actual no se recrean solos: ejecutar a mano las dos
+  sentencias de `drizzle/0019_sync_documents_cuenta_borrada.sql`).
+
+> **NO VERIFICADO.** La consulta previa y la vuelta atrás no se han ejecutado en staging.
+
+## 0020 · Retirada de `settings.fx_usd_eur` (T447, C-56)
+
+- **Qué hace**: `0020_settings_sin_fx_usd_eur.sql` borra la fila `fx_usd_eur` de `settings`. Desde C-49 (T440) nadie la
+  leía: el tipo USD→EUR sale de `fx_rates` y, sin filas, de `DEFAULT_FX_USD_EUR_PPM` (920.000). No toca el esquema y no
+  falla si la fila no existe.
+- **Por qué no puede quedarse**: la imagen nueva ya no conoce la clave, y `readSettings` trata una clave desconocida como
+  dato corrupto, con lo que fallarían todas las lecturas de parámetros globales. La migración se aplica al arrancar, antes
+  del _seed_ y de atender peticiones, así que con el orden normal no hay ventana. Además, el _seed_ de la imagen nueva borra
+  la clave en cada arranque (`RETIRED_SETTING_KEYS`), para el caso de la vuelta atrás.
+- **Antes de desplegar** (opcional, solo lectura): ver el valor que se va a borrar, por si hace falta reponerlo:
+
+  ```sql
+  SELECT key, value, updated_at FROM settings WHERE key = 'fx_usd_eur';
+  ```
+
+  Si el valor no es el sembrado (`920000`), anotarlo: no lo lee nadie, pero es el que habría que reponer al volver atrás.
+
+- **Volver a una imagen anterior**: compatible sin cambios. La imagen anterior siembra de nuevo `fx_usd_eur` al arrancar
+  (`INSERT … ON CONFLICT DO NOTHING`) con su valor por defecto, y no la lee para cobrar ni para el freno. Si se quiere el
+  valor anotado antes de desplegar, con la imagen anterior ya en marcha:
+
+  ```sql
+  UPDATE settings SET value = '<valor anotado>' WHERE key = 'fx_usd_eur';
+  ```
+
+- **Al volver a la imagen actual**: la migración 0020 consta como aplicada y no se repite, pero el _seed_ borra la fila
+  resembrada al arrancar, antes de que nadie lea los parámetros. No hay que hacer nada a mano.
+
+> **NO VERIFICADO.** La consulta previa y la vuelta atrás no se han ejecutado en staging; el borrado por el _seed_ tras
+> volver adelante está cubierto por `apps/seed.int.test.ts`.

@@ -10,6 +10,7 @@ import { lowBalanceEmail } from './emails/low-balance';
 import { freeExpiryWarningEmail } from './emails/free-expiry-warning';
 import { invoiceAvailableEmail } from './emails/invoice-available';
 import { emailChangeVerifyEmail } from './emails/email-change-verify';
+import { emailChangeRequestedNoticeEmail } from './emails/email-change-requested-notice';
 import { emailChangedNoticeEmail } from './emails/email-changed-notice';
 import { passwordResetEmail } from './emails/password-reset';
 import { verificationEmail } from './emails/verification';
@@ -58,6 +59,9 @@ function contentOf(deps: NotificationsDeps, email: AccountEmail) {
 	}
 	if (email.reason === 'email_change_verify') {
 		return emailChangeVerifyEmail({ link: email.link ?? '', supportEmail });
+	}
+	if (email.reason === 'email_change_requested_notice') {
+		return emailChangeRequestedNoticeEmail({ supportEmail });
 	}
 	if (email.reason === 'email_changed_notice') return emailChangedNoticeEmail({ supportEmail });
 	if (email.reason === 'legal_update') return legalUpdateEmail({ supportEmail });

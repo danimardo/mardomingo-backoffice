@@ -9,9 +9,10 @@ import { publishVersion, type PublishInput } from '$lib/server/features/legal';
 export async function publishAndNotify(
 	composition: Composition,
 	input: PublishInput
-): Promise<{ id: string; notified: number }> {
+): Promise<{ id: string; auditId: string; notified: number }> {
 	const published = publishVersion(composition.legalPublish, input);
-	if (input.requiresReacceptance) return { id: published.id, notified: 0 };
+	if (input.requiresReacceptance)
+		return { id: published.id, auditId: published.auditId, notified: 0 };
 	let notified = 0;
 	for (const to of verifiedUserEmails(composition.adminUsers)) {
 		const sent = await sendAccountEmail(composition.notifications, {
@@ -21,5 +22,6 @@ export async function publishAndNotify(
 		});
 		if (sent) notified += 1;
 	}
-	return { id: published.id, notified };
+	// `auditId` es la entrada de la publicación, que W48 enlaza al guardar (UX-13; C-54).
+	return { id: published.id, auditId: published.auditId, notified };
 }

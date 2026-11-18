@@ -34,6 +34,16 @@ const SATURDAY = Date.UTC(2026, 9, 10, 8, 0, 0);
 const WEDNESDAY = Date.UTC(2026, 9, 14, 8, 0, 0);
 const BUFFER = 30_000;
 
+/** Quitar el tipo manual devuelve el id de su entrada de auditoría (C-51); se comprueba y se compara el resto. */
+function withoutEntryId(
+	outcome: { readonly ok: true; readonly entryId: string } | { readonly ok: false }
+): {
+	readonly ok: boolean;
+} {
+	if (outcome.ok) expect(outcome.entryId).toMatch(/^aud_/);
+	return { ok: outcome.ok };
+}
+
 let fixture: CreditsFixture;
 let sender: FakeEmailSender;
 let fake: FakeFxSource;
@@ -244,7 +254,9 @@ describe('valor manual auditado (BE-FR-87 CA3)', () => {
 
 		// Desactivar ocurre después: con el reloj falso en el mismo milisegundo, las dos filas empatarían en `effective_from`.
 		fixture.clock.advance(1_000);
-		expect(clearManualFx(deps, { adminId, reason: 'Vuelta al BCE' })).toEqual({ ok: true });
+		expect(withoutEntryId(clearManualFx(deps, { adminId, reason: 'Vuelta al BCE' }))).toEqual({
+			ok: true
+		});
 		expect(getCurrentFxRate(deps).source).toBe('ecb');
 		expect(
 			fixture.db
@@ -271,7 +283,9 @@ describe('el refresco automático respeta el valor manual (BE-FR-87 CA3)', () =>
 		expect(getCurrentFxRate(deps)).toMatchObject({ usdEurPpm: toPpm(950_000), source: 'manual' });
 
 		fixture.clock.advance(1_000);
-		expect(clearManualFx(deps, { adminId, reason: 'Vuelta al BCE' })).toEqual({ ok: true });
+		expect(withoutEntryId(clearManualFx(deps, { adminId, reason: 'Vuelta al BCE' }))).toEqual({
+			ok: true
+		});
 		const expected = fxUsdEurPpm({ bceRatePpm: toPpm(1_100_000), bufferPpm: toPpm(BUFFER) });
 		expect(getCurrentFxRate(deps)).toMatchObject({ usdEurPpm: expected, source: 'ecb' });
 	});

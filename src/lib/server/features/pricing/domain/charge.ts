@@ -15,7 +15,7 @@ export interface ChargeInput {
 	readonly costMicroUsd: number;
 	/** Comisión indirecta del proveedor que respondió (`provider_fee_pct_*`), en ppm. */
 	readonly providerFeePpm: number;
-	/** Tipo USD→EUR en ppm (`fx_usd_eur`). */
+	/** Tipo USD→EUR en ppm (el vigente de `fx_rates` o `DEFAULT_FX_USD_EUR_PPM`; BE-FR-87). */
 	readonly fxUsdEurPpm: number;
 	/** Margen de la operación, o el global si no tiene, en ppm (2.000.000 = ×2,0). */
 	readonly marginPpm: number;

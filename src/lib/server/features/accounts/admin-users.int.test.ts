@@ -119,6 +119,14 @@ describe('bloqueo y desbloqueo (BE-FR-50)', () => {
 		expect(f.db.select().from(user).where(eq(user.id, targetId)).get()?.banReason).toBe('primero');
 	});
 
+	it('[C-22] un administrador no puede bloquear su propia cuenta (CANNOT_BLOCK_SELF) y no se escribe nada', () => {
+		expect(() => blockUser(deps, { adminId, userId: adminId, reason: 'por error' })).toThrow(
+			expect.objectContaining({ code: 'CANNOT_BLOCK_SELF' })
+		);
+		expect(f.db.select().from(user).where(eq(user.id, adminId)).get()?.banned).toBe(false);
+		expect(auditRows()).toHaveLength(0);
+	});
+
 	it('sin motivo no bloquea (VALIDATION_ERROR) y tampoco con solo espacios', () => {
 		expect(() => blockUser(deps, { adminId, userId: targetId, reason: '   ' })).toThrow(
 			expect.objectContaining({ code: 'VALIDATION_ERROR' })
@@ -154,6 +162,16 @@ describe('bloqueo y desbloqueo (BE-FR-50)', () => {
 });
 
 describe('rol tester (BE-FR-18)', () => {
+	it('un motivo de más de 500 caracteres tras recortar no cambia el rol ni audita (C-55)', () => {
+		const roleBefore = f.db.select().from(user).where(eq(user.id, targetId)).get()?.role;
+
+		expect(() =>
+			setTester(deps, { adminId, userId: targetId, on: true, reason: 'x'.repeat(501) })
+		).toThrow(expect.objectContaining({ code: 'VALIDATION_ERROR', details: { field: 'reason' } }));
+		expect(f.db.select().from(user).where(eq(user.id, targetId)).get()?.role).toBe(roleBefore);
+		expect(auditRows()).toEqual([]);
+	});
+
 	it('marca y desmarca tester con auditoría anterior → nuevo, sin tocar otros roles', () => {
 		f.db.update(user).set({ role: 'user,editor' }).where(eq(user.id, targetId)).run();
 
@@ -190,7 +208,8 @@ describe('cierre de sesiones (BE-FR-50)', () => {
 			reason: 'dispositivo perdido'
 		});
 
-		expect(closed).toBe(1);
+		// C-51 (T442; UX-13): devuelve también el id de su entrada de auditoría para que la ficha la enlace.
+		expect(closed).toEqual({ closed: 1, entryId: auditRows()[0]?.id });
 		expect(sessionsOf(targetId)).toBe(1);
 		expect(auditRows()[0]).toMatchObject({
 			action: 'accounts.session.close',
@@ -210,14 +229,14 @@ describe('cierre de sesiones (BE-FR-50)', () => {
 			})
 			.run();
 
-		const closed = closeUserSessions(deps, {
-			adminId,
-			userId: targetId,
-			sessionId: 'ses_ajena',
-			reason: 'prueba'
-		});
-
-		expect(closed).toBe(0);
+		expect(() =>
+			closeUserSessions(deps, {
+				adminId,
+				userId: targetId,
+				sessionId: 'ses_ajena',
+				reason: 'prueba'
+			})
+		).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
 		expect(sessionsOf(otherId)).toBe(1);
 	});
 
@@ -235,7 +254,7 @@ describe('cierre de sesiones (BE-FR-50)', () => {
 
 		expect(
 			closeUserSessions(deps, { adminId, userId: targetId, sessionId: null, reason: 'seguridad' })
-		).toBe(2);
+		).toMatchObject({ closed: 2 });
 		expect(sessionsOf(otherId)).toBe(1);
 	});
 });

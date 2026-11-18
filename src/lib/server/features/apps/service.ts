@@ -8,11 +8,16 @@ import { immediateTransaction } from '$lib/server/db/tx';
 import { recordEntry } from '$lib/server/features/audit';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { toMicro, toMicroUsd, toPpm } from '$lib/shared/money';
 import { cachedSettings, invalidateSettings, storeSettings } from './config.cache';
 import { appOperations, apps } from './schema';
-import { CHAT_RETRY_WAITS_MS, operationTotalMs } from './domain/operation-timing';
+import {
+	CHAT_RETRY_WAITS_MS,
+	minHoldTtlSeconds,
+	operationTotalMs
+} from './domain/operation-timing';
 import { isVisible } from './domain/announcements';
 import { isValidSlug } from './domain/slug';
 import {
@@ -66,7 +71,8 @@ import {
 	readSettings,
 	readSettingValue,
 	updateOverrides,
-	upsertSetting
+	upsertSetting,
+	type OperationRow
 } from './repository';
 import type { OperationKind } from './defaults';
 
@@ -293,10 +299,6 @@ export function getEffectiveConfig(
 	};
 }
 
-function requireReason(reason: string): void {
-	if (reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
-}
-
 /** Un error de restricción de SQLite (`CHECK`, `UNIQUE`, `FOREIGN KEY`) es una entrada no válida, no un fallo. */
 function isConstraintError(error: unknown): boolean {
 	return (
@@ -319,9 +321,12 @@ export interface UpdateSettingInput {
 	readonly reason: string;
 }
 
-/** Cambia un parámetro global (BE-FR-61 CA1, CA4): valida tipo y rango, y audita valor anterior y nuevo. */
-export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
-	requireReason(input.reason);
+/**
+ * Cambia un parámetro global (BE-FR-61 CA1, CA4): valida tipo y rango, y audita valor anterior y nuevo. Devuelve el id de la
+ * entrada de auditoría, para que W38 la enlace (UX-13; C-51).
+ */
+export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): string {
+	const reason = requireReason(input.reason);
 	if (!isSettingKey(input.key)) throw new AppError('VALIDATION_ERROR', { field: 'key' });
 	const key = input.key;
 	const parsed = parseAdminSettingValue(key, input.value);
@@ -332,8 +337,16 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 	const value = parsed.data;
 	const now = deps.clock.now();
 
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const before = readSettingValue(deps.db, deps.logger, key);
+		if (key === 'hold_ttl_seconds' && typeof value === 'number') {
+			// C-14: una reserva que caduca antes del cobro deja de contar en el saldo disponible y en el freno global.
+			const minSeconds = minHoldTtlSecondsOf(deps);
+			if (value < minSeconds) {
+				deps.logger.emit('apps.settings.rejected', { key, scope: 'global', reason: 'hold_ttl' });
+				throw new AppError('VALIDATION_ERROR', { field: 'value', minSeconds });
+			}
+		}
 		if (isCeilingKey(key) && typeof value === 'number') {
 			// Un global no puede quedar por debajo de una sobrescritura ya concedida a una app (3.2). No se recorta nada en
 			// silencio: se rechaza y se listan las apps y valores que lo impiden (D07 = R02).
@@ -357,7 +370,7 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 			}
 		}
 		upsertSetting(tx, key, value, now);
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -366,13 +379,14 @@ export function updateSetting(deps: AppsDeps, input: UpdateSettingInput): void {
 				entityId: key,
 				before: snapshotOf(key, before),
 				after: snapshotOf(key, value),
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 	});
 	invalidateSettings(deps.db);
 	deps.logger.emit('apps.settings.updated', { key, scope: 'global' });
+	return entryId;
 }
 
 export interface UpdateAppOverridesInput {
@@ -383,8 +397,8 @@ export interface UpdateAppOverridesInput {
 }
 
 /** Cambia las sobrescrituras de una app (BE-FR-61 CA3): cada valor ≤ su global, y auditoría con la misma transacción. */
-export function updateAppOverrides(deps: AppsDeps, input: UpdateAppOverridesInput): void {
-	requireReason(input.reason);
+export function updateAppOverrides(deps: AppsDeps, input: UpdateAppOverridesInput): string {
+	const reason = requireReason(input.reason);
 	const parsed = SettingsOverrides.safeParse(input.overrides);
 	if (!parsed.success) {
 		deps.logger.emit('apps.settings.rejected', {
@@ -397,7 +411,7 @@ export function updateAppOverrides(deps: AppsDeps, input: UpdateAppOverridesInpu
 	const overrides = parsed.data;
 	const now = deps.clock.now();
 
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const app = readApp(deps.db, deps.logger, input.appId);
 		if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
 		const globals = globalNumbers(loadSettings(deps));
@@ -410,7 +424,7 @@ export function updateAppOverrides(deps: AppsDeps, input: UpdateAppOverridesInpu
 			throw new AppError('VALIDATION_ERROR', { field: 'settings_overrides' });
 		}
 		updateOverrides(tx, app.id, overrides, now);
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -419,12 +433,13 @@ export function updateAppOverrides(deps: AppsDeps, input: UpdateAppOverridesInpu
 				entityId: app.id,
 				before: { settings_overrides: app.settingsOverrides },
 				after: { settings_overrides: overrides },
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 	});
 	deps.logger.emit('apps.settings.updated', { key: 'settings_overrides', scope: 'app' });
+	return entryId;
 }
 
 export interface SetAppMaintenanceInput {
@@ -437,8 +452,8 @@ export interface SetAppMaintenanceInput {
 
 /** Mantenimiento de una app (BE-FR-47, BE-FR-52): la API responde 503 MAINTENANCE desde la siguiente petición. Audita en la misma
  * transacción; un mantenimiento activo exige un mensaje. */
-export function setAppMaintenance(deps: AppsDeps, input: SetAppMaintenanceInput): void {
-	requireReason(input.reason);
+export function setAppMaintenance(deps: AppsDeps, input: SetAppMaintenanceInput): string {
+	const reason = requireReason(input.reason);
 	const message = input.message.trim();
 	if (message.length > 500 || (input.active && message === '')) {
 		deps.logger.emit('apps.settings.rejected', {
@@ -449,14 +464,14 @@ export function setAppMaintenance(deps: AppsDeps, input: SetAppMaintenanceInput)
 		throw new AppError('VALIDATION_ERROR', { field: 'maintenance' });
 	}
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const app = readApp(deps.db, deps.logger, input.appId);
 		if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
 		tx.update(apps)
 			.set({ maintenanceActive: input.active, maintenanceMessage: message, updatedAt: now })
 			.where(eq(apps.id, app.id))
 			.run();
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -465,12 +480,13 @@ export function setAppMaintenance(deps: AppsDeps, input: SetAppMaintenanceInput)
 				entityId: app.id,
 				before: { maintenance: { active: app.maintenanceActive, message: app.maintenanceMessage } },
 				after: { maintenance: { active: input.active, message } },
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 	});
 	deps.logger.emit('apps.settings.updated', { key: 'maintenance', scope: 'app' });
+	return entryId;
 }
 
 export interface UpdateAppDetailsInput {
@@ -493,8 +509,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * solo si está configurado;: nombre, descripción, soporte, texto tras la verificación, enlaces, orígenes CORS
  * y esquema de sincronización. Cada valor se valida con su esquema antes de tocar la fila; el cambio se audita en la misma transacción.
  */
-export function updateAppDetails(deps: AppsDeps, input: UpdateAppDetailsInput): void {
-	requireReason(input.reason);
+export function updateAppDetails(deps: AppsDeps, input: UpdateAppDetailsInput): string {
+	const reason = requireReason(input.reason);
 	const name = input.name.trim();
 	const description = input.description.trim();
 	const support = input.supportEmail === null ? null : input.supportEmail.trim();
@@ -515,7 +531,7 @@ export function updateAppDetails(deps: AppsDeps, input: UpdateAppDetailsInput): 
 	const now = deps.clock.now();
 	const nextSupport = support === null || support === '' ? null : support;
 
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const app = readApp(deps.db, deps.logger, input.appId);
 		if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
 		tx.update(apps)
@@ -531,7 +547,7 @@ export function updateAppDetails(deps: AppsDeps, input: UpdateAppDetailsInput): 
 			})
 			.where(eq(apps.id, app.id))
 			.run();
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -544,12 +560,13 @@ export function updateAppDetails(deps: AppsDeps, input: UpdateAppDetailsInput): 
 					allowed_origins: app.allowedOrigins
 				},
 				after: { name, support_configured: nextSupport !== null, allowed_origins: origins.data },
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 	});
 	deps.logger.emit('apps.settings.updated', { key: 'app_details', scope: 'app' });
+	return entryId;
 }
 
 export interface UpdateAppVersionsInput {
@@ -564,8 +581,8 @@ export interface UpdateAppVersionsInput {
 /** Versión mínima, recomendada y si se exige (W40, `guardarVersiones`); mismo formato que la cabecera `X-App-Version` (contrato API). */
 const VERSION_PATTERN = /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
 
-export function updateAppVersions(deps: AppsDeps, input: UpdateAppVersionsInput): void {
-	requireReason(input.reason);
+export function updateAppVersions(deps: AppsDeps, input: UpdateAppVersionsInput): string {
+	const reason = requireReason(input.reason);
 	const min =
 		input.minAppVersion === null || input.minAppVersion.trim() === ''
 			? null
@@ -580,7 +597,7 @@ export function updateAppVersions(deps: AppsDeps, input: UpdateAppVersionsInput)
 		(input.enforceVersion && min === null);
 	if (invalid) throw new AppError('VALIDATION_ERROR', { field: 'version' });
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const app = readApp(deps.db, deps.logger, input.appId);
 		if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
 		tx.update(apps)
@@ -592,7 +609,7 @@ export function updateAppVersions(deps: AppsDeps, input: UpdateAppVersionsInput)
 			})
 			.where(eq(apps.id, app.id))
 			.run();
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -609,12 +626,13 @@ export function updateAppVersions(deps: AppsDeps, input: UpdateAppVersionsInput)
 					recommended_app_version: recommended,
 					enforce_version: input.enforceVersion
 				},
-				reason: input.reason
+				reason
 			},
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 	});
 	deps.logger.emit('apps.settings.updated', { key: 'app_versions', scope: 'app' });
+	return entryId;
 }
 
 export interface NewApp {
@@ -633,8 +651,15 @@ export interface NewApp {
 	readonly postVerifyText?: string | null;
 }
 
-/** Alta de una app sin redesplegar (BE-FR-62). Valida las columnas JSON y la coherencia de versiones. */
-export function createApp(deps: AppsDeps, actorId: string, input: NewApp): string {
+/**
+ * Alta de una app sin redesplegar (BE-FR-62). Valida las columnas JSON y la coherencia de versiones. Devuelve el id de la app y el
+ * de su entrada de auditoría, que la página enlaza al guardar (UX-13; C-54).
+ */
+export function createApp(
+	deps: AppsDeps,
+	actorId: string,
+	input: NewApp
+): { readonly id: string; readonly entryId: string } {
 	if (!isValidSlug(input.slug)) throw new AppError('VALIDATION_ERROR', { field: 'slug' });
 	const clientTypes = ClientTypes.safeParse(input.clientTypes);
 	const links = AppLinks.safeParse(input.links);
@@ -655,7 +680,7 @@ export function createApp(deps: AppsDeps, actorId: string, input: NewApp): strin
 
 	const id = deps.ids('app');
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		try {
 			insertApp(tx, {
 				id,
@@ -682,7 +707,7 @@ export function createApp(deps: AppsDeps, actorId: string, input: NewApp): strin
 			if (isConstraintError(error)) throw new AppError('VALIDATION_ERROR', { field: 'app' });
 			throw error;
 		}
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: actorId,
@@ -696,7 +721,7 @@ export function createApp(deps: AppsDeps, actorId: string, input: NewApp): strin
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 	});
-	return id;
+	return { id, entryId };
 }
 
 export interface NewOperation {
@@ -720,13 +745,14 @@ export interface NewOperation {
 	readonly active?: boolean;
 }
 
-/** Alta de una operación del catálogo (BE-FR-77): sus reglas de coherencia se comprueban antes de guardar. */
+/** Alta de una operación del catálogo (BE-FR-77): sus reglas de coherencia se comprueban antes de guardar. Devuelve también el id de
+ * su entrada de auditoría (UX-13; C-54). */
 export function createOperation(
 	deps: AppsDeps,
 	actorId: string,
 	appId: string,
 	input: NewOperation
-): string {
+): { readonly id: string; readonly entryId: string } {
 	const app = readApp(deps.db, deps.logger, appId);
 	if (app === undefined) throw new AppError('UNKNOWN_APP', { field: 'app' });
 	const fallbackModels = FallbackModels.safeParse(input.fallbackModels ?? []);
@@ -771,7 +797,7 @@ export function createOperation(
 
 	const id = deps.ids('aop');
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		try {
 			insertOperation(tx, {
 				id,
@@ -801,7 +827,7 @@ export function createOperation(
 			if (isConstraintError(error)) throw new AppError('VALIDATION_ERROR', { field: 'operation' });
 			throw error;
 		}
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: actorId,
@@ -815,7 +841,7 @@ export function createOperation(
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 	});
-	return id;
+	return { id, entryId };
 }
 
 export interface NewTemplateVersionInput {
@@ -824,8 +850,12 @@ export interface NewTemplateVersionInput {
 	readonly body: unknown;
 }
 
-/** Publica una versión nueva de la plantilla de una operación `plantilla` (BE-FR-78, 79). Nunca edita la anterior. */
-export function createTemplateVersion(deps: AppsDeps, input: NewTemplateVersionInput): number {
+/** Publica una versión nueva de la plantilla de una operación `plantilla` (BE-FR-78, 79). Nunca edita la anterior. Devuelve el número
+ * de versión y el id de su entrada de auditoría (UX-13; C-54). */
+export function createTemplateVersion(
+	deps: AppsDeps,
+	input: NewTemplateVersionInput
+): { readonly version: number; readonly entryId: string } {
 	const operation = readOperationById(deps.db, deps.logger, input.operationId);
 	if (operation === undefined || operation.mode !== 'plantilla') {
 		throw new AppError('VALIDATION_ERROR', { field: 'operation' });
@@ -849,7 +879,7 @@ export function createTemplateVersion(deps: AppsDeps, input: NewTemplateVersionI
 			createdBy: input.actorId,
 			createdAt: now
 		});
-		recordEntry(
+		const entryId = recordEntry(
 			tx,
 			{
 				adminId: input.actorId,
@@ -863,7 +893,7 @@ export function createTemplateVersion(deps: AppsDeps, input: NewTemplateVersionI
 			{ clock: deps.clock, ids: deps.ids, logger: deps.logger }
 		);
 		deps.logger.emit('apps.template.versioned', { version });
-		return version;
+		return { version, entryId };
 	});
 }
 
@@ -956,33 +986,42 @@ export function announcementsFor(
 		}));
 }
 
-/** Tiempo máximo total de cada operación activa, con la política de intentos de `ai` (T193). */
+/** Tiempo máximo total de una operación, con la política de intentos de `ai` (T193). */
+function operationTotalMsOf(operation: OperationRow): number {
+	const transcription = operation.transcriptionConfig;
+	return operation.kind === 'transcription' && transcription !== null
+		? operationTotalMs({
+				primaryTimeoutMs: transcription.primary.timeout_ms,
+				retryWaitsMs: transcription.primary.enabled ? transcription.primary.retry_delays_ms : [],
+				fallbackTimeoutsMs: transcription.backup === null ? [] : [transcription.backup.timeout_ms]
+			})
+		: operationTotalMs({
+				primaryTimeoutMs: operation.timeoutMs,
+				retryWaitsMs: CHAT_RETRY_WAITS_MS,
+				fallbackTimeoutsMs: operation.fallbackModels.map(() => operation.timeoutMs)
+			});
+}
+
+/** Tiempo máximo total de cada operación activa (T193). */
 function operationTimeouts(
 	deps: AppsDeps,
 	appId: string
 ): Record<string, { readonly timeoutMs: number }> {
 	const entries = listOperations(deps.db, deps.logger, appId)
 		.filter((operation) => operation.active)
-		.map((operation) => {
-			const transcription = operation.transcriptionConfig;
-			const timeoutMs =
-				operation.kind === 'transcription' && transcription !== null
-					? operationTotalMs({
-							primaryTimeoutMs: transcription.primary.timeout_ms,
-							retryWaitsMs: transcription.primary.enabled
-								? transcription.primary.retry_delays_ms
-								: [],
-							fallbackTimeoutsMs:
-								transcription.backup === null ? [] : [transcription.backup.timeout_ms]
-						})
-					: operationTotalMs({
-							primaryTimeoutMs: operation.timeoutMs,
-							retryWaitsMs: CHAT_RETRY_WAITS_MS,
-							fallbackTimeoutsMs: operation.fallbackModels.map(() => operation.timeoutMs)
-						});
-			return [operation.key, { timeoutMs }] as const;
-		});
+		.map((operation) => [operation.key, { timeoutMs: operationTotalMsOf(operation) }] as const);
 	return Object.fromEntries(entries);
+}
+
+/**
+ * Mínimo de `hold_ttl_seconds` (C-14): la operación más larga de todas las apps más el margen. Cuentan también las inactivas,
+ * porque activarlas no vuelve a validar este parámetro.
+ */
+export function minHoldTtlSecondsOf(deps: Pick<AppsDeps, 'db' | 'logger'>): number {
+	const totals = listApps(deps.db, deps.logger).flatMap((app) =>
+		listOperations(deps.db, deps.logger, app.id).map(operationTotalMsOf)
+	);
+	return minHoldTtlSeconds(totals);
 }
 
 export interface AppStatusDto {

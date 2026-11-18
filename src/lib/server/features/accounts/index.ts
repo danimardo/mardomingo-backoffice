@@ -14,6 +14,7 @@ import type { Credits } from '$lib/server/features/credits';
 import { hashNormalizedEmail } from './email-hash';
 import { normalizeEmail } from './domain/email';
 import type { LegalDeps } from '$lib/server/features/legal';
+import { createEmailDispatcher } from './email-dispatch';
 import { sendAccountEmail, type NotificationsDeps } from '$lib/server/features/notifications';
 import { createAuth, type Auth } from './auth';
 import {
@@ -43,12 +44,13 @@ import { changePassword } from './password-change';
 import {
 	anonymizeUser,
 	clearSessionCookie,
+	checkCurrentPassword,
 	exportProfile,
-	passwordMatches,
 	revokeAllSessions,
+	type PasswordCheck,
 	type ProfileExport
 } from './erasure';
-export type { ProfileExport } from './erasure';
+export type { PasswordCheck, ProfileExport } from './erasure';
 import {
 	confirmEmailChange,
 	requestEmailChange,
@@ -110,8 +112,11 @@ export interface AccountsConfig {
 export type TokenKind = 'verification' | 'reset';
 
 export interface Accounts {
-	/** ¿Es la contraseña la de la cuenta? Para confirmar acciones destructivas (BE-FR-07). */
-	passwordMatches(userId: string, password: string): Promise<boolean>;
+	/**
+	 * Comprueba la contraseña actual para confirmar acciones destructivas (BE-FR-07), con el contador de sesión de la cuenta
+	 * (BE-FR-45, BE-FR-67; C-24), aparte del login: `locked` con los minutos que faltan si se ha superado.
+	 */
+	checkCurrentPassword(userId: string, password: string): Promise<PasswordCheck>;
 	/** Borrado de la cuenta: cierra todas las sesiones de todas las apps. Solo `privacy`. */
 	revokeAllSessions(userId: string): number;
 	/** Borrado de la cuenta: anonimiza `user` y borra credenciales, tokens y actividad. Solo `privacy`. */
@@ -132,19 +137,33 @@ export interface Accounts {
 	clearInactivityWarning(userId: string): void;
 	/** Perfil y dispositivos para la exportación RGPD (BE-FR-08). */
 	exportProfile(userId: string): ProfileExport | null;
-	/** Pide el cambio de email: contraseña actual, enlace de 24 h a la dirección nueva (W27, T266). */
+	/**
+	 * Pide el cambio de email: contraseña actual, enlace de 24 h a la dirección nueva (W27, T266). Superado el límite de intentos
+	 * de sesión de la cuenta lanza `AppError('LOGIN_TEMPORARILY_LOCKED')` con `retryAfterMinutes` (C-24).
+	 */
 	requestEmailChange(input: {
 		readonly userId: string;
 		readonly currentPassword: string;
 		readonly newEmail: string;
 		readonly remoteIp: string | null;
 	}): Promise<EmailChangeRequestOutcome>;
-	/** Aplica el cambio desde el enlace de W14: cierra todas las sesiones y avisa a la dirección anterior (T266). */
-	confirmEmailChange(token: string): Promise<EmailChangeConfirmOutcome>;
-	/** Cambio de contraseña con la actual; cierra las demás sesiones (W27, T266). */
+	/** Aplica el cambio desde el enlace de W14: cierra las sesiones salvo la actual y avisa a la dirección anterior (T266, C-19). */
+	confirmEmailChange(
+		token: string,
+		currentSessionId?: string | null
+	): Promise<EmailChangeConfirmOutcome>;
+	/**
+	 * Cambio de contraseña con la actual; cierra las demás sesiones (W27, T266). Superado el límite de intentos de sesión
+	 * de la cuenta lanza `AppError('LOGIN_TEMPORARILY_LOCKED')` con `retryAfterMinutes` (C-24).
+	 */
 	changePassword(
 		headers: Headers,
-		input: { readonly currentPassword: string; readonly newPassword: string }
+		input: {
+			readonly currentPassword: string;
+			readonly newPassword: string;
+			/** IP real del cliente (`getClientAddress()`): la sesión nueva la guarda (C-35). */
+			readonly remoteIp?: string | null;
+		}
 	): Promise<'changed' | 'wrong_password'>;
 	register(input: RegisterInput): Promise<{ readonly sentTo: string }>;
 	resendVerification(input: {
@@ -168,6 +187,8 @@ export interface Accounts {
 	/** Estado sin consumir el token: `verification` (JWT, con «used») o `reset` (opaco, «valid» o «invalid»). */
 	tokenState(token: string, kind: TokenKind): 'valid' | 'used' | 'invalid';
 	readSession(headers: Headers): ReturnType<typeof readSession>;
+	/** Solo pruebas: espera a que terminen los emails de cuenta enviados sin esperar (C-17). */
+	drainEmails(): Promise<void>;
 	auth: Auth;
 }
 
@@ -182,6 +203,7 @@ function keyOf(kind: string, token: string): string {
 }
 
 export function createAccounts(config: AccountsConfig): Accounts {
+	const emails = createEmailDispatcher(config.logger);
 	const base: AccountsBase = {
 		db: config.db,
 		logger: config.logger,
@@ -192,28 +214,36 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		apps: config.apps,
 		legal: config.legal,
 		emailHashKey: config.emailHashKey,
-		adminEmail: config.adminEmail
+		adminEmail: config.adminEmail,
+		emails
 	};
 
 	const auth = createAuth({
 		db: config.db,
 		secret: config.authSecret,
 		baseUrl: config.publicWebUrl,
-		sendVerification: async (email, _userId, token) => {
-			await sendAccountEmail(config.notifications, {
-				reason: 'verification',
-				to: email,
-				link: linkTo(config.publicWebUrl, '/verificar', token),
-				idempotencyKey: keyOf('verification', token)
-			});
+		// Better Auth espera la promesa del callback: el envío se lanza sin esperarlo (C-17).
+		sendVerification: (email, _userId, token) => {
+			emails.dispatch(() =>
+				sendAccountEmail(config.notifications, {
+					reason: 'verification',
+					to: email,
+					link: linkTo(config.publicWebUrl, '/verificar', token),
+					idempotencyKey: keyOf('verification', token)
+				})
+			);
+			return Promise.resolve();
 		},
-		sendPasswordReset: async (email, _userId, token) => {
-			await sendAccountEmail(config.notifications, {
-				reason: 'password_reset',
-				to: email,
-				link: linkTo(config.publicWebUrl, '/recuperar/nueva', token),
-				idempotencyKey: keyOf('password-reset', token)
-			});
+		sendPasswordReset: (email, _userId, token) => {
+			emails.dispatch(() =>
+				sendAccountEmail(config.notifications, {
+					reason: 'password_reset',
+					to: email,
+					link: linkTo(config.publicWebUrl, '/recuperar/nueva', token),
+					idempotencyKey: keyOf('password-reset', token)
+				})
+			);
+			return Promise.resolve();
 		},
 		onEmailVerified: (userId, email) => {
 			promoteAdminIfEligible(base, userId, email);
@@ -229,8 +259,9 @@ export function createAccounts(config: AccountsConfig): Accounts {
 	const deps: AccountsDeps = { ...base, auth };
 	return {
 		auth,
+		drainEmails: () => emails.drain(),
 		changePassword: (headers, input) => changePassword(deps, headers, input),
-		passwordMatches: (userId, password) => passwordMatches(deps, userId, password),
+		checkCurrentPassword: (userId, password) => checkCurrentPassword(deps, userId, password),
 		revokeAllSessions: (userId) => revokeAllSessions(deps, userId),
 		anonymizeUser: (userId) => anonymizeUser(deps, userId),
 		clearSessionCookie: (headers) => clearSessionCookie(deps, headers),
@@ -248,7 +279,8 @@ export function createAccounts(config: AccountsConfig): Accounts {
 		},
 		requestEmailChange: (input) =>
 			requestEmailChange(deps, { ...input, publicWebUrl: config.publicWebUrl }),
-		confirmEmailChange: (token) => confirmEmailChange(deps, token),
+		confirmEmailChange: (token, currentSessionId) =>
+			Promise.resolve(confirmEmailChange(deps, token, currentSessionId ?? null)),
 		register: (input) => register(deps, input),
 		resendVerification: (input) => resendVerification(deps, input),
 		verifyEmail: (token) => verifyEmail(deps, token),

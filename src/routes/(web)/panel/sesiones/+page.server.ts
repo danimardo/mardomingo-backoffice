@@ -60,7 +60,7 @@ export const actions: Actions = {
 		if (typeof sessionId !== 'string' || sessionId === '') {
 			return fail(400, { errors: { sessionId: 'validation_invalid' } });
 		}
-		const outcome = closeOtherSession(getComposition().db, {
+		const outcome = closeOtherSession(getComposition(), {
 			userId: access.user.id,
 			sessionId,
 			currentSessionId: await currentSessionIdOf(request.headers)
@@ -75,7 +75,7 @@ export const actions: Actions = {
 			const login = resolve('/login');
 			redirect(303, login);
 		}
-		closeOtherSessions(getComposition().db, {
+		closeOtherSessions(getComposition(), {
 			userId: access.user.id,
 			currentSessionId: await currentSessionIdOf(request.headers)
 		});

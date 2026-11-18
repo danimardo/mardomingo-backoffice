@@ -41,6 +41,11 @@ const TRIGGERS: readonly {
 		link: false
 	},
 	{
+		name: 'aviso de petición de cambio de email',
+		email: { reason: 'email_change_requested_notice', to: TO, idempotencyKey: 'k5b' },
+		link: false
+	},
+	{
 		name: 'saldo bajo',
 		email: { reason: 'low_balance', to: TO, idempotencyKey: 'k6' },
 		link: false

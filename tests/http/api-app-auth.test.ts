@@ -5,6 +5,7 @@ import { describe, expect, inject, it } from 'vitest';
 import { send } from './client';
 
 const baseUrl = inject('httpBaseUrl');
+const chatToken = inject('httpChatToken');
 const apiHost = new URL(baseUrl).host;
 const SECRETARIO = 'secretario';
 const json = { 'content-type': 'application/json', accept: 'application/json' };
@@ -180,11 +181,11 @@ describe('sesión de la API', () => {
 		expect(result.headers['set-cookie']).toBeUndefined();
 	});
 
-	it('logout con cuerpo responde 400 VALIDATION_ERROR (el cuerpo debe estar vacío)', async () => {
+	it('[C-29] logout con sesión válida y con cuerpo responde 400 VALIDATION_ERROR (el cuerpo debe estar vacío; no revoca)', async () => {
 		const result = await send(baseUrl, '/api/v1/auth/logout', {
 			method: 'POST',
 			host: apiHost,
-			headers: { ...json, 'x-app-id': SECRETARIO },
+			headers: { ...json, 'x-app-id': SECRETARIO, authorization: `Bearer ${chatToken}` },
 			body: '{"x":1}'
 		});
 

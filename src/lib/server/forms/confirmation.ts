@@ -14,3 +14,11 @@ export function savedRedirect(path: string, entryId: string): string {
 	const query = new URLSearchParams({ aviso: 'saved', auditoria: entryId });
 	return `${path}?${query.toString()}`;
 }
+
+/** Id de la entrada de auditoría del aviso `saved` de la URL (UX-13), solo si tiene forma de id; si no, `null`. */
+export function savedEntryOf(url: URL): string | null {
+	const entryId = url.searchParams.get('auditoria') ?? '';
+	return url.searchParams.get('aviso') === 'saved' && /^[A-Za-z0-9_-]{1,64}$/.test(entryId)
+		? entryId
+		: null;
+}

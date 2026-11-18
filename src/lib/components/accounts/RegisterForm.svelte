@@ -9,6 +9,7 @@
 	import PasswordField from '$lib/components/ui/PasswordField.svelte';
 	import TextField from '$lib/components/ui/TextField.svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import { REGISTER_CAPTCHA_ACTION } from '$lib/shared/captcha';
 	import { singleSubmit } from './submit';
 
 	interface Props {
@@ -109,7 +110,11 @@
 		</Notice>
 	</noscript>
 	{#if turnstileSiteKey !== ''}
-		<div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+		<div
+			class="cf-turnstile"
+			data-sitekey={turnstileSiteKey}
+			data-action={REGISTER_CAPTCHA_ACTION}
+		></div>
 	{/if}
 
 	<Button type="submit" {busy}>

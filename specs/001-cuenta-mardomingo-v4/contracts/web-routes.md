@@ -89,6 +89,17 @@ Cada `load`, cada _action_ y cada `+server.ts` protegido llama a su _guard_. El 
   2. `?/<acción>` con los mismos campos ocultos y `confirmado=true` ejecuta.
      El foco inicial de la confirmación no está en la acción destructiva. Los textos libres (motivo) **nunca**
      viajan por GET.
+- **Motivo de las acciones de administración** (BE-FR-55, FR-094; C-55, cierra R08 y D09): toda acción de
+  administración que pide `motivo` lo exige de **1 a 500 caracteres tras recortar** los espacios de los extremos, con
+  una sola regla (`$lib/shared/reason`): `requireReason` en los servicios (`VALIDATION_ERROR` con
+  `details.field = "reason"`) y `reasonRejection` (`$lib/server/forms/reason`) en la _action_, antes del servicio.
+  Un motivo vacío o de más de 500 caracteres responde `400` con `errors.motivo` (`validation_required` o
+  `reason_too_long`), `values.motivo` con lo escrito y `scope` (el formulario que falló, cuando la página tiene
+  varios); la página pinta junto a su campo «Este campo es obligatorio.» o «El motivo no puede tener más de 500
+  caracteres.» y conserva el texto (`reasonFieldOf`, `$lib/schemas/common/reason`). Los campos de motivo llevan
+  `maxlength="500"`. No se escribe nada ni se audita, y la auditoría guarda el motivo recortado. Aplica a W35–W38,
+  W40–W44 y W49 (W39 y W48 no piden motivo). La vista previa del detalle de usuario (W35) y la del tipo de cambio
+  manual (W38) ya rechazan el motivo que la acción rechazaría.
 - Con JavaScript: botón desactivado con `aria-busy="true"` durante el envío; ante un fallo, foco al resumen
   de errores o al primer campo inválido y anuncio con `aria-live`.
 - **Comprobación de origen (D-01)**: la comprobación CSRF propia de SvelteKit está desactivada (rechazaría
@@ -202,11 +213,13 @@ access: { url } | null, externalLanding: url | null, smartScreenHelp: boolean }`
 - **Query**: `app` (slug opcional; desconocido o inactivo → se ignora y se registra sin origen).
 - **`load`**: `originApp: { slug, name } | null`, `legal: [{ kind, version, url }]` (términos, privacidad,
   uso aceptable vigentes), `minAge`, `passwordRule: { min: 8, max: 128 }`, `turnstileSiteKey`.
+- **Captcha**: el widget declara `data-action="register"`; con Cloudflare real, el servidor exige además que la
+  respuesta traiga ese `action` y el `hostname` de la web (C-25).
 - **Actions**:
 
-| Action        | Entrada                                                                                                                                                                               | Validación                                                                                          | Éxito                                                                                                                                                          | Errores (`fail`)                                                                                                                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `?/registrar` | `email`, `password`, `acceptTerms`, `acceptPrivacy`, `acceptAup`, `ageDeclaration`, `cf-turnstile-response`, `app` (oculto), `versionTerms`, `versionPrivacy`, `versionAup` (ocultos) | `z.email()`; contraseña 8–128; las cuatro casillas `true` (nunca premarcadas); versiones = vigentes | `{ success: true, sentTo }` (misma respuesta exista o no el email, BE-FR-01 CA5); muestra a qué dirección se envió, qué hacer si no llega y el reenvío (UX-02) | `400` validación (`values` sin contraseña; foco al resumen); `400 CAPTCHA_INVALID` (con reintento); `400 DISPOSABLE_DOMAIN`; `429 REGISTRATION_IP_LIMIT`; `429 RATE_LIMITED` (IP); `409 LEGAL_VERSION_CHANGED` (vuelve a mostrar los documentos) |
+| Action        | Entrada                                                                                                                                                                               | Validación                                                                                          | Éxito                                                                                                                                                          | Errores (`fail`)                                                                                                                                                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `?/registrar` | `email`, `password`, `acceptTerms`, `acceptPrivacy`, `acceptAup`, `ageDeclaration`, `cf-turnstile-response`, `app` (oculto), `versionTerms`, `versionPrivacy`, `versionAup` (ocultos) | `z.email()`; contraseña 8–128; las cuatro casillas `true` (nunca premarcadas); versiones = vigentes | `{ success: true, sentTo }` (misma respuesta exista o no el email, BE-FR-01 CA5); muestra a qué dirección se envió, qué hacer si no llega y el reenvío (UX-02) | `400` validación (`values` sin contraseña; foco al resumen); `400 CAPTCHA_INVALID` (con reintento); `400 DISPOSABLE_DOMAIN`; `429 REGISTRATION_IP_LIMIT`; `429 RATE_LIMITED` (intentos por IP, `signup_attempts_per_ip_hour`, antes del captcha); `409 LEGAL_VERSION_CHANGED` (vuelve a mostrar los documentos) |
 
 - **Estados 16.6**: envío pendiente sin doble envío; errores por campo con resumen enlazado; captcha que no
   carga o falla con reintento; mensaje neutro antienumeración.
@@ -282,7 +295,8 @@ access: { url } | null, externalLanding: url | null, smartScreenHelp: boolean }`
 - **Query**: `token`. **`load`**: `tokenState`.
 - **Actions**: `?/confirmar` — `token` (oculto) → aplica el cambio, recalcula `email_normalized`, revoca
   todas las sesiones salvo la actual (si la hay) y redirige a `/panel/perfil?aviso=email_changed` (con
-  sesión) o `/login?aviso=email_changed` (sin ella). Errores: `400 TOKEN_*`.
+  sesión) o `/login?aviso=email_changed` (sin ella). Errores: `400 TOKEN_EXPIRED`; `400 TOKEN_INVALID` (también
+  si la dirección ya no está libre, con un mensaje propio).
 - **Eventos**: `accounts.email_change.applied`, `accounts.session.revoked`.
 
 ### W15 · `/logout` — Cerrar la sesión actual (BE-FR-06)
@@ -443,12 +457,12 @@ lastUsedAt, approxIp }]`. «IP aproximada» (D-19): IPv4 truncada a /24 (`203.0.
   `lowBalance: { thresholdMicro|null }`, `notice`.
 - **Actions**:
 
-| Action                   | Entrada                                                                                                                 | Validación                                                                                                            | Éxito                                                                                                                                              | Errores                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `?/cambiarEmail`         | `newEmail`, `password`                                                                                                  | `z.email()`; contraseña requerida                                                                                     | `{ success: true, messageKey: "email_change_requested" }` («Si la dirección es válida, recibirás un email»; también si pertenece a otra cuenta)    | `400`; `401 WRONG_PASSWORD`; `429 RATE_LIMITED` |
-| `?/cambiarPassword`      | `currentPassword`, `newPassword`                                                                                        | 8–128                                                                                                                 | Revoca las demás sesiones, aviso de seguridad; `redirect(303, "/panel/perfil?aviso=password_changed")` (indica que se cerraron las demás sesiones) | `400`; `401 WRONG_PASSWORD`                     |
-| `?/guardarDatosFiscales` | `kind` (`individual`\|`business`), `legalName`, `taxId`, `address`, `postalCode`, `city`, `country` (ISO 3166-1 alfa-2) | Formato del identificador fiscal español (NIF/NIE/CIF); NIF-IVA intracomunitario: solo formato (VIES pendiente, 12-2) | `?aviso=billing_saved`                                                                                                                             | `400` (error junto al campo)                    |
-| `?/guardarAvisoSaldo`    | `enabled`, `thresholdCredits`                                                                                           | `thresholdCredits` con el esquema de decimal español a entero escalado (µc), ≥ 0; obligatorio si `enabled`            | `?aviso=low_balance_saved`; desactivar es tan fácil como activar                                                                                   | `400`                                           |
+| Action                   | Entrada                                                                                                                 | Validación                                                                                                            | Éxito                                                                                                                                              | Errores                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `?/cambiarEmail`         | `newEmail`, `password`                                                                                                  | `z.email()`; contraseña requerida                                                                                     | `{ success: true, messageKey: "email_change_requested" }` («Si la dirección es válida, recibirás un email»; también si pertenece a otra cuenta)    | `400`; `401 WRONG_PASSWORD`; `429 RATE_LIMITED`; `429 LOGIN_TEMPORARILY_LOCKED` |
+| `?/cambiarPassword`      | `currentPassword`, `newPassword`                                                                                        | 8–128                                                                                                                 | Revoca las demás sesiones, aviso de seguridad; `redirect(303, "/panel/perfil?aviso=password_changed")` (indica que se cerraron las demás sesiones) | `400`; `401 WRONG_PASSWORD`; `429 LOGIN_TEMPORARILY_LOCKED`                     |
+| `?/guardarDatosFiscales` | `kind` (`individual`\|`business`), `legalName`, `taxId`, `address`, `postalCode`, `city`, `country` (ISO 3166-1 alfa-2) | Formato del identificador fiscal español (NIF/NIE/CIF); NIF-IVA intracomunitario: solo formato (VIES pendiente, 12-2) | `?aviso=billing_saved`                                                                                                                             | `400` (error junto al campo)                                                    |
+| `?/guardarAvisoSaldo`    | `enabled`, `thresholdCredits`                                                                                           | `thresholdCredits` con el esquema de decimal español a entero escalado (µc), ≥ 0; obligatorio si `enabled`            | `?aviso=low_balance_saved`; desactivar es tan fácil como activar                                                                                   | `400`                                                                           |
 
 - **Enlaces**: exportar datos (W28) y borrar la cuenta (W29).
 - **Estados 16.6**: cambio aplicado indicando qué sesiones se han cerrado; exportación en curso, descargada o
@@ -472,9 +486,9 @@ filename="cuenta-mardomingo-datos-<YYYY-MM-DD>.json"`, `no-store`. Contiene perf
   plataforma usadas por la cuenta), aviso de que el saldo se pierde sin reembolso en todas las apps.
 - **Actions**:
 
-| Action           | Entrada                                               | Éxito                                                                                                                                                                                                                                                                                           | Errores                               |
-| ---------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `?/borrarCuenta` | `password`, `confirmLoss` (casilla, nunca premarcada) | Revoca todas las sesiones, pone a cero las bolsas restantes con movimientos `forfeit` (cuentan en estadísticas, D-15), elimina datos personales y sincronizados, anonimiza la cuenta sin tocar las tablas inmutables (D-18), conserva el hash de bienvenida; `redirect(303, "/cuenta-borrada")` | `400` (casilla); `401 WRONG_PASSWORD` |
+| Action           | Entrada                                               | Éxito                                                                                                                                                                                                                                                                                           | Errores                                                               |
+| ---------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `?/borrarCuenta` | `password`, `confirmLoss` (casilla, nunca premarcada) | Revoca todas las sesiones, pone a cero las bolsas restantes con movimientos `forfeit` (cuentan en estadísticas, D-15), elimina datos personales y sincronizados, anonimiza la cuenta sin tocar las tablas inmutables (D-18), conserva el hash de bienvenida; `redirect(303, "/cuenta-borrada")` | `400` (casilla); `401 WRONG_PASSWORD`; `429 LOGIN_TEMPORARILY_LOCKED` |
 
 - La acción se llama «Borrar mi cuenta» y el foco inicial no está en ella; no pide nada más que BE-FR-07.
 - **Eventos**: `privacy.account.deleted`, `privacy.account.deletion_rejected`, `credits.balance.forfeited`,
@@ -510,6 +524,15 @@ es barrera, D4). Toda _action_ que modifica datos se audita (BE-FR-55) y, al
 guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace a la entrada de auditoría
 (UX-13). Los modelos de vista de administración **sí** pueden mostrar modelos y costes reales.
 
+**Aviso con enlace a la auditoría** (C-51, C-54): cada servicio auditado devuelve el id de su entrada y la _action_ redirige
+con `savedRedirect(<página>, <entryId>)`; el `load` lo lee con `savedEntryOf(url)` y la página muestra «Cambio guardado.»
+con el enlace a W47. Lo hacen W35–W38 y, desde C-54, W39 (`?/crearApp`), W40 (`?/guardarApp`, `?/guardarVersiones`,
+`?/guardarMantenimiento`, `?/guardarSobrescrituras`, `?/crearOperacion`), W41 (`?/activar`, `?/desactivar`,
+`?/guardarOperacion`, `?/guardarPlantilla` y `?/aplicarAlGrupo`, que enlaza la entrada de la operación de la ficha),
+W42 y W43 (vuelven a W42), W44 (`?/guardarLimites`, `?/fijarAlertaMistral`, `?/liberarFreno`), W48 (`?/publicar`) y
+W49 (`?/crear`, `?/guardar`, `?/desactivar`; sustituye a `?aviso=anuncio_creado`). Una acción que no cambia nada y no
+audita (liberar un freno que ya no está activo, desactivar un anuncio ya inactivo) vuelve sin aviso.
+
 ### W33 · `/admin` — Resumen
 
 - **`load`**: alertas activas (`alerts_state`), estado del freno global, avisos de modelos retirados o con
@@ -528,13 +551,15 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
   operaciones marcadas por moderación (sin contenido), roles y estado.
 - **Actions** (todas con el patrón de confirmación 1.4 y `reason` obligatorio salvo indicación):
 
-| Action                                               | Entrada                                                     | Efecto                              | Errores                               |
-| ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------- | ------------------------------------- |
-| `?/previsualizarBloqueo` / `?/bloquear`              | `reason`, `confirmado`                                      | Bloquea y revoca todas sus sesiones | `400` (motivo); `409 ALREADY_BLOCKED` |
-| `?/previsualizarDesbloqueo` / `?/desbloquear`        | `reason`, `confirmado`                                      | Desbloquea                          | `409`                                 |
-| `?/marcarTester` / `?/desmarcarTester`               | `reason`                                                    | Cambia el rol `tester`              | `409`                                 |
-| `?/previsualizarCierreSesiones` / `?/cerrarSesiones` | `reason`, `confirmado`, `sessionId` (opcional: una o todas) | Revoca                              | `404`                                 |
+| Action                                               | Entrada                                                     | Efecto                              | Errores                                                                           |
+| ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------- |
+| `?/previsualizarBloqueo` / `?/bloquear`              | `reason`, `confirmado`                                      | Bloquea y revoca todas sus sesiones | `400` (motivo); `409 ALREADY_BLOCKED`; `409 CANNOT_BLOCK_SELF` (su propia cuenta) |
+| `?/previsualizarDesbloqueo` / `?/desbloquear`        | `reason`, `confirmado`                                      | Desbloquea                          | `409`                                                                             |
+| `?/marcarTester` / `?/desmarcarTester`               | `reason`                                                    | Cambia el rol `tester`              | `409`                                                                             |
+| `?/previsualizarCierreSesiones` / `?/cerrarSesiones` | `reason`, `confirmado`, `sessionId` (opcional: una o todas) | Revoca                              | `404`                                                                             |
 
+- **Éxito de `?/cerrarSesiones`** (C-51): `redirect(303, "/admin/usuarios/<id>?aviso=saved&auditoria=<entryId>")`; la
+  página muestra «Cambio guardado» con el enlace a la entrada de auditoría.
 - **Eventos**: `accounts.user.blocked`, `accounts.user.unblocked`, `accounts.role.changed`,
   `accounts.session.revoked`, `audit.entry.recorded`.
 
@@ -559,6 +584,9 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
   consumido), `amountEurCents` (importe en **céntimos** de euro; solo con proveedor real; ≤ pagado; campo `importe`), `reason`, `confirmado` → movimiento `refund`,
   devolución por el proveedor (si es real) y rectificativa. Errores: `400`, `409 PAYMENT_NOT_REFUNDABLE`.
   _Enmienda 2026-10-28: `amountEur` decía euros y el código usa céntimos. D01 (el administrador indica los créditos a retirar) ya coincide con `creditsToRemove`: no cambia nada más del bloque._
+- **Éxito** (C-51): `redirect(303, "/admin/usuarios/<id>?aviso=saved&auditoria=<entryId>")`, con la entrada
+  `payments.refund`. Un reenvío con la misma clave no aplica nada ni audita, y vuelve a `/admin/usuarios/<id>`
+  sin aviso. _Enmienda 2026-11-18: sustituye a `?aviso=reembolso_aplicado`, que ninguna página mostraba._
 - **Eventos**: `payments.refund.applied`, `invoicing.invoice.issued`, `audit.entry.recorded`.
 
 ### W38 · `/admin/economia` — Economía (BE-FR-51, 61, 73, 87; UX-14; FR-089, FR-096, FR-128)
@@ -569,8 +597,18 @@ guardar, redirige con `?aviso=saved&auditoria=<entryId>` para mostrar el enlace 
 - **Actions**: `?/previsualizarParametros` / `?/guardarParametros` (claves y valores; validación de tipos,
   rangos y coherencia: margen ≥ 1, `min_balance_to_operate` ≥ 0…; muestra anterior → nuevo y alcance);
   `?/crearPaquete`, `?/guardarPaquete` (nombre, precio con IVA, bonificación, activo, orden);
-  `?/fijarTipoCambioManual` (`usdEur` decimal español), `?/quitarTipoCambioManual`;
+  `?/previsualizarTipoCambioManual` / `?/fijarTipoCambioManual` (`usdEurPpm`, entero en ppm entre 500.000 y
+  2.000.000, es decir de 0,50 a 2,00 EUR por USD; `motivo`; `confirmado` solo al fijar), `?/quitarTipoCambioManual`;
   `?/guardarPrecioOrientativo` (app, operación, valor manual).
+- **Tipo de cambio manual** (C-48): la vista previa no escribe nada y devuelve
+  `{ fxPreview: { beforePpm, beforeEur, afterPpm, afterEur, reason } }`, que se muestra como «antes → después»
+  («920000 ppm (0,92 EUR por USD) → 1000000 ppm (1 EUR por USD)»). Un valor fuera de rango, decimal, con signo o vacío
+  responde `400` con `errors.usdEurPpm = "fx_out_of_range"` y lo escrito en `values`, y el servicio lanza
+  `VALIDATION_ERROR` en `usdEurPpm`. Sin motivo, `400` con `errors.motivo`. _Enmienda 2026-11-18: decía
+  `usdEur` decimal español; el formulario siempre ha enviado ppm._
+- **Éxito** (C-51): las cuatro _actions_ que guardan (parámetros, fijar y quitar el tipo manual, precio orientativo)
+  redirigen con `?aviso=saved&auditoria=<entryId>`. Quitar el tipo manual sin valor del BCE al que volver no cambia
+  nada ni audita, y vuelve sin aviso.
 - **Eventos**: `apps.settings.updated`, `apps.settings.rejected`, `payments.pack.updated`,
   `pricing.fx.manual_set`, `audit.entry.recorded`.
 
@@ -592,6 +630,10 @@ inexistente responde `error(404)` desde el `load`.
   `?/guardarMantenimiento` (activo, mensaje); `?/guardarVersiones` (`min`, `recommended`, `enforce`);
   `?/previsualizarSobrescrituras` / `?/guardarSobrescrituras` (límites por app, no mayores que el global;
   aclaración 2026-10-10); `?/crearOperacion` (clave, nombre, tipo, modo).
+- **Aviso de predeterminados** (C-45): si el esquema de sincronización vigente ya no admite alguna categoría de los
+  predeterminados de la app (no declarada o con otra estrategia), el `load` la nombra en un aviso con enlace a W42. Esas
+  categorías no se siembran en las cuentas nuevas, y los predeterminados guardados no cambian hasta que el administrador
+  los corrige.
 - **Eventos**: `apps.settings.updated`, `apps.settings.rejected`, `audit.entry.recorded`.
 
 ### W41 · `/admin/apps/[slug=appSlug]/operaciones/[key=operationKey]` — Operación (BE-FR-32, 35, 72, 77, 78, 80; FR-050, FR-051)
@@ -601,23 +643,37 @@ inexistente responde `error(404)` desde el `load`.
   grupo, escenario de transcripción), modelos compatibles de la caché, versiones de la plantilla,
   `timeoutMs` total calculado.
 - **Actions**: `?/guardarOperacion`; `?/activar` (rechaza sin modelo, con modelo incapaz o sin precio ni
-  coste máximo estimado); `?/desactivar`; `?/aplicarAlGrupo` (modelo para todas las del grupo);
+  coste máximo estimado); `?/desactivar`; `?/aplicarAlGrupo` (tiempo máximo, tokens, temperatura y coste máximo estimado para todas las del grupo; no el modelo, T311, C-52);
   `?/guardarPlantilla` (crea una versión nueva inmutable).
+- **Motivo** (C-52): `?/activar`, `?/desactivar`, `?/guardarOperacion` y `?/aplicarAlGrupo` exigen `motivo` en el
+  servicio (`requireReason` de `apps`; `VALIDATION_ERROR` en `reason`). Sin motivo (vacío o solo espacios) responden
+  `400` con `errors.motivo = "validation_required"` y `scope` (`activar`, `desactivar`, `operacion` o `grupo`), y la
+  página muestra «Este campo es obligatorio.» en el campo de ese formulario, como W42 y W43. No se escribe nada: en
+  `?/aplicarAlGrupo` ningún miembro cambia. La auditoría guarda el motivo sin los espacios de los extremos. Más de
+  500 caracteres responde igual con `errors.motivo = "reason_too_long"` (C-55, regla común de 1.4).
 - **Eventos**: `apps.operation.activation_rejected`, `apps.template.versioned`, `apps.settings.updated`,
   `audit.entry.recorded`.
 
 ### W42 · `/admin/apps/[slug=appSlug]/predeterminados` — Predeterminados (BE-FR-42, 57; FR-067)
 
-- **`load`**: predeterminados vigentes por categoría. **Actions**: `?/guardarPredeterminados` (validados con
-  el esquema de sincronización de la app). No modifica ninguna cuenta.
+- **`load`**: predeterminados vigentes por categoría. **Actions**: `?/guardarPredeterminados` (`datos`, `motivo` y
+  `confirmado`; validados con el esquema de sincronización de la app). No modifica ninguna cuenta. El motivo es
+  obligatorio (`400` con `errors.motivo`, C-41). La auditoría guarda el motivo y, en `before` y `after`, un resumen
+  sin contenido: `{ categories, elements, sha256 }` y, en `after`, `changed` (categorías cambiadas); nunca el JSON
+  (data-model 3.7).
 - **Eventos**: `sync.defaults.updated`, `audit.entry.recorded`.
 
 ### W43 · `/admin/apps/[slug=appSlug]/predeterminados/copiar` — Copiar mis datos (BE-FR-42 CA3–CA4)
 
 - **`load`**: vista previa del documento sincronizado del propio administrador para esa app, por categorías,
-  con una casilla por elemento (ninguna decisión por defecto que favorezca copiar datos personales).
-- **Actions**: `?/copiar` — `items` (lista repetida `categoría:clave`) → solo sustituye las categorías con algún
-  elemento seleccionado. Errores: `400 NOTHING_SELECTED`.
+  con una casilla por elemento (ninguna decisión por defecto que favorezca copiar datos personales): ninguna casilla viene
+  marcada, y las categorías con `personal: true` en el esquema de sincronización muestran además un aviso (D14).
+- **Actions**: `?/copiar` — `usuario`, `sel:<categoría>` (repetido, un valor por elemento marcado), `motivo` y
+  `confirmado` → solo sustituye las categorías con algún elemento copiado y conserva las demás tal como estaban
+  (C-40). Errores: `400 NOTHING_SELECTED` (nada marcado, o nada de lo marcado existe ya en el documento de origen);
+  `400` con `errors.motivo` si falta el motivo o pasa de 500 caracteres (C-41, C-55). El formulario se envía a
+  `?vista=propia&/copiar` para que, si se rechaza, la página vuelva a listar las categorías y pinte el error junto
+  al motivo (C-55). Auditoría como en W42.
 - **Eventos**: `sync.defaults.copied`, `audit.entry.recorded`.
 
 ### W44 · `/admin/protecciones` — Protecciones (BE-FR-43, 46, 47, 53; UX-14; FR-091)

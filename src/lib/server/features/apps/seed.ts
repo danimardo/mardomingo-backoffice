@@ -14,11 +14,13 @@ import {
 	TRANSCRIPTION_BACKUP_MODEL,
 	TRANSCRIPTION_BACKUP_TIMEOUT_MS,
 	TRANSCRIPTION_PRIMARY_MODEL,
+	RETIRED_SETTING_KEYS,
 	approvedOperationOf,
 	type DefaultOperation
 } from './defaults';
 import { isSettingKey, type TranscriptionConfig } from './json-schemas';
 import {
+	seedDeleteSettings,
 	seedInsertApp,
 	seedInsertOperation,
 	seedInsertSetting,
@@ -76,11 +78,20 @@ function operationRow(operation: DefaultOperation, now: EpochMs): OperationInser
 export function seedApps(
 	tx: Tx,
 	now: EpochMs,
-	overrides: Readonly<Partial<Record<'registrations_per_ip_24h', number>>> = {}
+	overrides: Readonly<
+		Partial<
+			Record<
+				'registrations_per_ip_24h' | 'login_per_ip_15min' | 'signup_attempts_per_ip_hour',
+				number
+			>
+		>
+	> = {}
 ): void {
 	for (const [key, value] of Object.entries({ ...DEFAULT_SETTINGS, ...overrides })) {
 		if (isSettingKey(key)) seedInsertSetting(tx, key, value, now);
 	}
+	// Una clave retirada que haya vuelto a la BD (vuelta atrás a una imagen anterior) haría fallar `readSettings` (C-56).
+	seedDeleteSettings(tx, RETIRED_SETTING_KEYS);
 	seedInsertApp(tx, {
 		id: SECRETARIO_APP_ID,
 		slug: 'secretario',

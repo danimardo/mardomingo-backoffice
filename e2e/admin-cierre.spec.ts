@@ -71,7 +71,8 @@ async function setMaintenance(page: Page, next: { active: boolean; message: stri
 	await section.locator('#motivo-mantenimiento').fill('Prueba E2E de mantenimiento');
 	await section.locator('#confirmado-mantenimiento').check();
 	await section.getByRole('button', { name: 'Guardar mantenimiento' }).click();
-	await page.waitForURL(/\/admin\/apps\/secretario$/);
+	// Guardar vuelve a la ficha con el aviso y el enlace a la auditoría (UX-13; C-54).
+	await page.waitForURL(/\/admin\/apps\/secretario\?aviso=saved&auditoria=aud_/);
 	await page.waitForLoadState('networkidle');
 }
 
@@ -156,9 +157,11 @@ test('@BE-FR-42 copiar una sola casilla a predeterminados sustituye solo su cate
 	await page.goto('/admin/apps/secretario/predeterminados/copiar?vista=propia');
 	await page.waitForLoadState('networkidle');
 	await page.getByRole('group', { name: 'coreReplacements' }).getByRole('checkbox').first().check();
+	// El motivo es obligatorio y queda en la auditoría (BE-FR-55; C-41).
+	await page.getByRole('textbox', { name: /Motivo/ }).fill('Prueba E2E de copia');
 	await page.getByRole('checkbox', { name: 'Confirmo este cambio' }).check();
 	await page.getByRole('button', { name: 'Copiar los elementos marcados' }).click();
-	await page.waitForURL(/\/predeterminados$/);
+	await page.waitForURL(/\/predeterminados\?aviso=saved&auditoria=aud_/);
 	await page.waitForLoadState('networkidle');
 	const after = objectOf(JSON.parse(await page.locator('#datos').inputValue()));
 
@@ -250,7 +253,8 @@ test('@BE-FR-27 reembolsar una compra recién pagada: la vista previa no cambia 
 	await page.locator('#motivo').fill('Reembolso de prueba E2E');
 	await page.locator('#confirmado').check();
 	await page.getByRole('button', { name: 'Reembolsar', exact: true }).click();
-	await page.waitForURL(/aviso=reembolso_aplicado/);
+	// UX-13 (C-51): la ficha enlaza con la entrada de auditoría del reembolso.
+	await page.waitForURL(/aviso=saved&auditoria=aud_/);
 
 	const done = openDb();
 	try {
@@ -286,5 +290,9 @@ test('@BE-FR-50 cerrar las sesiones de una ficha observa el POST y vuelve a la m
 	expect(response.status()).toBe(303);
 
 	await page.waitForLoadState('networkidle');
-	await expect(page).toHaveURL(/\/admin\/usuarios\/usr_panel$/);
+	// UX-13 (C-51): vuelve a la misma ficha con el aviso y el enlace a la entrada de auditoría del cierre.
+	await expect(page).toHaveURL(
+		/\/admin\/usuarios\/usr_panel\?aviso=saved&auditoria=aud_[A-Za-z0-9_-]+$/
+	);
+	await expect(page.getByRole('link', { name: 'Ver la entrada en la auditoría' })).toBeVisible();
 });

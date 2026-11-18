@@ -18,6 +18,7 @@ export function seedDefaults(
 	options: {
 		readonly registrationsPerIp24h?: number | undefined;
 		readonly loginsPerIp15min?: number | undefined;
+		readonly signupAttemptsPerIpHour?: number | undefined;
 	} = {}
 ): void {
 	immediateTransaction(db, (tx) => {
@@ -28,7 +29,10 @@ export function seedDefaults(
 				: { registrations_per_ip_24h: options.registrationsPerIp24h }),
 			...(options.loginsPerIp15min === undefined
 				? {}
-				: { login_per_ip_15min: options.loginsPerIp15min })
+				: { login_per_ip_15min: options.loginsPerIp15min }),
+			...(options.signupAttemptsPerIpHour === undefined
+				? {}
+				: { signup_attempts_per_ip_hour: options.signupAttemptsPerIpHour })
 		});
 		seedSync(tx, now);
 		seedPayments(tx, now);

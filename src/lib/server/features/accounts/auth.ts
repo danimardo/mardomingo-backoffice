@@ -84,7 +84,8 @@ export function createAuth(deps: AuthDeps) {
 		],
 		rateLimit: { enabled: false },
 		advanced: {
-			// La IP la pone `accounts` desde `getClientAddress()` en una cabecera interna (y la borra si llega del cliente).
+			// La IP la pone `accounts` desde `getClientAddress()` en una cabecera interna; `hooks.server.ts` la quita de toda
+			// petición entrante y los servicios de `accounts` pasan a Better Auth cabeceras propias (C-35).
 			ipAddress: { ipAddressHeaders: ['x-mm-client-ip'] }
 		}
 	});

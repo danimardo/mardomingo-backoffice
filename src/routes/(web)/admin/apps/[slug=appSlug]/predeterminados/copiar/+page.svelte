@@ -1,11 +1,14 @@
 <script lang="ts">
 	// W43 · copiar de la cuenta propia a los predeterminados (T312; BE-FR-42 CA3–CA4; D03). Una casilla por elemento, sin preselección. Solo
-	// se sustituyen las categorías con algún elemento marcado. Sin JavaScript funciona igual.
+	// se sustituyen las categorías con algún elemento marcado; las demás se conservan (C-40). Exige motivo y confirmación
+	// (BE-FR-55; C-41). Sin JavaScript funciona igual.
 	import { resolve } from '$app/paths';
 	import Banner from '$lib/components/ui/Banner.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Checkbox from '$lib/components/ui/Checkbox.svelte';
 	import CheckboxGroup from '$lib/components/ui/CheckboxGroup.svelte';
+	import TextField from '$lib/components/ui/TextField.svelte';
+	import { REASON_MAX_LENGTH, reasonFieldOf } from '$lib/schemas/common/reason';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ActionData, PageData } from './$types';
 
@@ -37,18 +40,27 @@
 {/if}
 
 {#if data.categories.length > 0}
-	<form method="POST" action="?/copiar">
+	<!-- `vista=propia` en la acción: si se rechaza, la página vuelve a listar las categorías y el formulario (C-55). -->
+	<form method="POST" action="?vista=propia&/copiar">
 		{#each data.categories as category (category.category)}
-			{#if category.personal}
-				<Banner level="warning">{m.admin_defaults_personal_warning()}</Banner>
-			{/if}
 			<CheckboxGroup
 				id={`sel-${category.category}`}
 				name={`sel:${category.category}`}
 				legend={category.category}
+				description={category.personal
+					? m.admin_defaults_personal_warning({ category: category.category })
+					: ''}
 				options={category.elements.map((element) => ({ value: element, label: element }))}
 			/>
 		{/each}
+		<TextField
+			id="motivo"
+			name="motivo"
+			label={m.admin_defaults_reason()}
+			required
+			maxlength={REASON_MAX_LENGTH}
+			{...reasonFieldOf(form)}
+		/>
 		<Checkbox id="confirmado" name="confirmado" value="true">{m.admin_defaults_confirm()}</Checkbox>
 		<p><Button type="submit" variant="primary">{m.admin_defaults_copy_submit()}</Button></p>
 	</form>

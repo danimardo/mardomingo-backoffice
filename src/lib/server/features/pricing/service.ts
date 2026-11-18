@@ -18,12 +18,14 @@ import {
 import type { Logger } from '$lib/server/logging/logger';
 import type { IdGenerator } from '$lib/server/shared/ids';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import { computeCharge, marginFor } from './domain/charge';
 import {
 	currentFx,
 	currentRowOf,
 	fxUsdEurPpm,
 	isCurrentEcbObservation,
+	isManualFxPpm,
 	parseRatePpm,
 	staleWeekdays,
 	type CurrentFx
@@ -137,15 +139,35 @@ export async function refreshFxFromEcb(deps: PricingDeps): Promise<RefreshOutcom
 	return { status: 'updated', usdEurPpm };
 }
 
-/** Fija un tipo manual que sustituye al automático hasta que se desactive (BE-FR-87 CA3), con su auditoría. */
+/** Lanza `VALIDATION_ERROR` en el campo si el tipo manual no es un entero entre 500.000 y 2.000.000 ppm (C-48). */
+function requireManualFxPpm(usdEurPpm: number): void {
+	if (!isManualFxPpm(usdEurPpm)) throw new AppError('VALIDATION_ERROR', { field: 'usdEurPpm' });
+}
+
+/**
+ * Vista previa del tipo manual (C-48; W38): el tipo vigente y el nuevo, sin escribir nada. Valida el valor igual que
+ * `setManualFx`.
+ */
+export function previewManualFx(
+	deps: PricingDeps,
+	usdEurPpm: number
+): { readonly beforePpm: number; readonly afterPpm: number } {
+	requireManualFxPpm(usdEurPpm);
+	return { beforePpm: getCurrentFxRate(deps).usdEurPpm, afterPpm: usdEurPpm };
+}
+
+/**
+ * Fija un tipo manual que sustituye al automático hasta que se desactive (BE-FR-87 CA3), con su auditoría. Solo admite un
+ * entero entre 500.000 y 2.000.000 ppm (0,50 a 2,00 EUR por USD; C-48). Devuelve el id de la entrada de auditoría (UX-13).
+ */
 export function setManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly usdEurPpm: number; readonly reason: string }
-): void {
-	const reason = input.reason.trim();
-	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+): string {
+	const reason = requireReason(input.reason);
+	requireManualFxPpm(input.usdEurPpm);
 	const now = deps.clock.now();
-	immediateTransaction(deps.db, (tx) => {
+	const entryId = immediateTransaction(deps.db, (tx) => {
 		const before = getCurrentFxRate(deps).usdEurPpm;
 		const id = deps.ids('fx');
 		insertFxRecord(tx, {
@@ -159,7 +181,7 @@ export function setManualFx(
 			createdBy: input.adminId,
 			createdAt: now
 		});
-		recordEntry(
+		return recordEntry(
 			tx,
 			{
 				adminId: input.adminId,
@@ -168,60 +190,64 @@ export function setManualFx(
 				entityId: id,
 				before: { usdEurPpm: before },
 				after: { usdEurPpm: input.usdEurPpm },
-				reason: input.reason
+				reason
 			},
 			deps.audit
 		);
 	});
 	deps.logger.emit('pricing.fx.manual_set', {});
+	return entryId;
 }
 
 /**
  * Desactiva el manual: inserta una fila `ecb` con el último valor del BCE (BE-FR-87 CA3). Sin ningún valor del BCE no hay
- * a qué volver, y no se hace nada.
+ * a qué volver, y no se hace nada. Si se aplica, devuelve el id de la entrada de auditoría (UX-13).
  */
 export function clearManualFx(
 	deps: PricingDeps,
 	input: { readonly adminId: string; readonly reason: string }
-): { readonly ok: boolean } {
-	if (input.reason.trim() === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+): { readonly ok: true; readonly entryId: string } | { readonly ok: false } {
+	const reason = requireReason(input.reason);
 	const now = deps.clock.now();
-	const outcome = immediateTransaction(deps.db, (tx) => {
-		const last = lastEcbRecord(tx);
-		if (
-			last === undefined ||
-			last.ecbRatePpm === null ||
-			last.ecbDate === null ||
-			last.bufferPpm === null
-		)
-			return { ok: false };
-		const before = getCurrentFxRate(deps).usdEurPpm;
-		insertFxRecord(tx, {
-			id: deps.ids('fx'),
-			usdEurPpm: last.usdEurPpm,
-			source: 'ecb',
-			ecbRatePpm: last.ecbRatePpm,
-			ecbDate: last.ecbDate,
-			bufferPpm: last.bufferPpm,
-			effectiveFrom: now,
-			createdBy: null,
-			createdAt: now
-		});
-		recordEntry(
-			tx,
-			{
-				adminId: input.adminId,
-				action: 'pricing.fx.manual_cleared',
-				entity: 'fx_rate',
-				entityId: null,
-				before: { usdEurPpm: before },
-				after: { usdEurPpm: last.usdEurPpm },
-				reason: input.reason
-			},
-			deps.audit
-		);
-		return { ok: true };
-	});
+	const outcome = immediateTransaction(
+		deps.db,
+		(tx): { readonly ok: true; readonly entryId: string } | { readonly ok: false } => {
+			const last = lastEcbRecord(tx);
+			if (
+				last === undefined ||
+				last.ecbRatePpm === null ||
+				last.ecbDate === null ||
+				last.bufferPpm === null
+			)
+				return { ok: false };
+			const before = getCurrentFxRate(deps).usdEurPpm;
+			insertFxRecord(tx, {
+				id: deps.ids('fx'),
+				usdEurPpm: last.usdEurPpm,
+				source: 'ecb',
+				ecbRatePpm: last.ecbRatePpm,
+				ecbDate: last.ecbDate,
+				bufferPpm: last.bufferPpm,
+				effectiveFrom: now,
+				createdBy: null,
+				createdAt: now
+			});
+			const entryId = recordEntry(
+				tx,
+				{
+					adminId: input.adminId,
+					action: 'pricing.fx.manual_cleared',
+					entity: 'fx_rate',
+					entityId: null,
+					before: { usdEurPpm: before },
+					after: { usdEurPpm: last.usdEurPpm },
+					reason
+				},
+				deps.audit
+			);
+			return { ok: true, entryId };
+		}
+	);
 	if (outcome.ok) deps.logger.emit('pricing.fx.manual_cleared', {});
 	return outcome;
 }
@@ -287,7 +313,7 @@ export function manualPriceFor(deps: { readonly db: Db }, operationId: string): 
 
 /**
  * Fija o quita el valor manual del coste típico de una operación (BE-FR-73; W38). El valor manual no toca el calculado ni su origen:
- * sobrevive a los recálculos diarios. Queda en la auditoría con el valor anterior y el nuevo.
+ * sobrevive a los recálculos diarios. Queda en la auditoría con el valor anterior y el nuevo; devuelve el id de la entrada (UX-13).
  */
 export function setManualPrice(
 	deps: Pick<PricingDeps, 'db' | 'logger' | 'clock' | 'audit'>,
@@ -297,13 +323,12 @@ export function setManualPrice(
 		readonly microUsd: number | null;
 		readonly reason: string;
 	}
-): void {
-	const reason = input.reason.trim();
-	if (reason === '') throw new AppError('VALIDATION_ERROR', { field: 'reason' });
+): string {
+	const reason = requireReason(input.reason);
 	if (input.microUsd !== null && (!Number.isInteger(input.microUsd) || input.microUsd < 0)) {
 		throw new AppError('VALIDATION_ERROR', { field: 'microUsd' });
 	}
-	immediateTransaction(deps.db, (tx) => {
+	return immediateTransaction(deps.db, (tx) => {
 		const before = manualPriceOf(tx, input.operationId);
 		const manual = input.microUsd === null ? null : toMicro(input.microUsd);
 		tx.insert(priceReferences)
@@ -318,7 +343,7 @@ export function setManualPrice(
 				set: { manualTypicalMicro: manual }
 			})
 			.run();
-		recordEntry(
+		const entryId = recordEntry(
 			tx,
 			{
 				adminId: input.adminId,
@@ -332,5 +357,6 @@ export function setManualPrice(
 			deps.audit
 		);
 		deps.logger.emit('pricing.price.manual_set', { cleared: input.microUsd === null });
+		return entryId;
 	});
 }

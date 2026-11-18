@@ -19,6 +19,8 @@ import {
 	chargeFor,
 	checkMaxCost,
 	estimateChatMicroUsd,
+	getCurrentFxRate,
+	usdEurPpmOf,
 	type PricingDeps
 } from '$lib/server/features/pricing';
 import {
@@ -31,7 +33,9 @@ import {
 } from '$lib/server/features/notifications';
 import { emailOfUser } from '$lib/server/features/accounts';
 import {
-	guardRequest,
+	eurCentsOf,
+	guardAccessAndBrake,
+	guardFrequency,
 	type ProtectionsDeps,
 	type ProtectionsRuntime
 } from '$lib/server/features/protections';
@@ -122,10 +126,39 @@ export function protectionsOf(deps: AiDeps): ProtectionsDeps {
 		credits: deps.credits,
 		alerts: deps.alerts,
 		dailyCosts: {
-			costByUserOfDay: (from, until) => realCostByUserOfDay(deps.db, from, until)
+			costByUserOfDay: (from, until) => realCostCentsByUserOfDay(deps, from, until)
 		},
 		runtime: deps.protections
 	};
+}
+
+/**
+ * Coste real del día por cuenta en céntimos de euro, para el freno global (BE-FR-46; C-49). Cada grupo se convierte con
+ * el tipo vigente cuando se cobró su operación (`fx_rate_id`, BE-FR-87 CA1). Una operación sin tipo guardado (no había
+ * filas en `fx_rates`, o no tuvo coste que cobrar) usa el tipo vigente ahora: el freno protege y no debe quedarse corto.
+ * El redondeo es hacia arriba, como en `protections`.
+ */
+function realCostCentsByUserOfDay(
+	deps: AiDeps,
+	from: EpochMs,
+	until: EpochMs
+): { readonly userId: string; readonly costEurCents: number }[] {
+	let currentPpm: number | undefined;
+	const ppmOf = (fxRateId: string | null): number => {
+		const stored = fxRateId === null ? null : usdEurPpmOf(deps.pricing, fxRateId);
+		if (stored !== null) return stored;
+		currentPpm ??= getCurrentFxRate(deps.pricing).usdEurPpm;
+		return currentPpm;
+	};
+	const cents = new Map<string, number>();
+	for (const row of realCostByUserOfDay(deps.db, from, until)) {
+		const rowCents = eurCentsOf({
+			costMicroUsd: row.costMicroUsd,
+			fxUsdEurPpm: ppmOf(row.fxRateId)
+		});
+		cents.set(row.userId, (cents.get(row.userId) ?? 0) + rowCents);
+	}
+	return [...cents].map(([userId, costEurCents]) => ({ userId, costEurCents }));
 }
 
 /** Contexto de la petición: quién llama, desde qué app, la señal de desconexión y la clave de idempotencia. */
@@ -380,13 +413,13 @@ export async function runChat(
 	ctx: ChatContext,
 	body: ChatRequestBody
 ): Promise<ChatResponseBody | null> {
-	// Pasos 6 a 8 de §8: versión, mantenimiento, freno global y frecuencia (FR-069, FR-072, FR-073, FR-074, BE-FR-43).
-	guardRequest(protectionsOf(deps), {
+	// Pasos 6 a 8 de §8: versión, mantenimiento y freno global (FR-069, FR-072, FR-073, FR-074).
+	const protections = protectionsOf(deps);
+	guardAccessAndBrake(protections, {
 		endpoint: 'ai',
 		appId: ctx.appId,
 		appVersion: ctx.appVersion,
-		userId: ctx.userId,
-		transcription: false
+		userId: ctx.userId
 	});
 	const now = toEpochMs(deps.clock.now());
 	const key = ctx.idempotencyKey;
@@ -453,6 +486,10 @@ export async function runChat(
 		tools = body.tools;
 		toolChoice = body.tool_choice;
 	}
+
+	// Paso 12: frecuencia por minuto (BE-FR-43), después de la idempotencia y la validación para que un reintento con la
+	// clave ya usada o una petición inválida no gasten cupo (C-39).
+	guardFrequency(protections, { appId: ctx.appId, userId: ctx.userId, transcription: false });
 
 	// Coste máximo (paso 13, BE-FR-72): precio más caro entre el principal y los respaldos, en micro-USD y luego en µc.
 	const modelIds = [eop.model, ...eop.fallbackModels].filter((id): id is string => id !== null);

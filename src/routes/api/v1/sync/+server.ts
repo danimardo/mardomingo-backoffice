@@ -36,7 +36,13 @@ export const PUT = apiRoute(async (event) => {
 	requireAcceptedTerms(session.userId);
 
 	const ifMatch = parseIfMatch(event.request.headers.get('If-Match'));
-	if (ifMatch === null) return validationErrorResponse('If-Match');
+	if (ifMatch === null) {
+		getComposition().logger.emit('sync.document.rejected', {
+			reason: 'if_match_invalid',
+			errorCode: 'VALIDATION_ERROR'
+		});
+		return validationErrorResponse('If-Match');
+	}
 
 	const parsed = PutSyncBody.safeParse(await jsonBodyOf(event.request));
 	if (!parsed.success) return validationErrorResponse(firstIssuePath(parsed.error.issues));

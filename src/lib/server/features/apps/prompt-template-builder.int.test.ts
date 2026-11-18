@@ -49,7 +49,7 @@ describe('constructor de plantillas por servicio (BE-FR-78, 79)', () => {
 		const adminId = insertAdmin(database.db);
 		const created = seededPromptTemplate(deps, adminId);
 
-		const next = createTemplateVersion(deps, {
+		const { version: next } = createTemplateVersion(deps, {
 			actorId: adminId,
 			operationId: created.operationId,
 			body: {

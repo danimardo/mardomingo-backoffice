@@ -76,7 +76,8 @@ describe('siembra del documento (BE-FR-40)', () => {
 		updateDefaults(deps, {
 			adminId: ctx.adminId,
 			appId: SECRETARIO_APP_ID,
-			data: { quickTexts: { value: ['hola'], updatedAt: 9 } }
+			data: { quickTexts: { value: ['hola'], updatedAt: 9 } },
+			reason: 'Predeterminados de prueba'
 		});
 
 		const document = getSyncDocument(deps, { userId, appId: SECRETARIO_APP_ID });
@@ -121,7 +122,8 @@ describe('escritura con If-Match (BE-FR-41)', () => {
 			second.write({ ...reread.data, notas: { value: 'de B tras fusionar', updatedAt: 3 } })
 		).toEqual({ ok: true, revision: 3 });
 		expect(eventsNamed(fixture.logger, 'sync.document.rejected').at(-1)?.fields).toEqual({
-			reason: 'revision_conflict'
+			reason: 'revision_conflict',
+			errorCode: 'SYNC_CONFLICT'
 		});
 	});
 
@@ -179,7 +181,8 @@ describe('predeterminados (BE-FR-42)', () => {
 		updateDefaults(deps, {
 			adminId: ctx.adminId,
 			appId: SECRETARIO_APP_ID,
-			data: { quickTexts: { value: ['nuevo'], updatedAt: 0 } }
+			data: { quickTexts: { value: ['nuevo'], updatedAt: 0 } },
+			reason: 'Predeterminados de prueba'
 		});
 
 		expect(getSyncDocument(deps, { userId, appId: SECRETARIO_APP_ID })).toEqual(existing);
@@ -190,7 +193,12 @@ describe('predeterminados (BE-FR-42)', () => {
 
 	it('[BE-FR-42/CA2] los predeterminados vigentes son los que devuelve la lectura tras cambiarlos', () => {
 		const data = { quickTexts: { value: ['hola'], updatedAt: 9 } };
-		updateDefaults(deps, { adminId: ctx.adminId, appId: SECRETARIO_APP_ID, data });
+		updateDefaults(deps, {
+			adminId: ctx.adminId,
+			appId: SECRETARIO_APP_ID,
+			data,
+			reason: 'Predeterminados de prueba'
+		});
 
 		expect(getDefaults(deps, SECRETARIO_APP_ID)).toEqual(data);
 	});
@@ -209,7 +217,8 @@ describe('predeterminados (BE-FR-42)', () => {
 			adminId: ctx.adminId,
 			userId,
 			appId: secondAppId,
-			selection: [{ category: 'notas', elements: ['notas'] }]
+			selection: [{ category: 'notas', elements: ['notas'] }],
+			reason: 'Copia de prueba'
 		});
 
 		expect(getDefaults(deps, secondAppId)).toEqual({ notas: { value: 'mías', updatedAt: 1 } });

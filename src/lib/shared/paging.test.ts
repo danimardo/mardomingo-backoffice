@@ -1,6 +1,6 @@
 // Paginación de las listas de administración (UX-09): la página pedida, la siguiente detectada y los límites.
 import { describe, expect, it } from 'vitest';
-import { ADMIN_PAGE_SIZE, fetchLimit, pageNumber, sliceOf } from './paging';
+import { ADMIN_PAGE_SIZE, MAX_PAGE, fetchLimit, pageNumber, sliceOf } from './paging';
 
 describe('paginación de las listas de administración (UX-09)', () => {
 	it('la página pedida es un entero mayor o igual que 1', () => {
@@ -8,6 +8,8 @@ describe('paginación de las listas de administración (UX-09)', () => {
 		expect(pageNumber('3')).toBe(3);
 		expect(pageNumber('abc')).toBe(1);
 		expect(pageNumber('0')).toBe(1);
+		expect(pageNumber('100000000000000000000')).toBe(MAX_PAGE);
+		expect(pageNumber('9'.repeat(400))).toBe(MAX_PAGE);
 	});
 
 	it('pide una fila más de la página para detectar la siguiente', () => {

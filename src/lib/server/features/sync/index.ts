@@ -18,6 +18,7 @@ export {
 	previewCopyAsDefaults,
 	purgeTombstones,
 	putSyncDocument,
+	staleDefaultCategories,
 	updateDefaults,
 	type SyncDeps
 } from './service';

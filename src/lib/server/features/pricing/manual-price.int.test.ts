@@ -95,6 +95,10 @@ describe('precio orientativo manual (BE-FR-73)', () => {
 		expect(() => {
 			setManualPrice(deps(), { adminId, operationId, microUsd: -5, reason: 'x' });
 		}).toThrow();
+		// Más de 500 caracteres tras recortar tampoco vale (C-55).
+		expect(() => {
+			setManualPrice(deps(), { adminId, operationId, microUsd: 5, reason: 'x'.repeat(501) });
+		}).toThrow(expect.objectContaining({ code: 'VALIDATION_ERROR', details: { field: 'reason' } }));
 		expect(f.db.select().from(priceReferences).all()).toEqual([]);
 	});
 });

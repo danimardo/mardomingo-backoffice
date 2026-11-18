@@ -46,8 +46,9 @@ function deactivationAudits(): number {
 }
 
 describe('desactivar una operación exige motivo (D09 = R08)', () => {
-	it.each(['', '   ', '\t\n'])(
-		'el motivo %j no vale: rechaza con error de campo reason y no cambia nada',
+	// Más de 500 caracteres tras recortar tampoco vale (C-55).
+	it.each(['', '   ', '\t\n', 'x'.repeat(501)])(
+		'el motivo %# no vale: rechaza con error de campo reason y no cambia nada',
 		(reason) => {
 			let error: unknown;
 			try {

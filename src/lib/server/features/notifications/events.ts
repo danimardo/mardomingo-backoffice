@@ -11,6 +11,7 @@ export type EmailReason =
 	| 'free_expiry_warning'
 	| 'invoice_available'
 	| 'email_change_verify'
+	| 'email_change_requested_notice'
 	| 'email_changed_notice'
 	| 'legal_update'
 	| 'inactivity_notice';

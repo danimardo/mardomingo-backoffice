@@ -5,7 +5,7 @@ import type { LogEventMeta } from '$lib/server/logging/events';
 export interface PrivacyLogFields {
 	'privacy.export.generated': { durationMs: number };
 	'privacy.account.deleted': { reason: 'user' | 'inactivity' };
-	'privacy.account.deletion_rejected': { reason: 'wrong_password' | 'not_found' };
+	'privacy.account.deletion_rejected': { reason: 'wrong_password' | 'not_found' | 'locked' };
 	'privacy.inactive.notified': { count: number };
 	'privacy.inactive.cancelled': Record<string, never>;
 	'privacy.retention.applied': {

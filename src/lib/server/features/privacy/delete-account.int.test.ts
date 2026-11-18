@@ -14,7 +14,14 @@ import {
 	type PrivacyFixture
 } from '../../../../../tests/builders/privacy';
 import { toEpochMs } from '$lib/shared/time';
-import { account, session, user, userAppActivity, verification } from '../accounts/schema';
+import {
+	account,
+	loginAttempts,
+	session,
+	user,
+	userAppActivity,
+	verification
+} from '../accounts/schema';
 import {
 	creditBuckets,
 	creditHolds,
@@ -291,6 +298,65 @@ describe('borrado de cuenta (BE-FR-07)', () => {
 			{ reason: 'wrong_password' }
 		]);
 		expect(events('privacy.account.deleted')).toEqual([]);
+	});
+
+	it('[C-24] tras login_max_failures contraseñas erróneas, el siguiente intento se rechaza aunque sea la correcta (BE-FR-45)', async () => {
+		const maxFailures = 10;
+		for (let index = 0; index < maxFailures - 1; index += 1) {
+			expect(await deleteAsUser(saver, `mala-${String(index)}-xxxxxxxx`)).toEqual({
+				status: 'wrong_password'
+			});
+		}
+		expect(await deleteAsUser(saver, 'mala-final-xxxxxxxx')).toEqual({
+			status: 'locked',
+			retryAfterMinutes: 15
+		});
+		const tables = ['user', 'session', 'account', 'credit_buckets', 'credit_movements'];
+		const before = tables.map((table) => snapshot(table));
+
+		expect(await deleteAsUser(saver)).toEqual({ status: 'locked', retryAfterMinutes: 15 });
+
+		expect(tables.map((table) => snapshot(table))).toEqual(before);
+		expect(events('privacy.account.deletion_rejected').at(-1)?.fields).toEqual({
+			reason: 'locked'
+		});
+		expect(events('privacy.account.deleted')).toEqual([]);
+	});
+
+	it('[C-24] con intentos simultáneos, como mucho login_max_failures llegan a comprobar la contraseña', async () => {
+		const outcomes = await Promise.all(
+			Array.from({ length: 20 }, (_, index) => deleteAsUser(saver, `mala-${String(index)}-xxxx`))
+		);
+
+		expect(outcomes.filter((outcome) => outcome.status === 'wrong_password')).toHaveLength(9);
+		expect(outcomes.filter((outcome) => outcome.status === 'locked')).toHaveLength(11);
+	});
+
+	it('[C-24] un acierto antes del umbral pone el contador a cero y borra la cuenta', async () => {
+		for (let index = 0; index < 9; index += 1) {
+			await deleteAsUser(saver, `mala-${String(index)}-xxxxxxxx`);
+		}
+
+		expect((await deleteAsUser(saver)).status).toBe('deleted');
+		expect(db().select().from(loginAttempts).all()).toEqual([]);
+	});
+
+	it('[C-24] el bloqueo del login para su email no impide borrar la cuenta desde la sesión con la contraseña', async () => {
+		const owner = db().select({ email: user.email }).from(user).where(eq(user.id, saver)).get();
+		if (owner === undefined) throw new Error('la cuenta debía existir');
+		const wrong = { email: owner.email, password: 'mal', redirectTo: undefined, remoteIp: null };
+		const codes: string[] = [];
+		for (let index = 0; index < 11; index += 1) {
+			codes.push(
+				await f.accounts.login(wrong).then(
+					() => 'sin error',
+					(error: unknown) => (error instanceof Error ? error.message : 'desconocido')
+				)
+			);
+		}
+		expect(codes.at(-1)).toBe('LOGIN_TEMPORARILY_LOCKED');
+
+		expect((await deleteAsUser(saver)).status).toBe('deleted');
 	});
 
 	it('si una de las dueñas falla, no queda nada a medias', async () => {

@@ -28,7 +28,10 @@ RUN apt-get update \
 ENV NODE_ENV=production \
 	APP_ENV=production \
 	HOST=0.0.0.0 \
-	PORT=3000 \
+	PORT=7311 \
+	ADDRESS_HEADER=x-forwarded-for \
+	XFF_DEPTH=1 \
+	PROTOCOL_HEADER=x-forwarded-proto \
 	DATABASE_PATH=/data/app.db
 WORKDIR /app
 COPY --from=build /app/package.json ./package.json
@@ -42,7 +45,7 @@ RUN chmod 0755 docker-entrypoint.sh \
 
 USER node
 VOLUME ["/data"]
-EXPOSE 3000
+EXPOSE 7311
 
 # El healthcheck usa el mismo endpoint que Coolify (E13): 200 cuando la base de datos responde.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

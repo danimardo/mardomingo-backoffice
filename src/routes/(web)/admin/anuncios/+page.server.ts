@@ -1,5 +1,6 @@
 // W49 · `/admin/anuncios` (contracts/web-routes.md W49; BE-FR-85; T315). Lista de anuncios, creación y desactivación. Cada cambio
-// queda en la auditoría. Las fechas se leen en UTC (`AAAA-MM-DDTHH:MM`). Requiere rol de administrador.
+// queda en la auditoría y vuelve con `?aviso=saved&auditoria=<id>`, que la página enlaza (UX-13; C-54). Las fechas se leen en UTC
+// (`AAAA-MM-DDTHH:MM`). Requiere rol de administrador.
 import { error, fail, redirect } from '@sveltejs/kit';
 import { resolve } from '$app/paths';
 import { getComposition } from '$lib/server/composition.cache';
@@ -14,7 +15,8 @@ import {
 	type AnnouncementInput
 } from '$lib/server/features/apps';
 import { AppError } from '$lib/server/shared/errors';
-import { isConfirmed } from '$lib/server/forms/confirmation';
+import { isConfirmed, savedEntryOf, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { failureOf } from '$lib/server/web/actions';
 import { toEpochMs } from '$lib/shared/time';
 import type { Actions, PageServerLoad } from './$types';
@@ -41,11 +43,12 @@ function instantOf(value: string): number | null {
 	return Number.isNaN(ms) ? Number.NaN : ms;
 }
 
-export const load: PageServerLoad = ({ locals, setHeaders }) => {
+export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 	adminOrThrow(locals);
 	setHeaders({ 'cache-control': 'private, no-store' });
 	const composition = getComposition();
 	return {
+		saved: savedEntryOf(url),
 		apps: appOptionsForAnnouncements(composition.adminAnnouncements),
 		announcements: listAnnouncements(composition.adminAnnouncements).map((row) => ({
 			id: row.id,
@@ -95,8 +98,9 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const input = announcementOf(form);
 		if (input === null) return fail(400, { errors: { inicio: 'validation_invalid' } });
+		let entryId: string;
 		try {
-			updateAnnouncement(getComposition().adminAnnouncements, {
+			entryId = updateAnnouncement(getComposition().adminAnnouncements, {
 				adminId: admin.id,
 				id: textOf(form, 'anuncioId'),
 				announcement: input
@@ -106,31 +110,38 @@ export const actions: Actions = {
 			throw cause;
 		}
 		const back = resolve('/admin/anuncios');
-		redirect(303, back);
+		redirect(303, savedRedirect(back, entryId));
 	},
 	crear: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		const input = announcementOf(form);
 		if (input === null) return fail(400, { errors: { inicio: 'validation_invalid' } });
+		let entryId: string;
 		try {
-			createAnnouncement(getComposition().adminAnnouncements, {
+			({ auditId: entryId } = createAnnouncement(getComposition().adminAnnouncements, {
 				adminId: admin.id,
 				announcement: input
-			});
+			}));
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;
 		}
-		const done = `${resolve('/admin/anuncios')}?aviso=anuncio_creado`;
-		redirect(303, done);
+		const back = resolve('/admin/anuncios');
+		redirect(303, savedRedirect(back, entryId));
 	},
 	desactivar: async ({ locals, request }) => {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		// Motivo de 1 a 500 caracteres (C-55): el error va al campo del anuncio que se quería desactivar.
+		const rejected = reasonRejection(textOf(form, 'motivo'), {
+			scope: `desactivar:${textOf(form, 'anuncioId')}`
+		});
+		if (rejected !== null) return rejected;
+		let entryId: string | null;
 		try {
-			deactivateAnnouncement(getComposition().adminAnnouncements, {
+			entryId = deactivateAnnouncement(getComposition().adminAnnouncements, {
 				adminId: admin.id,
 				id: textOf(form, 'anuncioId'),
 				reason: textOf(form, 'motivo')
@@ -140,6 +151,7 @@ export const actions: Actions = {
 			throw cause;
 		}
 		const back = resolve('/admin/anuncios');
-		redirect(303, back);
+		// Un anuncio que ya estaba inactivo no cambia ni se audita: vuelve sin aviso.
+		redirect(303, entryId === null ? back : savedRedirect(back, entryId));
 	}
 };

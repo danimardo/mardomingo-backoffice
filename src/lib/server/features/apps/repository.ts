@@ -1,7 +1,7 @@
 // Lectura y escritura de `apps`, `app_operations`, `prompt_templates` y `settings`. Al leer, cada columna JSON se
 // valida con su esquema: si no encaja, se emite `apps.config.corrupt`, se rechaza la lectura con un error
 // controlado y el dato NO se modifica (BE-FR-61 CA5, data-model 3).
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { ZodType } from 'zod';
 import type { Db } from '$lib/server/db/client';
 import type { Tx } from '$lib/server/db/tx';
@@ -306,6 +306,14 @@ export function seedInsertSetting(
 	now: EpochMs
 ): void {
 	tx.insert(settings).values({ key, value, updatedAt: now }).onConflictDoNothing().run();
+}
+
+/** Borra las claves retiradas de `settings` que sigan en la BD (C-56); sin ninguna, no hace nada. */
+export function seedDeleteSettings(tx: Tx, keys: readonly string[]): void {
+	if (keys.length === 0) return;
+	tx.delete(settings)
+		.where(inArray(settings.key, [...keys]))
+		.run();
 }
 
 /** Todas las apps validadas, para los orígenes permitidos de las apps activas (CORS, T131). */

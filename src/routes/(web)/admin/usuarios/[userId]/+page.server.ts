@@ -21,7 +21,8 @@ import {
 	setTester,
 	unblockUser
 } from '$lib/server/features/accounts';
-import { isConfirmed, savedRedirect } from '$lib/server/forms/confirmation';
+import { isConfirmed, savedEntryOf, savedRedirect } from '$lib/server/forms/confirmation';
+import { reasonRejection } from '$lib/server/forms/reason';
 import { failureOf } from '$lib/server/web/actions';
 import { AppError } from '$lib/server/shared/errors';
 import type { Actions, PageServerLoad } from './$types';
@@ -78,11 +79,7 @@ export const load: PageServerLoad = ({ locals, params, setHeaders, url }) => {
 	if (account === null) error(404);
 	const balance = composition.credits.getBalance(params.userId);
 	// Aviso tras una acción aplicada: enlaza con su entrada de auditoría (UX-13). Solo si el id tiene forma de id.
-	const auditId = url.searchParams.get('auditoria') ?? '';
-	const saved =
-		url.searchParams.get('aviso') === 'saved' && /^[A-Za-z0-9_-]{1,64}$/.test(auditId)
-			? auditId
-			: null;
+	const saved = savedEntryOf(url);
 
 	// UX-09: rango de fechas para movimientos y consumo, y una página propia por lista, todo en la URL.
 	const range = rangeOf(url.searchParams);
@@ -195,6 +192,9 @@ export const actions: Actions = {
 		if (typeof accion !== 'string' || !PREVIEWABLE.includes(accion)) {
 			return fail(400, { formError: 'VALIDATION_ERROR' });
 		}
+		// El motivo que la acción rechazaría se rechaza ya en la vista previa, junto al campo de esa acción (C-55).
+		const rejected = reasonRejection(reasonOf(form), { scope: accion });
+		if (rejected !== null) return rejected;
 		const account = accountView(getComposition().adminUsers, params.userId);
 		if (account === null) error(404);
 		return {
@@ -210,6 +210,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'bloquear' });
+		if (rejected !== null) return rejected;
 		try {
 			const entryId = blockUser(getComposition().adminUsers, {
 				adminId: admin.id,
@@ -228,6 +230,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'desbloquear' });
+		if (rejected !== null) return rejected;
 		try {
 			const entryId = unblockUser(getComposition().adminUsers, {
 				adminId: admin.id,
@@ -246,6 +250,8 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'tester' });
+		if (rejected !== null) return rejected;
 		try {
 			const entryId = setTester(getComposition().adminUsers, {
 				adminId: admin.id,
@@ -265,16 +271,20 @@ export const actions: Actions = {
 		const admin = adminOrThrow(locals);
 		const form = await request.formData();
 		if (!isConfirmed(form)) return fail(400, { formError: 'VALIDATION_ERROR' });
+		const rejected = reasonRejection(reasonOf(form), { scope: 'cerrarSesiones' });
+		if (rejected !== null) return rejected;
 		const sessionValue = form.get('sesion');
 		try {
-			closeUserSessions(getComposition().adminUsers, {
+			const { entryId } = closeUserSessions(getComposition().adminUsers, {
 				adminId: admin.id,
 				userId: params.userId,
 				sessionId: typeof sessionValue === 'string' && sessionValue !== '' ? sessionValue : null,
 				reason: reasonOf(form)
 			});
-			const back = `${resolve('/admin/usuarios')}/${encodeURIComponent(params.userId)}`;
-			redirect(303, back);
+			const target = `${resolve('/admin/usuarios')}/${encodeURIComponent(params.userId)}`;
+			// UX-13 (C-51): la ficha enlaza con la entrada de auditoría del cierre.
+			const next = savedRedirect(target, entryId);
+			redirect(303, next);
 		} catch (cause) {
 			if (cause instanceof AppError) return failureOf(cause);
 			throw cause;

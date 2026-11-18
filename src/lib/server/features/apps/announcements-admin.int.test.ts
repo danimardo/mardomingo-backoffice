@@ -194,6 +194,10 @@ describe('anuncios del administrador (BE-FR-85)', () => {
 		expect(
 			codeOf(() => deactivateAnnouncement(deps, { adminId, id: made.id, reason: '   ' }))
 		).toBe('VALIDATION_ERROR');
+		// Más de 500 caracteres tras recortar tampoco vale (C-55).
+		expect(
+			codeOf(() => deactivateAnnouncement(deps, { adminId, id: made.id, reason: 'x'.repeat(501) }))
+		).toBe('VALIDATION_ERROR');
 		expect(listAnnouncements(deps)[0]?.active).toBe(true);
 	});
 

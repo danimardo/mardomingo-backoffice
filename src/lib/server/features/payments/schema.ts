@@ -110,8 +110,9 @@ export const payments = sqliteTable(
 export const REFUND_KEY_STATUSES = Object.freeze(['claimed', 'applied'] as const);
 
 // Claves de los reembolsos manuales (R12, propuesta de reglas): un reenvío del mismo formulario no vuelve a reembolsar. `claimed`
-// mientras se retiran los créditos y `applied` cuando el estado y la auditoría ya están escritos. Sin cuenta ni importe, para
-// que no dependa del borrado de cuentas (RGPD).
+// mientras se retiran los créditos y `applied` cuando el estado y la auditoría ya están escritos. Sin cuenta, para que no dependa
+// del borrado de cuentas (RGPD). C-13 (T405): guarda el importe del reembolso y el total devuelto tras él, que el reenvío usa
+// para reintentar la rectificativa sin tomar el importe del cliente. Nulos en las claves anteriores a la migración 0018.
 export const refundKeys = sqliteTable(
 	'refund_keys',
 	{
@@ -120,10 +121,20 @@ export const refundKeys = sqliteTable(
 			.notNull()
 			.references(() => payments.id, { onDelete: 'restrict' }),
 		status: text('status', { enum: REFUND_KEY_STATUSES }).notNull(),
+		amountEurCents: eurCents('amount_eur_cents'),
+		refundedAfterEurCents: eurCents('refunded_after_eur_cents'),
 		createdAt: epochMs('created_at').notNull().default(nowMs)
 	},
 	(table) => [
 		index('refund_keys_payment_idx').on(table.paymentId),
-		check('refund_keys_status_enum', enumCheck(table.status.name, REFUND_KEY_STATUSES))
+		check('refund_keys_status_enum', enumCheck(table.status.name, REFUND_KEY_STATUSES)),
+		check(
+			'refund_keys_amounts_together',
+			sql`(${sql.identifier('amount_eur_cents')} IS NULL) = (${sql.identifier('refunded_after_eur_cents')} IS NULL)`
+		),
+		check(
+			'refund_keys_amounts_range',
+			sql`${sql.identifier('amount_eur_cents')} >= 0 AND ${sql.identifier('refunded_after_eur_cents')} >= ${sql.identifier('amount_eur_cents')}`
+		)
 	]
 );

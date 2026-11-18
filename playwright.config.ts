@@ -157,7 +157,9 @@ export default defineConfig({
 						MOCK_TURNSTILE_URL: TURNSTILE_MOCK_URL,
 						// Un solo servidor para los tres navegadores: el límite de altas por IP (3/24 h) no admite el total de las pruebas.
 						E2E_REGISTRATIONS_PER_IP_24H: '100',
-						E2E_LOGINS_PER_IP_15MIN: '500'
+						E2E_LOGINS_PER_IP_15MIN: '500',
+						// Todos los intentos de registro de la suite llegan desde 127.0.0.1 (C-36: 10 por hora en producción).
+						E2E_SIGNUP_ATTEMPTS_PER_IP_HOUR: '500'
 					}
 				}
 			}

@@ -7,9 +7,9 @@ export interface AppsLogFields {
 	'apps.settings.rejected': {
 		key: string;
 		scope: 'global' | 'app';
-		reason: 'validation' | 'ceiling';
+		reason: 'validation' | 'ceiling' | 'hold_ttl';
 	};
-	'apps.app.rejected': { reason: 'unknown_app' | 'app_disabled' };
+	'apps.app.rejected': { reason: 'unknown_app' | 'app_disabled'; errorCode: string };
 	'apps.config.corrupt': { table: string; field: string };
 	'apps.template.versioned': { version: number };
 	'apps.announcement.created': Record<string, never>;

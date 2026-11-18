@@ -49,6 +49,7 @@ export const load: PageServerLoad = ({ locals, setHeaders, url }) => {
 		email: access.user.email,
 		passwordChanged: url.searchParams.get('aviso') === 'password_changed',
 		emailSent: url.searchParams.get('aviso') === 'email_sent',
+		emailChanged: url.searchParams.get('aviso') === 'email_changed',
 		exportFailed: url.searchParams.get('aviso') === 'export_failed',
 		saved: url.searchParams.get('aviso') ?? null,
 		threshold: getComposition().credits.lowBalance(access.user.id).thresholdMicro,
@@ -135,7 +136,7 @@ export const actions: Actions = {
 		const done = `${resolve('/panel/perfil')}?aviso=email_sent`;
 		redirect(303, done);
 	},
-	cambiarContrasena: async ({ request, locals }) => {
+	cambiarContrasena: async ({ request, locals, getClientAddress }) => {
 		const access = accessFor(locals.user, 'verified');
 		if (access.kind !== 'allow') {
 			const login = resolve('/login');
@@ -144,10 +145,18 @@ export const actions: Actions = {
 		const parsed = parseForm(ChangePasswordSchema, await request.formData());
 		if (!parsed.ok) return parsed.failure;
 
-		const outcome = await getComposition().accounts.changePassword(request.headers, {
-			currentPassword: parsed.data.currentPassword,
-			newPassword: parsed.data.newPassword
-		});
+		let outcome;
+		try {
+			outcome = await getComposition().accounts.changePassword(request.headers, {
+				currentPassword: parsed.data.currentPassword,
+				newPassword: parsed.data.newPassword,
+				remoteIp: clientIpOf(getClientAddress)
+			});
+		} catch (error) {
+			// Demasiadas contraseñas actuales erróneas (C-24): 429 `LOGIN_TEMPORARILY_LOCKED` con los minutos que faltan.
+			if (error instanceof AppError) return failureOf(error);
+			throw error;
+		}
 		if (outcome === 'wrong_password') {
 			return fail(400, { errors: { currentPassword: 'validation_invalid' }, values: {} });
 		}

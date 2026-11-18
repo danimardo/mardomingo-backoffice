@@ -9,6 +9,7 @@ import { recordEntry, type AuditDeps } from '$lib/server/features/audit';
 import { getSetting, type AppsDeps } from '$lib/server/features/apps';
 import type { Logger } from '$lib/server/logging/logger';
 import { AppError } from '$lib/server/shared/errors';
+import { requireReason } from '$lib/server/shared/reason';
 import type { IdGenerator, IdKind } from '$lib/server/shared/ids';
 import { toEpochMs, type CivilDate, type EpochMs } from '$lib/shared/time';
 import { civilDateOf, startOfMadridDay } from '$lib/shared/dates';
@@ -332,6 +333,7 @@ export function adjust(
 		readonly idempotencyKey: string;
 	}
 ): AdjustOutcome {
+	const reason = requireReason(input.reason);
 	return immediateTransaction(deps.db, (tx): AdjustOutcome => {
 		const now = deps.clock.now();
 		if (
@@ -366,7 +368,7 @@ export function adjust(
 				tx,
 				movementRows(input.userId, result.lines, {
 					adminId: input.adminId,
-					adminReason: input.reason
+					adminReason: reason
 				}),
 				idsOf(deps, 'mov'),
 				now
@@ -383,7 +385,7 @@ export function adjust(
 					entityId: input.userId,
 					before: snapshot(before),
 					after: snapshot(result.state),
-					reason: input.reason
+					reason
 				},
 				deps.auditDeps
 			);
@@ -407,7 +409,7 @@ export function adjust(
 			tx,
 			movementRows(input.userId, result.lines, {
 				adminId: input.adminId,
-				adminReason: input.reason
+				adminReason: reason
 			}),
 			idsOf(deps, 'mov'),
 			now
@@ -422,7 +424,7 @@ export function adjust(
 				entityId: input.userId,
 				before: snapshot(before),
 				after: snapshot(result.state),
-				reason: input.reason
+				reason
 			},
 			deps.auditDeps
 		);
