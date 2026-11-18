@@ -53,4 +53,47 @@
 		background: var(--color-bg-base);
 		min-height: 100vh;
 	}
+
+	/* Tipografía y ritmo vertical base. El preflight de Tailwind deja títulos, párrafos y listas sin tamaño ni margen;
+	   los estilos de componente (sin capa) tienen prioridad sobre estos. Solo tokens. */
+	h1,
+	h2,
+	h3 {
+		line-height: 1.25;
+		margin-block: var(--space-6) var(--space-3);
+		color: var(--color-text-primary);
+	}
+
+	h1 {
+		font-size: var(--font-size-2xl);
+		font-weight: var(--font-weight-title);
+	}
+
+	h2 {
+		font-size: var(--font-size-xl);
+		font-weight: var(--font-weight-subtitle);
+	}
+
+	h3 {
+		font-size: var(--font-size-lg);
+		font-weight: var(--font-weight-subtitle);
+	}
+
+	p {
+		margin-block: 0 var(--space-3);
+	}
+
+	main > section {
+		margin-block: var(--space-8);
+	}
+
+	main a {
+		color: var(--color-accent);
+		text-decoration: underline;
+		text-underline-offset: 0.2em;
+	}
+
+	main a:hover {
+		color: var(--color-accent-hover);
+	}
 }
