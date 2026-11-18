@@ -949,7 +949,13 @@ Las operaciones se siembran **inactivas**: las activa el administrador.
 | `support_email`                                                                                                      | email                             | `soporte@mardomingo.com`         |
 
 Claves retiradas (C-56): `fx_usd_eur` (migración 0020). El _seed_ borra en cada arranque las de `RETIRED_SETTING_KEYS`
-(`apps/defaults.ts`), porque `readSettings` trata una clave sin esquema como dato corrupto.
+(`apps/defaults.ts`), para no dejar filas huérfanas.
+
+Claves desconocidas (C-60): una clave sin esquema en la imagen que la lee (p. ej. la sembró una imagen posterior antes de
+volver atrás) no es corrupción: `readSettings` la omite, no toca la fila y avisa con `apps.settings.unknown_key` (sin el
+valor), una vez por clave y conexión. El panel sigue sin aceptar guardarla. Una clave conocida con un valor que no encaja sí
+es corrupción (`config_corrupt`, BE-FR-61 CA5). Las imágenes anteriores a este cambio (la de `staging` del 2026-11-17
+incluida) todavía la tratan como corrupción: `docs/operaciones/migraciones.md`.
 
 ### 3.2 Configuración de `apps`
 

@@ -1002,7 +1002,16 @@ procedimiento y resultados en `docs/operaciones/migraciones.md`).
 - **Ficheros**: `src/lib/server/features/apps/repository.ts` (`readSettings`: `if (!isSettingKey(row.key)) throw corruptError`,
   igual en todas las versiones), `apps/seed.ts` y `apps/defaults.ts` (el _seed_ inserta en cada arranque las claves que
   falten), `apps/json-schemas.ts` (`SETTING_SCHEMAS`), `docs/operaciones/migraciones.md`.
-- **Estado**: confirmado por ejecución (emulado). Tras migrar y sembrar con la imagen actual, la base tiene
+- **Estado**: corregido (2026-11-18), con su test en rojo antes del cambio (`apps/settings-unknown-key.int.test.ts`: 2 de 4
+  en rojo, los dos de la clave desconocida, por `INTERNAL_ERROR` de `readSettings`; los otros dos, que el panel no acepta
+  guardar la clave y que una clave conocida con un valor no válido sigue siendo corrupción, pasaban ya y quedan de guarda).
+  Decisión del propietario: opción (b). `readSettings` omite la clave desconocida sin tocar la fila y emite
+  `apps.settings.unknown_key` (`warn`, solo `key`) una vez por clave y conexión (`firstUnknownSettingWarning`, en
+  `config.cache.ts`); una clave conocida con valor no válido sigue lanzando `config_corrupt`. `RETIRED_SETTING_KEYS` y
+  `seedDeleteSettings` se mantienen: retirada = el _seed_ la borra al arrancar; desconocida = se tolera y se avisa. No arregla
+  la imagen de `staging` del 2026-11-17 ni las anteriores: para volver a ellas sigue haciendo falta el paso manual de
+  `docs/operaciones/migraciones.md`. No ensayado en staging. Antes: confirmado por ejecución (emulado). Tras migrar y
+  sembrar con la imagen actual, la base tiene
   `signup_attempts_per_ip_hour`, `resend_verification_per_email_hour` y `password_reset_per_email_hour` (C-34 y C-36, T426 y
   T428, commit `bd66f2e`, sin migración: las siembra el _seed_). Los esquemas de `settings` de `origin/staging` (imagen del
   PR #48, 2026-11-17) y de la anterior al PR #47, extraídos de git, rechazan esas tres claves; `readSettings` de esas imágenes
@@ -1021,7 +1030,9 @@ procedimiento y resultados en `docs/operaciones/migraciones.md`).
   sigue necesitando el paso manual). Con (b), la 0020 y `RETIRED_SETTING_KEYS` dejarían de ser imprescindibles, aunque siguen
   siendo útiles para no dejar filas huérfanas.
 - **Test (primero, debe fallar)**, solo con (b): en `apps/`, una fila de `settings` con una clave desconocida no impide leer
-  los parámetros (`getEffectiveConfig` devuelve los valores) y emite el evento sin el valor.
+  los parámetros (`getEffectiveConfig` devuelve los valores) y emite el evento sin el valor. Hecho en
+  `apps/settings-unknown-key.int.test.ts` (también: un solo aviso por clave aunque se vuelva a leer de la BD, el panel sigue
+  rechazando la clave y una clave conocida inválida sigue lanzando).
 - **Verificación**: `pnpm test:related` del test; en staging, la vuelta atrás con el paso manual (no ensayada).
 
 ## C-61 (Baja) — Los comandos para repetir a mano la 0017 y la 0019 no funcionan tal cual

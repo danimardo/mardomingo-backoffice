@@ -40,13 +40,22 @@ node -e "const db = require('better-sqlite3')(process.env.DATABASE_PATH); db.exe
 
 ## Claves nuevas de `settings` y vuelta a una imagen anterior (C-60)
 
-El _seed_ de cada arranque inserta las claves de `settings` que falten, y `readSettings` trata una clave que no conoce como dato
-corrupto, en todas las versiones. Una imagen anterior a la que se vuelve **no** sabe leer las claves que haya sembrado una
-imagen posterior, y fallan todas las lecturas de parámetros globales (es el mismo motivo por el que existe la 0020). La imagen
-de `staging` del 2026-11-17 (PR #48) no conoce `signup_attempts_per_ip_hour`, `resend_verification_per_email_hour` ni
-`password_reset_per_email_hour` (C-34 y C-36, T426 y T428), que siembra la imagen siguiente sin migración.
+El _seed_ de cada arranque inserta las claves de `settings` que falten. Hasta la corrección de C-60 (T451, 2026-11-18),
+`readSettings` trataba una clave que no conoce como dato corrupto: una imagen **anterior a esa corrección** a la que se vuelve
+no sabe leer las claves que haya sembrado una imagen posterior, y fallan todas las lecturas de parámetros globales (es el
+mismo motivo por el que existe la 0020).
 
-Antes de desplegar una imagen anterior a esas claves, con la imagen actual todavía en marcha:
+Desde T451, `readSettings` omite una clave desconocida, sin tocar la fila, y avisa con `apps.settings.unknown_key` (nivel
+`warn`, con el nombre de la clave y sin el valor, una vez por clave y proceso). Volver a una imagen que **incluya** T451 ya no
+necesita el paso manual de esta sección: basta con revisar en los registros los avisos `apps.settings.unknown_key`, que
+listan las claves que esa imagen ignora (sus valores se conservan y la imagen nueva los vuelve a usar al regresar). Una clave
+conocida con un valor no válido sigue siendo corrupción.
+
+El paso manual **sigue haciendo falta** para volver a una imagen anterior a T451, y en particular a la de `staging` del
+2026-11-17 (PR #48) o a cualquiera anterior: no conocen `signup_attempts_per_ip_hour`, `resend_verification_per_email_hour`
+ni `password_reset_per_email_hour` (C-34 y C-36, T426 y T428), que siembra la imagen siguiente sin migración.
+
+Antes de desplegar una imagen anterior a T451 y a esas claves, con la imagen actual todavía en marcha:
 
 1. Anotar sus valores, por si el administrador los había cambiado:
 
@@ -67,6 +76,10 @@ desde el panel.
 > los esquemas Zod de `settings` de `origin/staging` extraídos de git (no se arrancó la imagen): tras migrar y sembrar con la
 > imagen actual, las tres claves dan error; tras el paso 2, las 45 filas son válidas; al volver, el _seed_ las inserta (`3`,
 > `3` y `10`) y las lecturas funcionan.
+>
+> **T451 (2026-11-18)**: comprobado con el test de integración `apps/settings-unknown-key.int.test.ts` (una fila
+> `zzz_future_key` no impide leer los parámetros y emite el aviso una sola vez, sin el valor), no con una vuelta atrás real.
+> **No ensayado en staging** con dos imágenes que incluyan T451.
 
 ## 0017 · `prompts` de Secretario como categoría personal (T397, C-05; T399, C-07)
 
@@ -183,10 +196,11 @@ desde el panel.
 - **Qué hace**: `0020_settings_sin_fx_usd_eur.sql` borra la fila `fx_usd_eur` de `settings`. Desde C-49 (T440) nadie la
   leía: el tipo USD→EUR sale de `fx_rates` y, sin filas, de `DEFAULT_FX_USD_EUR_PPM` (920.000). No toca el esquema y no
   falla si la fila no existe.
-- **Por qué no puede quedarse**: la imagen nueva ya no conoce la clave, y `readSettings` trata una clave desconocida como
-  dato corrupto, con lo que fallarían todas las lecturas de parámetros globales. La migración se aplica al arrancar, antes
-  del _seed_ y de atender peticiones, así que con el orden normal no hay ventana. Además, el _seed_ de la imagen nueva borra
-  la clave en cada arranque (`RETIRED_SETTING_KEYS`), para el caso de la vuelta atrás.
+- **Por qué no puede quedarse**: la imagen nueva ya no conoce la clave. Sin T451 (C-60), `readSettings` trataba una clave
+  desconocida como dato corrupto, con lo que fallarían todas las lecturas de parámetros globales; desde T451 la omitiría con
+  un aviso, pero se borra igual para no dejar filas huérfanas. La migración se aplica al arrancar, antes del _seed_ y de
+  atender peticiones, así que con el orden normal no hay ventana. Además, el _seed_ de la imagen nueva borra la clave en cada
+  arranque (`RETIRED_SETTING_KEYS`), para el caso de la vuelta atrás.
 - **Antes de desplegar** (opcional, solo lectura): ver el valor que se va a borrar, por si hace falta reponerlo:
 
   ```sql
@@ -204,7 +218,8 @@ desde el panel.
   ```
 
 - **Al volver a la imagen actual**: la migración 0020 consta como aplicada y no se repite, pero el _seed_ borra la fila
-  resembrada al arrancar, antes de que nadie lea los parámetros. No hay que hacer nada a mano.
+  resembrada al arrancar, antes de que nadie lea los parámetros. No hay que hacer nada a mano. (Con T451, aunque se leyera
+  antes del _seed_, la fila solo daría el aviso `apps.settings.unknown_key`.)
 - La imagen anterior a 0020 (y la de `staging` del 2026-11-17) no conoce las claves de `settings` sembradas por la imagen
   nueva: antes de volver a ella, ver «Claves nuevas de `settings` y vuelta a una imagen anterior (C-60)». Sin ese paso, la
   vuelta atrás de la 0020 **no** es compatible.

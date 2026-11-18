@@ -90,7 +90,8 @@ export function seedApps(
 	for (const [key, value] of Object.entries({ ...DEFAULT_SETTINGS, ...overrides })) {
 		if (isSettingKey(key)) seedInsertSetting(tx, key, value, now);
 	}
-	// Una clave retirada que haya vuelto a la BD (vuelta atrás a una imagen anterior) haría fallar `readSettings` (C-56).
+	// Una clave retirada que haya vuelto a la BD (vuelta atrás a una imagen anterior) se borra (C-56): no se deja huérfana.
+	// Las desconocidas que no están en la lista (de una imagen posterior) se conservan; `readSettings` las omite (C-60).
 	seedDeleteSettings(tx, RETIRED_SETTING_KEYS);
 	seedInsertApp(tx, {
 		id: SECRETARIO_APP_ID,
