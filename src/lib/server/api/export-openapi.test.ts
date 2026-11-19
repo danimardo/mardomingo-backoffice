@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { buildOpenApiDocument } from './openapi';
 
-const PUBLIC_API_URL = 'https://api.mardomingo.com';
+const PUBLIC_API_URL = 'https://backend.mardomingo.com';
 const TARGET = join(process.cwd(), 'node_modules', '.cache', 'docs-api', 'request.json');
 
 it.runIf(existsSync(TARGET))('vuelca el OpenAPI a la carpeta temporal del script', () => {

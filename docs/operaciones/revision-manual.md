@@ -46,7 +46,7 @@ Registrar en `docs/operaciones/verificacion-staging.md`:
 
 1. `ss -ltn` en el servidor con el puerto 7312 libre antes del primer despliegue.
 2. La IP real del cliente en los logs y en `user.signup_ip`, con una petición desde una IP conocida.
-3. `url.origin` igual a `https://cuenta-staging.mardomingo.com` y formularios sin `403` de la comprobación de origen, con el `Origin` real de `PUBLIC_WEB_URL`.
+3. `url.origin` igual al host de staging (por confirmar; ADR 0010) y formularios sin `403` de la comprobación de origen, con el `Origin` real de `PUBLIC_WEB_URL`.
 4. El puerto 7312 no responde desde fuera del host.
 5. En OpenObserve, buscar un marcador enviado en una operación y comprobar que no aparece (privacidad de los logs).
 

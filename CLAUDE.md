@@ -1,7 +1,8 @@
 # Cuenta Mardomingo (mardomingo-backoffice)
 
-Backend multi-app de IA: API `api.mardomingo.com` (apps cliente con token Bearer) y web
-`cuenta.mardomingo.com` (registro, panel de usuario, panel de administración). Primera app
+Backend multi-app de IA: API (apps cliente con token Bearer) y web
+(registro, panel de usuario, panel de administración), ambas en un solo dominio,
+`backend.mardomingo.com` (ADR 0010). Primera app
 cliente: Secretario AI. SvelteKit 2 + Svelte 5 + TypeScript, SQLite con Drizzle, Better Auth,
 desplegado con Docker en Coolify.
 
