@@ -50,7 +50,7 @@ El saldo de los usuarios es dinero real. Ningún atajo justifica ponerlo en ries
   dominio), salvo Cloudflare Turnstile en el registro.
 - Los plazos de retención de BE-FR-83 se aplican de forma automática. Ningún dato personal se
   conserva más allá de su plazo.
-- Los datos de producción NUNCA se copian a staging ni a desarrollo.
+- Los datos de producción NUNCA se copian a desarrollo ni a ningún otro entorno.
 
 ### III. Seguridad por defecto (NO NEGOCIABLE)
 
@@ -350,7 +350,7 @@ debe dar por hecho que un log existe para siempre: Docker rota sus ficheros y, e
   operaciones completadas y **rechazos de negocio esperados** (saldo, límites, conflicto de
   sincronización, validación), siempre con `reason`.
 - `debug`: transiciones intermedias y reintentos.
-- `LOG_LEVEL`: `info` en producción, `debug` en staging y desarrollo. `/health` se registra en
+- `LOG_LEVEL`: `info` en producción, `debug` en desarrollo. `/health` se registra en
   `debug`.
 - Un rechazo de negocio **nunca** es `error`.
 
@@ -629,7 +629,7 @@ No se usa ninguna librería de componentes de UI de terceros: los componentes so
 
 | Servicio | Uso |
 |---|---|
-| Coolify | Despliegue (entornos `production` y `staging`). |
+| Coolify | Despliegue (entorno `production`, el único; ADR 0011). |
 | Backblaze B2 (EU Central) | Destino de Litestream. Bucket privado y clave limitada a ese bucket. |
 | Resend | Emails transaccionales; dominio con SPF, DKIM y DMARC. |
 | Cloudflare Turnstile | Captcha del registro. |
@@ -644,7 +644,7 @@ No se usa ninguna librería de componentes de UI de terceros: los componentes so
 - **Menores**: PR propio con el CI en verde y revisión de las notas de versión. Actualizan esta
   tabla con una enmienda PATCH.
 - **Mayores**: enmienda MINOR de esta constitución, con justificación y plan de migración probado
-  en staging.
+  en local y en el contenedor de prueba.
 - **Migración prevista**: SvelteKit 3 / adapter-node 6, cuando `better-auth` declare
   compatibilidad con `@sveltejs/kit@^3`. Hasta entonces, PROHIBIDA.
 
@@ -654,8 +654,8 @@ No se usa ninguna librería de componentes de UI de terceros: los componentes so
   `journal_mode=WAL`, `foreign_keys=ON`, `busy_timeout=5000` y `synchronous=NORMAL`.
 - El esquema se define **solo** con Drizzle. Las migraciones generadas con `drizzle-kit generate`
   se versionan en el repositorio y no se editan después de aplicarse en un entorno. PROHIBIDO
-  `drizzle-kit push` contra staging o producción.
-- Las migraciones se aplican al arrancar, después de un backup. Se prueban primero en staging. Una
+  `drizzle-kit push` contra producción.
+- Las migraciones se aplican al arrancar, después de un backup. Se prueban antes en local y en el contenedor de prueba (`docker-compose.yml`). Una
   migración destructiva (borrar columnas o tablas) requiere una migración previa de compatibilidad
   y un despliegue intermedio.
 - **Tipos de fecha del proyecto** (sin dependencias nuevas):
@@ -917,7 +917,8 @@ framework.
   páginas prerenderizadas, `init` también se ejecuta en el build y `building` lo evita.
 - **Si falta configuración**: el proceso termina con código distinto de 0 y un error que
   enumera **los nombres** de las variables ausentes o inválidas, nunca sus valores.
-- `APP_ENV` admite `development`, `test`, `staging` y `production`. **Solo** con `APP_ENV=test`
+- `APP_ENV` admite `development`, `test`, `staging` y `production`. `staging` solo sigue admitido por el
+  esquema: no hay entorno asociado (ADR 0011). **Solo** con `APP_ENV=test`
   se aceptan las opciones de prueba: URL base de los servidores simulados, captcha falso, *outbox*
   de emails en fichero y secretos de prueba. `APP_ENV=test` no exige las variables de producción.
 - **Coherencia entre variables**, comprobada por el esquema:
@@ -932,7 +933,7 @@ framework.
   sintaxis de shell (`Historias.md` 15.22).
 - `.env` está en `.gitignore`. Se versiona `.env.example` con **todas** las variables, valores
   de ejemplo no sensibles y un comentario que indica si cada una es secreta.
-- **Cómo recibe el proceso las variables**: en desarrollo, Vite carga `.env`. En staging y
+- **Cómo recibe el proceso las variables**: en desarrollo, Vite carga `.env`. En
   producción, Coolify las inyecta al contenedor; adapter-node **no** carga `.env`. Cambiar una
   variable exige reiniciar el contenedor, nunca reconstruir la imagen.
 - El código privado vive solo en `src/lib/server/**` o en módulos `*.server.ts`. SvelteKit no
@@ -948,20 +949,20 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | `BETTER_AUTH_URL` y orígenes de confianza | La URL única del entorno (`https://backend.mardomingo.com` en producción) | Better Auth atiende un solo origen (ADR 0010). |
 | `PUBLIC_TURNSTILE_SITE_KEY` | Clave pública de Turnstile | No es secreta. |
 | `EMAIL_FROM` | `Cuenta Mardomingo <no-reply@mardomingo.com>` | Dominio con SPF, DKIM y DMARC. `Reply-To`: el email de soporte (`soporte@mardomingo.com`). |
-| `LOG_LEVEL` | `info` en producción; `debug` en staging y desarrollo | Valores de pino. |
+| `LOG_LEVEL` | `info` en producción; `debug` en desarrollo | Valores de pino. |
 | `CLIENT_LOG_LEVEL` | `warn` en producción; `debug` en desarrollo | No es secreta. Llega al navegador en los datos del layout raíz. |
-| `PORT` | Producción **7311**, staging **7312** | Ver «Proxy, puerto e IP del cliente». |
+| `PORT` | Producción **7311** | Ver «Proxy, puerto e IP del cliente». |
 | `HOST` | `0.0.0.0` dentro del contenedor | La exposición se limita fuera del contenedor. |
 | `PROTOCOL_HEADER` | `x-forwarded-proto` | |
 | `ADDRESS_HEADER` | `x-forwarded-for` | |
 | `XFF_DEPTH` | `1` | |
-| `ORIGIN` | **No se define** | SvelteKit deduce el origen de `Host` y `X-Forwarded-Proto`, y así sirve igual producción y staging. |
+| `ORIGIN` | **No se define** | SvelteKit deduce el origen de `Host` y `X-Forwarded-Proto`, y así sirve igual en cualquier dominio. |
 
 ### Proxy, puerto e IP del cliente
 
 - Cadena de proxies: cliente → **Nginx Proxy Manager** (mismo host que Coolify, termina TLS) →
   **directamente al puerto de la app**. Ningún otro proxy intermedio.
-- **Puerto no estándar**: la app escucha en **7311** (producción) y **7312** (staging). PROHIBIDO
+- **Puerto no estándar**: la app escucha en **7311** (producción). PROHIBIDO
   usar puertos habituales (80, 81, 443, 3000, 4173, 5173, 5080, 4317, 5432, 6001, 6002, 8000,
   8080, 8443, 9000…), porque en el host hay otras aplicaciones. Antes del primer despliegue se
   comprueba que el puerto está libre en el host (`ss -ltn`). Si estuviera ocupado, se elige otro
@@ -978,12 +979,12 @@ Además de las que enumera la sección 9 de `Historias.md`:
   IP (altas por IP, *rate limit* de autenticación, IP de sesiones y aceptaciones legales) usa esa
   fuente. Better Auth se configura para obtener la IP de forma coherente; nunca debe confiar en
   el valor más a la izquierda de `X-Forwarded-For`, que controla el cliente.
-- **Verificación obligatoria en staging** antes de dar por buenos los límites por IP:
+- **Verificación obligatoria en producción cerrada**, antes de abrirla a Internet y de dar por buenos los límites por IP:
   - Se registra la IP real del cliente.
-  - `url.origin` es el del host de staging (por confirmar) y los formularios de la web no reciben
+  - `url.origin` es `https://backend.mardomingo.com` y los formularios de la web no reciben
     un 403 de la comprobación de origen propia.
   - Un `X-Forwarded-For` falsificado por el cliente no cambia la IP registrada.
-  - El puerto 7312 no responde a equipos distintos de Nginx Proxy Manager.
+  - El puerto 7311 no responde a equipos distintos de Nginx Proxy Manager.
 
 ## Flujo de desarrollo y puertas de calidad
 
@@ -997,8 +998,8 @@ Además de las que enumera la sección 9 de `Historias.md`:
 - Identificadores del código, nombres de tablas y columnas en **inglés**. Documentación, textos
   visibles y mensajes de commit en **español**.
 - Commits con **Conventional Commits** (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `chore:`).
-- Ramas: `main` (despliega a producción), `staging` (despliega a staging) y ramas de trabajo
-  `NNN-nombre-corto`, creadas por spec-kit. `main` y `staging` están protegidas: solo se integra
+- Ramas: `main` (despliega a producción) y ramas de trabajo
+  `NNN-nombre-corto`, creadas por spec-kit. `main` está protegida: solo se integra
   mediante PR con el CI en verde.
 
 ### Scripts estándar
@@ -1070,7 +1071,11 @@ el motivo). Los lotes cierran con la
 
 ### Despliegue
 
-- Primero se despliega a staging. A producción solo llega lo que se ha validado en staging.
+- No hay staging (ADR 0011): producción es el único entorno y permanece cerrada a Internet
+  (acceso restringido en Nginx Proxy Manager) hasta que el propietario decida abrirla.
+- Antes de desplegar, las migraciones se prueban en local y en el contenedor de prueba. Cada
+  despliegue va precedido de un backup, con Litestream activo desde el primer despliegue.
+- El humo posterior al despliegue (`e2e/smoke.spec.ts`, solo lectura) se ejecuta contra producción.
 - Despliegue con parada previa: nunca hay dos contenedores escribiendo en el mismo SQLite.
 
 ## Gobernanza (Governance)
@@ -1106,4 +1111,4 @@ el motivo). Los lotes cierran con la
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 3.1.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-11-19
+**Version**: 3.2.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-11-19
