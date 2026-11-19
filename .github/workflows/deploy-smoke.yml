@@ -1,14 +1,9 @@
 # Humo tras cada despliegue (T374; constitución, «Despliegue»): solo lectura contra la URL desplegada, sin crear datos.
-# Un fallo bloquea la promoción a producción. Se dispara:
-#  - tras un CI correcto en `staging` (workflow_run): contra la URL de staging, esperando a que el despliegue responda;
-#  - a mano (workflow_dispatch) o desde otro pipeline (workflow_call), con la URL como entrada.
+# Sin staging (ADR 0011): el humo va contra producción. Se dispara desde `ci.yml` (workflow_call, solo en `main` y con
+# PRODUCTION_SMOKE_ENABLED = true) o a mano (workflow_dispatch), siempre con la URL como entrada.
 name: deploy-smoke
 
 on:
-  workflow_run:
-    workflows: [ci]
-    types: [completed]
-    branches: [staging]
   workflow_call:
     inputs:
       url:
@@ -28,12 +23,9 @@ permissions:
 env:
   NODE_VERSION: 24.21.0
   PNPM_VERSION: 12.8.1
-  # La URL de staging sale de la variable del repositorio `STAGING_URL` (host por confirmar, ADR 0010): no hay host fijo.
 
 jobs:
   smoke:
-    # En `workflow_run` solo si el CI de `staging` ha pasado.
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: humo del despliegue
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -42,15 +34,10 @@ jobs:
         id: destino
         env:
           ENTRADA_URL: ${{ inputs.url }}
-          VARIABLE_STAGING: ${{ vars.STAGING_URL }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            URL="$VARIABLE_STAGING"
-          else
-            URL="$ENTRADA_URL"
-          fi
+          URL="$ENTRADA_URL"
           if [ -z "$URL" ]; then
-            echo "::error::Falta la URL a verificar: define la variable del repositorio STAGING_URL." >&2
+            echo "::error::Falta la URL a verificar: indica la URL de producción." >&2
             exit 1
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"

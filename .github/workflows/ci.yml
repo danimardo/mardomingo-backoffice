@@ -1,11 +1,11 @@
 # Integración continua (Historias.md 15.26; constitución, «Puertas del CI»). Se ejecuta en cada PR y en cada push
-# a `main` y `staging`. Las diez puertas van en este orden y todas son bloqueantes.
+# a `main` (sin staging, ADR 0011). Las diez puertas van en este orden y todas son bloqueantes.
 name: ci
 
 on:
   pull_request:
   push:
-    branches: [main, staging]
+    branches: [main]
 
 permissions:
   contents: read
@@ -174,14 +174,14 @@ jobs:
       - name: 10. Contraste de tokens
         run: pnpm tokens:check
 
-  # Humo tras el despliegue de staging (T374): el humo está en `deploy-smoke.yml`, y `workflow_run` no sirve porque GitHub
-  # solo lo dispara desde el workflow del branch por defecto (`main`). Aquí se llama como reutilizable, solo en `staging`.
-  humo-staging:
-    name: humo tras el despliegue de staging
+  # Humo tras el despliegue de producción (T374; ADR 0011: sin staging). El humo está en `deploy-smoke.yml` y aquí se
+  # llama como reutilizable, solo en `main`. Desactivado mientras producción esté cerrada a Internet (los servidores de
+  # GitHub no podrían entrar): en ese tiempo se lanza a mano con `pnpm test:e2e:smoke`. Al abrirla, se activa con la
+  # variable del repositorio PRODUCTION_SMOKE_ENABLED = true.
+  humo-produccion:
+    name: humo tras el despliegue de producción
     needs: gates
-    # Solo cuando existe staging: la variable del repositorio STAGING_ENABLED = true y la URL en la variable STAGING_URL
-    # (host de staging por confirmar, ADR 0010; 2026-10-27: staging aún no está creado).
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging' && vars.STAGING_ENABLED == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PRODUCTION_SMOKE_ENABLED == 'true'
     uses: ./.github/workflows/deploy-smoke.yml
     with:
-      url: ${{ vars.STAGING_URL }}
+      url: https://backend.mardomingo.com
