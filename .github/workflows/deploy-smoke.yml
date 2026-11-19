@@ -28,8 +28,7 @@ permissions:
 env:
   NODE_VERSION: 24.21.0
   PNPM_VERSION: 12.8.1
-  # Staging por defecto (constitución, «Despliegue»); `vars.STAGING_URL` lo puede sustituir.
-  STAGING_URL_DEFECTO: https://cuenta-staging.mardomingo.com
+  # La URL de staging sale de la variable del repositorio `STAGING_URL` (host por confirmar, ADR 0010): no hay host fijo.
 
 jobs:
   smoke:
@@ -46,9 +45,13 @@ jobs:
           VARIABLE_STAGING: ${{ vars.STAGING_URL }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            URL="${VARIABLE_STAGING:-$STAGING_URL_DEFECTO}"
+            URL="$VARIABLE_STAGING"
           else
             URL="$ENTRADA_URL"
+          fi
+          if [ -z "$URL" ]; then
+            echo "::error::Falta la URL a verificar: define la variable del repositorio STAGING_URL." >&2
+            exit 1
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
