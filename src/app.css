@@ -97,7 +97,11 @@
 		line-height: 1.5;
 		color: var(--color-text-primary);
 		background: var(--color-bg-base);
+		/* Columna a toda la altura: `main` crece (flex: 1) y el pie queda abajo aunque la página tenga poco contenido. */
+		display: flex;
+		flex-direction: column;
 		min-height: 100vh;
+		min-height: 100dvh;
 	}
 
 	/* Tipografía y ritmo vertical base. El preflight de Tailwind deja títulos, párrafos y listas sin tamaño ni margen;
