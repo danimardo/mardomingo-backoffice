@@ -9,14 +9,15 @@ Registro de las decisiones importantes y difíciles de revertir (constitución, 
 - Se crea un ADR al cambiar la arquitectura, al introducir una dependencia transversal o cuando un
   plan necesita romper una regla de `ARCHITECTURE.md`.
 
-| ADR                                                         | Título                                                      | Estado              |
-| ----------------------------------------------------------- | ----------------------------------------------------------- | ------------------- |
-| [0001](0001-monolito-sveltekit-2-dos-hosts.md)              | Monolito SvelteKit 2 que sirve la API y la web              | Aceptado            |
-| [0002](0002-sqlite-litestream-una-instancia.md)             | SQLite con Litestream en una sola instancia                 | Aceptado            |
-| [0003](0003-dinero-en-enteros-y-ledger.md)                  | Dinero en enteros, ledger de solo inserción y reservas      | Aceptado            |
-| [0004](0004-better-auth-sesiones-opacas.md)                 | Better Auth con sesiones opacas                             | Aceptado            |
-| [0005](0005-monolito-modular-por-funcionalidades.md)        | Monolito modular por funcionalidades                        | Aceptado            |
-| [0006](0006-form-actions-y-zod.md)                          | Form actions con helper propio y Zod como única validación  | Aceptado            |
-| [0007](0007-fuente-canonica-del-sistema-de-diseno.md)       | Fuente canónica del sistema de diseño                       | Sustituido por 0009 |
-| [0009](0009-sistema-de-diseno-becall-con-color-salvia.md)   | Sistema de diseño propio (BeCall) con el color verde salvia | Aceptado            |
-| [0008](0008-factura-referencia-compra-por-clave-foranea.md) | La factura referencia la compra por clave foránea           | Aceptado            |
+| ADR                                                         | Título                                                      | Estado                                             |
+| ----------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------- |
+| [0001](0001-monolito-sveltekit-2-dos-hosts.md)              | Monolito SvelteKit 2 que sirve la API y la web              | Sustituido por 0010 en lo relativo a los dos hosts |
+| [0002](0002-sqlite-litestream-una-instancia.md)             | SQLite con Litestream en una sola instancia                 | Aceptado                                           |
+| [0003](0003-dinero-en-enteros-y-ledger.md)                  | Dinero en enteros, ledger de solo inserción y reservas      | Aceptado                                           |
+| [0004](0004-better-auth-sesiones-opacas.md)                 | Better Auth con sesiones opacas                             | Aceptado                                           |
+| [0005](0005-monolito-modular-por-funcionalidades.md)        | Monolito modular por funcionalidades                        | Aceptado                                           |
+| [0006](0006-form-actions-y-zod.md)                          | Form actions con helper propio y Zod como única validación  | Aceptado                                           |
+| [0007](0007-fuente-canonica-del-sistema-de-diseno.md)       | Fuente canónica del sistema de diseño                       | Sustituido por 0009                                |
+| [0009](0009-sistema-de-diseno-becall-con-color-salvia.md)   | Sistema de diseño propio (BeCall) con el color verde salvia | Aceptado                                           |
+| [0008](0008-factura-referencia-compra-por-clave-foranea.md) | La factura referencia la compra por clave foránea           | Aceptado                                           |
+| [0010](0010-un-solo-dominio-backend.md)                     | Un solo dominio para la API y la web                        | Aceptado                                           |

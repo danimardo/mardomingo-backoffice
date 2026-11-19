@@ -1,0 +1,58 @@
+# Cuenta Mardomingo: la API y la web en un solo contenedor y un solo dominio (ADR 0010).
+#
+# Despliegue en Coolify: recurso «Docker Compose» desde el repositorio. El proxy inverso es Nginx Proxy Manager
+# (externo), no el de Coolify: aquí NO se asigna dominio en Coolify. NPM apunta a http://<IP del servidor>:<HOST_PORT>
+# y debe enviar `Host`, `X-Forwarded-For` y `X-Forwarded-Proto` (un solo proxy de confianza: XFF_DEPTH=1).
+#
+# Las variables sin valor por defecto se definen en Coolify (las secretas, como secretas). Si falta una obligatoria,
+# la app no arranca y el log dice cuáles (nunca sus valores).
+#
+# El puerto del host (HOST_PORT) escucha en todas las interfaces para que NPM lo alcance desde la LAN. No uses el
+# 3000 ni el 8000: los ocupa Coolify. Limita el acceso con el cortafuegos del servidor a la IP de NPM.
+
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    # Da tiempo a que Litestream vacíe su último tramo antes de parar (la app cierra al recibir SIGTERM).
+    stop_grace_period: 30s
+    ports:
+      - '${HOST_PORT:-7311}:7311'
+    volumes:
+      - app-data:/data
+    environment:
+      # Entorno y dominio único (la API y la web comparten origen).
+      APP_ENV: ${APP_ENV:-production}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://backend.mardomingo.com}
+      PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-https://backend.mardomingo.com}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-https://backend.mardomingo.com}
+      # Proxy: Nginx Proxy Manager, un solo salto.
+      ADDRESS_HEADER: x-forwarded-for
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+      PROTOCOL_HEADER: x-forwarded-proto
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-10M}
+      # Secretos y claves de proveedores.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      EMAIL_HASH_KEY: ${EMAIL_HASH_KEY:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Cuenta Mardomingo <no-reply@mardomingo.com>}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MANAGEMENT_KEY: ${OPENROUTER_MANAGEMENT_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      PUBLIC_TURNSTILE_SITE_KEY: ${PUBLIC_TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      PAYMENTS_PROVIDER: ${PAYMENTS_PROVIDER:-simulated}
+      INVOICING_PROVIDER: ${INVOICING_PROVIDER:-none}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      CLIENT_LOG_LEVEL: ${CLIENT_LOG_LEVEL:-}
+      # Réplica de la base de datos (opcional: sin LITESTREAM_BUCKET la app arranca sin réplica).
+      LITESTREAM_BUCKET: ${LITESTREAM_BUCKET:-}
+      LITESTREAM_ENDPOINT: ${LITESTREAM_ENDPOINT:-}
+      LITESTREAM_REGION: ${LITESTREAM_REGION:-}
+      LITESTREAM_ACCESS_KEY_ID: ${LITESTREAM_ACCESS_KEY_ID:-}
+      LITESTREAM_SECRET_ACCESS_KEY: ${LITESTREAM_SECRET_ACCESS_KEY:-}
+
+volumes:
+  app-data:

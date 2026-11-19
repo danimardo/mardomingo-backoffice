@@ -37,8 +37,8 @@ La gran ventaja es que tu aplicación no necesita saber cocinar. Solo tiene que 
 
 Es un servicio con dos caras:
 
-1. **Una web** (`cuenta.mardomingo.com`) donde las personas crean su cuenta, compran créditos, miran su saldo y gestionan sus datos.
-2. **Una API** (`api.mardomingo.com`) que las aplicaciones usan para trabajar con esa cuenta y con la inteligencia artificial.
+1. **Una web** (`backend.mardomingo.com`) donde las personas crean su cuenta, compran créditos, miran su saldo y gestionan sus datos.
+2. **Una API** (`backend.mardomingo.com/api/v1`, el mismo dominio) que las aplicaciones usan para trabajar con esa cuenta y con la inteligencia artificial.
 
 La idea central es muy sencilla: **una sola cuenta y un solo saldo que sirven para todas las aplicaciones de Mardomingo.** La
 primera aplicación es **Secretario AI**, que ayuda a escribir, corregir y traducir textos y a transcribir audio.
@@ -225,10 +225,10 @@ Para no crear falsas expectativas:
 
 ### Dónde está la API
 
-| Entorno    | Dirección base                              |
-| ---------- | ------------------------------------------- |
-| Producción | `https://api.mardomingo.com/api/v1`         |
-| Pruebas    | `https://api-staging.mardomingo.com/api/v1` |
+| Entorno    | Dirección base                          |
+| ---------- | --------------------------------------- |
+| Producción | `https://backend.mardomingo.com/api/v1` |
+| Pruebas    | por confirmar                           |
 
 El «versionado» va en la dirección (`/v1`): si algún día cambia algo de forma incompatible, existirá una `/v2` y la `/v1`
 seguirá funcionando durante un tiempo.
@@ -270,7 +270,7 @@ manual lo usan, y después verás el equivalente en JavaScript.
 ### Paso 1 · Comprobar que la API responde
 
 ```bash
-curl https://api.mardomingo.com/api/v1/health
+curl https://backend.mardomingo.com/api/v1/health
 ```
 
 Respuesta:
@@ -282,7 +282,7 @@ Respuesta:
 ### Paso 2 · Preguntar por el estado de tu app
 
 ```bash
-curl https://api.mardomingo.com/api/v1/app/status \
+curl https://backend.mardomingo.com/api/v1/app/status \
   -H "X-App-Id: secretario" \
   -H "X-App-Version: 1.0.0"
 ```
@@ -293,7 +293,7 @@ La respuesta incluye, entre otras cosas, si hay mantenimiento, la versión míni
 ### Paso 3 · Iniciar sesión
 
 ```bash
-curl -X POST https://api.mardomingo.com/api/v1/auth/login \
+curl -X POST https://backend.mardomingo.com/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -H "X-App-Id: secretario" \
   -H "X-App-Version: 1.0.0" \
@@ -317,7 +317,7 @@ Respuesta correcta:
 ### Paso 4 · Ver el saldo
 
 ```bash
-curl https://api.mardomingo.com/api/v1/me \
+curl https://backend.mardomingo.com/api/v1/me \
   -H "X-App-Id: secretario" \
   -H "X-App-Version: 1.0.0" \
   -H "Authorization: Bearer abc123..."
@@ -326,7 +326,7 @@ curl https://api.mardomingo.com/api/v1/me \
 ### Paso 5 · Pedir algo a la inteligencia artificial
 
 ```bash
-curl -X POST https://api.mardomingo.com/api/v1/ai/chat \
+curl -X POST https://backend.mardomingo.com/api/v1/ai/chat \
   -H "Content-Type: application/json" \
   -H "X-App-Id: secretario" \
   -H "X-App-Version: 1.0.0" \
@@ -340,7 +340,7 @@ Y ya está: has conectado una app.
 ## 13. El mismo recorrido en JavaScript
 
 ```js
-const API = 'https://api.mardomingo.com/api/v1';
+const API = 'https://backend.mardomingo.com/api/v1';
 const APP = { 'X-App-Id': 'secretario', 'X-App-Version': '1.0.0' };
 
 // Pequeña función que hace todas las peticiones y entiende los errores.
@@ -524,7 +524,7 @@ Cada función se explica igual: **para qué sirve**, **qué problema resuelve**,
   - `file`: el audio (WebM/Opus).
 
 ```bash
-curl -X POST https://api.mardomingo.com/api/v1/ai/transcribe \
+curl -X POST https://backend.mardomingo.com/api/v1/ai/transcribe \
   -H "X-App-Id: secretario" \
   -H "X-App-Version: 1.0.0" \
   -H "Authorization: Bearer abc123..." \
@@ -761,7 +761,7 @@ orientativos: el cobro real depende del tamaño del texto o del audio.
 
 Hasta aquí hemos hablado de la API, que es lo que usan los **programas**. Pero las **personas** también necesitan un sitio donde
 mirar su dinero, comprar créditos y mandar sobre sus datos. Ese sitio es el **panel**, dentro de la web
-`cuenta.mardomingo.com`. Es la «recepción» de la plataforma: aquí no se programa nada, se gestiona la cuenta.
+`backend.mardomingo.com`. Es la «recepción» de la plataforma: aquí no se programa nada, se gestiona la cuenta.
 
 > **Nota**: el panel usa la **misma cuenta y el mismo saldo** que la API. Lo que una persona compra aquí es lo que gasta su app
 > allí.

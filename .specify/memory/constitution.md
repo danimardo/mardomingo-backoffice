@@ -1,7 +1,7 @@
 # Constitución de Cuenta Mardomingo (mardomingo-backoffice)
 
-Marco innegociable del backend multi-app de IA «Cuenta Mardomingo»: API `api.mardomingo.com`, web
-`cuenta.mardomingo.com`, paneles de usuario y de administración. Toda especificación, plan, tarea
+Marco innegociable del backend multi-app de IA «Cuenta Mardomingo»: API y web con registro,
+paneles de usuario y de administración, todo en un solo dominio, `backend.mardomingo.com` (ADR 0010). Toda especificación, plan, tarea
 e implementación posterior DEBE cumplirla. La especificación funcional vive en `Historias.md`; esta
 constitución fija **cómo** se construye.
 
@@ -66,10 +66,11 @@ El saldo de los usuarios es dinero real. Ningún atajo justifica ponerlo en ries
 - La web aplica CSP estricta (`kit.csp`), HSTS y cookies `Secure`/`HttpOnly`/`SameSite=Lax`.
 - **CSRF**: la comprobación de origen de SvelteKit se desactiva, porque rechaza los POST
   `multipart/form-data` sin `Origin` que envían las apps de escritorio a la API. En su lugar,
-  `handle` aplica una comprobación equivalente **solo en el host web**: todo POST, PUT, PATCH o
-  DELETE con tipo de contenido de formulario debe traer un `Origin` igual al de `PUBLIC_WEB_URL`;
-  si no, `403`. El host de la API usa solo el token Bearer y no lee cookies, así que no es
-  vulnerable a CSRF; aplica CORS por app (BE-FR-65). Ambas reglas tienen tests HTTP.
+  `handle` aplica una comprobación equivalente **solo a las rutas web** (las que no cuelgan de
+  `/api/v1/*`): todo POST, PUT, PATCH o DELETE con tipo de contenido de formulario debe traer un
+  `Origin` igual al de `PUBLIC_WEB_URL`; si no, `403`. Las rutas `/api/v1/*` usan solo el token
+  Bearer y no leen cookies, así que no son vulnerables a CSRF; aplican CORS por app (BE-FR-65).
+  Ambas reglas tienen tests HTTP.
 - La autorización se comprueba en el servidor y en cada endpoint o acción: rol, propiedad del
   recurso y pertenencia de la sesión a la app de `X-App-Id`. La interfaz no es una barrera de
   seguridad.
@@ -692,13 +693,10 @@ framework.
   de `$app/paths`, que tipa la ruta y sus parámetros; la consulta se añade con
   `URLSearchParams`. PROHIBIDO saltarse esta regla con `eslint-disable`, `@ts-expect-error` o
   componentes envoltorio.
-- **Separación por host**, aplicada en `handle`:
-  - El host de la API (`PUBLIC_API_URL`) solo responde a `/api/v1/*`.
-  - El host de la web (`PUBLIC_WEB_URL`) solo responde a la web y a `/client-errors`.
-  - Cualquier otra combinación devuelve `404` sin ejecutar la ruta.
-  - Excepción: `/api/v1/health` responde con cualquier `Host`, porque el *healthcheck* de
-    Coolify llama al contenedor directamente.
-  - En desarrollo, si ambas URL comparten host, la separación se desactiva.
+- **Dominio único** (ADR 0010): la API y la web comparten host (`backend.mardomingo.com`), con
+  `PUBLIC_API_URL` y `PUBLIC_WEB_URL` iguales. La separación por host de `handle` queda inerte
+  cuando ambos hosts coinciden y solo se conserva por si se volvieran a separar. `/api/v1/health`
+  responde con cualquier `Host`, porque el *healthcheck* llama al contenedor directamente.
 - Opciones de página: `ssr = true` en todo el proyecto; `prerender = false` en la v4 (el
   contenido de landings, precios y legales sale de la BD); `trailingSlash` por defecto.
 - `handle` es un `sequence(...)` con este orden: contexto de la petición (`requestId`, logger) →
@@ -890,8 +888,8 @@ framework.
   - Los `load` no devuelven campos prohibidos: la función que compone el modelo de vista (en
     `presenters.ts` o en un `*.data.server.ts` de la ruta) se prueba con las claves exactas
     (`toStrictEqual`), porque los `load` no se llaman en los tests (`Historias.md` 15.2).
-  - La separación por host devuelve `404` en las combinaciones cruzadas, y `/api/v1/health`
-    responde con cualquier `Host`.
+  - `/api/v1/health` responde con cualquier `Host`, y con un dominio único no hay combinaciones
+    cruzadas que devuelvan `404` (si se separasen los hosts, la separación devolvería `404`).
 - **E2E** con Playwright y `javaScriptEnabled: false`: todos los recorridos críticos de
   «Mejora progresiva» se completan sin JavaScript.
 
@@ -947,7 +945,7 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | Variable | Valor | Notas |
 |---|---|---|
 | `ADMIN_EMAIL` | Email del administrador | La cuenta que se registra y **verifica** con ese email (normalizado) recibe el rol `admin`. Nunca hay más de una cuenta `admin`: si ya existe otra, no se promueve y se registra un error. Cambiar la variable no retira el rol al anterior; eso exige una acción explícita, auditada. |
-| `BETTER_AUTH_URL` y orígenes de confianza | Las URL de `cuenta.` y `api.` del entorno | Better Auth atiende los dos dominios. |
+| `BETTER_AUTH_URL` y orígenes de confianza | La URL única del entorno (`https://backend.mardomingo.com` en producción) | Better Auth atiende un solo origen (ADR 0010). |
 | `PUBLIC_TURNSTILE_SITE_KEY` | Clave pública de Turnstile | No es secreta. |
 | `EMAIL_FROM` | `Cuenta Mardomingo <no-reply@mardomingo.com>` | Dominio con SPF, DKIM y DMARC. `Reply-To`: el email de soporte (`soporte@mardomingo.com`). |
 | `LOG_LEVEL` | `info` en producción; `debug` en staging y desarrollo | Valores de pino. |
@@ -957,7 +955,7 @@ Además de las que enumera la sección 9 de `Historias.md`:
 | `PROTOCOL_HEADER` | `x-forwarded-proto` | |
 | `ADDRESS_HEADER` | `x-forwarded-for` | |
 | `XFF_DEPTH` | `1` | |
-| `ORIGIN` | **No se define** | Admite un solo origen y la instancia sirve dos dominios. |
+| `ORIGIN` | **No se define** | SvelteKit deduce el origen de `Host` y `X-Forwarded-Proto`, y así sirve igual producción y staging. |
 
 ### Proxy, puerto e IP del cliente
 
@@ -968,9 +966,11 @@ Además de las que enumera la sección 9 de `Historias.md`:
   8080, 8443, 9000…), porque en el host hay otras aplicaciones. Antes del primer despliegue se
   comprueba que el puerto está libre en el host (`ss -ltn`). Si estuviera ocupado, se elige otro
   del rango 7300–7399 y se actualiza esta tabla con una enmienda PATCH.
-- El puerto de la app **no** debe ser accesible desde fuera del host: solo desde Nginx Proxy
-  Manager (cortafuegos o publicación limitada a la interfaz o red que usa Nginx Proxy Manager).
-  Si fuera accesible, cualquiera podría saltarse el proxy y falsificar `X-Forwarded-For`.
+- El puerto de la app **no** debe ser accesible desde Internet ni desde equipos que no sean Nginx
+  Proxy Manager. Con Nginx Proxy Manager en otro equipo de la LAN, `docker-compose.yml` publica el
+  puerto en todas las interfaces del host (`HOST_PORT`, por defecto 7311) y el **cortafuegos del
+  servidor** lo limita a la IP de Nginx Proxy Manager. Si fuera accesible, cualquiera podría
+  saltarse el proxy y falsificar `X-Forwarded-For`.
 - Nginx Proxy Manager conserva la cabecera `Host` y añade `X-Forwarded-Proto` y
   `X-Forwarded-For`. Por eso basta con `PROTOCOL_HEADER`, `ADDRESS_HEADER` y `XFF_DEPTH=1`, sin
   `HOST_HEADER` ni `ORIGIN`.
@@ -980,10 +980,10 @@ Además de las que enumera la sección 9 de `Historias.md`:
   el valor más a la izquierda de `X-Forwarded-For`, que controla el cliente.
 - **Verificación obligatoria en staging** antes de dar por buenos los límites por IP:
   - Se registra la IP real del cliente.
-  - `url.origin` es `https://cuenta-staging.mardomingo.com` y los formularios de la web no reciben
+  - `url.origin` es el del host de staging (por confirmar) y los formularios de la web no reciben
     un 403 de la comprobación de origen propia.
   - Un `X-Forwarded-For` falsificado por el cliente no cambia la IP registrada.
-  - El puerto 7312 no responde desde fuera del host.
+  - El puerto 7312 no responde a equipos distintos de Nginx Proxy Manager.
 
 ## Flujo de desarrollo y puertas de calidad
 
@@ -1106,4 +1106,4 @@ el motivo). Los lotes cierran con la
 - **Revisión periódica**: al cerrar cada fase (v4, Stripe y fase 2) se revisa la constitución,
   sobre todo la tabla de versiones y la migración pendiente a SvelteKit 3.
 
-**Version**: 3.0.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-11-18
+**Version**: 3.1.0 | **Ratified**: 2026-10-10 | **Last Amended**: 2026-11-19

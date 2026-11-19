@@ -1,6 +1,6 @@
 # 0001 — Monolito SvelteKit 2 que sirve la API y la web
 
-- **Estado:** Aceptado (2026-10-10)
+- **Estado:** Sustituido por 0010 en lo relativo a los dos hosts (2026-11-19)
 
 ## Contexto
 

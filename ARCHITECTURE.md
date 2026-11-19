@@ -9,12 +9,12 @@ contradice. Las decisiones y sus alternativas están en `docs/adr/`.
 
 ## 1. Vista general
 
-Un **monolito modular** de SvelteKit 2 (una sola instancia, SQLite) que sirve dos hosts:
+Un **monolito modular** de SvelteKit 2 (una sola instancia, SQLite) que sirve la API y la web desde un único dominio (`backend.mardomingo.com`, ADR 0010):
 
 ```mermaid
 flowchart LR
-  Apps[Apps cliente<br/>Bearer + X-App-Id] -->|api.mardomingo.com/api/v1| Routes
-  Web[Navegador] -->|cuenta.mardomingo.com| Routes
+  Apps[Apps cliente<br/>Bearer + X-App-Id] -->|backend.mardomingo.com/api/v1| Routes
+  Web[Navegador] -->|backend.mardomingo.com| Routes
   subgraph SvelteKit [SvelteKit · una instancia]
     Hooks[hooks.server.ts<br/>requestId · host · preferencias · sesión] --> Routes[src/routes<br/>+server.ts · +page.server.ts]
     Routes --> Features[features/*/index.ts<br/>servicios y presenters]
@@ -114,8 +114,9 @@ dentro de este margen.
 - Las claves foráneas hacia tablas de funcionalidades posteriores (p. ej. de `credits` o `audit` hacia
   `user`) se declaran importando su `schema.ts` solo para `references()`; no crean dependencia en
   ejecución.
-- **CSRF** (constitución, principio III): la comprobación de origen la hace `handle` solo en el host
-  web; el host de la API usa solo Bearer.
+- **CSRF** (constitución, principio III): la comprobación de origen la hace `handle` en las rutas de la web
+  (todo lo que no es `/api/v1/*`); la API usa solo Bearer. Con el dominio único (ADR 0010) ambas
+  comparten host y la distinción es solo por ruta.
 
 ## 4. Reglas de dependencia
 
