@@ -37,7 +37,7 @@ Una contradicción no se resuelve en silencio: se informa y se enmienda uno de l
 
 - Cada especificación cita los `BE-FR` que cubre. El trabajo va por lotes (L01–L16,
   `Historias.md` 15.6), y cada lote cierra con su checkpoint (15.29).
-- Ramas: `main` (producción), `staging` y ramas de trabajo `NNN-nombre-corto`, creadas por Spec
+- Ramas: `main` (producción, único entorno; ADR 0011) y ramas de trabajo `NNN-nombre-corto`, creadas por Spec
   Kit. Commits con Conventional Commits.
 
 ## Localizar el código
@@ -86,7 +86,7 @@ Gestor de paquetes: **pnpm** (no uses npm ni yarn). Node 24.21.0 y pnpm 12.8.1.
 ### Operaciones y smoke tras despliegue
 
 - Procedimientos de operación en `docs/operaciones/`: `restauracion.md` (simulacro de restauración de Litestream, T372) y
-  `verificacion-staging.md` (proxy e IP real, T373, y verificaciones manuales de staging).
+  `verificacion-staging.md` (proxy e IP real, T373, y verificaciones manuales; sin staging, se hacen en producción cerrada, ADR 0011).
 - Antes de tocar migraciones o pagos: `docs/operaciones/migraciones.md` (orden de despliegue, consulta previa y vuelta atrás de
   cada migración) y `docs/operaciones/pagos.md` (tratamiento manual de los reembolsos anteriores a la migración 0018).
 - Tras cada despliegue, `e2e/smoke.spec.ts` contra la URL desplegada (solo lectura, sin crear datos en producción) más

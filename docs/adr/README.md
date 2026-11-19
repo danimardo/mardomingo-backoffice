@@ -21,3 +21,4 @@ Registro de las decisiones importantes y difíciles de revertir (constitución, 
 | [0009](0009-sistema-de-diseno-becall-con-color-salvia.md)   | Sistema de diseño propio (BeCall) con el color verde salvia | Aceptado                                           |
 | [0008](0008-factura-referencia-compra-por-clave-foranea.md) | La factura referencia la compra por clave foránea           | Aceptado                                           |
 | [0010](0010-un-solo-dominio-backend.md)                     | Un solo dominio para la API y la web                        | Aceptado                                           |
+| [0011](0011-sin-staging-produccion-cerrada.md)              | Sin staging: producción cerrada hasta el lanzamiento        | Aceptado                                           |
