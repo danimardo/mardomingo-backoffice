@@ -28,15 +28,16 @@
 </section>
 
 <style>
-	/* El marco se sale de la columna del contenido, hasta un ancho máximo. */
+	/* En pantallas estrechas el marco ocupa la columna más parte del relleno de `main`, con porcentajes: `vw` no se reduce con
+	   el zoom de la página y desbordaría (UX-16). En pantallas anchas se sale de la columna hasta un ancho máximo. */
 	.hero {
 		position: relative;
 		display: grid;
 		gap: var(--space-12);
 		box-sizing: border-box;
-		width: min(100vw - var(--space-8), 72rem);
+		width: calc(100% + 2 * (var(--space-6) - var(--space-4)));
 		margin: calc(-1 * var(--space-20)) 0 var(--space-12)
-			calc(50% - min(50vw - var(--space-4), 36rem));
+			calc(-1 * (var(--space-6) - var(--space-4)));
 		padding: var(--space-24) var(--space-6) 0;
 		overflow: hidden;
 		border-radius: var(--space-8);
@@ -57,6 +58,13 @@
 				transparent 75%
 			),
 			color-mix(in oklab, var(--primary-100) 40%, var(--color-bg-base));
+	}
+
+	@media (min-width: 64rem) {
+		.hero {
+			width: min(100vw - var(--space-8), 72rem);
+			margin-left: calc(50% - min(50vw - var(--space-4), 36rem));
+		}
 	}
 
 	@media (max-width: 40rem) {

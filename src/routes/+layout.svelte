@@ -71,6 +71,13 @@
 		padding: var(--space-24) var(--space-6) var(--space-8);
 	}
 
+	/* En móvil la píldora de la cabecera ocupa dos filas: el contenido empieza por debajo de ella. */
+	@media (max-width: 40rem) {
+		main {
+			padding-top: calc(var(--space-24) + var(--space-12));
+		}
+	}
+
 	main:focus {
 		outline: none;
 	}

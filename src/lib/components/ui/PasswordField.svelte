@@ -48,6 +48,8 @@
 	/* Mismos tokens de campo que TextField, para que se distinga del fondo del formulario. */
 	.field {
 		display: grid;
+		/* minmax(0, …): el ancho intrínseco del input no ensancha la columna (sin desbordar a 320 px ni con zoom, UX-16). */
+		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-2);
 		font-family: var(--font-ui);
 	}
